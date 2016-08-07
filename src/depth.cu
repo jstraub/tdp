@@ -1,7 +1,7 @@
 
-#include <cuda.h>
 #include <stdio.h>
 #include <Eigen/Dense>
+#include <tdp/cuda.h>
 #include <tdp/depth.h>
 #include <tdp/image.h>
 
@@ -28,12 +28,9 @@ __global__ void KernelDepthConvert(Image<uint16_t> dRaw,
 void ConvertDepth(const Image<uint16_t>& dRaw,
     const Image<float>& d,
     float scale) {
-  size_t w = d.w;
-  size_t h = d.h;
-  dim3 threads(32,32,1);
-  dim3 blocks(w/32+(w%32>0?1:0), h/32+(h%32>0?1:0),1);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,dRaw,32,32);
   KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale);
-
 }
 
 }

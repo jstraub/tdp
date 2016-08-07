@@ -1,7 +1,7 @@
 
-#include <cuda.h>
 #include <stdio.h>
 #include <Eigen/Dense>
+#include <tdp/cuda.h>
 #include <tdp/normals.h>
 
 namespace tdp {
@@ -50,12 +50,9 @@ void ComputeNormals(
     const Image<Eigen::Vector3f>& n,
     float f, float uc, float vc) {
   
-  size_t w = d.w;
-  size_t h = d.h;
-  dim3 threads(32,32,1);
-  dim3 blocks(w/32+(w%32>0?1:0), h/32+(h%32>0?1:0),1);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,dRaw,32,32);
   KernelSurfaceNormals<<<blocks,threads>>>(d,ddu,ddv,n,f,uc,vc);
-
 }
 
 }
