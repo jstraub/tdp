@@ -58,3 +58,5 @@ std::ostream& operator<<(std::ostream& out, const SO3<T>& so3) {
 }
 
 }
+#include <tdp/manifold/SO3_impl.hpp>
+

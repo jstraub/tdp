@@ -1,5 +1,6 @@
 #include <iostream>
 #include <Eigen/Dense>
+#include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
 
 using namespace tdp;

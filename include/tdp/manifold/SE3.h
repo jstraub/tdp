@@ -8,7 +8,7 @@ namespace tdp {
 
 template<typename T>
 class SE3 : Manifold<T,6> {
- friend class SO3<T>;
+ //friend class tdp::SO3<T>;
  public:
   SE3();
   SE3(const Eigen::Matrix<T,4,4>& Tmat);
