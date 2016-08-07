@@ -1,7 +1,5 @@
 
-list(APPEND SRCS
-  ./dummy.cpp
-  )
+file(GLOB SRCS "*.cpp")
 
 if(CUDA_FOUND)
   list(APPEND SRCS

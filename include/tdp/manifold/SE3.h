@@ -53,4 +53,4 @@ std::ostream& operator<<(std::ostream& out, const SE3<T>& se3);
 
 }
 
-#include <manifold/SE3_impl.hpp>
+#include <tdp/manifold/SE3_impl.hpp>
