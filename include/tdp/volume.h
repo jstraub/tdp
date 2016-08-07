@@ -13,7 +13,7 @@ class Volume {
   {}
   Volume(const Volume& vol)
     : w_(vol.w_), h_(vol.h_), d_(vol.d_), pitch_(vol.pitch_),
-    pitchImg_(vol.pitchImg_) ptr_(vol.ptr_)
+    pitchImg_(vol.pitchImg_), ptr_(vol.ptr_)
   {}
   ~Volume()
   {}

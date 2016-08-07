@@ -1,7 +1,4 @@
 #pragma once
-
-#ifdef CUDA_FOUND
-
 #include <cuda.h>
 
 namespace tdp {
@@ -26,5 +23,3 @@ class GpuAllocator {
 };
 
 }
-
-#endif
