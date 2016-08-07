@@ -1,3 +1,4 @@
+#pragma once 
 
 namespace tdp {
 
@@ -5,7 +6,7 @@ template <class T>
 class Image {
  public:
   Image()
-    : w_(0), h_(0), ptr_(nullptr)
+    : w_(0), h_(0), pitch_(0), ptr_(nullptr)
   {}
   Image(size_t w, size_t h, T* ptr)
     : w_(w), h_(h), pitch_(w), ptr_(ptr)
