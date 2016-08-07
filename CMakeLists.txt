@@ -39,4 +39,5 @@ link_directories(
 )
 
 add_subdirectory(./test)
+add_subdirectory(./experiments)
 add_subdirectory(./src)
