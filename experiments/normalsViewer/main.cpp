@@ -15,6 +15,7 @@
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
 #include <tdp/normals.h>
+#include <tdp/quickView.h>
 
 template<typename To, typename From>
 void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
@@ -124,13 +125,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         view.SetHandler(&handlers.back());
     }
 
-    pangolin::View& viewDebugA = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
-    container.AddDisplay(viewDebugA);
-    glfmt.push_back(pangolin::GlPixFormat(pangolin::VideoFormatFromString("GRAY32F")));
-    gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f));
-    strides.push_back(wc);
-    handlers.push_back( pangolin::ImageViewHandler(wc,hc) );
-    viewDebugA.SetHandler(&handlers.back());
+
+    tdp::QuickView viewDebugA(wc,hc);
+    //pangolin::View& viewDebugA = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
+    //container.AddDisplay(viewDebugA);
+    //glfmt.push_back(pangolin::GlPixFormat(pangolin::VideoFormatFromString("GRAY32F")));
+    //gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f));
+    //strides.push_back(wc);
+    //handlers.push_back( pangolin::ImageViewHandler(wc,hc) );
+    //viewDebugA.SetHandler(&handlers.back());
 
     pangolin::View& viewDebugB = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
     container.AddDisplay(viewDebugB);
@@ -350,7 +353,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if ( frame < end_frame ) {
             if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
                 frame = frame +1;
-                pangolin::Image<unsigned char>debugARaw(wc,hc,wc*sizeof(float),(uint8_t*)debugA.ptr);
+                //pangolin::Image<unsigned char>debugARaw(wc,hc,wc*sizeof(float),(uint8_t*)debugA.ptr);
                 images.push_back(debugARaw);
                 pangolin::Image<unsigned char>debugBRaw(wc,hc,wc*sizeof(float),(uint8_t*)debugB.ptr);
                 images.push_back(debugBRaw);
@@ -419,6 +422,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         glDisable(GL_DEPTH_TEST);
 
         CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
+        viewDebugA.SetImage(debugA);
         CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
         for(unsigned int i=0; i<images.size(); ++i)
         {
