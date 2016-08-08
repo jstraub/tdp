@@ -15,6 +15,12 @@
 #include <tdp/depth.h>
 #include <tdp/normals.h>
 #include <tdp/quickView.h>
+#include <tdp/volume.h>
+#include <tdp/managed_volume.h>
+#include <tdp/image.h>
+#include <tdp/manifold/SE3.h>
+#include <tdp/tsdf.h>
+#include <tdp/nvidia/helper_cuda.h>
 
 template<typename To, typename From>
 void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
@@ -71,6 +77,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     float uc = (w-1.)/2.;
     float vc = (h-1.)/2.;
 
+    size_t d_r = 32;
+
     // Check if video supports VideoPlaybackInterface
     pangolin::VideoPlaybackInterface* video_playback = video.Cast<pangolin::VideoPlaybackInterface>();
     const int total_frames = video_playback ? video_playback->GetTotalFrames() : std::numeric_limits<int>::max();
@@ -112,12 +120,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         strides.push_back( (8*si.Pitch()) / si.PixFormat().bpp );
     }
 
-    tdp::QuickView viewDebugA(wc,hc);
-    container.AddDisplay(viewDebugA);
-    tdp::QuickView viewDebugB(wc,hc);
-    container.AddDisplay(viewDebugB);
-    tdp::QuickView viewN2D(wc,hc);
-    container.AddDisplay(viewN2D);
 
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
@@ -135,13 +137,17 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
 
     pangolin::Var<int>  record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 );
-    pangolin::Var<int>  end_frame("viewer.end_frame", std::numeric_limits<int>::max() );
-    pangolin::Var<bool> video_wait("video.wait", true);
-    pangolin::Var<bool> video_newest("video.newest", false);
+    pangolin::Var<int>  end_frame("ui.end_frame", std::numeric_limits<int>::max() );
+    pangolin::Var<bool> video_wait("ui.wait", true);
+    pangolin::Var<bool> video_newest("ui.newest", false);
 
-    pangolin::Var<bool> show2DNormals("ui.show 2D Normals",true,true);
-    pangolin::Var<bool> compute3Dgrads("ui.compute3Dgrads",false,true);
-    pangolin::Var<bool> evaluatePlaneFit("ui.evalPlaneFit",true,true);
+    pangolin::Var<float> tsdfDmin("ui.d min",0.1,0.1,1.);
+    pangolin::Var<float> tsdfDmax("ui.d max",1.5,0.1,2.);
+    pangolin::Var<float> tsdfRho0("ui.rho0",0.1,0.,1.);
+    pangolin::Var<float> tsdfDRho("ui.d rho",0.1,0.,1.);
+    pangolin::Var<float> tsdfMu("ui.mu",0.1,0.,1.);
+    pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",d_r/2,0,d_r-1);
+    pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
 
     if( video_playback ) {
         if(total_frames < std::numeric_limits<int>::max() ) {
@@ -256,24 +262,43 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 #endif // CALLEE_HAS_CPP11
 
     tdp::ManagedHostImage<float> d(wc, hc);
-    tdp::ManagedHostImage<float> debugA(wc, hc);
-    tdp::ManagedHostImage<float> debugB(wc, hc);
 
     tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
     memset(n2D.ptr_,0,n2D.SizeBytes());
     tdp::ManagedHostImage<Eigen::Vector3f> n2Df(wc,hc);
     tdp::ManagedHostImage<Eigen::Vector3f> n(wc,hc);
 
-    pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc, GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
-
     tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
     tdp::ManagedDeviceImage<float> cuD(wc, hc);
-    tdp::ManagedDeviceImage<float> cuDu(wc, hc);
-    tdp::ManagedDeviceImage<float> cuDv(wc, hc);
-    tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
+
+    tdp::ManagedHostVolume<float> W(wc/2, hc/2, d_r);
+    tdp::ManagedHostVolume<float> TSDF(wc/2, hc/2, d_r);
+    tdp::ManagedHostImage<float> dEst(wc/2, hc/2);
+    W.Fill(0.);
+    TSDF.Fill(0.);
+    dEst.Fill(0.);
+    tdp::ManagedDeviceVolume<float> cuW(wc/2, hc/2, d_r);
+    tdp::ManagedDeviceVolume<float> cuTSDF(wc/2, hc/2, d_r);
+    tdp::ManagedDeviceImage<float> cuDEst(wc/2, hc/2);
+
+    tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+    tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+    tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
+
+    tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());
+    tdp::Camera<float> camR(Eigen::Vector4f(275,275,159.5,119.5)); 
+    tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
+
+    tdp::ManagedHostImage<float> debugA(wc/2, hc/2);
+    tdp::ManagedHostImage<float> debugB(wc/2, hc/2);
+    tdp::QuickView viewDebugA(wc/2,hc/2);
+    container.AddDisplay(viewDebugA);
+    tdp::QuickView viewDebugB(wc/2,hc/2);
+    container.AddDisplay(viewDebugB);
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
+
         glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -296,61 +321,50 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
 
+
         cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();
 
-        // upload to gpu
-        // get derivatives using shar kernel
-        float kernelA[3] = {1,0,-1};
-        setConvolutionKernel(kernelA);
-        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-        float kernelB[3] = {3/32.,10/32.,3/32.};
-        setConvolutionKernel(kernelB);
-        convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
-        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-        setConvolutionKernel(kernelA);
-        convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
-
-        cudaDeviceSynchronize();
-        pangolin::basetime tGrad = pangolin::TimeNow();
-
-        {
-          pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
-          cudaMemset(*cuNbufp,0, hc*wc*sizeof(Eigen::Vector3f));
-          tdp::Image<Eigen::Vector3f> cuN(wc, hc, wc*sizeof(Eigen::Vector3f), (Eigen::Vector3f*)*cuNbufp);
-          ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
-          if (show2DNormals) {
-            CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
-            //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
-            for(size_t y=0; y < n2Df.h_; ++y) {
-              for(size_t x=0; x < n2Df.w_*3; ++x) {
-                ((uint8_t*)n2D.RowPtr((int)y))[x] = floor(((float*)n2Df.RowPtr((int)y))[x]*128+127);
-              }
-            }
-          }
+        if (pangolin::Pushed(resetTSDF)) {
+          W.Fill(0.);
+          TSDF.Fill(0.);
+          dEst.Fill(0.);
+          tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+          tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+          tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
         }
-        cudaDeviceSynchronize();
-        pangolin::basetime tNormal = pangolin::TimeNow();
+
+        tsdfRho0 = 1./tsdfDmax;
+        tsdfDRho = (1./tsdfDmin - tsdfRho0)/float(d_r-1);
+
+        AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, tsdfRho0, tsdfDRho, tsdfMu); 
+
+        checkCudaErrors(cudaDeviceSynchronize());
+        pangolin::basetime tAddTSDF = pangolin::TimeNow();
+
+        RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, tsdfRho0, tsdfDRho, tsdfMu); 
+
+        checkCudaErrors(cudaDeviceSynchronize());
+        pangolin::basetime tRayTrace = pangolin::TimeNow();
 
         std::cout << pangolin::TimeDiff_s(t0,tDepth) << "\t"
-          << pangolin::TimeDiff_s(tDepth,tGrad) << "\t"
-          << pangolin::TimeDiff_s(tGrad,tNormal) << "\t"
-          << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
-
-        if (evaluatePlaneFit) {
-
-        }
+          << pangolin::TimeDiff_s(tDepth,tAddTSDF) << "\t"
+          << pangolin::TimeDiff_s(tAddTSDF,tRayTrace) << "\t"
+          << pangolin::TimeDiff_s(t0,tRayTrace) << "\t"<< std::endl;
 
         glEnable(GL_DEPTH_TEST);
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
-        pangolin::RenderVbo(cuNbuf);
+        //pangolin::RenderVbo(cuNbuf);
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);
 
-        CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
-        CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
+        CopyImage(cuDEst, debugA, cudaMemcpyDeviceToHost);
+        //if (tsdfSliceD.GuiChanged()) {
+        tdp::Image<float> sliceTSDF(cuTSDF.w_, cuTSDF.h_, cuTSDF.ImagePtr(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get())));
+        CopyImage(sliceTSDF, debugB, cudaMemcpyDeviceToHost);
+        //}
         for(unsigned int i=0; i<images.size(); ++i)
         {
           if(container[i].IsShown()) {
@@ -360,9 +374,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         }
         viewDebugA.SetImage(debugA);
         viewDebugB.SetImage(debugB);
-        if (show2DNormals) {
-          viewN2D.SetImage(n2D);
-        }
 
         // leave in pixel orthographic for slider to render.
         pangolin::DisplayBase().ActivatePixelOrthographic();

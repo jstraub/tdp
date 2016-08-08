@@ -4,12 +4,12 @@
 
 namespace tdp {
 
-template <class T, class B>
+template <class T, size_t D, class B>
 class CameraBase {
  public:
   typedef Eigen::Matrix<T,3,1> Point3;
   typedef Eigen::Matrix<T,2,1> Point2;
-  typedef Eigen::Matrix<T,Eigen::Dynamic,1> Parameters;
+  typedef Eigen::Matrix<T,D,1> Parameters;
 
   CameraBase(const Parameters& params) : params_(params)
   {}
@@ -31,14 +31,14 @@ class CameraBase {
 };
 
 template <class T>
-class Camera : public CameraBase<T,Camera<T>> {
+class Camera : public CameraBase<T,4,Camera<T>> {
  public:
   typedef Eigen::Matrix<T,3,1> Point3;
   typedef Eigen::Matrix<T,2,1> Point2;
-  typedef Eigen::Matrix<T,Eigen::Dynamic,1> Parameters;
+  typedef Eigen::Matrix<T,4,1> Parameters;
 
   // parameters: fu, fv, uc, vc
-  Camera(const Parameters& params) : CameraBase<T,Camera<T>>(params)
+  Camera(const Parameters& params) : CameraBase<T,4,Camera<T>>(params)
   {}
   ~Camera()
   {}

@@ -3,7 +3,6 @@ file(GLOB SRCS "*.cpp")
 file(GLOB CU_SRCS "*.cu")
 
 if(CUDA_FOUND)
-  message ("Cuda found -- adding .cu files to lib3dp")
   list(APPEND SRCS ${CU_SRCS})
   cuda_add_library(tdp SHARED
     ${SRCS}

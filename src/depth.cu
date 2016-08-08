@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <iostream>
 #include <Eigen/Dense>
 #include <tdp/cuda.h>
 #include <tdp/depth.h>
@@ -31,6 +32,7 @@ void ConvertDepth(const Image<uint16_t>& dRaw,
     float scale) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
+  //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
   KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale);
 }
 

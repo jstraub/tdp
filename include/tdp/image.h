@@ -10,7 +10,7 @@ class Image {
     : w_(0), h_(0), pitch_(0), ptr_(nullptr)
   {}
   Image(size_t w, size_t h, T* ptr)
-    : w_(w), h_(h), pitch_(w), ptr_(ptr)
+    : w_(w), h_(h), pitch_(w*sizeof(T)), ptr_(ptr)
   {}
   Image(size_t w, size_t h, size_t pitch, T* ptr)
     : w_(w), h_(h), pitch_(pitch), ptr_(ptr)
@@ -36,6 +36,8 @@ class Image {
 
   TDP_HOST_DEVICE
   size_t SizeBytes() { return pitch_*h_; }
+
+  void Fill(T value) { for (size_t i=0; i<w_*h_; ++i) ptr_[i] = value; }
 
   size_t w_;
   size_t h_;

@@ -8,3 +8,6 @@ file(GLOB SRCS
 add_executable(${ProjName}
   ${SRCS}
   )
+
+target_link_libraries(${ProjName}
+  tdp)

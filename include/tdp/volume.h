@@ -43,6 +43,8 @@ class Volume {
   TDP_HOST_DEVICE
   size_t SizeBytes() { return pitchImg_*d_; }
 
+  void Fill(T value) { for (size_t i=0; i<w_*d_*h_; ++i) ptr_[i] = value; }
+
   size_t w_;
   size_t h_;
   size_t d_; // depth
