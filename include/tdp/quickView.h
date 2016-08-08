@@ -1,13 +1,15 @@
 
 #pragma once
-#include <pangolin/view.h>
-#include <pangolin/handler_image.h>
-#include <tdp/pixFormat.h>
+#include <pangolin/gl/gl.h>
+#include <pangolin/gl/glsl.h>
+#include <pangolin/display/view.h>
+#include <pangolin/handler/handler_image.h>
+#include <tdp/pixelFormat.h>
 #include <tdp/image.h>
 
 namespace tdp {
 
-class QuickView : public pangolin::View, pangolin::ImageViewHandler {
+class QuickView : public pangolin::View, public pangolin::ImageViewHandler {
  public:
   QuickView(size_t w, size_t h);
   ~QuickView() {};
@@ -35,13 +37,13 @@ class QuickView : public pangolin::View, pangolin::ImageViewHandler {
 
 template <typename T>
 void QuickView::SetImage(const Image<T>& img) {
-  pangolin::Image img_p(img.w_, img.h_, img.pitch_, img.ptr_);
-  return SetImage(img_p, PixFormatFromType<T>(), img.pitch/sizeof(T));
+  pangolin::Image<T> img_p(img.w_, img.h_, img.pitch_, img.ptr_);
+  SetImage(img_p, PixFormatFromType<T>(), img.pitch_/sizeof(T));
 }
 
 template <typename T>
 void QuickView::SetImage(const pangolin::Image<T>& img) {
-  return SetImage(img, PixFormatFromType<T>(), img.pitch/sizeof(T));
+  SetImage(img, PixFormatFromType<T>(), img.pitch/sizeof(T));
 }
 
 template <typename T>
@@ -49,19 +51,19 @@ void QuickView::SetImage(const pangolin::Image<T>& img, const pangolin::GlPixFor
   this->Activate();
 
   // Get texture of correct dimension / format
-  tex.Reinitialise((GLsizei)img.w, (GLsizei)img.h,
+  tex_.Reinitialise((GLsizei)img.w, (GLsizei)img.h,
       fmt.scalable_internal_format, fmt.glformat, GL_FLOAT);
 
   // Upload image data to texture
-  tex.Bind();
+  tex_.Bind();
   glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)stride);
-  tex.Upload(img.ptr,0,0, (GLsizei)img.w, (GLsizei)img.h, fmt.glformat, fmt.gltype);
+  tex_.Upload(img.ptr,0,0, (GLsizei)img.w, (GLsizei)img.h, fmt.glformat, fmt.gltype);
 
   // Render
   this->UpdateView();
   this->glSetViewOrtho();
   pangolin::GlSlUtilities::OffsetAndScale(gloffsetscale_.first, gloffsetscale_.second);
-  this->glRenderTexture(tex);
+  this->glRenderTexture(tex_);
   pangolin::GlSlUtilities::UseNone();
   this->glRenderOverlay();
 

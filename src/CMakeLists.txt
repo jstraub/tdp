@@ -1,14 +1,18 @@
 
 file(GLOB SRCS "*.cpp")
+file(GLOB CU_SRCS "*.cu")
 
 if(CUDA_FOUND)
-  list(APPEND SRCS
-    ./ray.cu
-    ./normals.cu
-    ./depth.cu
+  message ("Cuda found -- adding .cu files to lib3dp")
+  list(APPEND SRCS ${CU_SRCS})
+  cuda_add_library(tdp SHARED
+    ${SRCS}
+    )
+else() 
+  add_library(tdp SHARED
+    ${SRCS}
     )
 endif()
+message ("${SRCS}")
 
-add_library(3dp SHARED
-  ${SRCS}
-  )
+target_link_libraries(tdp pangolin)

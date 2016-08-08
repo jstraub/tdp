@@ -9,8 +9,7 @@
 #include <pangolin/gl/glcuda.h>
 
 #include <Eigen/Dense>
-#include <tdp/ManagedImage.h>
-#include <tdp/Allocator.h>
+#include <tdp/managed_image.h>
 
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
@@ -323,21 +322,21 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     });
 #endif // CALLEE_HAS_CPP11
 
-    ManagedImage<float,CpuAllocator<float>> d(wc, hc);
-    ManagedImage<float,CpuAllocator<float>> debugA(wc, hc);
-    ManagedImage<float,CpuAllocator<float>> debugB(wc, hc);
-    ManagedImage<Eigen::Matrix<uint8_t,3,1>,CpuAllocator<Eigen::Matrix<uint8_t,3,1>>> n2D(wc, hc);
-    memset(n2D.ptr,0,n2D.SizeBytes());
-    ManagedImage<Eigen::Matrix<float,3,1>,CpuAllocator<Eigen::Matrix<float,3,1>>> n2Df(wc, hc);
-    ManagedImage<Eigen::Vector3f,CpuAllocator<Eigen::Vector3f>> n(wc, hc);
+    tdp::ManagedHostImage<float> d(wc, hc);
+    tdp::ManagedHostImage<float> debugA(wc, hc);
+    tdp::ManagedHostImage<float> debugB(wc, hc);
+    tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
+    memset(n2D.ptr_,0,n2D.SizeBytes());
+    tdp::ManagedHostImage<Eigen::Vector3f> n2Df(wc,hc);
+    tdp::ManagedHostImage<Eigen::Vector3f> n(wc,hc);
 
     pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc, GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
-    ManagedImage<uint16_t,GpuAllocator<uint16_t>> cuDraw(w, h);
-    ManagedImage<float,GpuAllocator<float>> cuD(wc, hc);
-    ManagedImage<float,GpuAllocator<float>> cuDu(wc, hc);
-    ManagedImage<float,GpuAllocator<float>> cuDv(wc, hc);
-    ManagedImage<float,GpuAllocator<float>> cuTmp(wc, hc);
+    tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
+    tdp::ManagedDeviceImage<float> cuD(wc, hc);
+    tdp::ManagedDeviceImage<float> cuDu(wc, hc);
+    tdp::ManagedDeviceImage<float> cuDv(wc, hc);
+    tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
@@ -354,17 +353,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
             if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
                 frame = frame +1;
                 //pangolin::Image<unsigned char>debugARaw(wc,hc,wc*sizeof(float),(uint8_t*)debugA.ptr);
-                images.push_back(debugARaw);
-                pangolin::Image<unsigned char>debugBRaw(wc,hc,wc*sizeof(float),(uint8_t*)debugB.ptr);
+                //images.push_back(debugARaw);
+                pangolin::Image<unsigned char>debugBRaw(wc,hc,wc*sizeof(float),(uint8_t*)debugB.ptr_);
                 images.push_back(debugBRaw);
-                pangolin::Image<unsigned char>n2DRaw(wc,hc,wc*3,(uint8_t*)n2D.ptr);
+                pangolin::Image<unsigned char>n2DRaw(wc,hc,wc*3,(uint8_t*)n2D.ptr_);
                 images.push_back(n2DRaw);
             }
         }
 
         pangolin::basetime t0 = pangolin::TimeNow();
 
-        pangolin::Image<uint16_t> dRaw = images[iD].Reinterpret<uint16_t>();
+        tdp::Image<uint16_t> dRaw(images[iD].w, images[iD].h,
+            images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
 
@@ -375,13 +375,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         // get derivatives using shar kernel
         float kernelA[3] = {1,0,-1};
         setConvolutionKernel(kernelA);
-        convolutionRowsGPU((float*)cuTmp.ptr,(float*)cuD.ptr,wc,hc);
+        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
         float kernelB[3] = {3/32.,10/32.,3/32.};
         setConvolutionKernel(kernelB);
-        convolutionColumnsGPU((float*)cuDu.ptr,(float*)cuTmp.ptr,wc,hc);
-        convolutionRowsGPU((float*)cuTmp.ptr,(float*)cuD.ptr,wc,hc);
+        convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
+        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
         setConvolutionKernel(kernelA);
-        convolutionColumnsGPU((float*)cuDv.ptr,(float*)cuTmp.ptr,wc,hc);
+        convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
 
         cudaDeviceSynchronize();
         pangolin::basetime tGrad = pangolin::TimeNow();
@@ -389,13 +389,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         {
           pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
           cudaMemset(*cuNbufp,0, hc*wc*sizeof(Eigen::Vector3f));
-          pangolin::Image<Eigen::Vector3f> cuN(wc, hc, wc*sizeof(Eigen::Vector3f), (Eigen::Vector3f*)*cuNbufp);
+          tdp::Image<Eigen::Vector3f> cuN(wc, hc, wc*sizeof(Eigen::Vector3f), (Eigen::Vector3f*)*cuNbufp);
           ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
           if (show2DNormals) {
             CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
             //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
-            for(size_t y=0; y < n2Df.h; ++y) {
-              for(size_t x=0; x < n2Df.w*3; ++x) {
+            for(size_t y=0; y < n2Df.h_; ++y) {
+              for(size_t x=0; x < n2Df.w_*3; ++x) {
                 ((uint8_t*)n2D.RowPtr((int)y))[x] = floor(((float*)n2Df.RowPtr((int)y))[x]*128+127);
               }
             }

@@ -1,4 +1,5 @@
 #pragma once 
+#include <tdp/config.h>
 
 namespace tdp {
 
@@ -20,14 +21,21 @@ class Image {
   ~Image()
   {}
 
+  TDP_HOST_DEVICE
   const T& operator()(size_t u, size_t v) const {
     return *(RowPtr(v)+u);
   }
+
+  TDP_HOST_DEVICE
   T& operator()(size_t u, size_t v) {
     return *(RowPtr(v)+u);
   }
 
-  T* RowPtr(size_t v) { return static_cast<T*>(static_cast<uint8_t*>(ptr_)+v*pitch_); }
+  TDP_HOST_DEVICE
+  T* RowPtr(size_t v) const { return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_); }
+
+  TDP_HOST_DEVICE
+  size_t SizeBytes() { return pitch_*h_; }
 
   size_t w_;
   size_t h_;

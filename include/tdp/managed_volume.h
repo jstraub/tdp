@@ -29,9 +29,9 @@ template <class T>
 using ManagedDeviceVolume = ManagedVolume<T,GpuAllocator<T>>;
 
 template<class T>
-void CopyVolume(pangolin::Volume<T>& From, pangolin::Volume<T>& To, cudaMemcpyKind cpType) { 
+void CopyVolume(Volume<T>& From, Volume<T>& To, cudaMemcpyKind cpType) { 
   assert(From.SizeBytes() == To.SizeBytes());
-  cudaMemcpy(To.ptr, From.ptr, From.SizeBytes(), cpType);
+  cudaMemcpy(To.ptr_, From.ptr_, From.SizeBytes(), cpType);
 }
 #endif
 

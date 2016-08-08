@@ -1,7 +1,9 @@
 
 #include <stdio.h>
 #include <Eigen/Dense>
+#include <tdp/config.h>
 #include <tdp/cuda.h>
+#include <tdp/image.h>
 #include <tdp/normals.h>
 
 namespace tdp {
@@ -9,19 +11,17 @@ namespace tdp {
 template<typename T>
 __device__
 T* RowPtr(Image<T>& I, size_t row) {
-  return (T*)((uint8_t*)I.ptr+I.pitch*row);
+  return (T*)((uint8_t*)I.ptr_+I.pitch_*row);
 }
 
 __global__ void KernelSurfaceNormals(Image<float> d,
     Image<float> ddu, Image<float> ddv,
     Image<Eigen::Vector3f> n, float f, float uc, float vc) {
-
   //const int tid = threadIdx.x;
-  const int tid = threadIdx.x + blockDim.x * threadIdx.y;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
-  if (idx < n.w && idy < n.h) {
+  if (idx < n.w_ && idy < n.h_) {
     const float di = RowPtr<float>(d,idy)[idx];
     float* ni = (float*)(&RowPtr<Eigen::Vector3f>(n,idy)[idx]);
     if (di > 0) {
@@ -51,7 +51,7 @@ void ComputeNormals(
     float f, float uc, float vc) {
   
   dim3 threads, blocks;
-  ComputeKernelParamsForImage(blocks,threads,dRaw,32,32);
+  ComputeKernelParamsForImage(blocks,threads,d,32,32);
   KernelSurfaceNormals<<<blocks,threads>>>(d,ddu,ddv,n,f,uc,vc);
 }
 

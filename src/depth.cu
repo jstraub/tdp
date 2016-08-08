@@ -12,16 +12,17 @@ __global__ void KernelDepthConvert(Image<uint16_t> dRaw,
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
-  if (idx < dRaw.w && idy < dRaw.h) {
-    const uint16_t di = RowPtr<uint16_t>(dRaw,idy)[idx];
+  if (idx < dRaw.w_ && idy < dRaw.h_) {
+    //const uint16_t di = RowPtr<uint16_t>(dRaw,idy)[idx];
+    const uint16_t di = dRaw(idx,idy);
     if (di > 0) {
-      RowPtr<float>(d,idy)[idx] = ((float)di)*scale;
+      d(idx,idy) = ((float)di)*scale;
     } else {
-      RowPtr<float>(d,idy)[idx] = 0./0.; // nan
+      d(idx,idy) = 0./0.; // nan
     }
-  } else if (idx < d.w && idy < d.h) {
+  } else if (idx < d.w_ && idy < d.h_) {
     // d might be bigger than dRaw because of consecutive convolutions
-    RowPtr<float>(d,idy)[idx] = 0./0.; // nan
+    d(idx,idy) = 0./0.; // nan
   }
 }
 
@@ -29,7 +30,7 @@ void ConvertDepth(const Image<uint16_t>& dRaw,
     const Image<float>& d,
     float scale) {
   dim3 threads, blocks;
-  ComputeKernelParamsForImage(blocks,threads,dRaw,32,32);
+  ComputeKernelParamsForImage(blocks,threads,d,32,32);
   KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale);
 }
 

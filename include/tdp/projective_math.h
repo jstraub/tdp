@@ -1,9 +1,16 @@
 #pragma once
 #include <Eigen/Dense>
+#include <tdp/manifold/SE3.h>
+#include <tdp/camera.h>
 
 namespace tdp {
 
-Eigen::Vector2f TransformHomography(u_d, T_rd, camR, camD, nd_r) {
+inline
+Eigen::Vector2f TransformHomography(const Eigen::Vector2f& u_d, 
+    const SE3<float>& T_rd, 
+    const Camera<float>& camR, 
+    const Camera<float>& camD, 
+    const Eigen::Vector3f& nd_r) {
   return camR.Project((T_rd.rotation()-T_rd.translation()*nd_r.transpose())*camD.Unproject(u_d(0), u_d(1)));
 };
 

@@ -30,7 +30,7 @@ using ManagedDeviceImage = ManagedImage<T,GpuAllocator<T>>;
 template<class T>
 void CopyImage(Image<T>& From, Image<T>& To, cudaMemcpyKind cpType) { 
   assert(From.SizeBytes() == To.SizeBytes());
-  cudaMemcpy(To.ptr, From.ptr, From.SizeBytes(), cpType);
+  cudaMemcpy(To.ptr_, From.ptr_, From.SizeBytes(), cpType);
 }
 #endif
 

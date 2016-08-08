@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cuda.h>
+#include <tdp/volume.h>
+#include <tdp/image.h>
 
 namespace tdp {
 
@@ -13,8 +15,7 @@ void ComputeKernelParamsForImage(dim3& blocks, dim3& threads,
 
 template<typename T>
 void ComputeKernelParamsForVolume(dim3& blocks, dim3& threads, 
-    Volume<t> V,
-    size_t numThreadsX, size_t numThreadsY, size_t numThreadsZ) {
+    Volume<T> V, size_t numThreadsX, size_t numThreadsY, size_t numThreadsZ) {
   threads = dim3(numThreadsX,numThreadsY,numThreadsZ); 
   blocks = dim3(V.w_/32+(V.w_%32>0?1:0), 
       V.h_/32+(V.h_%32>0?1:0),
