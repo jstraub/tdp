@@ -1,19 +1,21 @@
 
 #include <cuda.h>
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <tdp/image.h>
 
 namespace tdp {
 
 // populate rays given a pinhole camera parameterization
 __global__ 
-KernelRay(float uc, float vc, float invFu, float invFv, Image<float2> ray) {
+void KernelRay(float uc, float vc, float invFu, float invFv, Image<Eigen::Vector2f> ray) {
 
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
-  if (idx < ray.w && idy < ray.h) {
-    const float2 rayi = RowPtr<float2>(ray,idy)[idx];
-    rayi.x = (idx-uc)*invFu;
-    rayi.y = (idx-vc)*invFv;
+  if (idx < ray.w_ && idy < ray.h_) {
+    Eigen::Vector2f& rayi = ray(idx,idy);
+    rayi(0) = (idx-uc)*invFu;
+    rayi(1) = (idx-vc)*invFv;
   }
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <Eigen/Dense>
+#include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
 
 namespace tdp {
@@ -11,15 +12,22 @@ class SO3 : Manifold<T,3> {
   SO3();
   SO3(const Eigen::Matrix<T,3,3>& R);
   SO3(const SO3<T>& other);
+  TDP_HOST_DEVICE
   ~SO3() {};
 
+  TDP_HOST_DEVICE
   const Eigen::Matrix<T,3,3>& matrix() const { return R_;};
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3>& matrix() { return R_;};
 
+  TDP_HOST_DEVICE
   SO3<T> Inverse() const ;
+  TDP_HOST_DEVICE
   SO3<T> Exp (const Eigen::Matrix<T,3,1>& w)const ;
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> Log (const SO3<T>& other)const ;
 
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> vee() const;
 
   Eigen::Matrix<T,3,1> operator-(const SO3<T>& other);

@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <nvidia/helper_string.h>
+#include <tdp/nvidia/helper_string.h>
 
 /*
 inline void __ExitInTime(int seconds)

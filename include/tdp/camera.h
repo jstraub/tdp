@@ -1,4 +1,6 @@
+#pragma once
 #include <Eigen/Dense>
+#include <tdp/config.h>
 
 namespace tdp {
 
@@ -14,10 +16,13 @@ class CameraBase {
   ~CameraBase()
   {}
 
-  Point2 Project(const Point3& p) {
+  TDP_HOST_DEVICE
+  Point2 Project(const Point3& p) const {
     return static_cast<B*>(this)->Project(p);
   }
-  Point3 Unproject(T u, T v, T z) {
+
+  TDP_HOST_DEVICE
+  Point3 Unproject(T u, T v, T z) const {
     return static_cast<B*>(this)->Unproject(u,v,z);
   }
 
@@ -38,12 +43,14 @@ class Camera : public CameraBase<T,Camera<T>> {
   ~Camera()
   {}
 
-  Point2 Project(const Point3& p) {
+  TDP_HOST_DEVICE
+  Point2 Project(const Point3& p) const {
     return Point2(p(0)/p(2)*this->params_(0)+this->params_(2), 
                   p(1)/p(2)*this->params_(1)+this->params_(3));
   }
 
-  Point3 Unproject(T u, T v, T z) {
+  TDP_HOST_DEVICE
+  Point3 Unproject(T u, T v, T z) const {
     return Point3( (u-this->params_(2))/this->params_(0)*z,
                    (v-this->params_(3))/this->params_(1)*z,
                    z);

@@ -10,7 +10,8 @@ IF(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug) # Release; debug; ...
 ENDIF()
 
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
+message(${CMAKE_MODULE_PATH})
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set (CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "default install path" FORCE )
@@ -22,7 +23,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -Wno-deprecated -std=c++11")
 
 find_package (CUDA QUIET)
 if (CUDA_FOUND)
-  list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-std=c++11;-O2;-DVERBOSE")
+  list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-std=c++11;-O2;-DVERBOSE;-D__CUDACC__")
   include_directories(${CUDA_TOOLKIT_INCLUDE})
   add_definitions(-DCUDA_FOUND)
 endif()
@@ -30,7 +31,11 @@ endif()
 
 find_package(Pangolin REQUIRED)
 message(${Pangolin_DIR}/include)
-find_package (Eigen3 REQUIRED)
+
+#TODO fogure out hoew to get FindEigen3.cmake to find my own install (need CUDA support)
+#unset(EIGEN3_INCLUDE_DIR CACHE)
+#find_package (Eigen3 3.2.93 REQUIRED)
+set(EIGEN3_INCLUDE_DIR "/home/jstraub/workspace/research/3rdparty/eigen/")
 
 include_directories(
   include

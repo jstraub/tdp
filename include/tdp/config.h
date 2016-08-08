@@ -8,6 +8,8 @@
 
 //#define EIGEN_DEFAULT_DENSE_INDEX_TYPE int32_t
 
-#ifdef CUDA_FOUND
+#ifdef __CUDACC__ 
 #  define TDP_HOST_DEVICE __host__ __device__
+#else
+#  define TDP_HOST_DEVICE
 #endif

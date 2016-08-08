@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <Eigen/Dense>
+#include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
 #include <tdp/manifold/SO3.h>
 
@@ -13,15 +14,32 @@ class SE3 : Manifold<T,6> {
   SE3();
   SE3(const Eigen::Matrix<T,4,4>& Tmat);
   SE3(const SE3<T>& other);
+  TDP_HOST_DEVICE
   ~SE3() {};
 
+  TDP_HOST_DEVICE
   const Eigen::Matrix<T,4,4>& matrix() const { return T_;};
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,4,4>& matrix() { return T_;};
 
-  SE3<T> Inverse() const ;
-  SE3<T> Exp (const Eigen::Matrix<T,6,1>& w)const ;
-  Eigen::Matrix<T,6,1> Log (const SE3<T>& other)const ;
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,4> matrix3x4() const { return T_.topRows(3);};
 
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,1> translation() const { return T_.topRightCorner(3,1);};
+  TDP_HOST_DEVICE
+  SO3<T> rotation() const { return SO3<T>(T_.topLeftCorner(3,3));};
+
+  TDP_HOST_DEVICE
+  SE3<T> Inverse() const ;
+
+  TDP_HOST_DEVICE
+  SE3<T> Exp (const Eigen::Matrix<T,6,1>& w) const ;
+
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,6,1> Log (const SE3<T>& other) const ;
+
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> vee() const;
 
   Eigen::Matrix<T,6,1> operator-(const SE3<T>& other);
