@@ -13,7 +13,7 @@ class Image {
     : w_(w), h_(h), pitch_(w), ptr_(ptr)
   {}
   Image(size_t w, size_t h, size_t pitch, T* ptr)
-    : w_(w), h_(h), pitch_(w), ptr_(ptr)
+    : w_(w), h_(h), pitch_(pitch), ptr_(ptr)
   {}
   Image(const Image& img)
     : w_(img.w_), h_(img.h_), pitch_(img.pitch_), ptr_(img.ptr_)

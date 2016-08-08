@@ -104,51 +104,21 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::View& container = pangolin::Display("streams");
     container.SetLayout(pangolin::LayoutEqual)
              .SetBounds(0., 1.0, pangolin::Attach::Pix(menue_w), 1.0);
+    std::vector<tdp::QuickView*> streamViews; streamViews.reserve(10);
     for(unsigned int d=0; d < num_streams; ++d) {
         const pangolin::StreamInfo& si = video.Streams()[d];
-        pangolin::View& view = pangolin::CreateDisplay().SetAspect(si.Aspect());
-        container.AddDisplay(view);
+        streamViews.push_back(new tdp::QuickView(si.Width(), si.Height()));
+        container.AddDisplay(*streamViews.back());
         glfmt.push_back(pangolin::GlPixFormat(si.PixFormat()));
-        gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f) );
-        if( si.PixFormat().bpp % 8 ) {
-            pango_print_warn("Stream %i: Unable to display formats that are not a multiple of 8 bits.", d);
-        }
-        if( (8*si.Pitch()) % si.PixFormat().bpp ) {
-            pango_print_warn("Stream %i: Unable to display formats whose pitch is not a whole number of pixels.", d);
-        }
-        if(glfmt.back().gltype == GL_DOUBLE) {
-            scratch_buffer_bytes = std::max(scratch_buffer_bytes, sizeof(float)*si.Width() * si.Height());
-        }
         strides.push_back( (8*si.Pitch()) / si.PixFormat().bpp );
-        handlers.push_back( pangolin::ImageViewHandler(si.Width(), si.Height()) );
-        view.SetHandler(&handlers.back());
     }
 
-
     tdp::QuickView viewDebugA(wc,hc);
-    //pangolin::View& viewDebugA = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
-    //container.AddDisplay(viewDebugA);
-    //glfmt.push_back(pangolin::GlPixFormat(pangolin::VideoFormatFromString("GRAY32F")));
-    //gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f));
-    //strides.push_back(wc);
-    //handlers.push_back( pangolin::ImageViewHandler(wc,hc) );
-    //viewDebugA.SetHandler(&handlers.back());
-
-    pangolin::View& viewDebugB = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
+    container.AddDisplay(viewDebugA);
+    tdp::QuickView viewDebugB(wc,hc);
     container.AddDisplay(viewDebugB);
-    glfmt.push_back(pangolin::GlPixFormat(pangolin::VideoFormatFromString("GRAY32F")));
-    gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f));
-    strides.push_back(wc);
-    handlers.push_back( pangolin::ImageViewHandler(wc,hc) );
-    viewDebugB.SetHandler(&handlers.back());
-
-    pangolin::View& viewN2D = pangolin::CreateDisplay().SetAspect(video.Streams()[iD].Aspect());
+    tdp::QuickView viewN2D(wc,hc);
     container.AddDisplay(viewN2D);
-    glfmt.push_back(pangolin::GlPixFormat(pangolin::VideoFormatFromString("RGB24")));
-    gloffsetscale.push_back(std::pair<float,float>(0.0f, 1.0f));
-    strides.push_back(wc);
-    handlers.push_back( pangolin::ImageViewHandler(wc,hc) );
-    viewN2D.SetHandler(&handlers.back());
 
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
@@ -170,7 +140,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<bool> video_wait("video.wait", true);
     pangolin::Var<bool> video_newest("video.newest", false);
 
-    pangolin::Var<bool> show2DNormals("ui.show 2D Normals",false,true);
+    pangolin::Var<bool> show2DNormals("ui.show 2D Normals",true,true);
     pangolin::Var<bool> compute3Dgrads("ui.compute3Dgrads",false,true);
     pangolin::Var<bool> evaluatePlaneFit("ui.evalPlaneFit",true,true);
 
@@ -284,47 +254,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::RegisterKeyPressCallback('0', [&](){
         video.RecordOneFrame();
     });
-    pangolin::RegisterKeyPressCallback('a', [&](){
-        // Adapt scale
-        for(unsigned int i=0; i<images.size(); ++i) {
-            if(container[i].HasFocus()) {
-                pangolin::Image<unsigned char>& img = images[i];
-                pangolin::ImageViewHandler& ivh = handlers[i];
-
-                const bool have_selection = std::isfinite(ivh.GetSelection().Area()) && std::abs(ivh.GetSelection().Area()) >= 4;
-                pangolin::XYRangef froi = have_selection ? ivh.GetSelection() : ivh.GetViewToRender();
-                gloffsetscale[i] = pangolin::GetOffsetScale(img, froi.Cast<int>(), glfmt[i]);
-            }
-        }
-    });
-    pangolin::RegisterKeyPressCallback('g', [&](){
-        std::pair<float,float> os_default(0.0f, 1.0f);
-
-        // Get the scale and offset from the container that has focus.
-        for(unsigned int i=0; i<images.size(); ++i) {
-            if(container[i].HasFocus()) {
-                pangolin::Image<unsigned char>& img = images[i];
-                pangolin::ImageViewHandler& ivh = handlers[i];
-
-                const bool have_selection = std::isfinite(ivh.GetSelection().Area()) && std::abs(ivh.GetSelection().Area()) >= 4;
-                pangolin::XYRangef froi = have_selection ? ivh.GetSelection() : ivh.GetViewToRender();
-                os_default = pangolin::GetOffsetScale(img, froi.Cast<int>(), glfmt[i]);
-                break;
-            }
-        }
-
-        // Adapt scale for all images equally
-        // TODO : we're assuming the type of all the containers images' are the same.
-        for(unsigned int i=0; i<images.size(); ++i) {
-            gloffsetscale[i] = os_default;
-        }
-
-    });
 #endif // CALLEE_HAS_CPP11
 
     tdp::ManagedHostImage<float> d(wc, hc);
     tdp::ManagedHostImage<float> debugA(wc, hc);
     tdp::ManagedHostImage<float> debugB(wc, hc);
+
     tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
     memset(n2D.ptr_,0,n2D.SizeBytes());
     tdp::ManagedHostImage<Eigen::Vector3f> n2Df(wc,hc);
@@ -352,12 +287,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if ( frame < end_frame ) {
             if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
                 frame = frame +1;
-                //pangolin::Image<unsigned char>debugARaw(wc,hc,wc*sizeof(float),(uint8_t*)debugA.ptr);
-                //images.push_back(debugARaw);
-                pangolin::Image<unsigned char>debugBRaw(wc,hc,wc*sizeof(float),(uint8_t*)debugB.ptr_);
-                images.push_back(debugBRaw);
-                pangolin::Image<unsigned char>n2DRaw(wc,hc,wc*3,(uint8_t*)n2D.ptr_);
-                images.push_back(n2DRaw);
             }
         }
 
@@ -422,34 +351,19 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         glDisable(GL_DEPTH_TEST);
 
         CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
-        viewDebugA.SetImage(debugA);
         CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
         for(unsigned int i=0; i<images.size(); ++i)
         {
-            if(container[i].IsShown()) {
-                container[i].Activate();
-                pangolin::Image<unsigned char>& image = images[i];
-
-                // Get texture of correct dimension / format
-                const pangolin::GlPixFormat& fmt = glfmt[i];
-                pangolin::GlTexture& tex = pangolin::TextureCache::I().GlTex((GLsizei)image.w, (GLsizei)image.h, fmt.scalable_internal_format, fmt.glformat, GL_FLOAT);
-
-                // Upload image data to texture
-                tex.Bind();
-                glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)strides[i]);
-                tex.Upload(image.ptr,0,0, (GLsizei)image.w, (GLsizei)image.h, fmt.glformat, fmt.gltype);
-
-                // Render
-                handlers[i].UpdateView();
-                handlers[i].glSetViewOrtho();
-                const std::pair<float,float> os = gloffsetscale[i];
-                pangolin::GlSlUtilities::OffsetAndScale(os.first, os.second);
-                handlers[i].glRenderTexture(tex);
-                pangolin::GlSlUtilities::UseNone();
-                handlers[i].glRenderOverlay();
-            }
+          if(container[i].IsShown()) {
+            pangolin::Image<unsigned char>& image = images[i];
+            streamViews[i]->SetImage(image, glfmt[i], strides[i]);
+          }
         }
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        viewDebugA.SetImage(debugA);
+        viewDebugB.SetImage(debugB);
+        if (show2DNormals) {
+          viewN2D.SetImage(n2D);
+        }
 
         // leave in pixel orthographic for slider to render.
         pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -458,6 +372,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         }
         pangolin::FinishFrame();
     }
+
+    for (size_t i=0; i<streamViews.size(); ++i)
+      delete streamViews[i];
 }
 
 

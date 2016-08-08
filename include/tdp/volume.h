@@ -11,7 +11,7 @@ class Volume {
     : w_(0), h_(0), d_(0), pitch_(0), pitchImg_(0), ptr_(nullptr)
   {}
   Volume(size_t w, size_t h, size_t d, T* ptr)
-    : w_(w), h_(h), d_(d), pitch_(w), pitchImg_(w*h), ptr_(ptr)
+    : w_(w), h_(h), d_(d), pitch_(w*sizeof(T)), pitchImg_(w*h*sizeof(T)), ptr_(ptr)
   {}
   Volume(const Volume& vol)
     : w_(vol.w_), h_(vol.h_), d_(vol.d_), pitch_(vol.pitch_),

@@ -52,12 +52,13 @@ void QuickView::SetImage(const pangolin::Image<T>& img, const pangolin::GlPixFor
 
   // Get texture of correct dimension / format
   tex_.Reinitialise((GLsizei)img.w, (GLsizei)img.h,
-      fmt.scalable_internal_format, fmt.glformat, GL_FLOAT);
+      fmt.scalable_internal_format, true, 0, fmt.glformat, fmt.gltype, img.ptr);
 
   // Upload image data to texture
   tex_.Bind();
   glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)stride);
-  tex_.Upload(img.ptr,0,0, (GLsizei)img.w, (GLsizei)img.h, fmt.glformat, fmt.gltype);
+
+  tex_.Upload(img.ptr,0,0,(GLsizei)img.w, (GLsizei)img.h, fmt.glformat, fmt.gltype);
 
   // Render
   this->UpdateView();

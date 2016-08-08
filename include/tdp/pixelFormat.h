@@ -18,6 +18,7 @@ pangolin::GlPixFormat PixFormatFromType<uint16_t>(void) {
   fmt.glformat = GL_LUMINANCE;
   fmt.gltype = GL_UNSIGNED_SHORT;
   fmt.scalable_internal_format = GL_LUMINANCE32F_ARB;
+  //std::cout << "GL_LUMINANCE; GL_UNSIGNED_SHORT; GL_LUMINANCE32F_ARB;" << std::endl;
   return fmt;
 }
 template <>
@@ -26,6 +27,7 @@ pangolin::GlPixFormat PixFormatFromType<float>(void) {
   fmt.glformat = GL_LUMINANCE;
   fmt.gltype = GL_FLOAT;
   fmt.scalable_internal_format = GL_LUMINANCE32F_ARB;
+  //std::cout << "GL_LUMINANCE; GL_FLOAT; GL_LUMINANCE32F_ARB;" << std::endl;
   return fmt;
 }
 template <>
