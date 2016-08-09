@@ -20,8 +20,8 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
     Eigen::Vector3f n(0,0,-1);
     Eigen::Vector2f u_d(idx,idy);
     // iterate over depth starting from sensor; detect 0 crossing
-    float tsdfValPrev = mu+1.;
-    for (size_t id=tsdf.d_-1; id>0; --id) {
+    float tsdfValPrev = 1e6;
+    for (size_t id=tsdf.d_; id>0; --id) {
       float rho = rho0 + drho*(id-1);  // invers depth
       // TODO: debug
       Eigen::Vector3f nd = n*rho;
@@ -35,12 +35,20 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
       int y = floor(u_r(1)+0.5);
       //if (u_r(0)==u_r(0)) printf ("%f %f; ",u_r(0),u_r(1));
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
-        float tsdfVal = tsdf(x,y,id);
+        float tsdfVal = tsdf(x,y,id-1);
         //printf ("%f; ",tsdf(x,y,id));
-        if (tsdfVal == 0. || fabs(tsdfVal) > fabs(tsdfValPrev)) {
+        if (fabs(tsdfVal) < 1e-6 ) {
+          d(idx,idy) = 1./(rho0 + drho*(id-1));
+          break;
+        } else if (fabs(tsdfVal) > fabs(tsdfValPrev)) {
           // detected 0 crossing 
           // TODO interpolation
-          d(idx,idy) = 1./(rho0 + drho*(id-2)); 
+          const float dBef = 1./(rho0 + drho*(id-1)); 
+          const float dPrev = 1./(rho0 + drho*id);  // closer
+          const float deltaD = dBef-dPrev;
+          //d(idx,idy) = dBef + (deltaD*tsdfValPrev)/(tsdfVal-tsdfValPrev);
+          float idf = id+tsdfValPrev/(tsdfVal+tsdfValPrev);
+          d(idx,idy) = 1./(rho0 + drho*idf);
           //if (idx<10 && idy < 10) printf ("%f; ",d(idx,idy));
           break;
         }
