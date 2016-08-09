@@ -21,21 +21,27 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
     Eigen::Vector2f u_d(idx,idy);
     // iterate over depth starting from sensor; detect 0 crossing
     float tsdfValPrev = mu+1.;
-    for (size_t id=tsdf.d_; id>0; --id) {
+    for (size_t id=tsdf.d_-1; id>0; --id) {
       float rho = rho0 + drho*(id-1);  // invers depth
       // TODO: debug
       Eigen::Vector3f nd = n*rho;
-      Eigen::Vector2f u_r = TransformHomography(u_d, T_rd, camR, camD, nd);
+      Eigen::Matrix3f H = (T_rd.rotation().matrix()-T_rd.translation()*nd.transpose());
+      Eigen::Vector2f u_r = camR.Project(H*camD.Unproject(u_d(0), u_d(1), 1.));
+      //if (idx==0 && idy ==0) printf ("%f %f %f, %f %f %f %f; ",
+      //    rho, u_d(0), T_rd.translation()(0), H(0,0), H(0,1), H(0,2), 
+      //    T_rd.rotation().matrix()(0,0));
+      //  TransformHomography(u_d, T_rd, camR, camD, nd);
       int x = floor(u_r(0)+0.5);
       int y = floor(u_r(1)+0.5);
-      //if (idx<10 && idy == 1) printf ("%f %f; ",u_r(0),u_r(1));
+      //if (u_r(0)==u_r(0)) printf ("%f %f; ",u_r(0),u_r(1));
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,id);
-        if (tsdfVal ==0. || tsdfVal <= 0. && tsdfValPrev > 0.) {
+        //printf ("%f; ",tsdf(x,y,id));
+        if (tsdfVal == 0. || fabs(tsdfVal) > fabs(tsdfValPrev)) {
           // detected 0 crossing 
           // TODO interpolation
           d(idx,idy) = 1./(rho0 + drho*(id-2)); 
-          if (idx<10 && idy < 10) printf ("%f; ",d(idx,idy));
+          //if (idx<10 && idy < 10) printf ("%f; ",d(idx,idy));
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -62,21 +68,19 @@ void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
     int y = floor(u_d(1)+0.5);
     //if (idx<10 && idy == 1) printf ("%d %d; ",x,y);
     if (0<=x&&x<d.w_ && 0<=y&&y<d.h_) {
-      float z_d = d(x, y);
-      float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
-      float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
-
-      float eta = z_tsdf - z_d;
-      float etaOverMu = eta/mu;
-      float psi = 0.;
+      const float z_d = d(x, y);
+      const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
+      const float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
+      const float eta = z_d - z_tsdf;
       if (eta >= -mu) {
-        psi = (etaOverMu>1.f?1.f:etaOverMu)*(eta>=0.?1.:-1.);
+        const float etaOverMu = eta/mu;
+        const float psi = (etaOverMu>1.f?1.f:etaOverMu)*(eta>=0.?1.:-1.);
+        //// TODO can use other weights as well
+        const float Wnew = 1.;
+        //if (idx<10 && idy <10) printf ("%f; ",eta);
+        tsdf(idx,idy,idz) = (W(idx,idy,idz)*tsdf(idx,idy,idz) + Wnew*psi)/(W(idx,idy,idz)+Wnew);
+        W(idx,idy,idz) = min(W(idx,idy,idz)+Wnew, 100.f);
       }
-      //// TODO can use other weights as well
-      const float Wnew = 1.;
-      //if (idx<10 && idy <10) printf ("%f; ",eta);
-      tsdf(idx,idy,idz) = (W(idx,idy,idz)*tsdf(idx,idy,idz) + Wnew*psi)/(W(idx,idy,idz)+Wnew);
-      W(idx,idy,idz) = min(W(idx,idy,idz)+Wnew, 100.f);
     }
   }
 }

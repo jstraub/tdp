@@ -11,14 +11,21 @@ template<typename T>
 class SE3 : Manifold<T,6> {
  //friend class tdp::SO3<T>;
  public:
+  TDP_HOST_DEVICE
   SE3();
+
+  TDP_HOST_DEVICE
   SE3(const Eigen::Matrix<T,4,4>& Tmat);
+
+  TDP_HOST_DEVICE
   SE3(const SE3<T>& other);
+
   TDP_HOST_DEVICE
   ~SE3() {};
 
   TDP_HOST_DEVICE
   const Eigen::Matrix<T,4,4>& matrix() const { return T_;};
+
   TDP_HOST_DEVICE
   Eigen::Matrix<T,4,4>& matrix() { return T_;};
 
@@ -27,6 +34,7 @@ class SE3 : Manifold<T,6> {
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> translation() const { return T_.topRightCorner(3,1);};
+
   TDP_HOST_DEVICE
   SO3<T> rotation() const { return SO3<T>(T_.topLeftCorner(3,3));};
 
@@ -34,10 +42,10 @@ class SE3 : Manifold<T,6> {
   SE3<T> Inverse() const ;
 
   TDP_HOST_DEVICE
-  SE3<T> Exp (const Eigen::Matrix<T,6,1>& w) const ;
+  SE3<T> Exp(const Eigen::Matrix<T,6,1>& w) const ;
 
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,6,1> Log (const SE3<T>& other) const ;
+  Eigen::Matrix<T,6,1> Log(const SE3<T>& other) const ;
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> vee() const;

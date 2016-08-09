@@ -9,9 +9,15 @@ namespace tdp {
 template<typename T>
 class SO3 : Manifold<T,3> {
  public:
+  TDP_HOST_DEVICE
   SO3();
+
+  TDP_HOST_DEVICE
   SO3(const Eigen::Matrix<T,3,3>& R);
+
+  TDP_HOST_DEVICE
   SO3(const SO3<T>& other);
+
   TDP_HOST_DEVICE
   ~SO3() {};
 

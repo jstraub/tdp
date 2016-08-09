@@ -71,13 +71,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     size_t w = video.Streams()[iRGB].Width();
     size_t h = video.Streams()[iRGB].Height();
-    size_t wc = w+w%64; // for convolution
-    size_t hc = h+h%64;
+    size_t wc = w;//+w%64; // for convolution
+    size_t hc = h;//+h%64;
     float f = 550;
     float uc = (w-1.)/2.;
     float vc = (h-1.)/2.;
 
-    size_t d_r = 32;
+    size_t dTSDF = 64;
+    size_t wTSDF = wc;
+    size_t hTSDF = hc;
 
     // Check if video supports VideoPlaybackInterface
     pangolin::VideoPlaybackInterface* video_playback = video.Cast<pangolin::VideoPlaybackInterface>();
@@ -141,12 +143,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<bool> video_wait("ui.wait", true);
     pangolin::Var<bool> video_newest("ui.newest", false);
 
-    pangolin::Var<float> tsdfDmin("ui.d min",0.1,0.1,1.);
-    pangolin::Var<float> tsdfDmax("ui.d max",1.5,0.1,2.);
+    pangolin::Var<float> tsdfDmin("ui.d min",0.05,0.0,0.1);
+    pangolin::Var<float> tsdfDmax("ui.d max",1.0,0.1,2.);
     pangolin::Var<float> tsdfRho0("ui.rho0",0.1,0.,1.);
     pangolin::Var<float> tsdfDRho("ui.d rho",0.1,0.,1.);
     pangolin::Var<float> tsdfMu("ui.mu",0.1,0.,1.);
-    pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",d_r/2,0,d_r-1);
+    pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
 
     if( video_playback ) {
@@ -271,15 +273,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
     tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
-    tdp::ManagedHostVolume<float> W(wc/2, hc/2, d_r);
-    tdp::ManagedHostVolume<float> TSDF(wc/2, hc/2, d_r);
-    tdp::ManagedHostImage<float> dEst(wc/2, hc/2);
+
+    tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
+    tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
+    tdp::ManagedHostImage<float> dEst(wTSDF, hTSDF);
     W.Fill(0.);
-    TSDF.Fill(0.);
+    TSDF.Fill(-tsdfMu);
     dEst.Fill(0.);
-    tdp::ManagedDeviceVolume<float> cuW(wc/2, hc/2, d_r);
-    tdp::ManagedDeviceVolume<float> cuTSDF(wc/2, hc/2, d_r);
-    tdp::ManagedDeviceImage<float> cuDEst(wc/2, hc/2);
+    tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
+    tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
+    tdp::ManagedDeviceImage<float> cuDEst(wTSDF, hTSDF);
 
     tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
     tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
@@ -289,11 +292,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Camera<float> camR(Eigen::Vector4f(275,275,159.5,119.5)); 
     tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
 
-    tdp::ManagedHostImage<float> debugA(wc/2, hc/2);
-    tdp::ManagedHostImage<float> debugB(wc/2, hc/2);
-    tdp::QuickView viewDebugA(wc/2,hc/2);
+    tdp::ManagedHostImage<float> debugA(wTSDF, hTSDF);
+    tdp::ManagedHostImage<float> debugB(wTSDF, hTSDF);
+    tdp::QuickView viewDebugA(wTSDF,hTSDF);
     container.AddDisplay(viewDebugA);
-    tdp::QuickView viewDebugB(wc/2,hc/2);
+    tdp::QuickView viewDebugB(wTSDF,hTSDF);
     container.AddDisplay(viewDebugB);
     // Stream and display video
     while(!pangolin::ShouldQuit())
@@ -335,7 +338,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         }
 
         tsdfRho0 = 1./tsdfDmax;
-        tsdfDRho = (1./tsdfDmin - tsdfRho0)/float(d_r-1);
+        tsdfDRho = (1./tsdfDmin - tsdfRho0)/float(dTSDF-1);
 
         AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, tsdfRho0, tsdfDRho, tsdfMu); 
 
