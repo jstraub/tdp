@@ -39,6 +39,11 @@ class Image {
 
   void Fill(T value) { for (size_t i=0; i<w_*h_; ++i) ptr_[i] = value; }
 
+  void CopyFrom(const Image<T>& src, cudaMemcpyKind& type) {
+    assert(SizeBytes() <= src.SizeBytes());
+    cudaMemcpy(src.ptr_, ptr_, SizeBytes(), type);
+  }
+
   size_t w_;
   size_t h_;
   size_t pitch_; // the number of bytes per row
