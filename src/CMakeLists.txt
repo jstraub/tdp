@@ -3,9 +3,8 @@ file(GLOB SRCS "*.cpp")
 file(GLOB CU_SRCS "*.cu")
 
 if(CUDA_FOUND)
-  list(APPEND SRCS ${CU_SRCS})
   cuda_add_library(tdp SHARED
-    ${SRCS}
+    ${SRCS} ${CU_SRCS}
     )
 else() 
   add_library(tdp SHARED

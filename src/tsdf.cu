@@ -45,7 +45,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
           // TODO interpolation
           const float dBef = 1./(rho0 + drho*(id-1)); 
           const float dPrev = 1./(rho0 + drho*id);  // closer
-          const float deltaD = dBef-dPrev;
+          //const float deltaD = dBef-dPrev;
           //d(idx,idy) = dBef + (deltaD*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           float idf = id+tsdfValPrev/(tsdfVal+tsdfValPrev);
           d(idx,idy) = 1./(rho0 + drho*idf);

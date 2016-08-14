@@ -28,6 +28,7 @@ if (CUDA_FOUND)
   add_definitions(-DCUDA_FOUND)
 endif()
 
+set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
 find_package(Pangolin REQUIRED)
 message(${Pangolin_DIR}/include)
