@@ -11,38 +11,15 @@
 #include <Eigen/Dense>
 #include <tdp/managed_image.h>
 
-#include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
-#include <tdp/normals.h>
-#include <tdp/quickView.h>
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
 #include <tdp/image.h>
 #include <tdp/manifold/SE3.h>
-#include <tdp/tsdf.h>
-#include <tdp/nvidia/helper_cuda.h>
+#include <tdp/calibration/planeEstimation.h>
 
-template<typename To, typename From>
-void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
-{
-  memset(to.ptr,0,to.SizeBytes());
-  for(size_t y=0; y < from.h; ++y) {
-    for(size_t x=0; x < from.w; ++x) {
-      to.RowPtr((int)y)[x] = static_cast<To>(static_cast<float>(from.RowPtr((int)y)[x])*scale+offset);
-    }
-  }
-}
+#include "gui.hpp"
 
-//template<typename To, typename From, int D>
-//void ConvertPixelsMultiChannel(pangolin::Image<Eigen::Matrix<To,D,1>>& to, const pangolin::Image<Eigen::Matrix<From,D,1>>& from, float scale, float offset)
-//{
-//  memset(to.ptr,0,to.SizeBytes());
-//  for(size_t y=0; y < from.h; ++y) {
-//    for(size_t x=0; x < from.w; ++x) {
-//      to.RowPtr((int)y)[x] = ((from.RowPtr((int)y)[x]).cast<float>()*scale+offset).cast<To>();
-//    }
-//  }
-//}
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -54,53 +31,31 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         return;
     }
 
-    // Output details of video stream
-    size_t iRGB, iD;
-    for(size_t s = 0; s < num_streams; ++s) {
-        const pangolin::StreamInfo& si = video.Streams()[s];
-        std::cout << "Stream " << s << ": " << si.Width() << " x " << si.Height()
-                  << " " << si.PixFormat().format 
-                  << " (pitch: " << si.Pitch() << " bytes)" << std::endl;
-        if (si.PixFormat().format.compare(
-              pangolin::VideoFormatFromString("GRAY16LE").format)==0) {
-          iD = s;
-        }
-        if (si.PixFormat().format.compare(
-              pangolin::VideoFormatFromString("RGB24").format)==0) {
-          iRGB = s;
-        }
-    }
-    size_t w = video.Streams()[iRGB].Width();
-    size_t h = video.Streams()[iRGB].Height();
+
+    GUI gui(1200, 800, video );
+
+    size_t w = video.Streams()[gui.iRGB].Width();
+    size_t h = video.Streams()[gui.iRGB].Height();
+
     size_t wc = w;//+w%64; // for convolution
     size_t hc = h;//+h%64;
-    float f = 550;
-    float uc = (w-1.)/2.;
-    float vc = (h-1.)/2.;
 
-    size_t dTSDF = 64;
-    size_t wTSDF = wc;
-    size_t hTSDF = hc;
+    // Define Camera Render Object (for view / scene browsing)
+    pangolin::OpenGlRenderState s_cam(
+        pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+        pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
+        );
+    // Add named OpenGL viewport to window and provide 3D Handler
+    pangolin::View& d_cam = pangolin::CreateDisplay()
+      .SetHandler(new pangolin::Handler3D(s_cam));
+    gui.container().AddDisplay(d_cam);
 
-    // Check if video supports VideoPlaybackInterface
-    pangolin::VideoPlaybackInterface* video_playback = 
-      video.Cast<pangolin::VideoPlaybackInterface>();
-    const int total_frames = video_playback ? video_playback->GetTotalFrames() : std::numeric_limits<int>::max();
-
-    std::vector<unsigned char> buffer;
-    buffer.resize(video.SizeBytes()+1);
-
-    GUI gui((video.Width() * num_streams)+menue_w, video.Height() );
-
-    if( video_playback ) {
-        if(total_frames < std::numeric_limits<int>::max() ) {
-            std::cout << "Video length: " << total_frames << " frames" << std::endl;
-        }
-        end_frame = 0;
-    }
-    end_frame = std::numeric_limits<int>::max();
-
-    std::vector<pangolin::Image<unsigned char> > images;
+    tdp::ManagedHostImage<float> debugA(wc, hc);
+    tdp::ManagedHostImage<float> debugB(wc, hc);
+    tdp::QuickView viewDebugA(wc,hc);
+    gui.container().AddDisplay(viewDebugA);
+    tdp::QuickView viewDebugB(wc,hc);
+    gui.container().AddDisplay(viewDebugB);
 
     tdp::ManagedHostImage<float> d(wc, hc);
     tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -110,45 +65,33 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::SE3<float> T_wd(Eigen::Matrix4f::Identity());
     tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
 
-    tdp::ManagedHostImage<float> debugA(wc, hc);
-    tdp::ManagedHostImage<float> debugB(wc, hc);
-    tdp::QuickView viewDebugA(wc,hc);
-    gui.container.AddDisplay(viewDebugA);
-    tdp::QuickView viewDebugB(wc,hc);
-    gui.container.AddDisplay(viewDebugB);
+    pangolin::Var<float> huberAlpha("ui.alpha", 0.3, 0., 1.);
+    pangolin::Var<int> planeEstNumIter("ui.# iter", 100, 1, 1000);
+    pangolin::Var<float> planeEstEps("ui.10^eps", -6, -10, 0);
+
     // Stream and display video
     //
-    PlaneEstimation planeEstimator(cuD,cam);
     while(!pangolin::ShouldQuit())
     {
         glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         glColor3f(1.0f, 1.0f, 1.0f);
 
-        if(frame.GuiChanged()) {
-            if(video_playback) {
-                frame = video_playback->Seek(frame) -1;
-            }
-            end_frame = frame + 1;
-        }
-        if ( frame < end_frame ) {
-            if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
-                frame = frame +1;
-            }
-        }
+        gui.NextFrames();
 
         pangolin::basetime t0 = pangolin::TimeNow();
 
-        tdp::Image<uint16_t> dRaw(images[iD].w, images[iD].h,
-            images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
+        tdp::Image<uint16_t> dRaw;
+        if (!gui.ImageD(dRaw)) continue;
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
 
         cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();
 
-        planeEstimator.Reset(cuD);
         Eigen::Vector3f nd(0,0,-1);
-        planeEstimator.Compute(nd, 1e-6, 100);
+        tdp::PlaneEstimation planeEstimator(&cuD,camD,huberAlpha.Get());
+        //planeEstimator.Reset(&cuD,huberAlpha.Get());
+        planeEstimator.Compute(nd, pow(10,planeEstEps), planeEstNumIter.Get());
         nd = planeEstimator.GetMinimum();
         std::cout << "n=" << nd.transpose()/nd.norm() 
           << " d=" << 1./nd.norm() << std::endl;
@@ -164,13 +107,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);
 
-        for(unsigned int i=0; i<images.size(); ++i)
-        {
-          if(container[i].IsShown()) {
-            pangolin::Image<unsigned char>& image = images[i];
-            streamViews[i]->SetImage(image, glfmt[i], strides[i]);
-          }
-        }
+        gui.ShowFrames();
+
         viewDebugA.SetImage(debugA);
         viewDebugB.SetImage(debugB);
 

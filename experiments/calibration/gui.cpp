@@ -1,7 +1,10 @@
+#include "gui.hpp"
 
 GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
-  : w(w), h(h), video(video),
-  frame("ui.frame", -1, 0, total_frames-1 ),
+  : iRGB(-1), iD(-1),
+    w(w), h(h), video(video), video_playback(nullptr),
+  //frame("ui.frame", -1, 0, total_frames-1 ),
+  frame("ui.frame", -1, 0, 0),
   record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 ),
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
   video_wait("ui.wait", true),
@@ -21,6 +24,18 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
     container.SetLayout(pangolin::LayoutEqual)
              .SetBounds(0., 1.0, pangolin::Attach::Pix(menue_w), 1.0);
 
+    video_playback = video.Cast<pangolin::VideoPlaybackInterface>();
+    const int total_frames = video_playback ?  video_playback->GetTotalFrames() :
+      std::numeric_limits<int>::max();
+
+    if( video_playback ) {
+        if(total_frames < std::numeric_limits<int>::max() ) {
+            std::cout << "Video length: " << total_frames << " frames" << std::endl;
+        }
+        end_frame = 0;
+    }
+    end_frame = std::numeric_limits<int>::max();
+
     const size_t num_streams = video.Streams().size();
     handlers.reserve(num_streams+10);
 
@@ -33,15 +48,6 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
         strides.push_back( (8*si.Pitch()) / si.PixFormat().bpp );
     }
 
-    // Define Camera Render Object (for view / scene browsing)
-    pangolin::OpenGlRenderState s_cam(
-        pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
-        pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
-        );
-    // Add named OpenGL viewport to window and provide 3D Handler
-    pangolin::View& d_cam = pangolin::CreateDisplay()
-      .SetHandler(new pangolin::Handler3D(s_cam));
-    container.AddDisplay(d_cam);
 
     // current frame in memory buffer and displaying.
     pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
@@ -58,10 +64,10 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
 
     // Show/hide streams
     for(size_t v=0; v < container.NumChildren() && v < 9; v++) {
-        pangolin::RegisterKeyPressCallback(show_hide_keys[v], [v,&container](){
+        pangolin::RegisterKeyPressCallback(show_hide_keys[v], [&,v,&container](){
             container[v].ToggleShow();
         } );
-        pangolin::RegisterKeyPressCallback(screenshot_keys[v], [v,&images,&video](){
+        pangolin::RegisterKeyPressCallback(screenshot_keys[v], [&,v](){
             if(v < images.size() && images[v].ptr) {
                 try{
                     pangolin::SaveImage(
@@ -150,6 +156,23 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
     });
 #endif // CALLEE_HAS_CPP11
 
+    buffer.resize(video.SizeBytes()+1);
+
+    // Output details of video stream
+    for(size_t s = 0; s < num_streams; ++s) {
+      const pangolin::StreamInfo& si = video.Streams()[s];
+      std::cout << "Stream " << s << ": " << si.Width() << " x " << si.Height()
+        << " " << si.PixFormat().format 
+        << " (pitch: " << si.Pitch() << " bytes)" << std::endl;
+      if (si.PixFormat().format.compare(
+            pangolin::VideoFormatFromString("GRAY16LE").format)==0) {
+        iD = s;
+      }
+      if (si.PixFormat().format.compare(
+            pangolin::VideoFormatFromString("RGB24").format)==0) {
+        iRGB = s;
+      }
+    }
 }
 
 GUI::~GUI()

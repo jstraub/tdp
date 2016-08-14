@@ -4,16 +4,14 @@
 namespace tdp {
 
 template <typename T>
-pangolin::GlPixFormat PixFormatFromType(void);
-
-template <typename T>
-pangolin::GlPixFormat PixFormatFromType(void) { 
+inline pangolin::GlPixFormat PixFormatFromType(void) { 
   pangolin::GlPixFormat fmt;
-  std::cerr << "unrecognized format for PixFormatFromType" << std::endl;
+  std::cerr << "unrecognized format for PixFormatFromType " << typeid(T).name() << std::endl;
   return fmt;
 }
+
 template <>
-pangolin::GlPixFormat PixFormatFromType<uint16_t>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<uint16_t>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_LUMINANCE;
   fmt.gltype = GL_UNSIGNED_SHORT;
@@ -22,7 +20,7 @@ pangolin::GlPixFormat PixFormatFromType<uint16_t>(void) {
   return fmt;
 }
 template <>
-pangolin::GlPixFormat PixFormatFromType<float>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<float>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_LUMINANCE;
   fmt.gltype = GL_FLOAT;
@@ -31,7 +29,7 @@ pangolin::GlPixFormat PixFormatFromType<float>(void) {
   return fmt;
 }
 template <>
-pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,3,1>>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,3,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGB;
   fmt.gltype = GL_FLOAT;
@@ -39,7 +37,7 @@ pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,3,1>>(void) {
   return fmt;
 }
 template <>
-pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,4,1>>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,4,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGBA;
   fmt.gltype = GL_FLOAT;
@@ -47,7 +45,7 @@ pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,4,1>>(void) {
   return fmt;
 }
 template <>
-pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,3,1>>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,3,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGB;
   fmt.gltype = GL_UNSIGNED_BYTE;
@@ -55,11 +53,12 @@ pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,3,1>>(void) {
   return fmt;
 }
 template <>
-pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,4,1>>(void) { 
+inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,4,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGBA;
   fmt.gltype = GL_UNSIGNED_BYTE;
   fmt.scalable_internal_format = GL_RGBA8;
   return fmt;
 }
+
 }
