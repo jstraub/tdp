@@ -15,6 +15,7 @@
 #include <tdp/depth.h>
 #include <tdp/normals.h>
 #include <tdp/quickView.h>
+#include <tdp/directional/hist.h>
 
 template<typename To, typename From>
 void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
@@ -271,6 +272,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuDu(wc, hc);
     tdp::ManagedDeviceImage<float> cuDv(wc, hc);
     tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
+
+    tdp::GeodesicGrid<3> geoGrid;
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
@@ -345,6 +348,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
         pangolin::RenderVbo(cuNbuf);
+        geoGrid.Render3D();
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);
