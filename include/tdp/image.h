@@ -52,6 +52,9 @@ class Image {
   TDP_HOST_DEVICE
   size_t SizeBytes() const { return pitch_*h_; }
 
+  TDP_HOST_DEVICE
+  size_t Area() const { return w_*h_; }
+
   void Fill(T value) { for (size_t i=0; i<w_*h_; ++i) ptr_[i] = value; }
 
 #ifdef CUDA_FOUND

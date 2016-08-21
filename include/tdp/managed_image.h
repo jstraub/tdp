@@ -10,13 +10,25 @@ namespace tdp {
 
 template <class T, class Alloc>
 class ManagedImage : public Image<T> {
-  public:
-   ManagedImage(size_t w, size_t h) 
-     : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h))
-   {}
-   ~ManagedImage() {
-     Alloc::destroy(this->ptr_);
-   }
+ public:
+  ManagedImage() : Image<T>()
+  {}
+  ManagedImage(size_t w, size_t h) 
+    : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h))
+  {}
+
+  void Reinitialise(size_t w, size_t h) {
+    if (this->ptr_) 
+      Alloc::destroy(this->ptr_);
+    Alloc::construct(w*h);
+    this->w_ = w;
+    this->h_ = h;
+    this->pitch_ = w*sizeof(T);
+  }
+
+  ~ManagedImage() {
+    Alloc::destroy(this->ptr_);
+  }
 };
 
 template <class T>
