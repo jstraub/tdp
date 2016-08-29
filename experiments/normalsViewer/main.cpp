@@ -16,6 +16,7 @@
 #include <tdp/normals.h>
 #include <tdp/quickView.h>
 #include <tdp/directional/hist.h>
+#include <tdp/nvidia/helper_cuda.h>
 
 template<typename To, typename From>
 void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
@@ -143,6 +144,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<bool> show2DNormals("ui.show 2D Normals",true,true);
     pangolin::Var<bool> compute3Dgrads("ui.compute3Dgrads",false,true);
     pangolin::Var<bool> evaluatePlaneFit("ui.evalPlaneFit",true,true);
+
+    pangolin::Var<float> histScale("ui.hist scale",2.,1.,10.);
 
     if( video_playback ) {
         if(total_frames < std::numeric_limits<int>::max() ) {
@@ -273,7 +276,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuDv(wc, hc);
     tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
 
-    tdp::GeodesicGrid<3> geoGrid;
+    tdp::GeodesicHist<2> geoHist;
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
@@ -313,8 +316,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
         setConvolutionKernel(kernelA);
         convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
-
-        cudaDeviceSynchronize();
+        checkCudaErrors(cudaDeviceSynchronize());
         pangolin::basetime tGrad = pangolin::TimeNow();
 
         {
@@ -331,6 +333,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
               }
             }
           }
+          geoHist.ComputeGpu(cuN);
         }
         cudaDeviceSynchronize();
         pangolin::basetime tNormal = pangolin::TimeNow();
@@ -340,6 +343,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           << pangolin::TimeDiff_s(tGrad,tNormal) << "\t"
           << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
 
+
         if (evaluatePlaneFit) {
 
         }
@@ -348,7 +352,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
         pangolin::RenderVbo(cuNbuf);
-        geoGrid.Render3D();
+        geoHist.Render3D(histScale);
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);

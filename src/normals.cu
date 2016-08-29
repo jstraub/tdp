@@ -5,6 +5,7 @@
 #include <tdp/cuda.h>
 #include <tdp/image.h>
 #include <tdp/normals.h>
+#include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {
 
@@ -53,6 +54,7 @@ void ComputeNormals(
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
   KernelSurfaceNormals<<<blocks,threads>>>(d,ddu,ddv,n,f,uc,vc);
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 }

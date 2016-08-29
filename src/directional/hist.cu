@@ -1,6 +1,8 @@
 
 #include <Eigen/Dense>
 #include <tdp/image.h>
+#include <tdp/cuda.h>
+#include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {
 
@@ -8,7 +10,7 @@ __global__
 void KernelComputeCentroidBasedGeodesicHist(
     Image<Eigen::Vector3f> n,
     Image<Eigen::Vector3f> tri_centers,
-    Image<int> hist
+    Image<uint32_t> hist
     ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -23,18 +25,19 @@ void KernelComputeCentroidBasedGeodesicHist(
         id =i;
       }
     }
-    atomicInc(&hist[id], std::numeric_limits<int>::max());
+    atomicInc(&hist[id], 2147483647);
   }
 }
 
 void ComputeCentroidBasedGeoidesicHist(
     Image<Eigen::Vector3f>& n,
     Image<Eigen::Vector3f>& tri_centers,
-    Image<int>& hist
+    Image<uint32_t>& hist
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,n,32,32);
   KernelComputeCentroidBasedGeodesicHist<<<blocks,threads>>>(n,tri_centers,hist);
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 }

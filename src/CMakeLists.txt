@@ -1,6 +1,6 @@
 
-file(GLOB SRCS "*.cpp")
-file(GLOB CU_SRCS "*.cu")
+file(GLOB SRCS "*.cpp" "./*/*cpp")
+file(GLOB CU_SRCS "*.cu" "./*/*cu")
 
 if(CUDA_FOUND)
   cuda_add_library(tdp SHARED

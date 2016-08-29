@@ -11,12 +11,12 @@ namespace tdp {
 void ComputeCentroidBasedGeoidesicHist(
     Image<Eigen::Vector3f>& n,
     Image<Eigen::Vector3f>& tri_centers,
-    Image<int>& hist);
+    Image<uint32_t>& hist);
 
 template<uint32_t D>
 class GeodesicHist {
  public:
-  GeodesicHist()
+  GeodesicHist();
   ~GeodesicHist() {}
   
   void Render3D(float scale);
@@ -25,33 +25,33 @@ class GeodesicHist {
  private:
   GeodesicGrid<D> geoGrid_;
   ManagedDeviceImage<Eigen::Vector3f> cuTriCenters_;
-  ManagedDeviceImage<int> cuHist_;
+  ManagedDeviceImage<uint32_t> cuHist_;
 
   std::vector<Eigen::Vector3f> lines;
-  ManagedImage<int> hist_;
+  ManagedHostImage<uint32_t> hist_;
   pangolin::GlBuffer vbo_;
 
-  void RefreshLines();
+  void RefreshLines(float scale);
 };
 
 template<uint32_t D>
-GeodesicGrid<D>::GeodesicHist() : cuHist_(geoGrid_.NTri(),1) {
+GeodesicHist<D>::GeodesicHist() : cuHist_(geoGrid_.NTri(),1) {
   cuTriCenters_.Reinitialise(geoGrid_.NTri(),1);
-  cudaMemcpy(cuTriCenters_.ptr, &(geoGrid_.tri_centers_[0]), 
+  cudaMemcpy(cuTriCenters_.ptr_, &(geoGrid_.tri_centers_[0]), 
       geoGrid_.NTri(), cudaMemcpyHostToDevice);
 }
 
 template<uint32_t D>
-void GeodesicGrid<D>::ComputeGpu(Image<Eigen::Vector3f>& cuN) {
+void GeodesicHist<D>::ComputeGpu(Image<Eigen::Vector3f>& cuN) {
   cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes());
   ComputeCentroidBasedGeoidesicHist(cuN,cuTriCenters_,cuHist_);
-  CopyImage(hist_, cuHist_, cudaMemcpyDeviceToHost);
+  CopyImage(cuHist_, hist_, cudaMemcpyDeviceToHost);
 }
 
 template<uint32_t D>
-void GeodesicGrid<D>::RefreshLines() {
+void GeodesicHist<D>::RefreshLines(float scale) {
   float sum  =0.;
-  for (size_t i=0; i<hist_.w; ++i) sum += hist_[i];
+  for (size_t i=0; i<hist_.w_; ++i) sum += hist_[i];
   std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
   lines.clear();
   lines.reserve(cs.size()*2);
@@ -62,10 +62,10 @@ void GeodesicGrid<D>::RefreshLines() {
 }
 
 template<uint32_t D>
-void GeodesicGrid<D>::Render3D(float scale) {
+void GeodesicHist<D>::Render3D(float scale) {
   geoGrid_.Render3D(); 
-  RefreshLines(); 
-  vbo_.Reinitialise(GL_ARRAY_BUFFER,lines.size(),GL_FLOAT,3,GL_DYNAMIC_DRAW);
+  RefreshLines(scale); 
+  vbo_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,lines.size(),GL_FLOAT,3,GL_DYNAMIC_DRAW);
   vbo_.Upload(&(lines[0]),lines.size()*sizeof(Eigen::Vector3f));
 
   vbo_.Bind();
