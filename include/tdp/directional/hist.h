@@ -20,6 +20,7 @@ class GeodesicHist {
   ~GeodesicHist() {}
   
   void Render3D(float scale);
+  void Reset() { cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes()); }
   void ComputeGpu(Image<Eigen::Vector3f>& cuN);
 
  private:
@@ -39,11 +40,11 @@ GeodesicGrid<D>::GeodesicHist() : cuHist_(geoGrid_.NTri(),1) {
   cuTriCenters_.Reinitialise(geoGrid_.NTri(),1);
   cudaMemcpy(cuTriCenters_.ptr, &(geoGrid_.tri_centers_[0]), 
       geoGrid_.NTri(), cudaMemcpyHostToDevice);
+  Reset();
 }
 
 template<uint32_t D>
 void GeodesicGrid<D>::ComputeGpu(Image<Eigen::Vector3f>& cuN) {
-  cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes());
   ComputeCentroidBasedGeoidesicHist(cuN,cuTriCenters_,cuHist_);
   CopyImage(hist_, cuHist_, cudaMemcpyDeviceToHost);
 }
