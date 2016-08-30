@@ -67,7 +67,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
 
     // Show/hide streams
     for(size_t v=0; v < container.NumChildren() && v < 9; v++) {
-        pangolin::RegisterKeyPressCallback(show_hide_keys[v], [&,v,&container](){
+        pangolin::RegisterKeyPressCallback(show_hide_keys[v], [&,v](){
             container[v].ToggleShow();
         } );
         pangolin::RegisterKeyPressCallback(screenshot_keys[v], [&,v](){

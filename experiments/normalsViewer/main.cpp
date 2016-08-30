@@ -99,7 +99,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuDv(wc, hc);
     tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
 
-    tdp::GeodesicHist<3> normalHist;
+    tdp::GeodesicHist<4> normalHist;
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {

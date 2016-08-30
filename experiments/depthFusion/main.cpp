@@ -20,6 +20,7 @@
 #include <tdp/image.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/tsdf.h>
+#include <tdp/pyramid.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 template<typename To, typename From>
@@ -150,6 +151,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<float> tsdfMu("ui.mu",0.1,0.,1.);
     pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
+    pangolin::Var<bool> runICP("ui.run ICP", false, false);
 
     if( video_playback ) {
         if(total_frames < std::numeric_limits<int>::max() ) {
@@ -324,6 +326,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
 
+        if (runICP) {
+          // construct pyramid  
+          tdp::Pyramid<float,3> dPyr;
+          tdp::ConstructPyramidFromImage(cuD, dPyr, cudaMemcpyDeviceToHost);
+          tdp::Pyramid<float,3> dPyrEst;
+          tdp::ConstructPyramidFromImage(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
+          ICP.UpdateModel();
+          ICP.Compute(); 
+        }
 
         cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();
