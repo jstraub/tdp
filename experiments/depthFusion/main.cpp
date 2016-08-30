@@ -152,6 +152,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
     pangolin::Var<bool> runICP("ui.run ICP", false, false);
+    pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",30,0.,180.);
+    pangolin::Var<float> icpDistThr("ui.icp dist thr",0.,0.,1.);
 
     if( video_playback ) {
         if(total_frames < std::numeric_limits<int>::max() ) {
@@ -294,6 +296,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Camera<float> camR(Eigen::Vector4f(275,275,159.5,119.5)); 
     tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
 
+    // ICP stuff
+    tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
+    tdp::ManagedHostPyramid<float,3> dPyrEst(wc,hc);
+    tdp::ManagedDevicePyramid<float,3> cuDPyr(wc,hc);
+    tdp::ManagedDevicePyramid<float,3> cuDPyrEst(wc,hc);
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m;
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c;
+    tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_m;
+    tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_c;
+
     tdp::ManagedHostImage<float> debugA(wTSDF, hTSDF);
     tdp::ManagedHostImage<float> debugB(wTSDF, hTSDF);
     tdp::QuickView viewDebugA(wTSDF,hTSDF);
@@ -328,12 +340,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
         if (runICP) {
           // construct pyramid  
-          tdp::Pyramid<float,3> dPyr;
+          // TODO: could also construct the pyramid directly on the GPU
           tdp::ConstructPyramidFromImage(cuD, dPyr, cudaMemcpyDeviceToHost);
-          tdp::Pyramid<float,3> dPyrEst;
           tdp::ConstructPyramidFromImage(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
-          ICP.UpdateModel();
-          ICP.Compute(); 
+          CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
+          CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
+
+          tdp::PyramidDepth2PCs(cuDPyrEst,pcs_m);
+          tdp::PyramidDepth2PCs(cuDPyr,pcs_c);
+          tdp::Depth2Normals(cuDPyrEst,ns_m);
+          tdp::Depth2Normals(cuDPyr,ns_c);
+
+          Matrix3fda R_mc = Matrix3fda::Identity();
+          Vector3fda t_mc = Vector3fda::Zero();
+          std::vector<size_t> maxIt{10,6,3};
+          ICP::Compute(pcs_m,ns_m,pcs_c,ns_c,R_mc,t_mc,camD,maxIt,icpAngleThr_deg,
+              icpDistThr); 
+          std::cout << "R_mc" << std::endl << R_mc << std::endl 
+            << "t_mc " << t_mc.transpose() << std::endl;
         }
 
         cudaDeviceSynchronize();
