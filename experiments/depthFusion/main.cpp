@@ -305,6 +305,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c;
     tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_m;
     tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_c;
+    tdp::Matrix3fda R_mc = tdp::Matrix3fda::Identity();
+    tdp::Vector3fda t_mc = tdp::Vector3fda::Zero();
 
     tdp::ManagedHostImage<float> debugA(wTSDF, hTSDF);
     tdp::ManagedHostImage<float> debugB(wTSDF, hTSDF);
@@ -351,16 +353,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           tdp::Depth2Normals(cuDPyrEst,ns_m);
           tdp::Depth2Normals(cuDPyr,ns_c);
 
-          Matrix3fda R_mc = Matrix3fda::Identity();
-          Vector3fda t_mc = Vector3fda::Zero();
+          R_mc = tdp::Matrix3fda::Identity();
+          t_mc = tdp::Vector3fda::Zero();
           std::vector<size_t> maxIt{10,6,3};
           ICP::Compute(pcs_m,ns_m,pcs_c,ns_c,R_mc,t_mc,camD,maxIt,icpAngleThr_deg,
               icpDistThr); 
           std::cout << "R_mc" << std::endl << R_mc << std::endl 
             << "t_mc " << t_mc.transpose() << std::endl;
+          T_rd.matrix().topLeftCorner<3,3>() = R_mc;
+          T_rd.matrix().topRightCorner<3,1>() = t_mc;
         }
-
-        cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();
 
         if (pangolin::Pushed(resetTSDF)) {
