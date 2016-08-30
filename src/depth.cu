@@ -3,6 +3,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <tdp/cuda.h>
+#include <tdp/nvidia/helper_cuda.h>
 #include <tdp/depth.h>
 #include <tdp/image.h>
 
@@ -34,6 +35,7 @@ void ConvertDepth(const Image<uint16_t>& dRaw,
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
   //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
   KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale);
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 }

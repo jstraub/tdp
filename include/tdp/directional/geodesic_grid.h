@@ -46,7 +46,7 @@ GeodesicGrid<D>::GeodesicGrid() {
   pts_.push_back(Eigen::Vector3f(-a, 0, 1));
   for (auto& p : pts_) {
     p /= p.norm();
-    std::cout << p.transpose() << std::endl;
+    //std::cout << p.transpose() << std::endl;
   }
   tri_.push_back(Eigen::Vector3i(0, 11, 5));
   tri_.push_back(Eigen::Vector3i(0, 5, 1));
@@ -72,10 +72,9 @@ GeodesicGrid<D>::GeodesicGrid() {
   tri_lvls_.push_back(tri_.size());
   for (size_t d=0; d<D-1; ++d) 
     SubdivideOnce();
-  std::cout << "depth of geodesic grid: " << D << std::endl;
-  for (size_t d=0; d<tri_lvls_.size(); ++d) 
-    std::cout << tri_lvls_[d] << " ";
-  std::cout << std::endl;
+  std::cout << "depth of geodesic grid: " << D << " (";
+  for (size_t d=0; d<tri_lvls_.size(); ++d) std::cout << tri_lvls_[d] << " ";
+  std::cout << ")" << std::endl;
   RefreshCenters();
 }
 
@@ -115,7 +114,7 @@ void GeodesicGrid<D>::RefreshCenters() {
           pts_[tri_[i](1)] + 
           pts_[tri_[i](2)]).array()/3.);
     tri_centers_.back() /= tri_centers_.back().norm();
-    std::cout << tri_centers_.back().transpose() << std::endl;
+    //std::cout << tri_centers_.back().transpose() << std::endl;
   }
 }
 
@@ -128,17 +127,17 @@ void GeodesicGrid<D>::Render3D(void) {
   }
   if (ibo_.num_elements == 0) {
     ibo_.Reinitialise(pangolin::GlBufferType::GlElementArrayBuffer,N,GL_UNSIGNED_INT,3,GL_DYNAMIC_DRAW);
-    ibo_.Upload(&(tri_lvls_[*(tri_lvls_.end()-1)]),N*sizeof(Eigen::Vector3i));
+    ibo_.Upload(&(tri_[tri_lvls_[tri_lvls_.size()-2]]),N*sizeof(Eigen::Vector3i));
   }
   if (vboc_.num_elements == 0) {
     vboc_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,tri_centers_.size(),GL_FLOAT,3,GL_DYNAMIC_DRAW);
     vboc_.Upload(&(tri_centers_[0]),tri_centers_.size()*sizeof(Eigen::Vector3f));
   }
 
-  glPointSize(10);
-  glColor3f(1,0,0);
+  glPointSize(5);
+  glColor4f(1,0,0,0.9);
   pangolin::RenderVbo(vboc_);
-  glColor3f(0,1,0);
+  glColor4f(0.5,0.5,0.5,0.4);
   // TODO: debug
   pangolin::RenderVboIbo(vbo_,ibo_,true);
   glPointSize(1);

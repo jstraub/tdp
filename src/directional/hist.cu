@@ -1,5 +1,6 @@
 
-#include <Eigen/Dense>
+#include <tdp/eigen/dense.h>
+#include <iostream>
 #include <tdp/image.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
@@ -8,18 +9,22 @@ namespace tdp {
 
 __global__
 void KernelComputeCentroidBasedGeodesicHist(
-    Image<Eigen::Vector3f> n,
-    Image<Eigen::Vector3f> tri_centers,
+    Image<tdp::Vector3fda> n,
+    Image<tdp::Vector3fda> tri_centers,
     Image<uint32_t> hist
     ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
   if (idx < n.w_ && idy < n.h_) {
+    tdp::Vector3fda ni = n(idx,idy);
+    if (isnan(ni(0)) || isnan(ni(1)) || isnan(ni(2)) 
+        || ni.norm() < 0.9) return;
     int id = 0;
-    Eigen::Vector3f ni = n(idx,idy);
+    int N = tri_centers.w_;
     float maxDot = -1;
-    for (uint32_t i=0; i<tri_centers.w_; ++i) {
-      float dot = ni.dot(tri_centers[i]);
+    for (uint32_t i=0; i<N; ++i) {
+      const tdp::Vector3fda& c = tri_centers[i];
+      float dot = ni.dot(c);
       if (dot > maxDot) {
         maxDot = dot;
         id =i;
@@ -30,8 +35,8 @@ void KernelComputeCentroidBasedGeodesicHist(
 }
 
 void ComputeCentroidBasedGeoidesicHist(
-    Image<Eigen::Vector3f>& n,
-    Image<Eigen::Vector3f>& tri_centers,
+    Image<tdp::Vector3fda>& n,
+    Image<tdp::Vector3fda>& tri_centers,
     Image<uint32_t>& hist
     ) {
   dim3 threads, blocks;

@@ -8,7 +8,7 @@
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/glcuda.h>
 
-#include <Eigen/Dense>
+#include <tdp/eigen/dense.h>
 #include <tdp/managed_image.h>
 
 #include <tdp/convolutionSeparable.h>
@@ -17,6 +17,8 @@
 #include <tdp/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/nvidia/helper_cuda.h>
+
+#include "gui.hpp"
 
 template<typename To, typename From>
 void ConvertPixels(pangolin::Image<To>& to, const pangolin::Image<From>& from, float scale, float offset)
@@ -52,74 +54,22 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         return;
     }
 
-    // Output details of video stream
-    size_t iRGB, iD;
-    for(size_t s = 0; s < num_streams; ++s) {
-        const pangolin::StreamInfo& si = video.Streams()[s];
-        std::cout << "Stream " << s << ": " << si.Width() << " x " << si.Height()
-                  << " " << si.PixFormat().format << " (pitch: " << si.Pitch() << " bytes)" << std::endl;
-        if (si.PixFormat().format.compare(pangolin::VideoFormatFromString("GRAY16LE").format)==0) {
-          iD = s;
-        }
-        if (si.PixFormat().format.compare(pangolin::VideoFormatFromString("RGB24").format)==0) {
-          iRGB = s;
-        }
-    }
-    size_t w = video.Streams()[iRGB].Width();
-    size_t h = video.Streams()[iRGB].Height();
+    GUI gui(1200,800,video);
+
+    size_t w = video.Streams()[gui.iRGB].Width();
+    size_t h = video.Streams()[gui.iRGB].Height();
     size_t wc = w+w%64; // for convolution
     size_t hc = h+h%64;
     float f = 550;
     float uc = (w-1.)/2.;
     float vc = (h-1.)/2.;
 
-    // Check if video supports VideoPlaybackInterface
-    pangolin::VideoPlaybackInterface* video_playback = video.Cast<pangolin::VideoPlaybackInterface>();
-    const int total_frames = video_playback ? video_playback->GetTotalFrames() : std::numeric_limits<int>::max();
-
-    std::vector<unsigned char> buffer;
-    buffer.resize(video.SizeBytes()+1);
-
-    // Create OpenGL window - guess sensible dimensions
-    int menue_w = 180;
-    pangolin::CreateWindowAndBind( "VideoViewer",
-        (int)(video.Width() * num_streams)+menue_w,
-        (int)(video.Height())
-    );
-
-    // Assume packed OpenGL data unless otherwise specified
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glEnable (GL_BLEND);
-    glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Setup resizable views for video streams
-    std::vector<pangolin::GlPixFormat> glfmt;
-    std::vector<std::pair<float,float> > gloffsetscale;
-    std::vector<size_t> strides;
-    std::vector<pangolin::ImageViewHandler> handlers;
-    handlers.reserve(num_streams+10);
-
-    size_t scratch_buffer_bytes = 0;
-
-    pangolin::View& container = pangolin::Display("streams");
-    container.SetLayout(pangolin::LayoutEqual)
-             .SetBounds(0., 1.0, pangolin::Attach::Pix(menue_w), 1.0);
-    std::vector<tdp::QuickView*> streamViews; streamViews.reserve(10);
-    for(unsigned int d=0; d < num_streams; ++d) {
-        const pangolin::StreamInfo& si = video.Streams()[d];
-        streamViews.push_back(new tdp::QuickView(si.Width(), si.Height()));
-        container.AddDisplay(*streamViews.back());
-        glfmt.push_back(pangolin::GlPixFormat(si.PixFormat()));
-        strides.push_back( (8*si.Pitch()) / si.PixFormat().bpp );
-    }
-
     tdp::QuickView viewDebugA(wc,hc);
-    container.AddDisplay(viewDebugA);
+    gui.container().AddDisplay(viewDebugA);
     tdp::QuickView viewDebugB(wc,hc);
-    container.AddDisplay(viewDebugB);
+    gui.container().AddDisplay(viewDebugB);
     tdp::QuickView viewN2D(wc,hc);
-    container.AddDisplay(viewN2D);
+    gui.container().AddDisplay(viewN2D);
 
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
@@ -129,135 +79,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // Add named OpenGL viewport to window and provide 3D Handler
     pangolin::View& d_cam = pangolin::CreateDisplay()
       .SetHandler(new pangolin::Handler3D(s_cam));
-    container.AddDisplay(d_cam);
-
-    // current frame in memory buffer and displaying.
-    pangolin::Var<int> frame("ui.frame", -1, 0, total_frames-1 );
-    pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
-
-
-    pangolin::Var<int>  record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 );
-    pangolin::Var<int>  end_frame("viewer.end_frame", std::numeric_limits<int>::max() );
-    pangolin::Var<bool> video_wait("video.wait", true);
-    pangolin::Var<bool> video_newest("video.newest", false);
-
-    pangolin::Var<bool> show2DNormals("ui.show 2D Normals",true,true);
-    pangolin::Var<bool> compute3Dgrads("ui.compute3Dgrads",false,true);
-    pangolin::Var<bool> evaluatePlaneFit("ui.evalPlaneFit",true,true);
-
-    pangolin::Var<float> histScale("ui.hist scale",2.,1.,10.);
-
-    if( video_playback ) {
-        if(total_frames < std::numeric_limits<int>::max() ) {
-            std::cout << "Video length: " << total_frames << " frames" << std::endl;
-        }
-        end_frame = 0;
-    }
-    end_frame = std::numeric_limits<int>::max();
-
-    std::vector<unsigned char> scratch_buffer;
-    scratch_buffer.resize(scratch_buffer_bytes);
-
-    std::vector<pangolin::Image<unsigned char> > images;
-
-#ifdef CALLEE_HAS_CPP11
-    const int FRAME_SKIP = 30;
-    const char show_hide_keys[]  = {'1','2','3','4','5','6','7','8','9'};
-    const char screenshot_keys[] = {'!','"','#','$','%','^','&','*','('};
-
-    // Show/hide streams
-    for(size_t v=0; v < container.NumChildren() && v < 9; v++) {
-        pangolin::RegisterKeyPressCallback(show_hide_keys[v], [v,&container](){
-            container[v].ToggleShow();
-        } );
-        pangolin::RegisterKeyPressCallback(screenshot_keys[v], [v,&images,&video](){
-            if(v < images.size() && images[v].ptr) {
-                try{
-                    pangolin::SaveImage(
-                        images[v], video.Streams()[v].PixFormat(),
-                        pangolin::MakeUniqueFilename("capture.png")
-                    );
-                }catch(std::exception e){
-                    pango_print_error("Unable to save frame: %s\n", e.what());
-                }
-            }
-        } );
-    }
-
-    pangolin::RegisterKeyPressCallback('r', [&](){
-        if(!video.IsRecording()) {
-            video.SetTimelapse( static_cast<size_t>(record_timelapse_frame_skip) );
-            video.Record();
-            pango_print_info("Started Recording.\n");
-        }else{
-            video.Stop();
-            pango_print_info("Finished recording.\n");
-        }
-        fflush(stdout);
-    });
-    pangolin::RegisterKeyPressCallback('p', [&](){
-        video.Play();
-        end_frame = std::numeric_limits<int>::max();
-        pango_print_info("Playing from file log.\n");
-        fflush(stdout);
-    });
-    pangolin::RegisterKeyPressCallback('s', [&](){
-        video.Source();
-        end_frame = std::numeric_limits<int>::max();
-        pango_print_info("Playing from source input.\n");
-        fflush(stdout);
-    });
-    pangolin::RegisterKeyPressCallback(' ', [&](){
-        end_frame = (frame < end_frame) ? frame : std::numeric_limits<int>::max();
-    });
-    pangolin::RegisterKeyPressCallback('w', [&](){
-        video_wait = !video_wait;
-        if(video_wait) {
-            pango_print_info("Gui wait's for video frame.\n");
-        }else{
-            pango_print_info("Gui doesn't wait for video frame.\n");
-        }
-    });
-    pangolin::RegisterKeyPressCallback('d', [&](){
-        video_newest = !video_newest;
-        if(video_newest) {
-            pango_print_info("Discarding old frames.\n");
-        }else{
-            pango_print_info("Not discarding old frames.\n");
-        }
-    });
-    pangolin::RegisterKeyPressCallback('<', [&](){
-        if(video_playback) {
-            frame = video_playback->Seek(frame - FRAME_SKIP) -1;
-            end_frame = frame + 1;
-        }else{
-            pango_print_warn("Unable to skip backward.");
-        }
-    });
-    pangolin::RegisterKeyPressCallback('>', [&](){
-        if(video_playback) {
-            frame = video_playback->Seek(frame + FRAME_SKIP) -1;
-            end_frame = frame + 1;
-        }else{
-            end_frame = frame + FRAME_SKIP;
-        }
-    });
-    pangolin::RegisterKeyPressCallback(',', [&](){
-        if(video_playback) {
-            frame = video_playback->Seek(frame - 1) -1;
-            end_frame = frame+1;
-        }else{
-            pango_print_warn("Unable to skip backward.");
-        }
-    });
-    pangolin::RegisterKeyPressCallback('.', [&](){
-        // Pause at next frame
-        end_frame = frame+1;
-    });
-    pangolin::RegisterKeyPressCallback('0', [&](){
-        video.RecordOneFrame();
-    });
-#endif // CALLEE_HAS_CPP11
+    gui.container().AddDisplay(d_cam);
 
     tdp::ManagedHostImage<float> d(wc, hc);
     tdp::ManagedHostImage<float> debugA(wc, hc);
@@ -265,10 +87,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
     memset(n2D.ptr_,0,n2D.SizeBytes());
-    tdp::ManagedHostImage<Eigen::Vector3f> n2Df(wc,hc);
-    tdp::ManagedHostImage<Eigen::Vector3f> n(wc,hc);
+    tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
+    tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
 
-    pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc, GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
+    pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
+        GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
     tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
     tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -276,55 +99,54 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuDv(wc, hc);
     tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
 
-    tdp::GeodesicHist<2> geoHist;
+    tdp::GeodesicHist<3> normalHist;
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
         glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         glColor3f(1.0f, 1.0f, 1.0f);
 
-        if(frame.GuiChanged()) {
-            if(video_playback) {
-                frame = video_playback->Seek(frame) -1;
-            }
-            end_frame = frame + 1;
-        }
-        if ( frame < end_frame ) {
-            if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
-                frame = frame +1;
-            }
-        }
+        gui.NextFrames();
 
         pangolin::basetime t0 = pangolin::TimeNow();
 
-        tdp::Image<uint16_t> dRaw(images[iD].w, images[iD].h,
-            images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
+        tdp::Image<uint16_t> dRaw;
+        if (!gui.ImageD(dRaw)) continue;
+        
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
-
-        cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();
+        if (gui.verbose)
+          std::cout << "depth conversion: " <<
+            pangolin::TimeDiff_s(t0,tDepth) << std::endl;
 
-        // upload to gpu
-        // get derivatives using shar kernel
+        if (gui.verbose)
+          std::cout << "computing convolutions " << wc << "x" << hc << std::endl;
+        // upload to gpu and get derivatives using shar kernel
         float kernelA[3] = {1,0,-1};
         setConvolutionKernel(kernelA);
         convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
+        checkCudaErrors(cudaDeviceSynchronize());
         float kernelB[3] = {3/32.,10/32.,3/32.};
         setConvolutionKernel(kernelB);
         convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
+        checkCudaErrors(cudaDeviceSynchronize());
         convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
         setConvolutionKernel(kernelA);
         convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
-        checkCudaErrors(cudaDeviceSynchronize());
         pangolin::basetime tGrad = pangolin::TimeNow();
+
+        if (gui.verbose)
+          std::cout << "convolutions: " <<
+            pangolin::TimeDiff_s(tDepth,tGrad) << std::endl;
 
         {
           pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
-          cudaMemset(*cuNbufp,0, hc*wc*sizeof(Eigen::Vector3f));
-          tdp::Image<Eigen::Vector3f> cuN(wc, hc, wc*sizeof(Eigen::Vector3f), (Eigen::Vector3f*)*cuNbufp);
+          cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> cuN(wc, hc,
+              wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
           ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
-          if (show2DNormals) {
+          if (gui.show2DNormals) {
             CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
             //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
             for(size_t y=0; y < n2Df.h_; ++y) {
@@ -333,7 +155,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
               }
             }
           }
-          geoHist.ComputeGpu(cuN);
+
+          if (gui.computeHist) {
+            if (gui.histFrameByFrame)
+              normalHist.Reset();
+            normalHist.ComputeGpu(cuN);
+          }
         }
         cudaDeviceSynchronize();
         pangolin::basetime tNormal = pangolin::TimeNow();
@@ -343,45 +170,40 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           << pangolin::TimeDiff_s(tGrad,tNormal) << "\t"
           << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
 
-
-        if (evaluatePlaneFit) {
-
-        }
-
         glEnable(GL_DEPTH_TEST);
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
-        pangolin::RenderVbo(cuNbuf);
-        geoHist.Render3D(histScale);
+        if (gui.dispNormals) {
+          pangolin::RenderVbo(cuNbuf);
+        }
+        if (gui.computeHist) {
+          if (gui.dispGrid) {
+            normalHist.geoGrid_.Render3D();
+          }
+          normalHist.Render3D(gui.histScale);
+        }
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);
 
+        gui.ShowFrames();
+
         CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
         CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
-        for(unsigned int i=0; i<images.size(); ++i)
-        {
-          if(container[i].IsShown()) {
-            pangolin::Image<unsigned char>& image = images[i];
-            streamViews[i]->SetImage(image, glfmt[i], strides[i]);
-          }
-        }
         viewDebugA.SetImage(debugA);
         viewDebugB.SetImage(debugB);
-        if (show2DNormals) {
+        if (gui.show2DNormals) {
           viewN2D.SetImage(n2D);
         }
 
         // leave in pixel orthographic for slider to render.
         pangolin::DisplayBase().ActivatePixelOrthographic();
         if(video.IsRecording()) {
-            pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f, pangolin::DisplayBase().v.h-14.0f, 7.0f);
+            pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
+                pangolin::DisplayBase().v.h-14.0f, 7.0f);
         }
         pangolin::FinishFrame();
     }
-
-    for (size_t i=0; i<streamViews.size(); ++i)
-      delete streamViews[i];
 }
 
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Dense>
+#include <tdp/eigen/dense.h>
 #include <tdp/image.h>
 
 namespace tdp {
@@ -9,7 +9,7 @@ void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,
     const Image<float>& ddv,
-    const Image<Eigen::Vector3f>& n,
+    const Image<tdp::Vector3fda>& n,
     float f, float uc, float vc);
 
 }

@@ -6,6 +6,12 @@
 
 namespace tdp {
 
+struct Vec3f {
+  float x;
+  float y;
+  float z;
+};
+
 void ComputeKernelParamsForArray(dim3& blocks, dim3& threads,
     size_t size, size_t numThreads);
 

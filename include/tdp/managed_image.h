@@ -5,6 +5,7 @@
 #  include <tdp/allocator_gpu.h>
 #endif
 #include <tdp/image.h>
+#include <iostream>
 
 namespace tdp {
 
@@ -18,9 +19,10 @@ class ManagedImage : public Image<T> {
   {}
 
   void Reinitialise(size_t w, size_t h) {
-    if (this->ptr_) 
+    if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
-    Alloc::construct(w*h);
+    }
+    this->ptr_ = Alloc::construct(w*h);
     this->w_ = w;
     this->h_ = h;
     this->pitch_ = w*sizeof(T);
