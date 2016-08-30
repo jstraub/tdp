@@ -1,0 +1,164 @@
+
+\usepackage{dsfont}
+
+\DeclareMathOperator{\GEM}{\text{GEM}}
+\DeclareMathOperator{\vMF}{\text{vMF}}
+\DeclareMathOperator{\DP}{\text{DP}}
+\DeclareMathOperator{\Stick}{\text{Stick}}
+\DeclareMathOperator{\Mult}{\text{Mult}}
+\DeclareMathOperator{\Dir}{\text{Dir}}
+\DeclareMathOperator{\DirMult}{\text{DirMult}}
+\DeclareMathOperator{\Cat}{\text{Cat}}
+\DeclareMathOperator{\Unif}{\text{Unif}}
+\DeclareMathOperator{\BetaDist}{\text{Beta}}
+\DeclareMathOperator{\NIW}{\text{NIW}}
+\DeclareMathOperator{\IW}{\text{IW}}
+\DeclareMathOperator{\GAUSS}{\mathcal{N}}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\ELBO}{\mathcal{L}}
+\DeclareMathOperator{\Dkl}{\text{D}_\text{KL}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\median}{median}
+\DeclareMathOperator*{\diag}{diag}
+\DeclareMathOperator*{\tr}{tr}
+\DeclareMathOperator*{\trace}{trace}
+\DeclareMathOperator*{\vectorize}{vec}
+
+\DeclareMathOperator*{\sign}{sign}
+\DeclareMathOperator{\MI}{\text{I}}
+
+\newcommand{\Expectation}[1]{\ensuremath{\mathbb{E}\left\{#1\right\} }}
+\newcommand{\grad}[1]{\ensuremath{\nabla_{#1}}}
+
+%\newcommand{\argmin}[1]{\ensuremath{\operatorname*{arg\,min}_{#1}}}
+%\newcommand{\argmax}[1]{\ensuremath{\operatorname*{arg\,max}_{#1}}}
+%\newcommand{\arginf}[1]{\ensuremath{\operatorname*{arg\,inf}_{#1}}}
+%\newcommand{\argsup}[1]{\ensuremath{\operatorname*{arg\,sup}_{#1}}}
+
+% Riemannian Exp and Log maps
+\newcommand{\Log}[1]{\ensuremath{{\mathrm{Log}_{#1}}}}
+% \newcommand{\Exp}[1]{\ensuremath{{\mathrm{Exp}_{#1}}}}
+\newcommand{\Exp}[1]{{{\mathrm{Exp}_{#1}}}}
+
+\newcommand{\Bessel}[1]{\ensuremath{\text{I}_{#1}}}
+
+\newcommand{\SO}[1]{\ensuremath{\mathrm{SO(#1)}}}
+\newcommand{\so}[1]{\ensuremath{\mathrm{so(#1)}}}
+\newcommand{\SE}[1]{\ensuremath{\mathrm{SE(#1)}}}
+\newcommand{\se}[1]{\ensuremath{\mathrm{se(#1)}}}
+\newcommand{\SOthree}{\SO{3}}
+
+\newcommand{\Identity}{\ensuremath{\mathrm{I}}}
+
+
+\newcommand{\Prob}[1]{\text{Pr} \left(#1\right)}
+
+\newcommand{\ba}{\textbf{a}}
+\newcommand{\bx}{\textbf{x}}
+\newcommand{\bv}{\textbf{v}}
+\newcommand{\bu}{\textbf{u}}
+\newcommand{\bc}{\textbf{c}}
+\newcommand{\bq}{\textbf{q}}
+\newcommand{\bp}{\textbf{p}}
+\newcommand{\bw}{\textbf{w}}
+\newcommand{\bz}{\textbf{z}}
+\newcommand{\bD}{\textbf{D}}
+\newcommand{\bR}{\textbf{R}}
+
+\newcommand{\hba}{\hat{\textbf{a}}}
+\newcommand{\hbx}{\hat{\textbf{x}}}
+\newcommand{\hbv}{\hat{\textbf{v}}}
+\newcommand{\hbc}{\hat{\textbf{c}}}
+\newcommand{\hbq}{\hat{\textbf{q}}}
+\newcommand{\hbw}{\hat{\textbf{w}}}
+\newcommand{\hbz}{\hat{\textbf{z}}}
+\newcommand{\hbD}{\hat{\textbf{D}}}
+\newcommand{\hbR}{\hat{\textbf{R}}}
+
+\newcommand{\hz}{\hat{z}}
+\newcommand{\hmus}{\hat\mus}
+\newcommand{\hSigma}{\hat{\Sigma}}
+\newcommand{\hN}{\hat{N}}
+
+% indicator function
+\newcommand{\Ind}[1]{\mathds{1}_{[#1]}}
+
+\newcommand{\dirac}{\delta}
+
+\newcommand{\btheta}{\boldsymbol\theta}
+\newcommand{\balpha}{\boldsymbol\alpha}
+\newcommand{\bbeta}{\boldsymbol\beta}
+\newcommand{\bgamma}{\boldsymbol\gamma}
+\newcommand{\blambda}{\boldsymbol\lambda}
+\newcommand{\bphi}{\boldsymbol\phi}
+\newcommand{\bzeta}{\boldsymbol\zeta}
+\newcommand{\bpi}{{\boldmath\pi}}
+\newcommand{\bSigma}{{\bm\Sigma}}
+\newcommand{\bmu}{{\bm\mu}}
+
+\newcommand{\hbalpha}{\hat{\boldsymbol\alpha}}
+\newcommand{\hbbeta}{\hat{\boldsymbol\beta}}
+\newcommand{\hbgamma}{\hat{\boldsymbol\gamma}}
+\newcommand{\hblambda}{\hat{\boldsymbol\lambda}}
+\newcommand{\hbphi}{\hat{\boldsymbol\phi}}
+\newcommand{\hbzeta}{\hat{\boldsymbol\zeta}}
+\newcommand{\hbpi}{\hat{\boldmath\pi}}
+\newcommand{\hbSigma}{\hat{\bm\Sigma}}
+
+\newcommand{\deriv}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\dderiv}[2]{\frac{\partial^2 #1}{\partial #2^2}}
+
+
+\newcommand{\InnerProduct}[2]{\left\langle #1,#2 \right\rangle}   
+\newcommand{\norm}[1]{{{\left\|#1\right\|}}}
+
+
+\newcommand{\Real}{\mathbb{R}}
+% do not use this anymore:
+\newcommand{\R}{\mathbb{R}}
+
+\newcommand{\RR}{\ensuremath{\mathbb{R}}}
+\newcommand{\Rtwo}{\ensuremath{\RR^2}}
+\newcommand{\Rthree}{\ensuremath{\RR^3}}
+
+
+\newcommand{\SD}{\mathbb{S}^{D-1}}
+\newcommand{\SDdim}[1]{\mathbb{S}^{#1}}
+
+\newcommand{\TpS}{T_{\ps}\SD}
+
+\newcommand{\mfax}{\mu} % MF axis symbol
+
+
+%\DeclareRobustCommand{\xs}{\accentset{\circ}{x}}
+%\DeclareRobustCommand{\ps}{\accentset{\circ}{p}}
+%\DeclareRobustCommand{\bxs}{\accentset{\circ}{\textbf{x}}}
+%\DeclareRobustCommand{\xsmean}{\langle\accentset{\circ}{x}\rangle}
+%\DeclareRobustCommand{\mus}{\accentset{\circ}{\mu}}
+%\DeclareRobustCommand{\bmus}{\accentset{\circ}{\bmu}}
+
+\DeclareRobustCommand{\xs}{x}
+\DeclareRobustCommand{\ps}{p}
+\DeclareRobustCommand{\bxs}{\textbf{x}}
+\DeclareRobustCommand{\xsmean}{\langle x \rangle}
+\DeclareRobustCommand{\mus}{\mu}
+\DeclareRobustCommand{\bmus}{\bmu}
+\DeclareRobustCommand{\hbmus}{\hat{\bmu}}
+
+\DeclareRobustCommand{\qmean}{\tilde{q}}
+\DeclareRobustCommand{\xmean}{\bar{x}}
+
+\DeclareRobustCommand{\xts}{\breve{x}}
+%\newcommand{\xmean}{\langle x\rangle}
+\newcommand{\xtsmean}{\langle \xts \rangle}
+\newcommand{\xtsmeanhat}{\langle \hat{\xts} \rangle}
+
+%\newcommand{\dpsgmm}{DP-SGMM}
+\newcommand{\dpsgmm}{DP-TGMM}
+
+
+\newcommand{\indices}{\mathcal{I}}
+\newcommand{\sizeof}[1]{\left\vert #1 \right\vert}
+
+\newcommand{\proptosim}{\overset{\propto}{\sim}}

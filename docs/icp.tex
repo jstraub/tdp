@@ -1,0 +1,82 @@
+\section{ICP Math}
+
+Assume we have a model point cloud with points $p_i$ and surface
+normals $n_i$ and we want to align the currently sensed point cloud
+with points $q_i$ to the model by estimating the relative
+transformation $(R_{mc}, t_{mc})$. The ICP point-to-plane distance
+error function is given as:
+\begin{align}
+  \sum_i \| ( R_{mc} q_i + t_{mc} - p_i )^T n_i \|^2_2
+\end{align}
+Note that this already assumes a data association between model and current point cloud.
+This association can be obtained efficiently in the case of RGBD frames
+by projecting the current point cloud into the model camera frame and
+forming the association by the pixel positions of the projected current point cloud.
+
+\subsection{Solution using small angle assumption}
+Locally, around the current relative transformation estimate $(R_{mc},
+t_{mc})$ the cost function can be approximated by small perturbations $\xi$
+in the tangent space $\se{3}$ around the current pose:
+\begin{align}
+  \sum_i \| ( R_{mc} \exp(\xi_w) q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2
+\end{align}
+
+Slide 13 of 
+\url{{http://resources.mpi-inf.mpg.de/deformableShapeMatching/EG2011_Tutorial/slides/2.1%20Rigid%20ICP.pdf}} and 
+\url{https://www.comp.nus.edu.sg/~lowkl/publications/lowk_point-to-plane_icp_techrep.pdf}
+show how to linearize this system assuming small rotations:
+\begin{align}
+  &\sum_i \| (  \exp(\xi_w) R_{mc} q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2 \\
+  =& \sum_i \| ( (I + [\xi_w]_\times) R_{mc} q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2\\
+  =& \sum_i \| (  [\xi_w]_\times R_{mc} q_i + R_{mc} q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2\\
+  =& \sum_i \| n_i^T (\xi_w \times (R_{mc} q_i)) + n_i^T R_{mc} q_i + n_i^T t_{mc} + n_i^T \xi_t -n_i^T p_i \|^2_2\\
+  =& \sum_i \|  ( (R_{mc} q_i) \times n_i)^T \xi_w + n_i^T \xi_t + n_i^T ( R_{mc} q_i + t_{mc} - p_i) \|^2_2\\
+  =& \|  A \xi - b \|^2_2  \,,\quad
+  A = \begin{pmatrix}
+    ((R_{mc} q_i) \times n_i)^T &  n_i^T \\
+    \vdots & \vdots
+  \end{pmatrix}\,,\;
+  \xi = \begin{pmatrix} \xi_w \\ \xi_t \end{pmatrix}\,,\;
+  b = \begin{pmatrix}
+    n_i^T ( - R_{mc} q_i - t_{mc} + p_i) \\
+    \vdots
+  \end{pmatrix}
+\end{align}
+where we have used that the $\SO{3}$ exponential maps first order
+expansion is $I + [\xi_w]_\times$ for small angular magnitude.
+
+This can be solved in the standard approach using the pseudo inverse $A^TA$:
+\begin{align}
+  \xi = (A^TA)^{-1} A^Tb
+\end{align}
+For efficiency reasons $A$ and $b$ should never be constructed
+directly. Instead we directly accumulate $A^TA$ and $A^Tb$:
+\begin{align}
+  A^TA = \begin{pmatrix}
+    \sum_i A_{i0}^2 & \sum_i A_{i0} A_{i1} & \cdots \\
+    \sum_i A_{i0} A_{i1} & \sum_i A_{i1}^2 & \cdots \\
+      \vdots & \vdots & \ddots 
+  \end{pmatrix}
+  & 
+  A^Tb = \begin{pmatrix}
+    \sum_i A_{i0} b_{i} \\
+    \sum_i A_{i1} b_{i} \\
+      \vdots 
+  \end{pmatrix}
+\end{align}
+
+\subsection{Alternative using gradient descent}
+
+The optimum perturbation $\xi$ to minimize the cost function around the
+current pose estimate can be found by gradient descent in the direction of derivative with
+respect to $\xi$:
+\begin{align}
+  & \deriv{}{\xi} \sum_i \| ( R_{mc} \exp(\xi_w) q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2\\
+  =&  \sum_i 2 ( R_{mc} \exp(\xi_w) q_i + t_{mc} + \xi_t - p_i )^T n_i  \deriv{}{\xi}
+  \left[ n_i^T R_{mc} \exp(\xi_w) q_i   + n_i^T \xi_t
+  \right]\\
+  =&  \sum_i 2 ( R_{mc} \exp(\xi_w) q_i + t_{mc} + \xi_t - p_i )^T n_i  
+  \begin{pmatrix}
+    - n_i^T [R_{mc} q_i]_\times  & n_i^T
+  \end{pmatrix}
+\end{align}

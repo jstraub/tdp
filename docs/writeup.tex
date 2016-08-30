@@ -1,0 +1,42 @@
+\documentclass[12pt]{article}
+
+\usepackage{geometry}
+\geometry{ % These values are relative to the edge of paper (0in) and go inward it
+  top=1in,            % <-- you want to adjust this
+  inner=0.5in,
+  outer=0.5in,
+  bottom=0.8in,
+  headheight=3ex,       % <-- and this
+  headsep=2ex,          % <-- and this
+}
+
+\usepackage{lastpage} % to get the number of pages for the footer
+\usepackage{fancyhdr}
+\setlength{\headheight}{15.2pt}
+\pagestyle{fancy}
+\fancyhead[LO,LE]{}
+\fancyhead[RO,RE]{Julian Straub - jstraub@mit.edu}
+\fancyfoot[C,C] {\thepage/\pageref{LastPage}}
+
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{url}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+\title{}
+\author{Julian Straub}
+\date{}
+
+\input{./mathDefines.tex}
+
+\begin{document}
+\input{icp.tex}
+%
+\section{Bibliography}
+\bibliographystyle{alpha}
+\bibliography{jstraub.bib}
+\end{document}
+
