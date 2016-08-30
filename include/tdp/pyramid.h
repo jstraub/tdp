@@ -25,6 +25,7 @@ class Pyramid {
 
   size_t Width(int lvl) { return w_ >> lvl; };
   size_t Height(int lvl) { return h_ >> lvl; };
+  size_t Lvls() { return LEVELS; }
 
   size_t SizeBytes() { return NumElemsToLvl(w_,h_,LEVELS)*sizeof(T); }
 
