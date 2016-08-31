@@ -1,7 +1,5 @@
 
-#include <stdio.h>
-#include <Eigen/Dense>
-#include <tdp/config.h>
+#include <tdp/eigen/dense.h>
 #include <tdp/cuda.h>
 #include <tdp/image.h>
 #include <tdp/normals.h>
@@ -9,25 +7,20 @@
 
 namespace tdp {
 
-template<typename T>
-__device__
-T* RowPtr(Image<T>& I, size_t row) {
-  return (T*)((uint8_t*)I.ptr_+I.pitch_*row);
-}
-
-__global__ void KernelSurfaceNormals(Image<float> d,
+__global__ 
+void KernelSurfaceNormals(Image<float> d,
     Image<float> ddu, Image<float> ddv,
-    Image<tdp::Vector3fda> n, float f, float uc, float vc) {
+    Image<Vector3fda> n, float f, float uc, float vc) {
   //const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
   if (idx < n.w_ && idy < n.h_) {
-    const float di = RowPtr<float>(d,idy)[idx];
-    float* ni = (float*)(&RowPtr<tdp::Vector3fda>(n,idy)[idx]);
+    const float di = d(idx,idy);
+    float* ni = (float*)(&(n(idx,idy)));
     if (di > 0) {
-      const float ddui = RowPtr<float>(ddu,idy)[idx];
-      const float ddvi = RowPtr<float>(ddv,idy)[idx];
+      const float ddui = ddu(idx,idy);
+      const float ddvi = ddv(idx,idy);
       ni[0] = -ddui*f;
       ni[1] = -ddvi*f;
       ni[2] = ((idx-uc)*ddui + (idy-vc)*ddvi + di);
@@ -43,12 +36,11 @@ __global__ void KernelSurfaceNormals(Image<float> d,
   }
 }
 
-
 void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,
     const Image<float>& ddv,
-    const Image<tdp::Vector3fda>& n,
+    const Image<Vector3fda>& n,
     float f, float uc, float vc) {
   
   dim3 threads, blocks;

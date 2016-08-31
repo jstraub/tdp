@@ -1,9 +1,14 @@
 
+#include <assert.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
 #include <tdp/pyramid.h>
 #include <tdp/camera.h>
 #include <tdp/normals.h>
+#include <tdp/cuda.h>
+#include <tdp/nvidia/helper_cuda.h>
+#include <tdp/convolutionSeparable.h>
 
 namespace tdp {
 
@@ -11,7 +16,13 @@ void Depth2Normals(
     const Image<float>& cuD,
     const Camera<float>& cam,
     Image<Vector3fda> cuN) {
-
+  size_t wc = cuD.w_;
+  size_t hc = cuD.h_;
+  assert(wc%64 == 0);
+  assert(hc%64 == 0);
+  ManagedDeviceImage<float> cuDu(wc, hc);
+  ManagedDeviceImage<float> cuDv(wc, hc);
+  ManagedDeviceImage<float> cuTmp(wc, hc);
   // upload to gpu and get derivatives using shar kernel
   float kernelA[3] = {1,0,-1};
   setConvolutionKernel(kernelA);
@@ -29,19 +40,6 @@ void Depth2Normals(
   int uc = cam.params_(2);
   int vc = cam.params_(3);
   ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
-}
-
-template<int LEVELS>
-void Depth2Normals(
-    const Pyramid<float,LEVELS>& cuD,
-    const Camera<float>& cam,
-    Pyramid<Vector3fda,LEVELS> cuN) {
-  assert(cuD.Lvls() == cuN.Lvls());
-  for (size_t lvl=0; lvl<cuD.Lvls(); ++lvl) {
-    Image<Vector3fda> cuN_i = cuN.GetImage(lvl);
-    Image<Vector3fda> cuD_i = cuD.GetImage(lvl);
-    Depth2Normals(cuD_i, cam, cuN_i);
-  }
 }
 
 }

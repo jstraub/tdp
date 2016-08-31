@@ -14,13 +14,16 @@
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
 #include <tdp/normals.h>
+#include <tdp/pc.h>
 #include <tdp/quickView.h>
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
 #include <tdp/image.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/icp.h>
 #include <tdp/tsdf.h>
 #include <tdp/pyramid.h>
+#include <tdp/managed_pyramid.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 template<typename To, typename From>
@@ -72,8 +75,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     size_t w = video.Streams()[iRGB].Width();
     size_t h = video.Streams()[iRGB].Height();
-    size_t wc = w;//+w%64; // for convolution
-    size_t hc = h;//+h%64;
+    size_t wc = w+w%64; // for convolution
+    size_t hc = h+h%64;
     float f = 550;
     float uc = (w-1.)/2.;
     float vc = (h-1.)/2.;
@@ -301,10 +304,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedHostPyramid<float,3> dPyrEst(wc,hc);
     tdp::ManagedDevicePyramid<float,3> cuDPyr(wc,hc);
     tdp::ManagedDevicePyramid<float,3> cuDPyrEst(wc,hc);
-    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m;
-    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c;
-    tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_m;
-    tdp::ManageddevicePyramid<tdp::Vector3fda,3> ns_c;
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
+    tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
     tdp::Matrix3fda R_mc = tdp::Matrix3fda::Identity();
     tdp::Vector3fda t_mc = tdp::Vector3fda::Zero();
 
@@ -343,21 +346,23 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if (runICP) {
           // construct pyramid  
           // TODO: could also construct the pyramid directly on the GPU
-          tdp::ConstructPyramidFromImage(cuD, dPyr, cudaMemcpyDeviceToHost);
-          tdp::ConstructPyramidFromImage(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
+          tdp::ConstructPyramidFromImage<float,3>(cuD, dPyr, cudaMemcpyDeviceToHost);
+          tdp::ConstructPyramidFromImage<float,3>(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
           CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
           CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
 
-          tdp::PyramidDepth2PCs(cuDPyrEst,pcs_m);
-          tdp::PyramidDepth2PCs(cuDPyr,pcs_c);
-          tdp::Depth2Normals(cuDPyrEst,ns_m);
-          tdp::Depth2Normals(cuDPyr,ns_c);
+          tdp::PyramidDepth2PCs(cuDPyrEst,camD,pcs_m);
+          tdp::PyramidDepth2PCs(cuDPyr,camD,pcs_c);
+          // TODO: dont redo the work of convolving - build pyramid of
+          // ddu and ddv and compute normals from that
+          tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
+          tdp::Depth2Normals(cuDPyr,camD,ns_c);
 
           R_mc = tdp::Matrix3fda::Identity();
           t_mc = tdp::Vector3fda::Zero();
           std::vector<size_t> maxIt{10,6,3};
-          ICP::Compute(pcs_m,ns_m,pcs_c,ns_c,R_mc,t_mc,camD,maxIt,icpAngleThr_deg,
-              icpDistThr); 
+          tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, R_mc,
+              t_mc, camD, maxIt, icpAngleThr_deg, icpDistThr); 
           std::cout << "R_mc" << std::endl << R_mc << std::endl 
             << "t_mc " << t_mc.transpose() << std::endl;
           T_rd.matrix().topLeftCorner<3,3>() = R_mc;

@@ -11,7 +11,7 @@ void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,
     const Image<float>& ddv,
-    const Image<tdp::Vector3fda>& n,
+    const Image<Vector3fda>& n,
     float f, float uc, float vc);
 
 void Depth2Normals(
@@ -21,8 +21,14 @@ void Depth2Normals(
 
 template<int LEVELS>
 void Depth2Normals(
-    const Pyramid<float,LEVELS>& cuD,
+    Pyramid<float,LEVELS>& cuD,
     const Camera<float>& cam,
-    Pyramid<Vector3fda,LEVELS> cuN);
+    Pyramid<Vector3fda,LEVELS> cuN) {
+  for (size_t lvl=0; lvl<LEVELS; ++lvl) {
+    Image<float> cuD_i = cuD.GetImage(lvl);
+    Image<Vector3fda> cuN_i = cuN.GetImage(lvl);
+    Depth2Normals(cuD_i, cam, cuN_i);
+  }
+}
 
 }

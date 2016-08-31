@@ -1,4 +1,6 @@
 
+#include <tdp/cuda.h>
+#include <tdp/nvidia/helper_cuda.h>
 #include <tdp/image.h>
 #include <tdp/camera.h>
 #include <tdp/eigen/dense.h>

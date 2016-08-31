@@ -3,7 +3,9 @@
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
 #include <tdp/camera.h>
+#include <tdp/reductions.cuh>
 
 namespace tdp {
 
@@ -16,7 +18,7 @@ __global__ void KernelICPStep(
     Image<Vector3fda> n_c,
     Matrix3fda R_mc, 
     Vector3fda t_mc, 
-    Camera<float> cam,
+    const Camera<float> cam,
     float dotThr,
     float distThr,
     int N_PER_T,
@@ -24,7 +26,7 @@ __global__ void KernelICPStep(
     ) {
   const int tid = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = tid*N_PER_T;
-  const int N = I.w_*I.h_;
+  const int N = pc_m.w_*pc_m.h_;
   const int idE = min(N,(tid+1)*N_PER_T);
   __shared__ Eigen::Matrix<float,22,1,Eigen::DontAlign> sum[BLK_SIZE];
 
@@ -51,8 +53,10 @@ __global__ void KernelICPStep(
           // if we found a valid association accumulate the A and b for A x = b
           // where x \in se{3} as well as the residual error
           float ab[7];      
-          Eigen::Map<Vector3fda>(ab) = (R_mc * pc_c(idx,idy)).cross(n_mi);
-          Eigen::Map<Vector3fda>(&ab[3]) = n_mi;
+          Eigen::Map<Vector3fda> top(&(ab[0]));
+          Eigen::Map<Vector3fda> bottom(&(ab[3]));
+          top = (R_mc * pc_c(idx,idy)).cross(n_mi);
+          bottom = n_mi;
           ab[6] = n_mi.dot(pc_mi-pc_c_in_m);
           Eigen::Matrix<float,22,1,Eigen::DontAlign> upperTriangle;
           int k=0;
@@ -78,7 +82,7 @@ __global__ void KernelICPStep(
   }
   if(threadIdx.x < 22) {
     // sum the last two remaining matrixes directly into global memory
-    atomicAdd_<T>(&out[threadIdx.x], sum[0](threadIdx.x)+sum[1](threadIdx.x));
+    atomicAdd_<float>(&out[threadIdx.x], sum[0](threadIdx.x)+sum[1](threadIdx.x));
   }
 }
 
@@ -89,7 +93,7 @@ void ICPStep (
     Image<Vector3fda> n_c,
     Matrix3fda& R_mc, 
     Vector3fda& t_mc, 
-    Camera<float>& cam
+    const Camera<float>& cam,
     float dotThr,
     float distThr,
     Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
@@ -112,7 +116,7 @@ void ICPStep (
   for (int i=0; i<6; ++i) {
     ATb(i) = sumAb(prevRowStart+7-i-1);
     for (int j=i; j<6; ++j) {
-      ATA(i,j) = sumAb(prevRow+j-i);
+      ATA(i,j) = sumAb(prevRowStart+j-i);
     }
     prevRowStart += 7-i;
   }

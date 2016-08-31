@@ -11,7 +11,7 @@ class GpuAllocator {
 
   static T* construct(size_t N) {
     T* ptr;
-    cudaMalloc(&ptr, N*sizeof(T));
+    cudaMalloc((void**)&ptr, N*sizeof(T));
     return ptr;
   }
 
