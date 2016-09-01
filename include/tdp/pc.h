@@ -13,7 +13,7 @@ void Depth2PC(
     );
 
 template<int LEVELS>
-void PyramidDepth2PCs(
+void Depth2PCs(
     Pyramid<float,LEVELS>& d,
     const Camera<float>& cam,
     Pyramid<Vector3fda,LEVELS>& pc

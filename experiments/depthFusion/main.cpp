@@ -346,15 +346,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if (runICP) {
           // construct pyramid  
           // TODO: could also construct the pyramid directly on the GPU
-          tdp::ConstructPyramidFromImage<float,3>(cuD, dPyr, cudaMemcpyDeviceToHost);
-          tdp::ConstructPyramidFromImage<float,3>(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
-          CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
-          CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
+          //tdp::ConstructPyramidFromImage<float,3>(cuD, dPyr, cudaMemcpyDeviceToHost);
+          //tdp::ConstructPyramidFromImage<float,3>(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
+          //CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
+          //CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
+          tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr, cudaMemcpyDeviceToDevice);
+          tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst, cudaMemcpyDeviceToDevice);
 
-          tdp::PyramidDepth2PCs(cuDPyrEst,camD,pcs_m);
-          tdp::PyramidDepth2PCs(cuDPyr,camD,pcs_c);
-          // TODO: dont redo the work of convolving - build pyramid of
-          // ddu and ddv and compute normals from that
+          tdp::Depth2PCs(cuDPyrEst,camD,pcs_m);
+          tdp::Depth2PCs(cuDPyr,camD,pcs_c);
           tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
           tdp::Depth2Normals(cuDPyr,camD,ns_c);
 

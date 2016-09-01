@@ -8,6 +8,11 @@
 
 namespace tdp {
 
+void PyrDown(
+    const Image<float>& Iin,
+    Image<float>& Iout,
+    );
+
 template<typename T, int LEVELS>
 class Pyramid {
  public:
@@ -47,15 +52,24 @@ class Pyramid {
 template<typename T, int LEVELS>
 void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   P.GetImage(0).CopyFrom(I, type);
-  for (int lvl=1; lvl<LEVELS; ++lvl) {
-    Image<T> Isrc = P.GetImage(lvl-1);
-    Image<T> Idst = P.GetImage(lvl);
-    for (size_t v=0; v<Idst.h_; ++v) {
-      T* dst = Idst.RowPtr(v);
-      T* src0 = Idst.RowPtr(v*2);
-      T* src1 = Idst.RowPtr(v*2+1);
-      for (size_t u=0; u<Idst.w_; ++u) {
-        dst[u] = src0[u*2] + src0[u*2+1] + src1[u*2] + src1[u*2+1] ;
+  if (type == cudaMemcpyDeviceToDevice 
+      || type == cudaMemcpyHostToDevice) {
+    // P is on GPU so perform downsampling on GPU
+    for (int lvl=1; lvl<LEVELS; ++lvl) {
+      PyrDown(P.GetImage(lvl-1), P.GetImage(lvl));
+    }
+  } else {
+    // P is on CPU so perform downsampling there as well
+    for (int lvl=1; lvl<LEVELS; ++lvl) {
+      Image<T> Isrc = P.GetImage(lvl-1);
+      Image<T> Idst = P.GetImage(lvl);
+      for (size_t v=0; v<Idst.h_; ++v) {
+        T* dst = Idst.RowPtr(v);
+        T* src0 = Idst.RowPtr(v*2);
+        T* src1 = Idst.RowPtr(v*2+1);
+        for (size_t u=0; u<Idst.w_; ++u) {
+          dst[u] = 0.25*(src0[u*2] + src0[u*2+1] + src1[u*2] + src1[u*2+1]);
+        }
       }
     }
   }

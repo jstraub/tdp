@@ -60,4 +60,16 @@ class Camera : public CameraBase<T,4,Camera<T>> {
 typedef Camera<float> Cameraf;
 typedef Camera<double> Camerad;
 
+template<typename T>
+Camera<T> ScaleCamera(const Camera<T>& cam, T scale) {
+  Camera<T>::Parameters paramsScaled = cam.params_;
+  paramsScaled(0) *= scale;
+  paramsScaled(1) *= scale;
+  paramsScaled(2) = (paramsScaled(2)+0.5)*scale-0.5;
+  paramsScaled(3) = (paramsScaled(3)+0.5)*scale-0.5;
+  return Camera<T>(paramsScaled);
+}
+
+
+
 }
