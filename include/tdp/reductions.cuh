@@ -23,6 +23,44 @@ template<typename T>
 __device__ inline T zero()
 {return 0;};
 
+template<typename T, int BLK_SIZE>
+__device__ inline SumPyramidReduce(int tid, T* vals, T* out) {
+  // old reduction.....
+  __syncthreads(); //sync the threads
+#pragma unroll
+  for(int s=(BLK_SIZE)/2; s>1; s>>=1) {
+    if(tid < s) {
+      vals[tid] += vals[tid+s];
+    }
+    __syncthreads();
+  }
+  if(tid == 0) {
+    // sum the last two remaining matrixes directly into global memory
+    atomicAdd_<T>(out, vals[0]+vals[1]);
+  }
+}
+
+template<typename TA, typename TB, int BLK_SIZE>
+__device__ inline void SumPyramidReduce(int tid, TA* valsA, TA* outA, TB* valsB, TB* outB) {
+  // old reduction.....
+  __syncthreads(); //sync the threads
+#pragma unroll
+  for(int s=(BLK_SIZE)/2; s>1; s>>=1) {
+    if(tid < s) {
+      valsA[tid] += valsA[tid+s];
+      valsB[tid] += valsB[tid+s];
+    }
+    __syncthreads();
+  }
+  if(tid == 0) {
+    // sum the last two remaining matrixes directly into global memory
+    atomicAdd_<T>(outA, valsA[0]+valsA[1]);
+  }
+  if(tid == 1) {
+    atomicAdd_<T>(outB, valsB[0]+valsB[1]);
+  }
+}
+
 
 // TODO: clearly templates should be used here but I cannot seem to
 // figure out how to do that
