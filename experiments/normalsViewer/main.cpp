@@ -14,6 +14,7 @@
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
 #include <tdp/normals.h>
+#include <tdp/camera.h>
 #include <tdp/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/nvidia/helper_cuda.h>
@@ -99,6 +100,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuDv(wc, hc);
     tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
 
+    tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
     tdp::GeodesicHist<4> normalHist;
     // Stream and display video
     while(!pangolin::ShouldQuit())
@@ -119,33 +121,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if (gui.verbose)
           std::cout << "depth conversion: " <<
             pangolin::TimeDiff_s(t0,tDepth) << std::endl;
-
-        if (gui.verbose)
-          std::cout << "computing convolutions " << wc << "x" << hc << std::endl;
-        // upload to gpu and get derivatives using shar kernel
-        float kernelA[3] = {1,0,-1};
-        setConvolutionKernel(kernelA);
-        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-        checkCudaErrors(cudaDeviceSynchronize());
-        float kernelB[3] = {3/32.,10/32.,3/32.};
-        setConvolutionKernel(kernelB);
-        convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
-        checkCudaErrors(cudaDeviceSynchronize());
-        convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-        setConvolutionKernel(kernelA);
-        convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
-        pangolin::basetime tGrad = pangolin::TimeNow();
-
-        if (gui.verbose)
-          std::cout << "convolutions: " <<
-            pangolin::TimeDiff_s(tDepth,tGrad) << std::endl;
-
         {
           pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
           cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
           tdp::Image<tdp::Vector3fda> cuN(wc, hc,
               wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
-          ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
+          Depth2Normals(cuD, cam, cuN);
           if (gui.show2DNormals) {
             CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
             //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
@@ -155,7 +136,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
               }
             }
           }
-
           if (gui.computeHist) {
             if (gui.histFrameByFrame)
               normalHist.Reset();
@@ -166,8 +146,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         pangolin::basetime tNormal = pangolin::TimeNow();
 
         std::cout << pangolin::TimeDiff_s(t0,tDepth) << "\t"
-          << pangolin::TimeDiff_s(tDepth,tGrad) << "\t"
-          << pangolin::TimeDiff_s(tGrad,tNormal) << "\t"
+          << pangolin::TimeDiff_s(tDepth,tNormal) << "\t"
           << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
 
         glEnable(GL_DEPTH_TEST);
