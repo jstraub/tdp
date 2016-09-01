@@ -7,6 +7,7 @@
 
 namespace tdp {
 
+
 void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,

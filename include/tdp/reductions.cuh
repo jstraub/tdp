@@ -9,7 +9,6 @@
 
 namespace tdp {
 
-
 // just base function - empty because we are specializing if you look down
 template<typename T>
 __device__ inline void atomicAdd_(T* address, const T& val)
@@ -22,6 +21,11 @@ __device__ inline bool isNan(const T& val)
 template<typename T>
 __device__ inline T zero()
 {return 0;};
+
+// TODO: clearly templates should be used here but I cannot seem to
+// figure out how to do that
+float SumReduction(const Image<float>& I);
+Eigen::Vector3f SumReduction(const Image<Eigen::Vector3f>& I);
 
 template<typename T, int BLK_SIZE>
 __device__ inline SumPyramidReduce(int tid, T* vals, T* out) {
@@ -62,8 +66,4 @@ __device__ inline void SumPyramidReduce(int tid, TA* valsA, TA* outA, TB* valsB,
 }
 
 
-// TODO: clearly templates should be used here but I cannot seem to
-// figure out how to do that
-float SumReduction(const Image<float>& I);
-Eigen::Vector3f SumReduction(const Image<Eigen::Vector3f>& I);
 }

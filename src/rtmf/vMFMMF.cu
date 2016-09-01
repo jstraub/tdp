@@ -179,7 +179,7 @@ void MMFvMFCostFctAssignmentGPU(
 
   const int N_PER_T = 16;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256);
+  ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256,N_PER_T);
 
   if (K==1) {
       MMFvMFCostFctAssignment<1,256><<<blocks,threads>>>(

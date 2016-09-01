@@ -13,7 +13,7 @@ struct Vec3f {
 };
 
 void ComputeKernelParamsForArray(dim3& blocks, dim3& threads,
-    size_t size, size_t numThreads);
+    size_t size, size_t numThreads, size_t numDataPerThread=1);
 
 template<typename T>
 inline void ComputeKernelParamsForImage(dim3& blocks, dim3& threads,
@@ -31,5 +31,16 @@ inline void ComputeKernelParamsForVolume(dim3& blocks, dim3& threads,
       V.h_/numThreadsY+(V.h_%numThreadsY>0?1:0),
       V.d_/numThreadsZ+(V.d_%numThreadsZ>0?1:0));
 }
+
+TDP_HOST_DEVICE
+inline IsValidData(const Vector3fda& x) {
+  return !isnan(x(0)) && !isnan(x(1)) && !isnan(x(2));
+}
+
+TDP_HOST_DEVICE
+inline IsValidNormal(const Vector3fda& n) {
+  return IsValidData(n) && fabs(n.normSquared()-1.0f) < 1e-3f;
+}
+
 
 }
