@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/reductions.cuh>
 #include <tdp/nvidia/helper_cuda.h>
@@ -21,7 +22,7 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   __shared__ Vector3fda mui[K*6];
   __shared__ float pik[K*6];
   __shared__ float rho[BLOCK_SIZE];
-  __shared__ uint32_t Wi[BLOCK_SIZE];
+  __shared__ float Wi[BLOCK_SIZE];
   
   const int tid = threadIdx.x ;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -32,7 +33,7 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   Wi[tid] = 0;
 
   __syncthreads(); // make sure that ys have been cached
-  for(int id=idx*N_PER_T; id<min(n.Area(),(idx+1)*N_PER_T); ++id)                      
+  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)                      
   {
     Vector3fda ni = n[id];
     float err_max = -1e7f;
@@ -81,7 +82,7 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   __shared__ Vector3fda mui[K*6];
   __shared__ float pik[K*6];
   __shared__ float rho[BLOCK_SIZE];
-  __shared__ uint32_t Wi[BLOCK_SIZE];
+  __shared__ float Wi[BLOCK_SIZE];
   
   const int tid = threadIdx.x ;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -92,7 +93,7 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   Wi[tid] = 0;
 
   __syncthreads(); // make sure that ys have been cached
-  for(int id=idx*N_PER_T; id<min(n.Area(),(idx+1)*N_PER_T); ++id)                      
+  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)                      
   {
     Vector3fda ni = n[id];
     float weight = weights[id];
@@ -124,10 +125,10 @@ void MMFvMFCostFctAssignmentGPU( Image<Vector3fda> cuN,
    }
   assert(K<8);
 
-  ManagedDeviceImage cuCost(1,1);
-  ManagedDeviceImage cuW(1,1);
-  cudaMemset(cuCost.ptr_,0,cuCost.SizeInBytes());
-  cudaMemset(cuW.ptr_,0,cuW.SizeInBytes());
+  ManagedDeviceImage<float> cuCost(1,1);
+  ManagedDeviceImage<float> cuW(1,1);
+  cudaMemset(cuCost.ptr_,0,cuCost.SizeBytes());
+  cudaMemset(cuW.ptr_,0,cuW.SizeBytes());
 
   const int N_PER_T = 16;
   dim3 threads, blocks;
@@ -172,10 +173,10 @@ void MMFvMFCostFctAssignmentGPU(
    }
   assert(K<8);
 
-  ManagedDeviceImage cuCost(1,1);
-  ManagedDeviceImage cuW(1,1);
-  cudaMemset(cuCost.ptr_,0,cuCost.SizeInBytes());
-  cudaMemset(cuW.ptr_,0,cuW.SizeInBytes());
+  ManagedDeviceImage<float> cuCost(1,1);
+  ManagedDeviceImage<float> cuW(1,1);
+  cudaMemset(cuCost.ptr_,0,cuCost.SizeBytes());
+  cudaMemset(cuW.ptr_,0,cuW.SizeBytes());
 
   const int N_PER_T = 16;
   dim3 threads, blocks;

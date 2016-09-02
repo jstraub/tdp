@@ -1,8 +1,14 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once
 
-#include <cuda.h>
+#include <stddef.h>
+#include <tdp/cuda.h>
 #include <tdp/volume.h>
 #include <tdp/image.h>
+#include <tdp/eigen/dense.h>
+#include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {
 
@@ -33,13 +39,13 @@ inline void ComputeKernelParamsForVolume(dim3& blocks, dim3& threads,
 }
 
 TDP_HOST_DEVICE
-inline IsValidData(const Vector3fda& x) {
+inline bool IsValidData(const Vector3fda& x) {
   return !isnan(x(0)) && !isnan(x(1)) && !isnan(x(2));
 }
 
 TDP_HOST_DEVICE
-inline IsValidNormal(const Vector3fda& n) {
-  return IsValidData(n) && fabs(n.normSquared()-1.0f) < 1e-3f;
+inline bool IsValidNormal(const Vector3fda& n) {
+  return IsValidData(n) && fabs(n.squaredNorm()-1.0f) < 1e-3f;
 }
 
 

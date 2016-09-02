@@ -10,7 +10,7 @@ namespace tdp {
 
 void PyrDown(
     const Image<float>& Iin,
-    Image<float>& Iout,
+    Image<float>& Iout
     );
 
 template<typename T, int LEVELS>
@@ -52,11 +52,18 @@ class Pyramid {
 template<typename T, int LEVELS>
 void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   P.GetImage(0).CopyFrom(I, type);
+  CompletePyramid(P, type);
+}
+
+template<typename T, int LEVELS>
+void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   if (type == cudaMemcpyDeviceToDevice 
       || type == cudaMemcpyHostToDevice) {
     // P is on GPU so perform downsampling on GPU
     for (int lvl=1; lvl<LEVELS; ++lvl) {
-      PyrDown(P.GetImage(lvl-1), P.GetImage(lvl));
+      Image<T> Isrc = P.GetImage(lvl-1);
+      Image<T> Idst = P.GetImage(lvl);
+      PyrDown(Isrc, Idst);
     }
   } else {
     // P is on CPU so perform downsampling there as well

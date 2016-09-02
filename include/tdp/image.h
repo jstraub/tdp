@@ -1,3 +1,6 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once 
 #include <assert.h>
 #include <tdp/config.h>
@@ -60,7 +63,7 @@ class Image {
 #ifdef CUDA_FOUND
   void CopyFrom(const Image<T>& src, cudaMemcpyKind type) {
     assert(SizeBytes() <= src.SizeBytes());
-    cudaMemcpy(src.ptr_, ptr_, SizeBytes(), type);
+    cudaMemcpy(ptr_, src.ptr_, SizeBytes(), type);
   }
 #endif
 

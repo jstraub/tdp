@@ -1,4 +1,8 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 
+#include <assert.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
@@ -66,7 +70,8 @@ __global__ void KernelICPStep(
               upperTriangle(k++) = ab[i]*ab[j];
             }
           }
-          upperTriangle(22) = 1.; // to get number of data points
+          assert(k==21);
+          upperTriangle(21) = 1.; // to get number of data points
           sum[threadIdx.x] += upperTriangle;
         }
       }
@@ -108,21 +113,23 @@ void ICPStep (
 
   KernelICPStep<256><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
-  Eigen::Matrix<float,22,1,Eigen::DontAlign> sumAb;
-  cudaMemcpy(&sumAb(0),out.ptr_,22*sizeof(float), cudaMemcpyDeviceToHost);
+  ManagedHostImage<float> sumAb(22,1);
+  cudaMemcpy(sumAb.ptr_,out.ptr_,22*sizeof(float), cudaMemcpyDeviceToHost);
 
-  std::cout << sumAb.transpose() << std::endl;
+  for (int i=0; i<22; ++i) std::cout << sumAb[i] << "\t";
+  std::cout << std::endl;
+
   int prevRowStart = 0;
   for (int i=0; i<6; ++i) {
-    ATb(i) = sumAb(prevRowStart+7-i-1);
+    ATb(i) = sumAb[prevRowStart+7-i-1];
     for (int j=i; j<6; ++j) {
-      ATA(i,j) = sumAb(prevRowStart+j-i);
+      ATA(i,j) = sumAb[prevRowStart+j-i];
     }
     prevRowStart += 7-i;
   }
   ATA += ATA.transpose();
   ATA.diagonal() = ATA.diagonal().array()*0.5;
-  count = sumAb(21);
+  count = sumAb[21];
 }
 
 }

@@ -1,3 +1,6 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -154,7 +157,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<float> tsdfMu("ui.mu",0.1,0.,1.);
     pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
-    pangolin::Var<bool> runICP("ui.run ICP", false, false);
+    pangolin::Var<bool> runICP("ui.run ICP", true, true);
     pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",30,0.,180.);
     pangolin::Var<float> icpDistThr("ui.icp dist thr",0.,0.,1.);
 
@@ -350,11 +353,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           //tdp::ConstructPyramidFromImage<float,3>(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
           //CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
           //CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
+          std::cout  << "building depth pyramids" << std::endl;
           tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr, cudaMemcpyDeviceToDevice);
           tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst, cudaMemcpyDeviceToDevice);
-
+          std::cout  << "building PC pyramids" << std::endl;
           tdp::Depth2PCs(cuDPyrEst,camD,pcs_m);
           tdp::Depth2PCs(cuDPyr,camD,pcs_c);
+          std::cout  << "building normal pyramids" << std::endl;
           tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
           tdp::Depth2Normals(cuDPyr,camD,ns_c);
 

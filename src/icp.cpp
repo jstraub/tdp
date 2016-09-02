@@ -27,11 +27,13 @@ void ICP::ComputeProjective(
           R_mc, t_mc, cam,
           acos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,count);
-      // solve for x using ldlt
-      Eigen::Matrix<float,6,1,Eigen::DontAlign> x = ATA.ldlt().solve(ATb); 
-      // apply x to the transformation
-      R_mc = SO3f::Exp_(x.topRows(3)) * R_mc;
-      t_mc += x.bottomRows(3);
+      if (count > 0) {
+        // solve for x using ldlt
+        Eigen::Matrix<float,6,1,Eigen::DontAlign> x = ATA.ldlt().solve(ATb); 
+        // apply x to the transformation
+        R_mc = SO3f::Exp_(x.topRows(3)) * R_mc;
+        t_mc += x.bottomRows(3);
+      }
     }
   }
 }

@@ -1,12 +1,18 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once
 
 #include <tdp/eigen/dense.h>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
 #include <tdp/pyramid.h>
+#include <tdp/managed_pyramid.h>
 #include <tdp/camera.h>
+#include <tdp/cuda.h>
+#include <tdp/convolutionSeparable.h>
 
 namespace tdp {
-
 
 void ComputeNormals(
     const Image<float>& d,
@@ -44,8 +50,10 @@ void Depth2Normals(
   size_t hc = cuD.h_;
   assert(wc%64 == 0);
   assert(hc%64 == 0);
-  ManagedDeviceImage<float> cuDu(wc, hc);
-  ManagedDeviceImage<float> cuDv(wc, hc);
+  ManagedDevicePyramid<float,3> cuDuPyr(wc, hc);
+  ManagedDevicePyramid<float,3> cuDvPyr(wc, hc);
+  Image<float> cuDu = cuDuPyr.GetImage(0);
+  Image<float> cuDv = cuDvPyr.GetImage(0);
   ManagedDeviceImage<float> cuTmp(wc, hc);
   // upload to gpu and get derivatives using shar kernel
   float kernelA[3] = {1,0,-1};
@@ -60,32 +68,24 @@ void Depth2Normals(
   setConvolutionKernel(kernelA);
   convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
 
-  float f = cam.params_(0);
-  int uc = cam.params_(2);
-  int vc = cam.params_(3);
-  Image<float> cuN = cuNPyr.GetImage(0);
-  ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
+  tdp::CompletePyramid<float,3>(cuDuPyr, cudaMemcpyDeviceToDevice);
+  tdp::CompletePyramid<float,3>(cuDvPyr, cudaMemcpyDeviceToDevice);
 
   // Compute the pyramid by downsamplying the gradients and computing
   // the normals based on the downsampled normals
   Camera<float> camLvl = cam;
-  for (int lvl=1; lvl<LEVELS; ++lvl) {
+  for (int lvl=0; lvl<LEVELS; ++lvl) {
+    float f = camLvl.params_(0);
+    int uc = camLvl.params_(2);
+    int vc = camLvl.params_(3);
+    Image<Vector3fda> cuN = cuNPyr.GetImage(lvl);
+    cuD = cuDPyr.GetImage(lvl);
+    cuDu = cuDuPyr.GetImage(lvl);
+    cuDv = cuDvPyr.GetImage(lvl);
+    ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
     wc /= 2;
     hc /= 2;
-    camLvl = ScaleCamera(camLvl,0.5);
-
-    ManagedDeviceImage<float> cuDuDown(wc, hc);
-    ManagedDeviceImage<float> cuDvDown(wc, hc);
-
-    PyrDown(cuDu,cuDuDown);
-    PyrDown(cuDv,cuDvDown);
-    cuD = cuDPyr.GetImage(lvl);
-    cuN = cuNPyr.GetImage(lvl);
-
-    f = cam.params_(0);
-    uc = cam.params_(2);
-    vc = cam.params_(3);
-    ComputeNormals(cuD, cuDuDown, cuDvDown, cuN, f, uc, vc);
+    camLvl = ScaleCamera<float>(camLvl,0.5);
   }
 }
 

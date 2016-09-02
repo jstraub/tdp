@@ -3,8 +3,9 @@
  */
 
 #include <tdp/cuda.h>
-#include <tdp/nvidia/cuda_global.h>
+#include <tdp/nvidia/helper_cuda.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/reductions.cuh>
 
 namespace tdp {
 
@@ -32,7 +33,7 @@ __global__ void KernelVectorSum(Image<Vector3fda> x,
   }
   __syncthreads(); // make sure that ys have been cached
 
-  for(int id=idx*N_PER_T; id<min(x.Area(),(idx+1)*N_PER_T); ++id)
+  for(int id=idx*N_PER_T; id<min((int)x.Area(),(idx+1)*N_PER_T); ++id)
   {
     Vector3fda xi = x[id];
     int32_t k = z[id]-k0;

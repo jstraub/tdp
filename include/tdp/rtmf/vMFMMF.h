@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
 #include <tdp/eigen/dense.h>
 
 namespace tdp {
@@ -34,6 +35,8 @@ class vMFMMF {
    float UpdateMF(Image<Vector3fda>& cuN);
    void UpdateAssociation(Image<Vector3fda>& cuN);
 
+   Eigen::Matrix<float,3,6> ComputeSums(uint32_t k);
+
    ManagedDeviceImage<uint32_t> cuZ_;
    ManagedDeviceImage<Vector3fda> cuMu_;
    ManagedDeviceImage<float> cuPi_;
@@ -61,8 +64,7 @@ float vMFMMF<K>::Compute(Image<Vector3fda>& cuN,
 }
 
 template<int K>
-float vMFMMF<K>::UpdateMF(Image<Vector3fda>& cuN,
-    ) {
+float vMFMMF<K>::UpdateMF(Image<Vector3fda>& cuN) {
   for (size_t k=0; k<K; ++k) {
     Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
     // tauR_*R^T is the contribution of the motion prior between two
