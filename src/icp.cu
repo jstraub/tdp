@@ -28,41 +28,46 @@ __global__ void KernelICPStep(
     int N_PER_T,
     Image<float> out
     ) {
-  const int tid = threadIdx.x + blockDim.x * blockIdx.x;
-  const int idS = tid*N_PER_T;
+  const int tid = threadIdx.x;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idS = idx*N_PER_T;
   const int N = pc_m.w_*pc_m.h_;
-  const int idE = min(N,(tid+1)*N_PER_T);
-  __shared__ Eigen::Matrix<float,22,1,Eigen::DontAlign> sum[BLK_SIZE];
+  const int idE = min(N,(idx+1)*N_PER_T);
+  __shared__ Eigen::Matrix<float,29,1,Eigen::DontAlign> sum[BLK_SIZE];
 
-  sum[threadIdx.x] = Eigen::Matrix<float,22,1,Eigen::DontAlign>::Zero();
+  sum[tid] = Eigen::Matrix<float,29,1,Eigen::DontAlign>::Zero();
 
   for (int id=idS; id<idE; ++id) {
     const int idx = id%pc_c.w_;
     const int idy = id/pc_c.w_;
+    Vector3fda pc_ci = pc_c(idx,idy);
     // project current point into model frame to get association
-    if (idx < pc_c.w_ && idy < pc_c.h_) {
-      Vector3fda pc_c_in_m = R_mc * pc_c(idx,idy) + t_mc;
+    if (idx < pc_c.w_ && idy < pc_c.h_ && IsValidData(pc_ci)) {
+      Vector3fda pc_c_in_m = R_mc * pc_ci + t_mc;
       // project into model camera
       Vector2fda x_c_in_m = cam.Project(pc_c_in_m);
       int u = floor(x_c_in_m(0)+0.5f);
       int v = floor(x_c_in_m(1)+0.5f);
-      if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_ && !isnan(pc_c_in_m(0))) {
+      if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
+          && IsValidData(pc_c_in_m)) {
         // found association -> check thresholds;
         Vector3fda n_c_in_m = R_mc * n_c(idx,idy);
         Vector3fda n_mi = n_m(idx,idy);
         Vector3fda pc_mi = pc_m(idx,idy);
         float dot  = n_mi.dot(n_c_in_m);
-        if (dot > dotThr && !isnan(pc_mi(0))) {
+        //if (tid < 10)
+        //  printf("%d %d to %d %d; 3d: %f %f %f; %f >? %f\n",idx,idy,u,v,pc_c(idx,idy)(0),pc_c(idx,idy)(1),pc_c(idx,idy)(2),dot,dotThr);
+        if (dot > dotThr && IsValidData(pc_mi)) {
           // association is good -> accumulate
           // if we found a valid association accumulate the A and b for A x = b
           // where x \in se{3} as well as the residual error
           float ab[7];      
           Eigen::Map<Vector3fda> top(&(ab[0]));
           Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          top = (R_mc * pc_c(idx,idy)).cross(n_mi);
+          top = (R_mc * pc_ci).cross(n_mi);
           bottom = n_mi;
           ab[6] = n_mi.dot(pc_mi-pc_c_in_m);
-          Eigen::Matrix<float,22,1,Eigen::DontAlign> upperTriangle;
+          Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
           int k=0;
 #pragma unroll
           for (int i=0; i<7; ++i) {
@@ -70,9 +75,11 @@ __global__ void KernelICPStep(
               upperTriangle(k++) = ab[i]*ab[j];
             }
           }
-          assert(k==21);
-          upperTriangle(21) = 1.; // to get number of data points
-          sum[threadIdx.x] += upperTriangle;
+          assert(k==28);
+          upperTriangle(28) = 1.; // to get number of data points
+          sum[tid] += upperTriangle;
+          //if (tid < 10)
+          //  printf("%f %f %f %f %f\n",sum[tid](0),sum[tid](1),sum[tid](2),sum[tid](3),sum[tid](4));
         }
       }
     }
@@ -85,9 +92,11 @@ __global__ void KernelICPStep(
     }
     __syncthreads();
   }
-  if(threadIdx.x < 22) {
+  if(tid < 29) {
     // sum the last two remaining matrixes directly into global memory
-    atomicAdd_<float>(&out[threadIdx.x], sum[0](threadIdx.x)+sum[1](threadIdx.x));
+    atomicAdd(&out[tid], sum[0](tid)+sum[1](tid));
+    //atomicAdd_<float>();
+    //printf("%f %f %f \n",out[tid],sum[0](tid),sum[1](tid));
   }
 }
 
@@ -108,28 +117,32 @@ void ICPStep (
   size_t N = pc_m.w_*pc_m.h_;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,N/10,256);
-  ManagedDeviceImage<float> out(22,1);
-  cudaMemset(out.ptr_, 0, 22*sizeof(float));
+  ManagedDeviceImage<float> out(29,1);
+  cudaMemset(out.ptr_, 0, 29*sizeof(float));
 
   KernelICPStep<256><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
-  ManagedHostImage<float> sumAb(22,1);
-  cudaMemcpy(sumAb.ptr_,out.ptr_,22*sizeof(float), cudaMemcpyDeviceToHost);
+  ManagedHostImage<float> sumAb(29,1);
+  cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
 
-  for (int i=0; i<22; ++i) std::cout << sumAb[i] << "\t";
-  std::cout << std::endl;
+  //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
+  //std::cout << std::endl;
 
+  ATA.fill(0.);
+  ATb.fill(0.);
   int prevRowStart = 0;
   for (int i=0; i<6; ++i) {
     ATb(i) = sumAb[prevRowStart+7-i-1];
     for (int j=i; j<6; ++j) {
       ATA(i,j) = sumAb[prevRowStart+j-i];
+      ATA(j,i) = sumAb[prevRowStart+j-i];
     }
     prevRowStart += 7-i;
   }
-  ATA += ATA.transpose();
-  ATA.diagonal() = ATA.diagonal().array()*0.5;
-  count = sumAb[21];
+  float error = sumAb[27];
+  count = sumAb[28];
+  std::cout << ATA << std::endl << ATb.transpose() << std::endl;
+  std::cout << "error&count " << error << " " << count << std::endl;
 }
 
 }

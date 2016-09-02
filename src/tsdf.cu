@@ -23,7 +23,6 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
     float tsdfValPrev = 1e6;
     for (size_t id=tsdf.d_; id>0; --id) {
       float rho = rho0 + drho*(id-1);  // invers depth
-      // TODO: debug
       Eigen::Vector3f nd = n*rho;
       Eigen::Matrix3f H = (T_rd.rotation().matrix()-T_rd.translation()*nd.transpose());
       Eigen::Vector2f u_r = camR.Project(H*camD.Unproject(u_d(0), u_d(1), 1.));
@@ -40,14 +39,16 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
         if (fabs(tsdfVal) < 1e-6 ) {
           d(idx,idy) = 1./(rho0 + drho*(id-1));
           break;
-        } else if (fabs(tsdfVal) > fabs(tsdfValPrev)) {
+        //} else if (fabs(tsdfVal) > fabs(tsdfValPrev)) {
+        } else if (tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing 
           // TODO interpolation
           const float dBef = 1./(rho0 + drho*(id-1)); 
           const float dPrev = 1./(rho0 + drho*id);  // closer
           //const float deltaD = dBef-dPrev;
           //d(idx,idy) = dBef + (deltaD*tsdfValPrev)/(tsdfVal-tsdfValPrev);
-          float idf = id+tsdfValPrev/(tsdfVal+tsdfValPrev);
+          //float idf = id-tsdfValPrev/(tsdfVal+tsdfValPrev);
+          float idf = id+tsdfValPrev/(tsdfVal-tsdfValPrev);
           d(idx,idy) = 1./(rho0 + drho*idf);
           //if (idx<10 && idy < 10) printf ("%f; ",d(idx,idy));
           break;
@@ -82,7 +83,7 @@ void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
       const float eta = z_d - z_tsdf;
       if (eta >= -mu) {
         const float etaOverMu = eta/mu;
-        const float psi = (etaOverMu>1.f?1.f:etaOverMu)*(eta>=0.?1.:-1.);
+        const float psi = (etaOverMu>1.f?1.f:etaOverMu);//*(eta>=0.?1.:-1.);
         //// TODO can use other weights as well
         const float Wnew = 1.;
         //if (idx<10 && idy <10) printf ("%f; ",eta);

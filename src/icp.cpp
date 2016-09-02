@@ -18,14 +18,15 @@ void ICP::ComputeProjective(
   Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
   Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
   size_t lvls = maxIt.size();
-  for (size_t lvl=0; lvl<lvls; ++lvl) {
+  for (int lvl=lvls-1; lvl >= 0; --lvl) {
     for (size_t it=0; it<maxIt[lvl]; ++it) {
+      std::cout << "lvl " << lvl << " it " << it << std::endl;
       // Compute ATA and ATb from A x = b
       float count = 0.; 
       ICPStep(pcs_m.GetImage(lvl), ns_m.GetImage(lvl), 
           pcs_c.GetImage(lvl), ns_c.GetImage(lvl),
           R_mc, t_mc, cam,
-          acos(angleThr_deg*M_PI/180.),
+          cos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,count);
       if (count > 0) {
         // solve for x using ldlt
@@ -33,6 +34,8 @@ void ICP::ComputeProjective(
         // apply x to the transformation
         R_mc = SO3f::Exp_(x.topRows(3)) * R_mc;
         t_mc += x.bottomRows(3);
+        std::cout << "x: " << x.transpose() << std::endl; 
+        std::cout << R_mc << std::endl << t_mc.transpose() << std::endl;
       }
     }
   }

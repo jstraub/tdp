@@ -150,10 +150,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<bool> video_wait("ui.wait", true);
     pangolin::Var<bool> video_newest("ui.newest", false);
 
-    pangolin::Var<float> tsdfDmin("ui.d min",0.05,0.0,0.1);
-    pangolin::Var<float> tsdfDmax("ui.d max",1.0,0.1,2.);
+    pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
+    pangolin::Var<float> tsdfDmax("ui.d max",1.5,0.1,2.);
     pangolin::Var<float> tsdfRho0("ui.rho0",0.1,0.,1.);
-    pangolin::Var<float> tsdfDRho("ui.d rho",0.1,0.,1.);
+    pangolin::Var<float> tsdfDRho("ui.d rho",0.3,0.,1.);
     pangolin::Var<float> tsdfMu("ui.mu",0.1,0.,1.);
     pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
@@ -314,6 +314,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Matrix3fda R_mc = tdp::Matrix3fda::Identity();
     tdp::Vector3fda t_mc = tdp::Vector3fda::Zero();
 
+    pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
+        GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
+
     tdp::ManagedHostImage<float> debugA(wTSDF, hTSDF);
     tdp::ManagedHostImage<float> debugB(wTSDF, hTSDF);
     tdp::QuickView viewDebugA(wTSDF,hTSDF);
@@ -346,26 +349,20 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepth(cuDraw, cuD, 1e-4);
 
-        if (runICP) {
-          // construct pyramid  
-          // TODO: could also construct the pyramid directly on the GPU
-          //tdp::ConstructPyramidFromImage<float,3>(cuD, dPyr, cudaMemcpyDeviceToHost);
-          //tdp::ConstructPyramidFromImage<float,3>(cuDEst, dPyrEst, cudaMemcpyDeviceToHost);
-          //CopyPyramid(dPyr,cuDPyr,cudaMemcpyHostToDevice);
-          //CopyPyramid(dPyrEst,cuDPyrEst,cudaMemcpyHostToDevice);
-          std::cout  << "building depth pyramids" << std::endl;
-          tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr, cudaMemcpyDeviceToDevice);
-          tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst, cudaMemcpyDeviceToDevice);
-          std::cout  << "building PC pyramids" << std::endl;
-          tdp::Depth2PCs(cuDPyrEst,camD,pcs_m);
-          tdp::Depth2PCs(cuDPyr,camD,pcs_c);
-          std::cout  << "building normal pyramids" << std::endl;
-          tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
-          tdp::Depth2Normals(cuDPyr,camD,ns_c);
+        // construct pyramid  
+        tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
+            cudaMemcpyDeviceToDevice);
+        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
+            cudaMemcpyDeviceToDevice);
+        tdp::Depth2PCs(cuDPyrEst,camD,pcs_m);
+        tdp::Depth2PCs(cuDPyr,camD,pcs_c);
+        tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
+        tdp::Depth2Normals(cuDPyr,camD,ns_c);
 
+        if (runICP) {
           R_mc = tdp::Matrix3fda::Identity();
           t_mc = tdp::Vector3fda::Zero();
-          std::vector<size_t> maxIt{10,6,3};
+          std::vector<size_t> maxIt{4,4,4};
           tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, R_mc,
               t_mc, camD, maxIt, icpAngleThr_deg, icpDistThr); 
           std::cout << "R_mc" << std::endl << R_mc << std::endl 
@@ -376,6 +373,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         pangolin::basetime tDepth = pangolin::TimeNow();
 
         if (pangolin::Pushed(resetTSDF)) {
+          T_rd.matrix() = Eigen::Matrix4f::Identity();
           W.Fill(0.);
           TSDF.Fill(0.);
           dEst.Fill(0.);
@@ -405,14 +403,32 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         glEnable(GL_DEPTH_TEST);
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
-        //pangolin::RenderVbo(cuNbuf);
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0, hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(0);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(1,0,0);
+        pangolin::RenderVbo(cuPcbuf);
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0, hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(0);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(0,1,0);
+        pangolin::RenderVbo(cuPcbuf);
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);
 
         CopyImage(cuDEst, debugA, cudaMemcpyDeviceToHost);
         //if (tsdfSliceD.GuiChanged()) {
-        tdp::Image<float> sliceTSDF(cuTSDF.w_, cuTSDF.h_, cuTSDF.ImagePtr(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get())));
+        tdp::Image<float> sliceTSDF(cuTSDF.w_, cuTSDF.h_,
+            cuTSDF.ImagePtr(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get())));
         CopyImage(sliceTSDF, debugB, cudaMemcpyDeviceToHost);
         //}
         for(unsigned int i=0; i<images.size(); ++i)
@@ -428,7 +444,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         // leave in pixel orthographic for slider to render.
         pangolin::DisplayBase().ActivatePixelOrthographic();
         if(video.IsRecording()) {
-            pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f, pangolin::DisplayBase().v.h-14.0f, 7.0f);
+          pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
+              pangolin::DisplayBase().v.h-14.0f, 7.0f);
         }
         pangolin::FinishFrame();
     }

@@ -1,6 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
 #include <tdp/config.h>
+#include <tdp/eigen/dense.h>
 
 namespace tdp {
 
@@ -20,6 +21,11 @@ class CameraBase {
   Point2 Project(const Point3& p) const {
     return static_cast<B*>(this)->Project(p);
   }
+
+  //TDP_HOST_DEVICE
+  //Vector2fda Project(const Vector3fda& p) const {
+  //  return static_cast<B*>(this)->Project(p);
+  //}
 
   TDP_HOST_DEVICE
   Point3 Unproject(T u, T v, T z) const {
@@ -48,6 +54,12 @@ class Camera : public CameraBase<T,4,Camera<T>> {
     return Point2(p(0)/p(2)*this->params_(0)+this->params_(2), 
                   p(1)/p(2)*this->params_(1)+this->params_(3));
   }
+
+  //TDP_HOST_DEVICE
+  //Vector2fda Project(const Vector3fda& p) const {
+  //  return Point2(p(0)/p(2)*this->params_(0)+this->params_(2), 
+  //                p(1)/p(2)*this->params_(1)+this->params_(3));
+  //}
 
   TDP_HOST_DEVICE
   Point3 Unproject(T u, T v, T z) const {

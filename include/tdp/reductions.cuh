@@ -2,6 +2,7 @@
 #include <Eigen/Dense>
 #include <tdp/cuda.h>
 #include <stdio.h>
+#include <assert.h>
 #include <cuda_runtime_api.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
@@ -13,7 +14,7 @@ namespace tdp {
 // just base function - empty because we are specializing if you look down
 template<typename T>
 __device__ inline void atomicAdd_(T* address, const T& val)
-{};
+{ assert(false); };
 
 template<typename T>
 __device__ inline bool isNan(const T& val)
