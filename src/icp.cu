@@ -121,6 +121,7 @@ void ICPStep (
     prevRowStart += 7-i;
   }
   ATA += ATA.transpose();
+  ATA.diagonal() = ATA.diagonal().array()*0.5;
   count = sumAb(21);
 }
 
