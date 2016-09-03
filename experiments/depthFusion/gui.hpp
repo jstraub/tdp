@@ -68,6 +68,9 @@ class GUI {
   pangolin::Var<bool> video_newest;
   pangolin::Var<bool> verbose;
 
+  pangolin::Var<float> depthSensorScale;
+  pangolin::Var<bool> dispDepthPyrEst;
+  
   pangolin::Var<float> tsdfDmin;
   pangolin::Var<float> tsdfDmax;
   pangolin::Var<float> tsdfRho0;
@@ -96,8 +99,6 @@ class GUI {
 
   std::vector<unsigned char> buffer;
   std::vector<pangolin::Image<unsigned char> > images;
-
-
 
 };
 

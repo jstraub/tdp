@@ -1,6 +1,9 @@
-
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once
 #include <assert.h>
+#include <iostream>
 #include <stddef.h>
 #include <algorithm>
 #include <tdp/image.h>
@@ -83,10 +86,16 @@ void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
 }
 
 template<typename T, int LEVELS>
-void PyramidToImage(const Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
+void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
+  int u0 = 0;
   for (int lvl=0; lvl<LEVELS; ++lvl) {
-    Image<T> Ilvl(P.Width(lvl), P.Height(lvl), I.pitch_, I.ptr_+P.NumElemsToLvl(lvl));
-    Ilvl.CopyFrom(P.GetImage(lvl), type);
+    Image<T> IlvlSrc = P.GetImage(lvl);
+    Image<T> Ilvl(P.Width(lvl), P.Height(lvl), I.pitch_, 
+        I.ptr_+u0);
+    std::cout << IlvlSrc.Description() << " to "
+      << Ilvl.Description() << std::endl;
+    Ilvl.CopyFrom(IlvlSrc, type);
+    u0 += P.Width(lvl);
   }
 }
 

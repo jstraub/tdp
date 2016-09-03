@@ -4,9 +4,11 @@
 #pragma once 
 #include <assert.h>
 #include <tdp/config.h>
+#include <sstream>
 #ifdef CUDA_FOUND
 #  include <cuda.h>
 #  include <cuda_runtime_api.h>
+#  include <tdp/nvidia/helper_cuda.h>
 #endif
 
 namespace tdp {
@@ -58,12 +60,21 @@ class Image {
   TDP_HOST_DEVICE
   size_t Area() const { return w_*h_; }
 
+  std::string Description() const {
+    std::stringstream ss;
+    ss << w_ << "x" << h_ << " pitch=" << pitch_ 
+      << " " << SizeBytes() << "bytes";
+    return ss.str();
+  }
+
   void Fill(T value) { for (size_t i=0; i<w_*h_; ++i) ptr_[i] = value; }
 
 #ifdef CUDA_FOUND
+  /// Perform pitched copy from the given src image to this image.
+  /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Image<T>& src, cudaMemcpyKind type) {
-    assert(SizeBytes() <= src.SizeBytes());
-    cudaMemcpy(ptr_, src.ptr_, SizeBytes(), type);
+    checkCudaErrors(cudaMemcpy2D(ptr_, pitch_, 
+          src.ptr_, src.pitch_, w_*sizeof(T), h_, type));
   }
 #endif
 

@@ -99,6 +99,7 @@ void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
   dim3 threads, blocks;
   ComputeKernelParamsForVolume(blocks,threads,tsdf,16,16,4);
   KernelAddToTSDF<<<blocks,threads>>>(tsdf, W, d, T_rd, T_rd.Inverse(), camR, camD, rho0, drho, mu);
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
@@ -107,6 +108,7 @@ void RayTraceTSDF(Volume<float> tsdf, Image<float> d,
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
   KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, d, T_rd, camR, camD, rho0, drho, mu);
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 }

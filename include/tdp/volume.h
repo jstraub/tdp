@@ -1,6 +1,7 @@
 #pragma once 
 #include <tdp/config.h>
 #include <stdint.h>
+#include <tdp/image.h>
 
 namespace tdp {
 
@@ -38,6 +39,10 @@ class Volume {
   TDP_HOST_DEVICE
   T* ImagePtr(size_t d) const { 
     return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+d*pitchImg_); 
+  }
+
+  Image<T> GetImage(size_t d) const { 
+    return Image<T>(w_,h_,pitch_,ImagePtr(d));
   }
 
   TDP_HOST_DEVICE

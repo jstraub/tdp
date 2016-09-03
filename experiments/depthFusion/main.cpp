@@ -111,12 +111,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
-  tdp::ManagedHostImage<float> debugA(wTSDF, hTSDF);
-  tdp::ManagedHostImage<float> debugB(wTSDF, hTSDF);
-  tdp::QuickView viewDebugA(wTSDF,hTSDF);
-  tdp::QuickView viewDebugB(wTSDF,hTSDF);
-  gui.container().AddDisplay(viewDebugA);
-  gui.container().AddDisplay(viewDebugB);
+  tdp::ManagedHostImage<float> tsdfDEst(wTSDF, hTSDF);
+  tdp::ManagedHostImage<float> tsdfSlice(wTSDF, hTSDF);
+  tdp::QuickView viewTsdfDEst(wTSDF,hTSDF);
+  tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
+  gui.container().AddDisplay(viewTsdfDEst);
+  gui.container().AddDisplay(viewTsdfSliveView);
+
+  tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1)+dPyr.Width(2), hc);
+  tdp::QuickView viewDepthPyr(dispDepthPyr.w_,dispDepthPyr.h_);
+  gui.container().AddDisplay(viewDepthPyr);
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -129,9 +133,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
 
+    // update inverse depth (rho) ranges based on depth min max
+    gui.tsdfRho0 = 1./gui.tsdfDmax;
+    gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
+
     pangolin::basetime t0 = pangolin::TimeNow();
-    CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-    ConvertDepth(cuDraw, cuD, 1e-4, 0.1, 4.);
+    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    ConvertDepth(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
         cudaMemcpyDeviceToDevice);
@@ -156,26 +164,20 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       W.Fill(0.);
       TSDF.Fill(-1.01);
       dEst.Fill(0.);
-      tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+      cuDEst.CopyFrom(dEst, cudaMemcpyHostToDevice);
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
     }
 
-    gui.tsdfRho0 = 1./gui.tsdfDmax;
-    gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
 
     AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, gui.tsdfRho0,
         gui.tsdfDRho, gui.tsdfMu); 
     numFused ++;
-
-    checkCudaErrors(cudaDeviceSynchronize());
     pangolin::basetime tAddTSDF = pangolin::TimeNow();
 
     RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
         gui.tsdfDRho, gui.tsdfMu); 
-
-    checkCudaErrors(cudaDeviceSynchronize());
     pangolin::basetime tRayTrace = pangolin::TimeNow();
 
     std::cout << "splits: " << pangolin::TimeDiff_s(t0,tDepth) << "\t"
@@ -218,14 +220,19 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     glDisable(GL_DEPTH_TEST);
     gui.ShowFrames();
 
-    CopyImage(cuDEst, debugA, cudaMemcpyDeviceToHost);
-    //if (gui.tsdfSliceD.GuiChanged()) {
-    tdp::Image<float> sliceTSDF(cuTSDF.w_, cuTSDF.h_,
-        cuTSDF.ImagePtr(std::min((int)cuTSDF.d_-1,gui.tsdfSliceD.Get())));
-    CopyImage(sliceTSDF, debugB, cudaMemcpyDeviceToHost);
-    //}
-    viewDebugA.SetImage(debugA);
-    viewDebugB.SetImage(debugB);
+    tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
+    viewTsdfDEst.SetImage(tsdfDEst);
+
+    tdp::Image<float> cuTsdfSlice = cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,gui.tsdfSliceD.Get()));
+    tsdfSlice.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+    viewTsdfSliveView.SetImage(tsdfSlice);
+
+    if (gui.dispDepthPyrEst) {
+      tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,cudaMemcpyDeviceToHost);
+    } else {
+      tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,cudaMemcpyDeviceToHost);
+    }
+    viewDepthPyr.SetImage(dispDepthPyr);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

@@ -16,8 +16,11 @@ __global__ void KernelDepth2PC(
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
   if (idx < pc.w_ && idy < pc.h_) {
     const float di = d(idx,idy);
+    //if (100<idx&&idx<110 && 100<idy&&idy<110) printf("%f\n",di);
     if (di > 0) {
       pc(idx,idy) = cam.Unproject(idx,idy,di);
+      //if (100<idx&&idx<110 && 100<idy&&idy<110) printf("%f %f %f\n",
+      //    pc(idx,idy)(0),pc(idx,idy)(1),pc(idx,idy)(2));
     } else {
       pc(idx,idy)(0) = NAN; // nan
       pc(idx,idy)(1) = NAN; // nan

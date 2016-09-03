@@ -19,8 +19,8 @@ __global__ void KernelDepthConvert(Image<uint16_t> dRaw,
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
   if (idx < dRaw.w_ && idy < dRaw.h_) {
-    //const uint16_t di = RowPtr<uint16_t>(dRaw,idy)[idx];
     const float di = ((float)dRaw(idx,idy))*scale;
+    //if (100<idx&&idx<110 && 100<idy&&idy<110) printf("%f %f %f\n",di,dMin,dMax);
     if (dMin < di && di < dMax) {
       d(idx,idy) = di;
     } else {
