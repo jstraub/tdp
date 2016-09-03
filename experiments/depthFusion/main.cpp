@@ -10,6 +10,7 @@
 #include <pangolin/utils/timer.h>
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/glcuda.h>
+#include <pangolin/gl/gldraw.h>
 
 #include <Eigen/Dense>
 #include <tdp/managed_image.h>
@@ -158,8 +159,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<int> tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
     pangolin::Var<bool> resetTSDF("ui.reset TSDF", false, false);
     pangolin::Var<bool> runICP("ui.run ICP", true, true);
-    pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",30,0.,180.);
-    pangolin::Var<float> icpDistThr("ui.icp dist thr",0.,0.,1.);
+    pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
+    pangolin::Var<float> icpDistThr("ui.icp dist thr",0.05,0.,1.);
+    pangolin::Var<int> icpIter0("ui.ICP iter lvl 0",1,0,10);
+    pangolin::Var<int> icpIter1("ui.ICP iter lvl 1",0,0,10);
+    pangolin::Var<int> icpIter2("ui.ICP iter lvl 2",0,0,10);
 
     if( video_playback ) {
         if(total_frames < std::numeric_limits<int>::max() ) {
@@ -299,8 +303,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
 
     tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());
-    tdp::Camera<float> camR(Eigen::Vector4f(275,275,159.5,119.5)); 
-    tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
+    tdp::Camera<float> camR(Eigen::Vector4f(f,f,uc,vc)); 
+    tdp::Camera<float> camD(Eigen::Vector4f(f,f,uc,vc)); 
 
     // ICP stuff
     tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -323,6 +327,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     container.AddDisplay(viewDebugA);
     tdp::QuickView viewDebugB(wTSDF,hTSDF);
     container.AddDisplay(viewDebugB);
+    size_t numFused = 0;
     // Stream and display video
     while(!pangolin::ShouldQuit())
     {
@@ -359,38 +364,38 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
         tdp::Depth2Normals(cuDPyr,camD,ns_c);
 
-        if (runICP) {
-          R_mc = tdp::Matrix3fda::Identity();
-          t_mc = tdp::Vector3fda::Zero();
-          std::vector<size_t> maxIt{4,4,4};
-          tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, R_mc,
-              t_mc, camD, maxIt, icpAngleThr_deg, icpDistThr); 
-          std::cout << "R_mc" << std::endl << R_mc << std::endl 
-            << "t_mc " << t_mc.transpose() << std::endl;
-          T_rd.matrix().topLeftCorner<3,3>() = R_mc;
-          T_rd.matrix().topRightCorner<3,1>() = t_mc;
+        if (runICP && numFused > 30) {
+          //T_rd.matrix() = Eigen::Matrix4f::Identity();
+          std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+          tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_rd,
+              camD, maxIt, icpAngleThr_deg, icpDistThr); 
+          //std::cout << "T_mc" << std::endl << T_rd.matrix3x4() << std::endl;
         }
         pangolin::basetime tDepth = pangolin::TimeNow();
 
         if (pangolin::Pushed(resetTSDF)) {
           T_rd.matrix() = Eigen::Matrix4f::Identity();
           W.Fill(0.);
-          TSDF.Fill(0.);
+          TSDF.Fill(-1.01);
           dEst.Fill(0.);
           tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
           tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
           tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
+          numFused = 0;
         }
 
         tsdfRho0 = 1./tsdfDmax;
         tsdfDRho = (1./tsdfDmin - tsdfRho0)/float(dTSDF-1);
 
-        AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, tsdfRho0, tsdfDRho, tsdfMu); 
+        AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, tsdfRho0,
+            tsdfDRho, tsdfMu); 
+        numFused ++;
 
         checkCudaErrors(cudaDeviceSynchronize());
         pangolin::basetime tAddTSDF = pangolin::TimeNow();
 
-        RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, tsdfRho0, tsdfDRho, tsdfMu); 
+        RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, tsdfRho0,
+            tsdfDRho, tsdfMu); 
 
         checkCudaErrors(cudaDeviceSynchronize());
         pangolin::basetime tRayTrace = pangolin::TimeNow();
@@ -402,25 +407,34 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
         glEnable(GL_DEPTH_TEST);
         d_cam.Activate(s_cam);
-        pangolin::glDrawAxis(1);
+        // render model first
+        Eigen::Matrix4f T_w = Eigen::Matrix4f::Identity();
+        pangolin::glSetFrameOfReference(T_w);
+        pangolin::glDrawAxis(0.1f);
         {
           pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0, hc*wc*sizeof(tdp::Vector3fda));
-          tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(0);
-          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        glColor3f(1,0,0);
-        pangolin::RenderVbo(cuPcbuf);
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0, hc*wc*sizeof(tdp::Vector3fda));
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
           tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(0);
           cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
               cudaMemcpyDeviceToDevice);
         }
         glColor3f(0,1,0);
         pangolin::RenderVbo(cuPcbuf);
+        pangolin::glUnsetFrameOfReference();
+        // render current camera second in the propper frame of
+        // reference
+        pangolin::glSetFrameOfReference(T_rd.matrix());
+        pangolin::glDrawAxis(0.1f);
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(0);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(1,0,0);
+        pangolin::RenderVbo(cuPcbuf);
+        pangolin::glUnsetFrameOfReference();
 
         glLineWidth(1.5f);
         glDisable(GL_DEPTH_TEST);

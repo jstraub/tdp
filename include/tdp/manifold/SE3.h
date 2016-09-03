@@ -18,6 +18,9 @@ class SE3 : Manifold<T,6> {
   SE3(const Eigen::Matrix<T,4,4>& Tmat);
 
   TDP_HOST_DEVICE
+  SE3(const Eigen::Matrix<T,3,3>& Rmat, const Eigen::Matrix<T,3,1>& tmat);
+
+  TDP_HOST_DEVICE
   SE3(const SE3<T>& other);
 
   TDP_HOST_DEVICE
@@ -63,12 +66,11 @@ class SE3 : Manifold<T,6> {
 //  static Eigen::Matrix<T,3,3> G3();
 //  static Eigen::Matrix<T,3,3> G(uint32_t i);
 
- private:
-  Eigen::Matrix<T,4,4> T_;
-
   static Eigen::Matrix<T,4,4> Exp_(const Eigen::Matrix<T,6,1>& w);
   static Eigen::Matrix<T,6,1> Log_(const Eigen::Matrix<T,4,4>& Tmat);
-  
+
+ private:
+  Eigen::Matrix<T,4,4> T_;
 };
 
 typedef SE3<double> SE3d;

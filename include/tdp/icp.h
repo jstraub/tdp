@@ -6,6 +6,7 @@
 #include <tdp/pyramid.h>
 #include <tdp/camera.h>
 #include <tdp/manifold/SO3.h>
+#include <tdp/manifold/SE3.h>
 
 namespace tdp {
 
@@ -21,6 +22,7 @@ void ICPStep (
     float distThr,
     Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
     Eigen::Matrix<float,6,1,Eigen::DontAlign>& ATb,
+    float& error,
     float& count
     );
 
@@ -38,8 +40,7 @@ class ICP {
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& pcs_c,
     Pyramid<Vector3fda,3>& ns_c,
-    Matrix3fda& R_mc, 
-    Vector3fda& t_mc, 
+    SE3f& T_mc,
     const Camera<float>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
     );

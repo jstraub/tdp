@@ -11,6 +11,13 @@ SE3<T>::SE3(const Eigen::Matrix<T,4,4>& Tmat)
 {}
 
 template<typename T>
+SE3<T>::SE3(const Eigen::Matrix<T,3,3>& Rmat, const
+    Eigen::Matrix<T,3,1>& tmat) : SE3<T>() {
+  T_.topLeftCorner(3,3) = Rmat;
+  T_.topRightCorner(3,3) = tmat;
+}
+
+template<typename T>
 SE3<T>::SE3(const SE3<T>& other)
   : T_(other.T_)
 {}
@@ -36,15 +43,15 @@ Eigen::Matrix<T,6,1> SE3<T>::Log(const SE3<T>& other) const {
 template<typename T>
 Eigen::Matrix<T,4,4> SE3<T>::Exp_(const Eigen::Matrix<T,6,1>& w) {
   Eigen::Matrix<T,4,4> Tmat = Eigen::Matrix<T,4,4>::Identity();
-  Tmat.topLeftCorner(3,3) = SO3<T>::Exp_(w.bottomRows(3));
-  Tmat.topRightCorner(3,1) = w.topRows(3);
+  Tmat.topLeftCorner(3,3) = SO3<T>::Exp_(w.topRows(3));
+  Tmat.topRightCorner(3,1) = w.bottomRows(3);
   return Tmat;
 }
 
 template<typename T>
 Eigen::Matrix<T,6,1> SE3<T>::Log_(const Eigen::Matrix<T,4,4>& Tmat) {
   Eigen::Matrix<T,6,1> w;
-  w << Tmat.topRightCorner(3,1), SO3<T>::Log_(Tmat.topLeftCorner(3,3));
+  w << SO3<T>::Log_(Tmat.topLeftCorner(3,3)), Tmat.topRightCorner(3,1);
   return w;
 }
 

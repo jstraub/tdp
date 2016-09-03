@@ -55,18 +55,20 @@ __global__ void KernelICPStep(
         Vector3fda n_mi = n_m(idx,idy);
         Vector3fda pc_mi = pc_m(idx,idy);
         float dot  = n_mi.dot(n_c_in_m);
+        float dist = n_mi.dot(pc_mi-pc_c_in_m);
         //if (tid < 10)
         //  printf("%d %d to %d %d; 3d: %f %f %f; %f >? %f\n",idx,idy,u,v,pc_c(idx,idy)(0),pc_c(idx,idy)(1),pc_c(idx,idy)(2),dot,dotThr);
-        if (dot > dotThr && IsValidData(pc_mi)) {
+        if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
           // association is good -> accumulate
           // if we found a valid association accumulate the A and b for A x = b
           // where x \in se{3} as well as the residual error
           float ab[7];      
           Eigen::Map<Vector3fda> top(&(ab[0]));
           Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          top = (R_mc * pc_ci).cross(n_mi);
+          top = (n_mi).cross(pc_c_in_m);
+          //top = (R_mc * pc_ci).cross(n_mi);
           bottom = n_mi;
-          ab[6] = n_mi.dot(pc_mi-pc_c_in_m);
+          ab[6] = dist;
           Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
           int k=0;
 #pragma unroll
@@ -112,6 +114,7 @@ void ICPStep (
     float distThr,
     Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
     Eigen::Matrix<float,6,1,Eigen::DontAlign>& ATb,
+    float& error,
     float& count
     ) {
   size_t N = pc_m.w_*pc_m.h_;
@@ -127,7 +130,6 @@ void ICPStep (
 
   //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
   //std::cout << std::endl;
-
   ATA.fill(0.);
   ATb.fill(0.);
   int prevRowStart = 0;
@@ -139,10 +141,10 @@ void ICPStep (
     }
     prevRowStart += 7-i;
   }
-  float error = sumAb[27];
   count = sumAb[28];
-  std::cout << ATA << std::endl << ATb.transpose() << std::endl;
-  std::cout << "error&count " << error << " " << count << std::endl;
+  error = sumAb[27]/count;
+  //std::cout << ATA << std::endl << ATb.transpose() << std::endl;
+  //std::cout << "\terror&count " << error << " " << count << std::endl;
 }
 
 }
