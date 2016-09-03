@@ -6,3 +6,6 @@ tags
 *.swp
 *.swo
 *.lbl
+*.aux
+*.log
+writeup.pdf
