@@ -6,6 +6,7 @@
 #include <tdp/pyramid.h>
 #include <tdp/image.h>
 #include <tdp/cuda.h>
+#include <tdp/reductions.cuh>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {
@@ -21,7 +22,29 @@ void KernelPyrDown(
   if (idx < Iout.w_ && idy < Iout.h_) {
     T* in0 = Iin.RowPtr(idy*2);
     T* in1 = Iin.RowPtr(idy*2+1);
-    Iout(idx,idy) = 0.25f*(in0[idx*2] + in0[idx*2+1] + in1[idx*2] + in1[idx*2+1]);
+    T val00 = in0[idx*2];
+    T val01 = in0[idx*2+1];
+    T val10 = in1[idx*2];
+    T val11 = in1[idx*2+1];
+    T val = zero<T>();
+    float num = 0.;
+    if (!isNan(val00)) {
+      val += val00;
+      num ++;
+    }
+    if (!isNan(val01)) {
+      val += val01;
+      num ++;
+    }
+    if (!isNan(val10)) {
+      val += val10;
+      num ++;
+    }
+    if (!isNan(val11)) {
+      val += val11;
+      num ++;
+    }
+    Iout(idx,idy) = val/num;
   }
 }
 

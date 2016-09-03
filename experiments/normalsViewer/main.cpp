@@ -116,7 +116,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         if (!gui.ImageD(dRaw)) continue;
         
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-        ConvertDepth(cuDraw, cuD, 1e-4);
+        ConvertDepth(cuDraw, cuD, 1e-4, 0.1, 4.);
         pangolin::basetime tDepth = pangolin::TimeNow();
         if (gui.verbose)
           std::cout << "depth conversion: " <<

@@ -19,15 +19,15 @@ __global__ void KernelDepth2PC(
     if (di > 0) {
       pc(idx,idy) = cam.Unproject(idx,idy,di);
     } else {
-      pc(idx,idy)(0) = 0./0.; // nan
-      pc(idx,idy)(1) = 0./0.; // nan
-      pc(idx,idy)(2) = 0./0.; // nan
+      pc(idx,idy)(0) = NAN; // nan
+      pc(idx,idy)(1) = NAN; // nan
+      pc(idx,idy)(2) = NAN; // nan
     }
   } else if (idx < d.w_ && idy < d.h_) {
     // d might be bigger than pc because of consecutive convolutions
-    pc(idx,idy)(0) = 0./0.; // nan
-    pc(idx,idy)(1) = 0./0.; // nan
-    pc(idx,idy)(2) = 0./0.; // nan
+    pc(idx,idy)(0) = NAN; // nan
+    pc(idx,idy)(1) = NAN; // nan
+    pc(idx,idy)(2) = NAN; // nan
   }
 }
 

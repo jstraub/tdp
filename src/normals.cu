@@ -29,9 +29,9 @@ void KernelSurfaceNormals(Image<float> d,
       ni[1] /= norm;
       ni[2] /= norm;
     } else {
-      ni[0] = 0.;
-      ni[1] = 0.;
-      ni[2] = 0.;
+      ni[0] = NAN;
+      ni[1] = NAN;
+      ni[2] = NAN;
     }
   }
 }

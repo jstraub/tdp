@@ -50,11 +50,11 @@ __device__ inline void atomicAdd_<Eigen::Vector3f>(Eigen::Vector3f* address,
 
 template<>
 __device__ inline bool isNan(const Eigen::Vector2f& val)
-{return !isfinite(val(0));};
+{return !isfinite(val(0)) || !isfinite(val(1));};
 
 template<>
 __device__ inline bool isNan(const Eigen::Vector3f& val)
-{return !isfinite(val(0));};
+{return !isfinite(val(0)) || !isfinite(val(1)) || !isfinite(val(2));};
 
 template<>
 __device__ inline Eigen::Vector2f zero()

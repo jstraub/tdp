@@ -10,31 +10,38 @@
 namespace tdp {
 
 __global__ void KernelDepthConvert(Image<uint16_t> dRaw,
-    Image<float> d, float scale) {
+    Image<float> d, 
+    float scale, 
+    float dMin, 
+    float dMax
+    ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
   if (idx < dRaw.w_ && idy < dRaw.h_) {
     //const uint16_t di = RowPtr<uint16_t>(dRaw,idy)[idx];
-    const uint16_t di = dRaw(idx,idy);
-    if (di > 0) {
-      d(idx,idy) = ((float)di)*scale;
+    const float di = ((float)dRaw(idx,idy))*scale;
+    if (dMin < di && di < dMax) {
+      d(idx,idy) = di;
     } else {
-      d(idx,idy) = 0./0.; // nan
+      d(idx,idy) = NAN; // nan
     }
   } else if (idx < d.w_ && idy < d.h_) {
     // d might be bigger than dRaw because of consecutive convolutions
-    d(idx,idy) = 0./0.; // nan
+    d(idx,idy) = NAN; // nan
   }
 }
 
 void ConvertDepth(const Image<uint16_t>& dRaw,
     const Image<float>& d,
-    float scale) {
+    float scale,
+    float dMin, 
+    float dMax
+    ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
   //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
-  KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale);
+  KernelDepthConvert<<<blocks,threads>>>(dRaw,d,scale,dMin,dMax);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
