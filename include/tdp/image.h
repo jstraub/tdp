@@ -52,7 +52,8 @@ class Image {
   }
 
   TDP_HOST_DEVICE
-  T* RowPtr(size_t v) const { return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_); }
+  T* RowPtr(size_t v) const { 
+    return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_); }
 
   TDP_HOST_DEVICE
   size_t SizeBytes() const { return pitch_*h_; }

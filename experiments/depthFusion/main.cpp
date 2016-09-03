@@ -30,6 +30,8 @@
 #include <tdp/managed_pyramid.h>
 #include <tdp/nvidia/helper_cuda.h>
 
+#include <tdp/Stopwatch.h>
+
 #include "gui.hpp"
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
@@ -118,7 +120,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewTsdfDEst);
   gui.container().AddDisplay(viewTsdfSliveView);
 
-  tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1)+dPyr.Width(2), hc);
+  tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1), hc);
   tdp::QuickView viewDepthPyr(dispDepthPyr.w_,dispDepthPyr.h_);
   gui.container().AddDisplay(viewDepthPyr);
   size_t numFused = 0;
@@ -137,7 +139,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     gui.tsdfRho0 = 1./gui.tsdfDmax;
     gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
 
-    pangolin::basetime t0 = pangolin::TimeNow();
+    TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepth(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
     // construct pyramid  
@@ -149,15 +151,17 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Depth2PCs(cuDPyr,camD,pcs_c);
     tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
     tdp::Depth2Normals(cuDPyr,camD,ns_c);
+    TOCK("Setup Pyramids");
 
     if (gui.runICP && numFused > 30) {
+      TICK("ICP");
       //T_rd.matrix() = Eigen::Matrix4f::Identity();
       std::vector<size_t> maxIt{gui.icpIter0,gui.icpIter1,gui.icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_rd,
           camD, maxIt, gui.icpAngleThr_deg, gui.icpDistThr); 
       //std::cout << "T_mc" << std::endl << T_rd.matrix3x4() << std::endl;
+      TOCK("ICP");
     }
-    pangolin::basetime tDepth = pangolin::TimeNow();
 
     if (pangolin::Pushed(gui.resetTSDF)) {
       T_rd.matrix() = Eigen::Matrix4f::Identity();
@@ -170,21 +174,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       numFused = 0;
     }
 
-
+    TICK("Add To TSDF");
     AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, gui.tsdfRho0,
         gui.tsdfDRho, gui.tsdfMu); 
     numFused ++;
-    pangolin::basetime tAddTSDF = pangolin::TimeNow();
+    TOCK("Add To TSDF");
 
+    TICK("Ray Trace TSDF");
     RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
         gui.tsdfDRho, gui.tsdfMu); 
-    pangolin::basetime tRayTrace = pangolin::TimeNow();
+    TOCK("Ray Trace TSDF");
 
-    std::cout << "splits: " << pangolin::TimeDiff_s(t0,tDepth) << "\t"
-      << pangolin::TimeDiff_s(tDepth,tAddTSDF) << "\t"
-      << pangolin::TimeDiff_s(tAddTSDF,tRayTrace) << "\t"
-      << pangolin::TimeDiff_s(t0,tRayTrace) << "\t"<< std::endl;
-
+    TICK("Draw 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // render model first
@@ -215,7 +216,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     glColor3f(1,0,0);
     pangolin::RenderVbo(cuPcbuf);
     pangolin::glUnsetFrameOfReference();
+    TOCK("Draw 3D");
 
+    TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
     gui.ShowFrames();
@@ -233,6 +236,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,cudaMemcpyDeviceToHost);
     }
     viewDepthPyr.SetImage(dispDepthPyr);
+    TOCK("Draw 2D");
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -240,6 +244,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
     }
+    Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
 }

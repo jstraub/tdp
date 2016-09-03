@@ -87,15 +87,16 @@ void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
 
 template<typename T, int LEVELS>
 void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
-  int u0 = 0;
-  for (int lvl=0; lvl<LEVELS; ++lvl) {
-    Image<T> IlvlSrc = P.GetImage(lvl);
-    Image<T> Ilvl(P.Width(lvl), P.Height(lvl), I.pitch_, 
-        I.ptr_+u0);
-    std::cout << IlvlSrc.Description() << " to "
-      << Ilvl.Description() << std::endl;
-    Ilvl.CopyFrom(IlvlSrc, type);
-    u0 += P.Width(lvl);
+  Image<T> IlvlSrc = P.GetImage(0);
+  Image<T> Ilvl(P.Width(0), P.Height(0), I.pitch_, I.ptr_);
+  Ilvl.CopyFrom(IlvlSrc, type);
+  int v0 = 0;
+  for (int lvl=1; lvl<LEVELS; ++lvl) {
+    IlvlSrc = P.GetImage(lvl);
+    Image<T> IlvlDst(P.Width(lvl), P.Height(lvl), I.pitch_, 
+        &I(P.Width(0),v0));
+    IlvlDst.CopyFrom(IlvlSrc, type);
+    v0 += P.Height(lvl);
   }
 }
 
