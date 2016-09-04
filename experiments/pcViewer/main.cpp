@@ -68,6 +68,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::GlBuffer pcIbo;
   pangolin::MakeTriangleStripIboForVbo(pcIbo,wc,hc);
   pangolin::GlBuffer pcVbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer pcCbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
 
@@ -90,6 +91,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     gui.NextFrames();
 
+    tdp::Image<Eigen::Vector3b> rgb;
+    if (!gui.ImageRGB(rgb)) continue;
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
     tdp::ConvertDepth(dRaw, d, 1e-3, 0.1, 4.);
@@ -101,17 +104,19 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     //glColor3f(0.5f,1.0f,0.0f);
 
-    pcVbo.Reinitialise(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3,GL_DYNAMIC_DRAW);
     std::cout << "drew " << pcIbo.num_elements << " triangles with " << 
       pcVbo.num_elements << " vertices" << std::endl;
     pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
+    pcCbo.Upload(rgb.ptr_,rgb.SizeBytes(),0);
 
     if (gui.useMatCap) {
 
       pcVbo.Bind()
-
       glEnableVertexAttribArray(0);                                               
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      pcCbo.Bind()
+      glEnableVertexAttribArray(1);                                               
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 0, 0); 
 
       matcap.Bind();
       pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
@@ -123,20 +128,23 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
     //glEnableClientState(GL_COLOR_ARRAY);
     
-    pcVbo.Bind();
-    glVertexPointer(pcVbo.count_per_element, pcVbo.datatype, 0, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
+    //pcVbo.Bind();
+    //glVertexPointer(pcVbo.count_per_element, pcVbo.datatype, 0, 0);
+    //glEnableClientState(GL_VERTEX_ARRAY);
 
     pcIbo.Bind();
     glDrawElements(GL_TRIANGLE_STRIP,pcIbo.num_elements, pcIbo.datatype, 0);
     pcIbo.Unbind();
 
-    glDisableClientState(GL_VERTEX_ARRAY);
-    pcVbo.Unbind();
+    //glDisableClientState(GL_VERTEX_ARRAY);
+    //pcVbo.Unbind();
 
     if (gui.useMatCap) {
       matcap.Unbind();
       // TODO unbind the attrib array
+      glDisableVertexAttribArray(1);
+      pcCbo.Unbind();
+      glDisableVertexAttribArray(0);
       pcVbo.Unbind();
     }
     //glDisableClientState(GL_COLOR_ARRAY);

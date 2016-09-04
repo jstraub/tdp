@@ -37,7 +37,7 @@ class GUI {
         images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
     return true; 
   } 
-  bool ImageD(tdp::Image<Eigen::Matrix<uint8_t,3,1> >& rgb) {
+  bool ImageRGB(tdp::Image<Eigen::Matrix<uint8_t,3,1> >& rgb) {
     if (iRGB < 0) return false;
     rgb = tdp::Image<Eigen::Matrix<uint8_t,3,1> >(images[iRGB].w, images[iRGB].h,
         images[iRGB].pitch, 
