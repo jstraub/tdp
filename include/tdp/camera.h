@@ -67,6 +67,26 @@ class Camera : public CameraBase<T,4,Camera<T>> {
                    (v-this->params_(3))/this->params_(1)*z,
                    z);
   }
+
+  Eigen::Matrix<T,3,3> GetK() const {
+    Eigen::Matrix<T,3,3> K = Eigen::Matrix<T,3,3>::Zero();
+    K(0,0) = this->params_(0);
+    K(1,1) = this->params_(1);
+    K(2,2) = 1.;
+    K(0,2) = this->params_(2);
+    K(1,2) = this->params_(3);
+    return K;
+  }
+
+  Eigen::Matrix<T,3,3> GetKinv() const {
+    Eigen::Matrix<T,3,3> Kinv = Eigen::Matrix<T,3,3>::Zero();
+    Kinv(0,0) = 1./this->params_(0);
+    Kinv(1,1) = 1./this->params_(1);
+    Kinv(2,2) = 1.;
+    Kinv(0,2) = -this->params_(2)/this->params_(0);
+    Kinv(1,2) = -this->params_(3)/this->params_(1);
+    return Kinv;
+  }
 };
 
 typedef Camera<float> Cameraf;

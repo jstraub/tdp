@@ -2,12 +2,11 @@
 layout (location = 0) in vec3 pos;
 layout (location = 1) in vec3 normal;
 
-uniform sampler2D matcap
-
+uniform sampler2D matcap;
 uniform mat4 P;
 uniform mat4 MV;
 
-varying vec2 vN;
+out vec2 vN;
 
 // inspired by https://www.clicktorelease.com/blog/creating-spherical-environment-mapping-shader
 void main() {

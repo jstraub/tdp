@@ -1,8 +1,10 @@
 #version 330
 
-uniform sampler2D matcap
-varying vec2 vN;
+uniform sampler2D matcap;
+in vec2 vN;
 
 void main() {
-  gl_FragColor = vec4(texture2D(matcap,vN),1.);
+  vec3 rgb = texture2D(matcap,vN).xyz;
+  //gl_FragColor = vec4(rgb,1.);
+  gl_FragColor = vec4(vN.x,vN.y,0.,1.);
 }

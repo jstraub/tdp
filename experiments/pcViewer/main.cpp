@@ -22,6 +22,9 @@
 #include <tdp/camera.h>
 #include <tdp/quickView.h>
 #include <tdp/eigen/dense.h>
+#ifdef CUDA_FOUND
+#include <tdp/normals.h>
+#endif
 
 #include "gui.hpp"
 
@@ -47,15 +50,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  tdp::QuickView viewDebugA(wc,hc);
-  gui.container().AddDisplay(viewDebugA);
-  tdp::QuickView viewDebugB(wc,hc);
-  gui.container().AddDisplay(viewDebugB);
-
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& d_cam = pangolin::CreateDisplay()
@@ -70,6 +68,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::GlBuffer pcIbo;
   pangolin::MakeTriangleStripIboForVbo(pcIbo,wc,hc);
   pangolin::GlBuffer pcVbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer pcNbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer pcCbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -86,10 +85,26 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
       "/home/jstraub/workspace/research/tdp/shaders/colorPc.frag");
   colorPc.Link();
+
+  // http://www.geeks3d.com/20110908/opengl-3-3-sampler-objects-control-your-texture-units/
+  GLuint linearFiltering;
+  glGenSamplers(1,&linearFiltering);
+  glSamplerParameteri(linearFiltering, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glSamplerParameteri(linearFiltering, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glSamplerParameteri(linearFiltering, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
   pangolin::GlTexture matcapTex(512,512,GL_RGB8);
   pangolin::TypedImage matcapImg = pangolin::LoadImage(
       "/home/jstraub/workspace/research/tdp/shaders/normal.jpg");
   matcapTex.Upload(matcapImg.ptr,GL_RGB,GL_UNSIGNED_BYTE);
+
+#ifdef CUDA_FOUND
+  tdp::ManagedDeviceImage<float> cuD(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(wc, hc);
+#endif
+  tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
+  for (size_t i=0; i<wc*hc; ++i)
+    n[i] = tdp::Vector3fda(0.,0.,1.);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -105,22 +120,41 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (!gui.ImageD(dRaw)) continue;
     tdp::ConvertDepth(dRaw, d, 1e-3, 0.1, 4.);
     tdp::Depth2PC(d,cam,pc);
+#ifdef CUDA_FOUND
+    // compute normals if we have CUDA (normal extraction not
+    // implemented on CPU (yet))
+    cuD.CopyFrom(d,cudaMemcpyHostToDevice);
+    tdp::Depth2Normals(cuD, cam, cuN);
+    n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+#endif
 
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     pangolin::glDrawAxis(0.1);
+    Eigen::Matrix3f Kinv = cam.GetKinv();
+    pangolin::glDrawFrustrum(Kinv, wc, hc, 0.1);
 
-    //glColor3f(0.5f,1.0f,0.0f);
-
-    std::cout << "drew " << pcIbo.num_elements << " triangles with " << 
-      pcVbo.num_elements << " vertices" << std::endl;
-
+    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
     if (gui.useMatCap) {
       pcVbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      pcNbo.Bind();
+      glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+
       glEnableVertexAttribArray(0);                                               
+      glEnableVertexAttribArray(1);                                               
       pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
+      pcNbo.Upload(n.ptr_,n.SizeBytes(),0);
       matcap.Bind();
+      //TODO: matcap.SetUniform("matcap",matcapTex);
+      // https://www.opengl.org/wiki/Sampler_(GLSL)#Binding_textures_to_samplers
+      //glActiveTexture(GL_TEXTURE0 + 2);
+      //matcapTex.Bind();
+      //glBindSampler(2,linearFiltering);
+      //matcap.SetUniform("matcap",2);
+      matcap.SetUniform("P",P);
+      matcap.SetUniform("MV",MV);
     } else {
       pcVbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
@@ -132,23 +166,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
       pcCbo.Upload(rgb.ptr_,rgb.SizeBytes(),0);
       colorPc.Bind();
+      colorPc.SetUniform("P",P);
+      colorPc.SetUniform("MV",MV);
     }
-    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-    matcap.SetUniform("P",P);
-    matcap.SetUniform("MV",MV);
 
     pcIbo.Bind();
     glDrawElements(GL_TRIANGLE_STRIP,pcIbo.num_elements, pcIbo.datatype, 0);
     pcIbo.Unbind();
 
     if (gui.useMatCap) {
+      //glBindSampler(2,0);
+      matcapTex.Unbind();
       matcap.Unbind();
+      glDisableVertexAttribArray(1);
       glDisableVertexAttribArray(0);
+      pcNbo.Unbind();
       pcVbo.Unbind();
     } else {
       colorPc.Unbind();
-      // TODO unbind the attrib array
       glDisableVertexAttribArray(1);
       glDisableVertexAttribArray(0);
       pcCbo.Unbind();
@@ -159,11 +194,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
-
     gui.ShowFrames();
-
-    viewDebugA.SetImage(d);
-    viewDebugB.SetImage(d);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -173,6 +204,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     pangolin::FinishFrame();
   }
+  glDeleteSamplers(1,&linearFiltering);
 }
 
 

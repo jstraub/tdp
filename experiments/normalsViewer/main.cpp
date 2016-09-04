@@ -74,9 +74,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
-  tdp::ManagedDeviceImage<float> cuDu(wc, hc);
-  tdp::ManagedDeviceImage<float> cuDv(wc, hc);
-  tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   tdp::GeodesicHist<4> normalHist;
@@ -141,8 +138,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     gui.ShowFrames();
 
-    CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
-    CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
     viewDebugA.SetImage(debugA);
     viewDebugB.SetImage(debugB);
     if (gui.show2DNormals) {
