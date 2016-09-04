@@ -1,7 +1,8 @@
 #version 330
 
-in vec4 FragColor;
+uniform sampler2D matcap
+varying vec2 vN;
 
 void main() {
-  gl_FragColor = FragColor;
+  gl_FragColor = vec4(texture2D(matcap,vN),1.);
 }
