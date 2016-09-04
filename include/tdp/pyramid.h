@@ -7,14 +7,18 @@
 #include <stddef.h>
 #include <algorithm>
 #include <tdp/image.h>
+#ifdef CUDA_FOUND
 #include <tdp/cuda.h>
+#endif
 
 namespace tdp {
 
+#ifdef CUDA_FOUND
 void PyrDown(
     const Image<float>& Iin,
     Image<float>& Iout
     );
+#endif
 
 template<typename T, int LEVELS>
 class Pyramid {
@@ -52,6 +56,7 @@ class Pyramid {
  private:
 };
 
+#ifdef CUDA_FOUND
 template<typename T, int LEVELS>
 void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   P.GetImage(0).CopyFrom(I, type);
@@ -99,5 +104,6 @@ void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
     v0 += P.Height(lvl);
   }
 }
+#endif
 
 }

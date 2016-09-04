@@ -10,6 +10,7 @@
 
 namespace tdp {
 
+#ifdef CUDA_FOUND
 void ICPStep (
     Image<Vector3fda> pc_m,
     Image<Vector3fda> n_m,
@@ -25,6 +26,7 @@ void ICPStep (
     float& error,
     float& count
     );
+#endif
 
 class ICP {
  public:

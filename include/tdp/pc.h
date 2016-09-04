@@ -6,6 +6,12 @@
 
 namespace tdp {
 
+void Depth2PCGpu(
+    const Image<float>& d,
+    const Camera<float>& cam,
+    Image<Vector3fda>& pc
+    );
+
 void Depth2PC(
     const Image<float>& d,
     const Camera<float>& cam,

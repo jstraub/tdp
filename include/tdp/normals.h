@@ -9,11 +9,14 @@
 #include <tdp/pyramid.h>
 #include <tdp/managed_pyramid.h>
 #include <tdp/camera.h>
+#ifdef CUDA_FOUND
 #include <tdp/cuda.h>
 #include <tdp/convolutionSeparable.h>
+#endif
 
 namespace tdp {
 
+#ifdef CUDA_FOUND
 void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,
@@ -25,18 +28,6 @@ void Depth2Normals(
     const Image<float>& cuD,
     const Camera<float>& cam,
     Image<Vector3fda> cuN);
-
-//template<int LEVELS>
-//void Depth2Normals(
-//    Pyramid<float,LEVELS>& cuD,
-//    const Camera<float>& cam,
-//    Pyramid<Vector3fda,LEVELS> cuN) {
-//  for (size_t lvl=0; lvl<LEVELS; ++lvl) {
-//    Image<float> cuD_i = cuD.GetImage(lvl);
-//    Image<Vector3fda> cuN_i = cuN.GetImage(lvl);
-//    Depth2Normals(cuD_i, cam, cuN_i);
-//  }
-//}
 
 template<int LEVELS>
 void Depth2Normals(
@@ -88,5 +79,6 @@ void Depth2Normals(
     camLvl = ScaleCamera<float>(camLvl,0.5);
   }
 }
+#endif
 
 }

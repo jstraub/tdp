@@ -7,4 +7,16 @@
 
 namespace tdp {
 
+void Depth2PC(
+    const Image<float>& d,
+    const Camera<float>& cam,
+    Image<Vector3fda>& pc
+    ) {
+  for (size_t v=0; v<pc.w_; ++v)
+    for (size_t u=0; u<pc.h_; ++u) 
+      if (u<d.w_ && v<d.h_) {
+        pc(u,v) = cam.Unproject(u,v,d(u,v));
+      }
+}
+
 }

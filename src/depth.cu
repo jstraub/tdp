@@ -32,8 +32,8 @@ __global__ void KernelDepthConvert(Image<uint16_t> dRaw,
   }
 }
 
-void ConvertDepth(const Image<uint16_t>& dRaw,
-    const Image<float>& d,
+void ConvertDepthGpu(const Image<uint16_t>& dRaw,
+    Image<float>& d,
     float scale,
     float dMin, 
     float dMax

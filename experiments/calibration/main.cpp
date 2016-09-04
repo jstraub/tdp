@@ -83,7 +83,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         tdp::Image<uint16_t> dRaw;
         if (!gui.ImageD(dRaw)) continue;
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-        ConvertDepth(cuDraw, cuD, 1e-4, 0.1, 4.0);
+        ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.0);
 
         cudaDeviceSynchronize();
         pangolin::basetime tDepth = pangolin::TimeNow();

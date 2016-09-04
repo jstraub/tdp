@@ -26,11 +26,13 @@ void ICP::ComputeProjective(
       Matrix3fda R_mc = T_mc.rotation().matrix();
       Vector3fda t_mc = T_mc.translation();
       // Compute ATA and ATb from A x = b
+#ifdef CUDA_FOUND
       ICPStep(pcs_m.GetImage(lvl), ns_m.GetImage(lvl), 
           pcs_c.GetImage(lvl), ns_c.GetImage(lvl),
           R_mc, t_mc, cam,
           cos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,error,count);
+#endif
       if (count < 100) return;
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x = ATA.ldlt().solve(ATb); 

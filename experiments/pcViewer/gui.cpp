@@ -10,13 +10,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   video_wait("ui.wait", true),
   video_newest("ui.newest", false),
   verbose("ui.verbose", true),
-  compute3Dgrads("ui.compute3Dgrads",false,true),
-  show2DNormals("ui.show 2D Normals",true,true),
-  computeHist("ui.ComputeHist",true,true),
-  histFrameByFrame("ui.hist frame2frame",true,true),
-  histScale("ui.hist scale",40.,1.,100.),
-  dispGrid("ui.Show Grid",false,true),
-  dispNormals("ui.Show Normals",false,true)
+  useMatCap("ui.use matcap", true,true)
 {
     // Create OpenGL window - guess sensible dimensions
     int menue_w = 180;

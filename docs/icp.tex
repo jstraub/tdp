@@ -64,6 +64,46 @@ directly. Instead we directly accumulate $A^TA$ and $A^Tb$:
       \vdots 
   \end{pmatrix}
 \end{align}
+Due to symmetry we only need to accumulate $21$ values ($22$ if we want
+the cost function value as well).
+
+\subsection{Alternative using surface normal rotational alignment} 
+
+Model normals $n_i$ and current normals $\nu_i$:
+\begin{align}
+  R^* &= \argmax_{R\in\SO{3}} \sum_i n_i^T R_{mc} \nu_i \\
+  &= \argmax_{R\in\SO{3}}\sum_i \tr (R_{mc} n_i \nu_i^T )\\
+  &= \argmax_{R\in\SO{3}}\tr (R_{mc} \sum_i n_i \nu_i^T )\\
+  &= \argmax_{R\in\SO{3}}\tr (R_{mc} N) \,,\; N = \sum_i n_i \nu_i^T 
+\end{align}
+which is of the form of an orthogonal Procrustes problem that can be
+solved in closed form using the SVD of $N=USV^T$:
+\begin{align}
+  R^* &= UV^T
+\end{align}
+Hence one needs to accumulate only $6$ of the values of $N$ on GPU.
+
+In a second step we minimize the original point-to-plane error with respect to the translation $\xi$:
+\begin{align}
+  \sum_i \| ( R_{mc} q_i + t_{mc} + \xi_t - p_i )^T n_i \|^2_2 
+  &= \sum_i \| n_i^T \xi_t + n_i^T ( R_{mc} q_i + t_{mc} - p_i ) \|^2_2 \\
+  &= \|\tilde{A} \xi_t -\tilde{b} \|^2_2 \,,\quad
+  \tilde{A} = \begin{pmatrix}
+     n_i^T \\
+    \vdots
+  \end{pmatrix}\,,\;
+  \tilde{b} = \begin{pmatrix}
+    n_i^T ( - R_{mc} q_i - t_{mc} + p_i) \\
+    \vdots
+  \end{pmatrix}
+\end{align}
+Which can be solved as above via:
+\begin{align}
+  \xi_t = (\tilde{A}^T \tilde{A})^{-1} \tilde{A}^T \tilde{b}
+\end{align}
+On the GPU we only need to accumulate $\tilde{A}^T \tilde{A}$ and
+$\tilde{A}^T \tilde{b}$ which can be described by $9$ values ($10$ if
+we want the error as well).
 
 \subsection{Alternative using gradient descent}
 

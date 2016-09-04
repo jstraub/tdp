@@ -1,17 +1,10 @@
 
 #include <assert.h>
-#include <tdp/eigen/dense.h>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
-#include <tdp/pyramid.h>
-#include <tdp/camera.h>
 #include <tdp/normals.h>
-#include <tdp/cuda.h>
-#include <tdp/nvidia/helper_cuda.h>
-#include <tdp/convolutionSeparable.h>
 
 namespace tdp {
 
+#ifdef CUDA_FOUND
 void Depth2Normals(
     const Image<float>& cuD,
     const Camera<float>& cam,
@@ -41,6 +34,7 @@ void Depth2Normals(
   int vc = cam.params_(3);
   ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
 }
+#endif
 
 
 }

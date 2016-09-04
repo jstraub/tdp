@@ -94,7 +94,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (!gui.ImageD(dRaw)) continue;
 
     CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-    ConvertDepth(cuDraw, cuD, 1e-4, 0.1, 4.);
+    ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.);
     pangolin::basetime tDepth = pangolin::TimeNow();
     if (gui.verbose)
       std::cout << "depth conversion: " <<
@@ -122,10 +122,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     cudaDeviceSynchronize();
     pangolin::basetime tNormal = pangolin::TimeNow();
-
-    std::cout << pangolin::TimeDiff_s(t0,tDepth) << "\t"
-      << pangolin::TimeDiff_s(tDepth,tNormal) << "\t"
-      << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
 
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);

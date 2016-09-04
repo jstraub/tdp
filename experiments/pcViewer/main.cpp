@@ -1,3 +1,6 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -6,18 +9,17 @@
 #include <pangolin/utils/file_utils.h>
 #include <pangolin/utils/timer.h>
 #include <pangolin/gl/gl.h>
-#include <pangolin/gl/glcuda.h>
+#include <pangolin/gl/glsl.h>
+#include <pangolin/gl/glvbo.h>
+#include <pangolin/image/image_io.h>
 
 #include <tdp/eigen/dense.h>
 #include <tdp/managed_image.h>
 
-#include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
-#include <tdp/normals.h>
+#include <tdp/pc.h>
 #include <tdp/camera.h>
 #include <tdp/quickView.h>
-#include <tdp/directional/hist.h>
-#include <tdp/nvidia/helper_cuda.h>
 
 #include "gui.hpp"
 
@@ -35,10 +37,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iRGB].Width();
-  size_t h = video.Streams()[gui.iRGB].Height();
-  size_t wc = w+w%64; // for convolution
-  size_t hc = h+h%64;
+  size_t w = video.Streams()[gui.iD].Width();
+  size_t h = video.Streams()[gui.iD].Height();
+  size_t wc = w;
+  size_t hc = h;
   float f = 550;
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
@@ -47,8 +49,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewDebugA);
   tdp::QuickView viewDebugB(wc,hc);
   gui.container().AddDisplay(viewDebugB);
-  tdp::QuickView viewN2D(wc,hc);
-  gui.container().AddDisplay(viewN2D);
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -61,25 +61,27 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(d_cam);
 
   tdp::ManagedHostImage<float> d(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
   tdp::ManagedHostImage<float> debugA(wc, hc);
   tdp::ManagedHostImage<float> debugB(wc, hc);
 
-  tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
-  memset(n2D.ptr_,0,n2D.SizeBytes());
-  tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
-  tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
-
-  pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
-      GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
-
-  tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
-  tdp::ManagedDeviceImage<float> cuD(wc, hc);
-  tdp::ManagedDeviceImage<float> cuDu(wc, hc);
-  tdp::ManagedDeviceImage<float> cuDv(wc, hc);
-  tdp::ManagedDeviceImage<float> cuTmp(wc, hc);
+  pangolin::GlBuffer pcIbo;
+  pangolin::MakeTriangleStripIboForVbo(pcIbo,wc,hc);
+  pangolin::GlBuffer pcVbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
-  tdp::GeodesicHist<4> normalHist;
+
+  pangolin::GlSlProgram matcap;
+  matcap.AddShaderFromFile(pangolin::GlSlVertexShader,
+      "/home/jstraub/workspace/research/tdp/shaders/matcap.vert");
+  matcap.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      "/home/jstraub/workspace/research/tdp/shaders/matcap.frag");
+  matcap.Link();
+  pangolin::GlTexture matcapTex(512,512,GL_RGB8);
+  pangolin::TypedImage matcapImg = pangolin::LoadImage(
+      "/home/jstraub/workspace/research/tdp/shaders/normal.jpg");
+  matcapTex.Upload(matcapImg.ptr,GL_RGB,GL_UNSIGNED_BYTE);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -88,70 +90,59 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     gui.NextFrames();
 
-    pangolin::basetime t0 = pangolin::TimeNow();
-
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
-
-    CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-    ConvertDepth(cuDraw, cuD, 1e-4, 0.1, 4.);
-    pangolin::basetime tDepth = pangolin::TimeNow();
-    if (gui.verbose)
-      std::cout << "depth conversion: " <<
-        pangolin::TimeDiff_s(t0,tDepth) << std::endl;
-    {
-      pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
-      cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
-      tdp::Image<tdp::Vector3fda> cuN(wc, hc,
-          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
-      Depth2Normals(cuD, cam, cuN);
-      if (gui.show2DNormals) {
-        CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
-        //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
-        for(size_t y=0; y < n2Df.h_; ++y) {
-          for(size_t x=0; x < n2Df.w_*3; ++x) {
-            ((uint8_t*)n2D.RowPtr((int)y))[x] = floor(((float*)n2Df.RowPtr((int)y))[x]*128+127);
-          }
-        }
-      }
-      if (gui.computeHist) {
-        if (gui.histFrameByFrame)
-          normalHist.Reset();
-        normalHist.ComputeGpu(cuN);
-      }
-    }
-    cudaDeviceSynchronize();
-    pangolin::basetime tNormal = pangolin::TimeNow();
-
-    std::cout << pangolin::TimeDiff_s(t0,tDepth) << "\t"
-      << pangolin::TimeDiff_s(tDepth,tNormal) << "\t"
-      << pangolin::TimeDiff_s(t0,tNormal) << "\t"<< std::endl;
+    tdp::ConvertDepth(dRaw, d, 1e-3, 0.1, 4.);
+    tdp::Depth2PC(d,cam,pc);
 
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
-    pangolin::glDrawAxis(1);
-    if (gui.dispNormals) {
-      pangolin::RenderVbo(cuNbuf);
+    pangolin::glDrawAxis(0.1);
+
+    //glColor3f(0.5f,1.0f,0.0f);
+
+    pcVbo.Reinitialise(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3,GL_DYNAMIC_DRAW);
+    std::cout << "drew " << pcIbo.num_elements << " triangles with " << 
+      pcVbo.num_elements << " vertices" << std::endl;
+    pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
+
+    if (gui.useMatCap) {
+      matcap.Bind();
+
+      pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+      pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+      matcap.SetUniform("P",P);
+      matcap.SetUniform("MV",MV);
+      
     }
-    if (gui.computeHist) {
-      if (gui.dispGrid) {
-        normalHist.geoGrid_.Render3D();
-      }
-      normalHist.Render3D(gui.histScale);
+    //cbo.Bind();
+    //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
+    //glEnableClientState(GL_COLOR_ARRAY);
+    
+    pcVbo.Bind();
+    glVertexPointer(pcVbo.count_per_element, pcVbo.datatype, 0, 0);
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+    pcIbo.Bind();
+    glDrawElements(GL_TRIANGLE_STRIP,pcIbo.num_elements, pcIbo.datatype, 0);
+    pcIbo.Unbind();
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+    pcVbo.Unbind();
+
+    if (gui.useMatCap) {
+      matcap.Unbind();
     }
+    //glDisableClientState(GL_COLOR_ARRAY);
+    //cbo.Unbind();
 
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
     gui.ShowFrames();
 
-    CopyImage(cuDu, debugA, cudaMemcpyDeviceToHost);
-    CopyImage(cuDv, debugB, cudaMemcpyDeviceToHost);
-    viewDebugA.SetImage(debugA);
-    viewDebugB.SetImage(debugB);
-    if (gui.show2DNormals) {
-      viewN2D.SetImage(n2D);
-    }
+    viewDebugA.SetImage(d);
+    viewDebugB.SetImage(d);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

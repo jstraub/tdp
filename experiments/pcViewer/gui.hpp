@@ -68,13 +68,8 @@ class GUI {
   pangolin::Var<bool> video_newest;
   pangolin::Var<bool> verbose;
 
-  pangolin::Var<bool> compute3Dgrads;
-  pangolin::Var<bool> show2DNormals;
-  pangolin::Var<bool> computeHist;
-  pangolin::Var<bool> histFrameByFrame;
-  pangolin::Var<float> histScale;
-  pangolin::Var<bool> dispGrid;
-  pangolin::Var<bool> dispNormals;
+  pangolin::Var<bool> useMatCap;
+
  private:
   size_t w;
   size_t h;

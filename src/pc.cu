@@ -34,7 +34,7 @@ __global__ void KernelDepth2PC(
   }
 }
 
-void Depth2PC(
+void Depth2PCGpu(
     const Image<float>& d,
     const Camera<float>& cam,
     Image<Vector3fda>& pc

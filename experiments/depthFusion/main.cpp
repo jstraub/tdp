@@ -141,7 +141,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    ConvertDepth(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
+    ConvertDepthGpu(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
         cudaMemcpyDeviceToDevice);

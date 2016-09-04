@@ -1,5 +1,7 @@
 
-add_subdirectory(./depthFusion)
-add_subdirectory(./normalsViewer)
 add_subdirectory(./pcViewer)
-add_subdirectory(./calibration)
+if (CUDA_FOUND)
+  add_subdirectory(./depthFusion)
+  add_subdirectory(./normalsViewer)
+  add_subdirectory(./calibration)
+endif()
