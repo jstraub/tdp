@@ -5,9 +5,11 @@
 #include <pangolin/pangolin.h>
 #include <pangolin/var/var.h>
 #include <pangolin/display/display.h>
-#include <tdp/quickView.h>
 #include <pangolin/video/video.h>
 #include <pangolin/video/video_record_repeat.h>
+
+#include <tdp/quickView.h>
+#include <tdp/eigen/dense.h>
 
 class GUI {
  public:
@@ -37,11 +39,11 @@ class GUI {
         images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
     return true; 
   } 
-  bool ImageRGB(tdp::Image<Eigen::Matrix<uint8_t,3,1> >& rgb) {
+  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb) {
     if (iRGB < 0) return false;
-    rgb = tdp::Image<Eigen::Matrix<uint8_t,3,1> >(images[iRGB].w, images[iRGB].h,
+    rgb = tdp::Image<tdp::Vector3bda>(images[iRGB].w, images[iRGB].h,
         images[iRGB].pitch, 
-        reinterpret_cast<Eigen::Matrix<uint8_t,3,1>*>(images[iRGB].ptr));
+        reinterpret_cast<tdp::Vector3bda*>(images[iRGB].ptr));
     return true; 
   } 
 

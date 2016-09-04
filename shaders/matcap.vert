@@ -11,6 +11,6 @@ out vec4 FragColor;
 
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
-  vec3 n = MV * vec4(normal,1.)
+  vec3 n = MV * vec4(normal,1.);
   FragColor = vec4(texture(matcap,n.xy),1.);
 }

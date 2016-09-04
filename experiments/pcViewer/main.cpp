@@ -11,6 +11,7 @@
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/glsl.h>
 #include <pangolin/gl/glvbo.h>
+#include <pangolin/gl/gldraw.h>
 #include <pangolin/image/image_io.h>
 
 #include <tdp/eigen/dense.h>
@@ -20,6 +21,7 @@
 #include <tdp/pc.h>
 #include <tdp/camera.h>
 #include <tdp/quickView.h>
+#include <tdp/eigen/dense.h>
 
 #include "gui.hpp"
 
@@ -78,6 +80,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   matcap.AddShaderFromFile(pangolin::GlSlFragmentShader,
       "/home/jstraub/workspace/research/tdp/shaders/matcap.frag");
   matcap.Link();
+  pangolin::GlSlProgram colorPc;
+  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
+      "/home/jstraub/workspace/research/tdp/shaders/colorPc.vert");
+  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      "/home/jstraub/workspace/research/tdp/shaders/colorPc.frag");
+  colorPc.Link();
   pangolin::GlTexture matcapTex(512,512,GL_RGB8);
   pangolin::TypedImage matcapImg = pangolin::LoadImage(
       "/home/jstraub/workspace/research/tdp/shaders/normal.jpg");
@@ -91,7 +99,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     gui.NextFrames();
 
-    tdp::Image<Eigen::Vector3b> rgb;
+    tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
@@ -106,45 +114,44 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     std::cout << "drew " << pcIbo.num_elements << " triangles with " << 
       pcVbo.num_elements << " vertices" << std::endl;
-    pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
-    pcCbo.Upload(rgb.ptr_,rgb.SizeBytes(),0);
 
     if (gui.useMatCap) {
-
-      pcVbo.Bind()
-      glEnableVertexAttribArray(0);                                               
+      pcVbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-      pcCbo.Bind()
-      glEnableVertexAttribArray(1);                                               
-      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 0, 0); 
-
+      glEnableVertexAttribArray(0);                                               
+      pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
       matcap.Bind();
-      pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-      pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-      matcap.SetUniform("P",P);
-      matcap.SetUniform("MV",MV);
+    } else {
+      pcVbo.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      pcCbo.Bind();
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+
+      glEnableVertexAttribArray(0);                                               
+      glEnableVertexAttribArray(1);                                               
+      pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
+      pcCbo.Upload(rgb.ptr_,rgb.SizeBytes(),0);
+      colorPc.Bind();
     }
-    //cbo.Bind();
-    //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
-    //glEnableClientState(GL_COLOR_ARRAY);
-    
-    //pcVbo.Bind();
-    //glVertexPointer(pcVbo.count_per_element, pcVbo.datatype, 0, 0);
-    //glEnableClientState(GL_VERTEX_ARRAY);
+    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+    matcap.SetUniform("P",P);
+    matcap.SetUniform("MV",MV);
 
     pcIbo.Bind();
     glDrawElements(GL_TRIANGLE_STRIP,pcIbo.num_elements, pcIbo.datatype, 0);
     pcIbo.Unbind();
 
-    //glDisableClientState(GL_VERTEX_ARRAY);
-    //pcVbo.Unbind();
-
     if (gui.useMatCap) {
       matcap.Unbind();
+      glDisableVertexAttribArray(0);
+      pcVbo.Unbind();
+    } else {
+      colorPc.Unbind();
       // TODO unbind the attrib array
       glDisableVertexAttribArray(1);
-      pcCbo.Unbind();
       glDisableVertexAttribArray(0);
+      pcCbo.Unbind();
       pcVbo.Unbind();
     }
     //glDisableClientState(GL_COLOR_ARRAY);

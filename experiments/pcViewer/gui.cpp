@@ -10,7 +10,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   video_wait("ui.wait", true),
   video_newest("ui.newest", false),
   verbose("ui.verbose", true),
-  useMatCap("ui.use matcap", true,true)
+  useMatCap("ui.use matcap", false,true)
 {
     // Create OpenGL window - guess sensible dimensions
     int menue_w = 180;
