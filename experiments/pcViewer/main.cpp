@@ -107,13 +107,17 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pcVbo.Upload(pc.ptr_,pc.SizeBytes(),0);
 
     if (gui.useMatCap) {
-      matcap.Bind();
 
+      pcVbo.Bind()
+
+      glEnableVertexAttribArray(0);                                               
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+
+      matcap.Bind();
       pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
       pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
       matcap.SetUniform("P",P);
       matcap.SetUniform("MV",MV);
-      
     }
     //cbo.Bind();
     //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
@@ -132,6 +136,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     if (gui.useMatCap) {
       matcap.Unbind();
+      // TODO unbind the attrib array
+      pcVbo.Unbind();
     }
     //glDisableClientState(GL_COLOR_ARRAY);
     //cbo.Unbind();
