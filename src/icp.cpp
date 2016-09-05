@@ -38,14 +38,14 @@ void ICP::ComputeProjective(
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x = ATA.ldlt().solve(ATb); 
       // apply x to the transformation
       SE3f dT = SE3f::Exp_(x);
-      Eigen::Matrix3f dR = Eigen::Matrix3f::Zero();
-      dR(0,1) = x(2);
-      dR(0,2) = -x(1);
-      dR(1,2) = x(0);
-      dT.matrix().topLeftCorner(3,3) = (Eigen::Matrix3f::Identity()
-          +dR-dR.transpose());
-      dT.matrix().topRightCorner(3,1) = x.bottomRows(3);
-      //T_mc = dT + T_mc;
+      // as in kinfu paper:
+      //Eigen::Matrix3f dR = Eigen::Matrix3f::Zero();
+      //dR(0,1) = x(2);
+      //dR(0,2) = -x(1);
+      //dR(1,2) = x(0);
+      //dT.matrix().topLeftCorner(3,3) = (Eigen::Matrix3f::Identity()
+      //    +dR-dR.transpose());
+      //dT.matrix().topRightCorner(3,1) = x.bottomRows(3);
       T_mc.matrix() = dT.matrix() * T_mc.matrix();
       //R_mc = SO3f::Exp_(x.topRows(3)) * R_mc;
       ////R_mc += SO3f::invVee(x.topRows(3)) * R_mc;

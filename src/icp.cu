@@ -49,13 +49,14 @@ __global__ void KernelICPStep(
       int u = floor(x_c_in_m(0)+0.5f);
       int v = floor(x_c_in_m(1)+0.5f);
       if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
+          && pc_ci(2) > 0. && pc_c_in_m(2) > 0.
           && IsValidData(pc_c_in_m)) {
         // found association -> check thresholds;
         Vector3fda n_c_in_m = R_mc * n_c(idx,idy);
-        Vector3fda n_mi = n_m(idx,idy);
-        Vector3fda pc_mi = pc_m(idx,idy);
+        Vector3fda n_mi = n_m(u,v);
+        Vector3fda pc_mi = pc_m(u,v);
         float dot  = n_mi.dot(n_c_in_m);
-        float dist = n_mi.dot(pc_mi-pc_c_in_m);
+        float dist = (pc_mi-pc_c_in_m).norm();
         //if (tid < 10)
         //  printf("%d %d to %d %d; 3d: %f %f %f; %f >? %f\n",idx,idy,u,v,pc_c(idx,idy)(0),pc_c(idx,idy)(1),pc_c(idx,idy)(2),dot,dotThr);
         if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
@@ -65,10 +66,13 @@ __global__ void KernelICPStep(
           float ab[7];      
           Eigen::Map<Vector3fda> top(&(ab[0]));
           Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          top = (n_mi).cross(pc_c_in_m);
-          //top = (R_mc * pc_ci).cross(n_mi);
+          // as in Kinfu paper: top = (n_mi).cross(pc_c_in_m);
+          // as in my own deriv: 
+          top = (R_mc * pc_ci).cross(n_mi);
+          // as in mp3guy: 
+          //top = (pc_c_in_m).cross(n_mi);
           bottom = n_mi;
-          ab[6] = dist;
+          ab[6] = n_mi.dot(pc_mi-pc_c_in_m);
           Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
           int k=0;
 #pragma unroll
@@ -80,8 +84,6 @@ __global__ void KernelICPStep(
           assert(k==28);
           upperTriangle(28) = 1.; // to get number of data points
           sum[tid] += upperTriangle;
-          //if (tid < 10)
-          //  printf("%f %f %f %f %f\n",sum[tid](0),sum[tid](1),sum[tid](2),sum[tid](3),sum[tid](4));
         }
       }
     }
@@ -123,7 +125,8 @@ void ICPStep (
   ManagedDeviceImage<float> out(29,1);
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
 
-  KernelICPStep<256><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,dotThr,distThr,10,out);
+  KernelICPStep<256><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,
+      dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(29,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);

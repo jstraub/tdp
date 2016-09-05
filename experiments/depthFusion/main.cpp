@@ -148,6 +148,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     gui.tsdfRho0 = 1./gui.tsdfDmax;
     gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
 
+    TICK("Ray Trace TSDF");
+    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
+        gui.tsdfDRho, gui.tsdfMu); 
+    TOCK("Ray Trace TSDF");
+
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepthGpu(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
@@ -188,11 +193,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         gui.tsdfDRho, gui.tsdfMu); 
     numFused ++;
     TOCK("Add To TSDF");
-
-    TICK("Ray Trace TSDF");
-    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
-        gui.tsdfDRho, gui.tsdfMu); 
-    TOCK("Ray Trace TSDF");
 
     TICK("Draw 3D");
     glEnable(GL_DEPTH_TEST);
