@@ -49,6 +49,19 @@ void KernelPyrDown(
 }
 
 void PyrDown(
+    const Image<Vector3fda>& Iin,
+    Image<Vector3fda>& Iout
+    ) {
+  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+  assert(Iin.w_ == Iout.w_*2);
+  assert(Iin.h_ == Iout.h_*2);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
+  KernelPyrDown<Vector3fda><<<blocks,threads>>>(Iin,Iout);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void PyrDown(
     const Image<float>& Iin,
     Image<float>& Iout
     ) {

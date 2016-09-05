@@ -18,11 +18,19 @@ __device__ inline void atomicAdd_(T* address, const T& val)
 
 template<typename T>
 __device__ inline bool isNan(const T& val)
-{return !isfinite(val);};
+{return val!=val;};
+
+template<>
+__device__ inline bool isNan(const Vector3fda& val)
+{return isNan<float>(val(0)) || isNan<float>(val(1)) || isNan<float>(val(2));};
 
 template<typename T>
 __device__ inline T zero()
 {return 0;};
+
+template<>
+__device__ inline Vector3fda zero()
+{return Vector3fda::Zero();};
 
 // TODO: clearly templates should be used here but I cannot seem to
 // figure out how to do that

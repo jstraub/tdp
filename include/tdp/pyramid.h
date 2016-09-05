@@ -18,6 +18,10 @@ void PyrDown(
     const Image<float>& Iin,
     Image<float>& Iout
     );
+void PyrDown(
+    const Image<Vector3fda>& Iin,
+    Image<Vector3fda>& Iout
+    );
 #endif
 
 template<typename T, int LEVELS>

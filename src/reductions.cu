@@ -56,6 +56,10 @@ template<>
 __device__ inline bool isNan(const Eigen::Vector3f& val)
 {return !isfinite(val(0)) || !isfinite(val(1)) || !isfinite(val(2));};
 
+//template<>
+//__device__ inline bool isNan(const Vector3fda& val)
+//{return !isfinite(val(0)) || !isfinite(val(1)) || !isfinite(val(2));};
+
 template<>
 __device__ inline Eigen::Vector2f zero()
 {return Eigen::Vector2f::Zero();};
@@ -63,6 +67,10 @@ __device__ inline Eigen::Vector2f zero()
 template<>
 __device__ inline Eigen::Vector3f zero()
 {return Eigen::Vector3f::Zero();};
+
+//template<>
+//__device__ inline Vector3fda zero()
+//{return Vector3fda::Zero();};
 
 template<typename T, int BLK_SIZE>
 __global__
