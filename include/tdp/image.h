@@ -2,6 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 #pragma once 
+#include <limits>
 #include <assert.h>
 #include <tdp/config.h>
 #include <sstream>
@@ -60,6 +61,22 @@ class Image {
 
   TDP_HOST_DEVICE
   size_t Area() const { return w_*h_; }
+
+  std::pair<double,double> MinMax(size_t* iMin=nullptr, size_t* iMax=nullptr) const {
+    std::pair<double,double> minMax(std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::lowest());
+    for (size_t i=0; i<Area(); ++i) {
+      if (minMax.first > ptr_[i]) {
+        minMax.first = ptr_[i];
+        if (iMin) *iMin = i;
+      }
+      if (minMax.second < ptr_[i]) {
+        minMax.second = ptr_[i];
+        if (iMax) *iMax = i;
+      }
+    }
+    return minMax;
+  }
 
   std::string Description() const {
     std::stringstream ss;

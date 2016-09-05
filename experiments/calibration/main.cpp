@@ -15,6 +15,7 @@
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
 #include <tdp/image.h>
+#include <tdp/hist.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/calibration/planeEstimation.h>
 
@@ -56,10 +57,14 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     gui.container().AddDisplay(viewDebugA);
     tdp::QuickView viewDebugB(wc,hc);
     gui.container().AddDisplay(viewDebugB);
+    pangolin::DataLog logStats;
+    pangolin::Plotter plotStats(&logStats, 0.f,100.f, 0.f,1.f, 10.f, 0.1f);
+    gui.container().AddDisplay(plotStats);
 
     tdp::ManagedHostImage<float> d(wc, hc);
     tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
     tdp::ManagedDeviceImage<float> cuD(wc, hc);
+    tdp::ManagedDeviceImage<float> cuRho(wc, hc);
     tdp::ManagedDeviceImage<float> cuPlaneDeriv(wc, hc);
 
     tdp::SE3<float> T_wd(Eigen::Matrix4f::Identity());
@@ -68,6 +73,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::Var<float> huberAlpha("ui.alpha", 0.3, 0., 1.);
     pangolin::Var<int> planeEstNumIter("ui.# iter", 100, 1, 1000);
     pangolin::Var<float> planeEstEps("ui.10^eps", -6, -10, 0);
+    pangolin::Var<float> histDx("ui.Hist dx", 0.01, 1e-3, 0.01);
+    pangolin::Var<float> sensorScale("ui.sensor scale", 1e-3, 1e-4, 1e-3);
 
     // Stream and display video
     //
@@ -78,15 +85,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
         gui.NextFrames();
 
-        pangolin::basetime t0 = pangolin::TimeNow();
-
         tdp::Image<uint16_t> dRaw;
         if (!gui.ImageD(dRaw)) continue;
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-        ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.0);
-
-        cudaDeviceSynchronize();
-        pangolin::basetime tDepth = pangolin::TimeNow();
+        ConvertDepthGpu(cuDraw, cuD, sensorScale, 0.1, 4.0);
 
         Eigen::Vector3f nd(0,0,-1);
         tdp::PlaneEstimation planeEstimator(&cuD,camD,huberAlpha.Get());
@@ -97,7 +99,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           << " d=" << 1./nd.norm() << std::endl;
         CopyImage(planeEstimator.cuF_,debugA,cudaMemcpyDeviceToHost);
 
-        std::cout << pangolin::TimeDiff_s(t0,tDepth) << "\t" << std::endl;
+        tdp::Hist hist;
+        hist.Compute(debugA, histDx, true);
+        logStats.Clear();
+        for (size_t i=0; i<hist.hist_.size(); ++i) 
+          logStats.Log(hist.hist_[i]);
+        //plotStats.Scroll(100,0);
 
         glEnable(GL_DEPTH_TEST);
         d_cam.Activate(s_cam);
@@ -108,8 +115,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         glDisable(GL_DEPTH_TEST);
 
         gui.ShowFrames();
-
         viewDebugA.SetImage(debugA);
+
+        ConvertDepthToInverseDepthGpu(cuDraw, cuRho, sensorScale, 0.1, 4.0);
+        debugB.CopyFrom(cuRho,cudaMemcpyDeviceToHost);
         viewDebugB.SetImage(debugB);
 
         // leave in pixel orthographic for slider to render.

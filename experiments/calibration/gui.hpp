@@ -60,6 +60,11 @@ class GUI {
   }
 
   int iRGB, iD;
+  pangolin::Var<int> frame;
+  pangolin::Var<int>  record_timelapse_frame_skip;
+  pangolin::Var<int>  end_frame;
+  pangolin::Var<bool> video_wait;
+  pangolin::Var<bool> video_newest;
  private:
   size_t w;
   size_t h;
@@ -75,11 +80,6 @@ class GUI {
   std::vector<unsigned char> buffer;
   std::vector<pangolin::Image<unsigned char> > images;
 
-  pangolin::Var<int> frame;
-  pangolin::Var<int>  record_timelapse_frame_skip;
-  pangolin::Var<int>  end_frame;
-  pangolin::Var<bool> video_wait;
-  pangolin::Var<bool> video_newest;
 
 };
 
