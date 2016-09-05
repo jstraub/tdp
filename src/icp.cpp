@@ -53,6 +53,8 @@ void ICP::ComputeProjective(
       //std::cout << "x: " << x.transpose() << std::endl; 
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+        << " # inliers: " << count 
+        << " x=" << x.transpose()
         << std::endl;
       //std::cout << dT.matrix3x4() << std::endl;
       if (it>0 && fabs(error-errPrev)/error < 1e-7) break;

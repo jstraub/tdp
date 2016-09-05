@@ -54,9 +54,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  size_t dTSDF = 64;
-  size_t wTSDF = wc;
-  size_t hTSDF = hc;
+  size_t dTSDF = 128;
+  size_t wTSDF = 512;
+  size_t hTSDF = 512;
   
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
 
@@ -84,17 +84,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
   tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedHostImage<float> dEst(wTSDF, hTSDF);
   W.Fill(0.);
-  TSDF.Fill(-gui.tsdfMu);
-  dEst.Fill(0.);
+  TSDF.Fill(-1.);
   tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
   tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedDeviceImage<float> cuDEst(wTSDF, hTSDF);
 
-  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
   tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
   tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
+
+  tdp::ManagedHostImage<float> dEst(wc, hc);
+  tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
+  dEst.Fill(0.);
+  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
 
   tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());
   tdp::Camera<float> camR(Eigen::Vector4f(f,f,uc,vc)); 
@@ -115,9 +116,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
-  tdp::ManagedHostImage<float> tsdfDEst(wTSDF, hTSDF);
+  tdp::ManagedHostImage<float> tsdfDEst(wc, hc);
   tdp::ManagedHostImage<float> tsdfSlice(wTSDF, hTSDF);
-  tdp::QuickView viewTsdfDEst(wTSDF,hTSDF);
+  tdp::QuickView viewTsdfDEst(wc,hc);
   tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
   gui.container().AddDisplay(viewTsdfDEst);
   gui.container().AddDisplay(viewTsdfSliveView);
@@ -132,6 +133,20 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewNormalsPyr);
+
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
+
+  pangolin::Var<float> grid0x("ui.grid0 x",-1,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-1,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.5,0.,1);
+  pangolin::Var<float> dGridx("ui.dGrid x",2./(wTSDF-1),0,0.1);
+  pangolin::Var<float> dGridy("ui.dGrid y",2./(hTSDF-1),0,0.1);
+  pangolin::Var<float> dGridz("ui.dGrid z",2./(dTSDF-1),0,0.1);
+
+  pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
+  pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
+  pangolin::Var<float> offsettz("ui.tz",0.,-0.1,0.1);
+
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -147,12 +162,20 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // update inverse depth (rho) ranges based on depth min max
     gui.tsdfRho0 = 1./gui.tsdfDmax;
     gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
+    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+    tdp::Vector3fda dGrid(dGridx,dGridy,dGridz);
+    tdp::Vector3fda offsett(offsettx,offsetty,offsettz);
 
+    T_rd.matrix().topRightCorner(3,1) += offsett;
+
+    if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
-    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
-        gui.tsdfDRho, gui.tsdfMu); 
+    //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
+    //    gui.tsdfDRho, gui.tsdfMu); 
+    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
     TOCK("Ray Trace TSDF");
 
+    if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepthGpu(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
@@ -168,6 +191,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     TOCK("Setup Pyramids");
 
     if (gui.runICP && numFused > 30) {
+      if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_rd.matrix() = Eigen::Matrix4f::Identity();
       std::vector<size_t> maxIt{gui.icpIter0,gui.icpIter1,gui.icpIter2};
@@ -186,14 +210,22 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
+      offsettx = 0.;
+      offsetty = 0.;
+      offsettz = 0.;
     }
 
-    TICK("Add To TSDF");
-    AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, gui.tsdfRho0,
-        gui.tsdfDRho, gui.tsdfMu); 
-    numFused ++;
-    TOCK("Add To TSDF");
+    //AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, gui.tsdfRho0,
+    //    gui.tsdfDRho, gui.tsdfMu); 
+    if (fuseTSDF || numFused <= 30) {
+      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
+      TICK("Add To TSDF");
+      AddToTSDF(cuTSDF, cuW, cuD, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
+      numFused ++;
+      TOCK("Add To TSDF");
+    }
 
+    if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);

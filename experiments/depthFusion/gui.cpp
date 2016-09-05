@@ -9,7 +9,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
   video_wait("ui.wait", true),
   video_newest("ui.newest", false),
-  verbose("ui.verbose", true),
+  verbose("ui.verbose", false, true),
   depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3),
   dispDepthPyrEst("ui.disp d pyr est", false,true),
   tsdfDmin("ui.d min",0.10,0.0,0.1),
