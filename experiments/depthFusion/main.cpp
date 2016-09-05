@@ -183,8 +183,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
     //    gui.tsdfDRho, gui.tsdfMu); 
     tdp::SE3f T_w;
-    //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
-    RayTraceTSDF(cuTSDF, cuDEst, T_w, camD, grid0, dGrid, gui.tsdfMu); 
+    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
+    //RayTraceTSDF(cuTSDF, cuDEst, T_w, camD, grid0, dGrid, gui.tsdfMu); 
     TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
@@ -206,9 +206,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_rd.matrix() = Eigen::Matrix4f::Identity();
+      tdp::SE3f dT;
       std::vector<size_t> maxIt{gui.icpIter0,gui.icpIter1,gui.icpIter2};
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_rd,
+      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
           camD, maxIt, gui.icpAngleThr_deg, gui.icpDistThr); 
+      T_rd.matrix() = dT.matrix()*T_rd.matrix();
       //std::cout << "T_mc" << std::endl << T_rd.matrix3x4() << std::endl;
       TOCK("ICP");
     }
@@ -257,6 +259,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     d_cam.Activate(s_cam);
     // render model first
     pangolin::glDrawAxis(0.1f);
+    pangolin::glSetFrameOfReference(T_rd.matrix());
     {
       pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
       cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
@@ -268,7 +271,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     pangolin::RenderVbo(cuPcbuf);
     // render current camera second in the propper frame of
     // reference
-    pangolin::glSetFrameOfReference(T_rd.matrix());
     pangolin::glDrawAxis(0.1f);
     {
       pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
