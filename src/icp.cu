@@ -66,9 +66,9 @@ __global__ void KernelICPStep(
           float ab[7];      
           Eigen::Map<Vector3fda> top(&(ab[0]));
           Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          // as in Kinfu paper: top = (n_mi).cross(pc_c_in_m);
-          // as in my own deriv: 
-          top = (R_mc * pc_ci).cross(n_mi);
+          // as in Kinfu paper: 
+          top = (n_mi).cross(pc_c_in_m);
+          // as in my own deriv: top = (R_mc * pc_ci).cross(n_mi);
           // as in mp3guy: 
           //top = (pc_c_in_m).cross(n_mi);
           bottom = n_mi;
