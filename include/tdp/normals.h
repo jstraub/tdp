@@ -24,6 +24,11 @@ void ComputeNormals(
     const Image<Vector3fda>& n,
     float f, float uc, float vc);
 
+void Normals2Image(
+    const Image<Vector3fda>& n,
+    Image<Vector3bda>& n2d
+    );
+
 void Depth2Normals(
     const Image<float>& cuD,
     const Camera<float>& cam,

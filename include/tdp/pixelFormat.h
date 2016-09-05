@@ -53,6 +53,14 @@ inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,3,1>>(void)
   return fmt;
 }
 template <>
+inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,3,1,Eigen::DontAlign>>(void) { 
+  pangolin::GlPixFormat fmt;
+  fmt.glformat = GL_RGB;
+  fmt.gltype = GL_UNSIGNED_BYTE;
+  fmt.scalable_internal_format = GL_RGBA8;
+  return fmt;
+}
+template <>
 inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<uint8_t,4,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGBA;

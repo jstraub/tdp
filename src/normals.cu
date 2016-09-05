@@ -49,4 +49,35 @@ void ComputeNormals(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ 
+void KernelSurfaceNormals2Image(
+    Image<Vector3fda> n, Image<Vector3bda> n2d) {
+  //const int tid = threadIdx.x;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < n.w_ && idy < n.h_) {
+    Vector3fda ni = n(idx,idy);
+    if (IsValidNormal(ni)) {
+      n2d(idx,idy)(0) = floor(ni(0)*128+127);
+      n2d(idx,idy)(1) = floor(ni(1)*128+127);
+      n2d(idx,idy)(2) = floor(ni(2)*128+127);
+    } else {
+      n2d(idx,idy)(0) = 0;
+      n2d(idx,idy)(1) = 0;
+      n2d(idx,idy)(2) = 0;
+    }
+  }
+}
+
+void Normals2Image(
+    const Image<Vector3fda>& n,
+    Image<Vector3bda>& n2d
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,n,32,32);
+  KernelSurfaceNormals2Image<<<blocks,threads>>>(n,n2d);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }

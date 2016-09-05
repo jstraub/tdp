@@ -57,6 +57,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   size_t dTSDF = 64;
   size_t wTSDF = wc;
   size_t hTSDF = hc;
+  
+  pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
 
   gui.tsdfSliceD.Meta().range[1] = dTSDF-1;
   gui.tsdfSliceD = dTSDF/2;
@@ -123,6 +125,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1), hc);
   tdp::QuickView viewDepthPyr(dispDepthPyr.w_,dispDepthPyr.h_);
   gui.container().AddDisplay(viewDepthPyr);
+  
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuDispNormalsPyr(ns_m.Width(0)+ns_m.Width(1), hc);
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuDispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> dispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
+
+  tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
+  gui.container().AddDisplay(viewNormalsPyr);
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -234,6 +243,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,cudaMemcpyDeviceToHost);
     }
     viewDepthPyr.SetImage(dispDepthPyr);
+
+    if (dispNormalsPyrEst) {
+      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,cudaMemcpyDeviceToDevice);
+    } else {
+      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,cudaMemcpyDeviceToDevice);
+    }
+    tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
+    dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+    viewNormalsPyr.SetImage(dispNormals2dPyr);
     TOCK("Draw 2D");
 
     // leave in pixel orthographic for slider to render.

@@ -32,7 +32,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         return;
     }
 
-
     GUI gui(1200, 800, video );
 
     size_t w = video.Streams()[gui.iRGB].Width();
