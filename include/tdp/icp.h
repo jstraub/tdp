@@ -26,6 +26,19 @@ void ICPStep (
     float& error,
     float& count
     );
+
+void ICPVisualizeAssoc (
+    Image<Vector3fda> pc_m,
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> pc_c,
+    Image<Vector3fda> n_c,
+    SE3f& T_mc,
+    const Camera<float>& cam,
+    float angleThr,
+    float distThr,
+    Image<float>& assoc_m,
+    Image<float>& assoc_c
+    );
 #endif
 
 class ICP {

@@ -58,6 +58,10 @@ class SO3 : Manifold<T,3> {
 
   static SO3<T> Random();
 
+  static SO3<T> Rx(T alpha);
+  static SO3<T> Ry(T alpha);
+  static SO3<T> Rz(T alpha);
+
  private:
   Eigen::Matrix<T,3,3> R_;
 };
@@ -70,6 +74,8 @@ std::ostream& operator<<(std::ostream& out, const SO3<T>& so3) {
   out << so3.matrix();
   return out;
 }
+
+
 
 }
 #include <tdp/manifold/SO3_impl.hpp>

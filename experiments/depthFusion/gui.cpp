@@ -22,7 +22,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   runICP("ui.run ICP", true, true),
   icpAngleThr_deg("ui.icp angle thr",15,0.,90.),
   icpDistThr("ui.icp dist thr",0.05,0.,1.),
-  icpIter0("ui.ICP iter lvl 0",1,0,10),
+  icpIter0("ui.ICP iter lvl 0",2,0,10),
   icpIter1("ui.ICP iter lvl 1",0,0,10),
   icpIter2("ui.ICP iter lvl 2",0,0,10)
 {

@@ -166,4 +166,30 @@ SO3<T> SO3<T>::Random() {
   return SO3<T>(Exp_(w));
 }
 
+// Not sure about those rotations
+//template<typename T>
+//SO3<T> SO3<T>::Rx(T alpha) { 
+//  Eigen::Matrix<T,3,3> R;
+//  R << 1., 0., 0.,
+//       0., cos(alpha), sin(alpha),
+//       0., -sin(alpha), cos(alpha);
+//  return SO3<T>(R);
+//}
+//template<typename T>
+//SO3<T> SO3<T>::Ry(T alpha) {
+//  Eigen::Matrix<T,3,3> R;
+//  R << cos(alpha), 0., sin(alpha),
+//       0.,         1.,    0.,
+//       -sin(alpha),0., cos(alpha);
+//  return SO3<T>(R);
+//}
+//template<typename T>
+//SO3<T> SO3<T>::Rz(T alpha) {
+//  Eigen::Matrix<T,3,3> R;
+//  R << cos(alpha),  sin(alpha), 0.,
+//       -sin(alpha), cos(alpha), 0.,
+//       0.,          0.,         1.;
+//  return SO3<T>(R);
+//}
+
 }

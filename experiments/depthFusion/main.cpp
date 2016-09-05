@@ -112,6 +112,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
   tdp::Matrix3fda R_mc = tdp::Matrix3fda::Identity();
   tdp::Vector3fda t_mc = tdp::Vector3fda::Zero();
+  tdp::ManagedDeviceImage<float> cuICPassoc_m(wc, hc);
+  tdp::ManagedDeviceImage<float> cuICPassoc_c(wc, hc);
+  tdp::ManagedHostImage<float> ICPassoc_m(wc, hc);
+  tdp::ManagedHostImage<float> ICPassoc_c(wc, hc);
 
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
@@ -133,6 +137,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewNormalsPyr);
+
+  tdp::QuickView viewICPassocM(wc,hc);
+  gui.container().AddDisplay(viewICPassocM);
+  tdp::QuickView viewICPassocC(wc,hc);
+  gui.container().AddDisplay(viewICPassocC);
 
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
 
@@ -200,6 +209,14 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       //std::cout << "T_mc" << std::endl << T_rd.matrix3x4() << std::endl;
       TOCK("ICP");
     }
+    ICPassoc_c.Fill(NAN);
+    ICPassoc_m.Fill(NAN);
+    cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
+    cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
+    tdp::ICPVisualizeAssoc(pcs_m.GetImage(0), ns_m.GetImage(0),
+        pcs_c.GetImage(0), ns_c.GetImage(0), T_rd,
+          camD, gui.icpAngleThr_deg, gui.icpDistThr, cuICPassoc_m,
+          cuICPassoc_c);
 
     if (pangolin::Pushed(gui.resetTSDF)) {
       T_rd.matrix() = Eigen::Matrix4f::Identity();
@@ -284,6 +301,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
     dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
     viewNormalsPyr.SetImage(dispNormals2dPyr);
+
+    ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
+    ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
+    viewICPassocM.SetImage(ICPassoc_m);
+    viewICPassocC.SetImage(ICPassoc_c);
     TOCK("Draw 2D");
 
     // leave in pixel orthographic for slider to render.
