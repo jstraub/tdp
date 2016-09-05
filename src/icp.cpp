@@ -33,7 +33,10 @@ void ICP::ComputeProjective(
           cos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,error,count);
 #endif
-      if (count < 100) return;
+      if (count < 100) {
+        std::cout << "# inliers " << count << " to small " << std::endl;
+        return;
+      }
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x = (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
       float alpha = x(0);
@@ -42,7 +45,7 @@ void ICP::ComputeProjective(
       // apply x to the transformation
       SE3f dT = SE3f::Exp_(x);
       //dT.matrix().topRightCorner(3,1).fill(0.);
-      dT.matrix().topLeftCorner(3,3) = Eigen::Matrix3f::Identity();
+      //dT.matrix().topLeftCorner(3,3) = Eigen::Matrix3f::Identity();
       // lowkl
       //Eigen::Matrix3f dR;
       //dR(0,0) = cos(gamma)*cos(beta);
@@ -72,6 +75,7 @@ void ICP::ComputeProjective(
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
+        << " |ATA|=" << ATA.determinant()
         << " x=" << x.transpose()
         << std::endl;
       std::cout << dT.matrix() << std::endl;

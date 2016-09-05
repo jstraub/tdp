@@ -144,6 +144,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewICPassocC);
 
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
+  pangolin::Var<bool> resetICP("ui.resrt ICP",false,false);
 
   pangolin::Var<float> grid0x("ui.grid0 x",-1,-2,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-1,-2,0);
@@ -227,6 +228,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
+      offsettx = 0.;
+      offsetty = 0.;
+      offsettz = 0.;
+    }
+    if (pangolin::Pushed(resetICP)) {
+      T_rd.matrix() = Eigen::Matrix4f::Identity();
       offsettx = 0.;
       offsetty = 0.;
       offsettz = 0.;

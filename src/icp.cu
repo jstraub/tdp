@@ -29,11 +29,12 @@ __global__ void KernelICPStep(
     int N_PER_T,
     Image<float> out
     ) {
+  assert(BLK_SIZE >=29);
   const int tid = threadIdx.x;
-  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
-  const int idS = idx*N_PER_T;
+  const int id_ = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idS = id_*N_PER_T;
   const int N = pc_m.w_*pc_m.h_;
-  const int idE = min(N,(idx+1)*N_PER_T);
+  const int idE = min(N,(id_+1)*N_PER_T);
   __shared__ Eigen::Matrix<float,29,1,Eigen::DontAlign> sum[BLK_SIZE];
   sum[tid] = Eigen::Matrix<float,29,1,Eigen::DontAlign>::Zero();
   for (int id=idS; id<idE; ++id) {
@@ -45,8 +46,8 @@ __global__ void KernelICPStep(
       Vector3fda pc_c_in_m = R_mc * pc_ci + t_mc;
       // project into model camera
       Vector2fda x_c_in_m = cam.Project(pc_c_in_m);
-      int u = floor(x_c_in_m(0)+0.5f);
-      int v = floor(x_c_in_m(1)+0.5f);
+      const int u = floor(x_c_in_m(0)+0.5f);
+      const int v = floor(x_c_in_m(1)+0.5f);
       if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
           && pc_ci(2) > 0. && pc_c_in_m(2) > 0.
           && IsValidData(pc_c_in_m)) {
@@ -54,8 +55,8 @@ __global__ void KernelICPStep(
         Vector3fda n_c_in_m = R_mc * n_c(idx,idy);
         Vector3fda n_mi = n_m(u,v);
         Vector3fda pc_mi = pc_m(u,v);
-        float dot  = n_mi.dot(n_c_in_m);
-        float dist = (pc_mi-pc_c_in_m).norm();
+        const float dot  = n_mi.dot(n_c_in_m);
+        const float dist = (pc_mi-pc_c_in_m).norm();
         //if (tid < 10)
         //  printf("%d %d to %d %d; 3d: %f %f %f; %f >? %f\n",idx,idy,u,v,pc_c(idx,idy)(0),pc_c(idx,idy)(1),pc_c(idx,idy)(2),dot,dotThr);
         if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
@@ -127,18 +128,21 @@ void ICPStep (
     ) {
   size_t N = pc_m.w_*pc_m.h_;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,N/10,256);
+  ComputeKernelParamsForArray(blocks,threads,N/10,32);
   ManagedDeviceImage<float> out(29,1);
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
 
-  KernelICPStep<256><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,
+  //std::cout << blocks.x << " " << threads.x << " " << 16 << " " << 10
+  //  << " " << N << std::endl;
+
+  KernelICPStep<32><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,
       dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(29,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
 
-  //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
-  //std::cout << std::endl;
+  for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
+  std::cout << std::endl;
   ATA.fill(0.);
   ATb.fill(0.);
   int k = 0;
@@ -155,8 +159,8 @@ void ICPStep (
   }
   count = sumAb[28];
   error = sumAb[27]/count;
-  //std::cout << ATA << std::endl << ATb.transpose() << std::endl;
-  //std::cout << "\terror&count " << error << " " << count << std::endl;
+  std::cout << ATA << std::endl << ATb.transpose() << std::endl;
+  std::cout << "\terror&count " << error << " " << count << std::endl;
 }
 
 // R_mc: R_model_current
@@ -175,7 +179,6 @@ __global__ void KernelICPVisualizeAssoc(
     Image<float> assoc_m,
     Image<float> assoc_c
     ) {
-  const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = idx*N_PER_T;
   const int N = pc_m.w_*pc_m.h_;
