@@ -85,7 +85,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
   tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
   W.Fill(0.);
-  TSDF.Fill(-1.);
+  TSDF.Fill(-1.01);
   tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
   tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
 
@@ -182,7 +182,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     TICK("Ray Trace TSDF");
     //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
     //    gui.tsdfDRho, gui.tsdfMu); 
-    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
+    tdp::SE3f T_w;
+    //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
+    RayTraceTSDF(cuTSDF, cuDEst, T_w, camD, grid0, dGrid, gui.tsdfMu); 
     TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;

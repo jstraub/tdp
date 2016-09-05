@@ -140,7 +140,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
       //  printf("%f %f, %f, %d %d\n", u_r(0), u_r(1), d_d_in_r,x,y);
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,idz);
-        if (tsdfVal <= 0. && tsdfValPrev >= 0.) {
+        if (-1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
           d(idx,idy) = d_d_in_r_Prev-((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           break;
