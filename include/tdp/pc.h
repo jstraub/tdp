@@ -31,4 +31,17 @@ void Depth2PCs(
   }
 }
 
+template<int LEVELS>
+void Depth2PCsGpu(
+    Pyramid<float,LEVELS>& d,
+    const Camera<float>& cam,
+    Pyramid<Vector3fda,LEVELS>& pc
+    ) {
+  for (size_t lvl=0; lvl<LEVELS; ++lvl) {
+    Image<float> d_i = d.GetImage(lvl);
+    Image<Vector3fda> pc_i = pc.GetImage(lvl);
+    Depth2PCGpu(d_i, cam, pc_i);
+  }
+}
+
 }

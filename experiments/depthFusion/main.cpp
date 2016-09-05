@@ -64,7 +64,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& d_cam = pangolin::CreateDisplay()
@@ -147,8 +147,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         cudaMemcpyDeviceToDevice);
     tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
         cudaMemcpyDeviceToDevice);
-    tdp::Depth2PCs(cuDPyrEst,camD,pcs_m);
-    tdp::Depth2PCs(cuDPyr,camD,pcs_c);
+    tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+    tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
     tdp::Depth2Normals(cuDPyr,camD,ns_c);
     TOCK("Setup Pyramids");
@@ -189,8 +189,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // render model first
-    Eigen::Matrix4f T_w = Eigen::Matrix4f::Identity();
-    pangolin::glSetFrameOfReference(T_w);
     pangolin::glDrawAxis(0.1f);
     {
       pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
@@ -201,7 +199,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     glColor3f(0,1,0);
     pangolin::RenderVbo(cuPcbuf);
-    pangolin::glUnsetFrameOfReference();
     // render current camera second in the propper frame of
     // reference
     pangolin::glSetFrameOfReference(T_rd.matrix());
@@ -226,7 +223,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
     viewTsdfDEst.SetImage(tsdfDEst);
 
-    tdp::Image<float> cuTsdfSlice = cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,gui.tsdfSliceD.Get()));
+    tdp::Image<float> cuTsdfSlice =
+      cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,gui.tsdfSliceD.Get()));
     tsdfSlice.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
     viewTsdfSliveView.SetImage(tsdfSlice);
 

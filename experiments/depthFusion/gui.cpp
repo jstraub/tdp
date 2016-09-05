@@ -16,7 +16,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   tsdfDmax("ui.d max",4.,0.1,4.),
   tsdfRho0("ui.rho0",0.1,0.,1.),
   tsdfDRho("ui.d rho",0.3,0.,1.),
-  tsdfMu("ui.mu",0.1,0.,1.),
+  tsdfMu("ui.mu",0.5,0.,1.),
   tsdfSliceD("ui.TSDF slice D",32,0,64-1),
   resetTSDF("ui.reset TSDF", false, false),
   runICP("ui.run ICP", true, true),
