@@ -68,22 +68,6 @@ class GUI {
   pangolin::Var<bool> video_newest;
   pangolin::Var<bool> verbose;
 
-  pangolin::Var<float> depthSensorScale;
-  pangolin::Var<bool> dispDepthPyrEst;
-  
-  pangolin::Var<float> tsdfDmin;
-  pangolin::Var<float> tsdfDmax;
-  pangolin::Var<float> tsdfRho0;
-  pangolin::Var<float> tsdfDRho;
-  pangolin::Var<float> tsdfMu;
-  pangolin::Var<int> tsdfSliceD;
-  pangolin::Var<bool> resetTSDF;
-  pangolin::Var<bool> runICP;
-  pangolin::Var<float> icpAngleThr_deg;
-  pangolin::Var<float> icpDistThr;
-  pangolin::Var<int> icpIter0;
-  pangolin::Var<int> icpIter1;
-  pangolin::Var<int> icpIter2;
 
  private:
   size_t w;

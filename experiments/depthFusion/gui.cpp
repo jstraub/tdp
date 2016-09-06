@@ -9,22 +9,7 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
   video_wait("ui.wait", true),
   video_newest("ui.newest", false),
-  verbose("ui.verbose", false, true),
-  depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3),
-  dispDepthPyrEst("ui.disp d pyr est", false,true),
-  tsdfDmin("ui.d min",0.10,0.0,0.1),
-  tsdfDmax("ui.d max",4.,0.1,4.),
-  tsdfRho0("ui.rho0",0.1,0.,1.),
-  tsdfDRho("ui.d rho",0.3,0.,1.),
-  tsdfMu("ui.mu",0.5,0.,1.),
-  tsdfSliceD("ui.TSDF slice D",32,0,64-1),
-  resetTSDF("ui.reset TSDF", false, false),
-  runICP("ui.run ICP", true, true),
-  icpAngleThr_deg("ui.icp angle thr",15,0.,90.),
-  icpDistThr("ui.icp dist thr",0.05,0.,1.),
-  icpIter0("ui.ICP iter lvl 0",2,0,10),
-  icpIter1("ui.ICP iter lvl 1",0,0,10),
-  icpIter2("ui.ICP iter lvl 2",0,0,10)
+  verbose("ui.verbose", false, true)
 {
     // Create OpenGL window - guess sensible dimensions
     int menue_w = 180;

@@ -60,12 +60,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
 
-  gui.tsdfSliceD.Meta().range[1] = dTSDF-1;
-  gui.tsdfSliceD = dTSDF/2;
-
+  tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
-      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
@@ -96,6 +94,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
   dEst.Fill(0.);
   tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+  tdp::ManagedDeviceImage<float> cuDView(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
   tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());
   tdp::Camera<float> camR(Eigen::Vector4f(f,f,uc,vc)); 
@@ -143,15 +143,30 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::QuickView viewICPassocC(wc,hc);
   gui.container().AddDisplay(viewICPassocC);
 
-  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
-  pangolin::Var<bool> resetICP("ui.resrt ICP",false,false);
+  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<bool>  dispDepthPyrEst("ui.disp d pyr est", false,true);
+  pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
+  pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
 
-  pangolin::Var<float> grid0x("ui.grid0 x",-1,-2,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-1,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",0.5,0.,1);
-  pangolin::Var<float> dGridx("ui.dGrid x",2./(wTSDF-1),0,0.1);
-  pangolin::Var<float> dGridy("ui.dGrid y",2./(hTSDF-1),0,0.1);
-  pangolin::Var<float> dGridz("ui.dGrid z",2./(dTSDF-1),0,0.1);
+  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
+
+  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
+  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.,0.,1);
+  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,0);
+  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,0);
+  pangolin::Var<float> gridEz("ui.gridE z",3.5,2.,3);
+
+  pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
+  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",25,0.,90.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.15,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",2,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
 
   pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
   pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
@@ -169,28 +184,25 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
 
-    // update inverse depth (rho) ranges based on depth min max
-    gui.tsdfRho0 = 1./gui.tsdfDmax;
-    gui.tsdfDRho = (1./gui.tsdfDmin - gui.tsdfRho0)/float(dTSDF-1);
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
-    tdp::Vector3fda dGrid(dGridx,dGridy,dGridz);
+    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+    tdp::Vector3fda dGrid = gridE - grid0;
+    dGrid(0) /= (wTSDF-1);
+    dGrid(1) /= (hTSDF-1);
+    dGrid(2) /= (dTSDF-1);
     tdp::Vector3fda offsett(offsettx,offsetty,offsettz);
 
     T_rd.matrix().topRightCorner(3,1) += offsett;
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
-    //RayTraceTSDF(cuTSDF, cuDEst, T_rd, camR, camD, gui.tsdfRho0,
-    //    gui.tsdfDRho, gui.tsdfMu); 
-    tdp::SE3f T_w;
-    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
-    //RayTraceTSDF(cuTSDF, cuDEst, T_w, camD, grid0, dGrid, gui.tsdfMu); 
+    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, tsdfMu); 
     TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    ConvertDepthGpu(cuDraw, cuD, gui.depthSensorScale, gui.tsdfDmin, gui.tsdfDmax);
+    ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
         cudaMemcpyDeviceToDevice);
@@ -202,14 +214,14 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Depth2Normals(cuDPyr,camD,ns_c);
     TOCK("Setup Pyramids");
 
-    if (gui.runICP && numFused > 30) {
+    if (runICP && numFused > 30) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_rd.matrix() = Eigen::Matrix4f::Identity();
       tdp::SE3f dT;
-      std::vector<size_t> maxIt{gui.icpIter0,gui.icpIter1,gui.icpIter2};
+      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
-          camD, maxIt, gui.icpAngleThr_deg, gui.icpDistThr); 
+          camD, maxIt, icpAngleThr_deg, icpDistThr); 
       T_rd.matrix() = dT.matrix()*T_rd.matrix();
       //std::cout << "T_mc" << std::endl << T_rd.matrix3x4() << std::endl;
       TOCK("ICP");
@@ -220,10 +232,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
     tdp::ICPVisualizeAssoc(pcs_m.GetImage(0), ns_m.GetImage(0),
         pcs_c.GetImage(0), ns_c.GetImage(0), T_rd,
-          camD, gui.icpAngleThr_deg, gui.icpDistThr, cuICPassoc_m,
+          camD, icpAngleThr_deg, icpDistThr, cuICPassoc_m,
           cuICPassoc_c);
 
-    if (pangolin::Pushed(gui.resetTSDF)) {
+    if (pangolin::Pushed(resetTSDF)) {
       T_rd.matrix() = Eigen::Matrix4f::Identity();
       W.Fill(0.);
       TSDF.Fill(-1.01);
@@ -243,22 +255,42 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       offsettz = 0.;
     }
 
-    //AddToTSDF(cuTSDF, cuW, cuD, T_rd, camR, camD, gui.tsdfRho0,
-    //    gui.tsdfDRho, gui.tsdfMu); 
     if (fuseTSDF || numFused <= 30) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuW, cuD, T_rd, camD, grid0, dGrid, gui.tsdfMu); 
+      AddToTSDF(cuTSDF, cuW, cuD, T_rd, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
+
+    // Render point cloud from viewpoint of camera
+    // TODO: implement marching cubes and "just" render the mesh
+    //Eigen::Matrix4f T_mvMat = s_cam.GetModelViewMatrix();
+    //Eigen::Matrix4f dT = Eigen::Matrix4f::Identity();
+    //dT(1,1) = -1.;
+    //dT(2,2) = -1.;
+    //std::cout << T_mvMat << std::endl;
+    //std::cout << dT*T_mvMat << std::endl;
+    //tdp::SE3f T_mv(dT*T_mvMat);
+    tdp::SE3f T_mv;
+    RayTraceTSDF(cuTSDF, cuDView, T_mv, camView, grid0, dGrid, tsdfMu); 
+    tdp::Depth2PCGpu(cuDView,camView,cuPcView);
+
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // render model first
     pangolin::glDrawAxis(0.1f);
+    {
+      pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+      cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+      cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
+          cudaMemcpyDeviceToDevice);
+    }
+    glColor3f(0,0,1);
+    pangolin::RenderVbo(cuPcbuf);
     pangolin::glSetFrameOfReference(T_rd.matrix());
     {
       pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
@@ -293,11 +325,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     viewTsdfDEst.SetImage(tsdfDEst);
 
     tdp::Image<float> cuTsdfSlice =
-      cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,gui.tsdfSliceD.Get()));
+      cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
     tsdfSlice.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
     viewTsdfSliveView.SetImage(tsdfSlice);
 
-    if (gui.dispDepthPyrEst) {
+    if (dispDepthPyrEst) {
       tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,cudaMemcpyDeviceToHost);
     } else {
       tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,cudaMemcpyDeviceToHost);

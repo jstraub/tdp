@@ -27,25 +27,14 @@ void KernelRayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
       Eigen::Vector3f nd = n*rho;
       Eigen::Matrix3f H = (T_rd.rotation().matrix()-T_rd.translation()*nd.transpose());
       Eigen::Vector2f u_r = camR.Project(H*camD.Unproject(u_d(0), u_d(1), 1.));
-      //if (idx==0 && idy ==0) printf ("%f %f %f, %f %f %f %f; ",
-      //    rho, u_d(0), T_rd.translation()(0), H(0,0), H(0,1), H(0,2), 
-      //    T_rd.rotation().matrix()(0,0));
-      //  TransformHomography(u_d, T_rd, camR, camD, nd);
       int x = floor(u_r(0)+0.5);
       int y = floor(u_r(1)+0.5);
-      //if (u_r(0)==u_r(0)) printf ("%f %f; ",u_r(0),u_r(1));
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,id-1);
-        //printf ("%f; ",tsdf(x,y,id));
-        //if (fabs(tsdfVal) < 1e-6 ) {
-        //  d(idx,idy) = 1./(rho0 + drho*(id-1));
-        //  break;
-        //} else 
         if (tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
           float idf = id+tsdfValPrev/(tsdfVal-tsdfValPrev);
           d(idx,idy) = 1./(rho0 + drho*idf);
-          //if (idx<10 && idy < 10) printf ("%f; ",d(idx,idy));
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -84,7 +73,6 @@ void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W, Image<float>
         const float psi = (etaOverMu>1.f?1.f:etaOverMu);
         // TODO can use other weights as well (like incidence angle)
         const float Wnew = 1.;
-        //if (idx<10 && idy <10) printf ("%f; ",eta);
         tsdf(idx,idy,idz) = (W(idx,idy,idz)*tsdf(idx,idy,idz) 
             + Wnew*psi)/(W(idx,idy,idz)+Wnew);
         W(idx,idy,idz) = min(W(idx,idy,idz)+Wnew, 100.f);
@@ -124,8 +112,6 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
     Vector3fda r_d_in_r = T_rd.rotation().matrix() * r_d;
     // iterate over z in TSDF; detect 0 crossing in TSDF
-    //if (idx==100 && idy ==100) 
-    //  printf("%f %f %f\n", r_d(0), r_d(1), r_d(2));
     float tsdfValPrev = -1.01;
     float d_d_in_r_Prev = 0.;
     for (size_t idz=0; idz<tsdf.d_; ++idz) {
@@ -136,13 +122,12 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
       Vector2fda u_r = T_rd.translation().topRows(2) + r_d_in_r*d_d_in_r;
       int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
       int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
-      //if (idx==100 && idy ==100) 
-      //  printf("%f %f, %f, %d %d\n", u_r(0), u_r(1), d_d_in_r,x,y);
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,idz);
         if (-1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
-          d(idx,idy) = d_d_in_r_Prev-((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
+          d(idx,idy) = d_d_in_r_Prev
+            -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -182,7 +167,6 @@ void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
         const float psi = (etaOverMu>1.f?1.f:etaOverMu);
         // TODO can use other weights as well (like incidence angle)
         const float Wnew = 1.;
-        //if (idx<10 && idy <10) printf ("%f; ",eta);
         tsdf(idx,idy,idz) = (W(idx,idy,idz)*tsdf(idx,idy,idz) 
             + Wnew*psi)/(W(idx,idy,idz)+Wnew);
         W(idx,idy,idz) = min(W(idx,idy,idz)+Wnew, 100.f);

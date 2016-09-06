@@ -57,8 +57,6 @@ __global__ void KernelICPStep(
         Vector3fda pc_mi = pc_m(u,v);
         const float dot  = n_mi.dot(n_c_in_m);
         const float dist = (pc_mi-pc_c_in_m).norm();
-        //if (tid < 10)
-        //  printf("%d %d to %d %d; 3d: %f %f %f; %f >? %f\n",idx,idy,u,v,pc_c(idx,idy)(0),pc_c(idx,idy)(1),pc_c(idx,idy)(2),dot,dotThr);
         if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
           // association is good -> accumulate
           // if we found a valid association accumulate the A and b for A x = b
@@ -66,20 +64,10 @@ __global__ void KernelICPStep(
           float ab[7];      
           Eigen::Map<Vector3fda> top(&(ab[0]));
           Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          // lowkl
-          //top = (pc_c_in_m).cross(n_mi);
-          // as in Kinfu paper: 
-          //top = (n_mi).cross(pc_c_in_m);
-          // as in my own deriv: top = (R_mc * pc_ci).cross(n_mi);
           // as in mp3guy: 
           top = (pc_c_in_m).cross(n_mi);
           bottom = n_mi;
           ab[6] = n_mi.dot(pc_mi-pc_c_in_m);
-          // lowkl
-          //ab[6] = n_mi.dot(-pc_mi+pc_c_in_m);
-          assert(ab[3]==n_mi(0));
-          assert(ab[4]==n_mi(1));
-          assert(ab[5]==n_mi(2));
           Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
           int k=0;
 #pragma unroll
@@ -88,7 +76,6 @@ __global__ void KernelICPStep(
               upperTriangle(k++) = ab[i]*ab[j];
             }
           }
-          assert(k==28);
           upperTriangle(28) = 1.; // to get number of data points
           sum[tid] += upperTriangle;
         }
@@ -106,8 +93,6 @@ __global__ void KernelICPStep(
   if(tid < 29) {
     // sum the last two remaining matrixes directly into global memory
     atomicAdd(&out[tid], sum[0](tid)+sum[1](tid));
-    //atomicAdd_<float>();
-    //printf("%f %f %f \n",out[tid],sum[0](tid),sum[1](tid));
   }
 }
 
@@ -132,17 +117,14 @@ void ICPStep (
   ManagedDeviceImage<float> out(29,1);
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
 
-  //std::cout << blocks.x << " " << threads.x << " " << 16 << " " << 10
-  //  << " " << N << std::endl;
-
   KernelICPStep<32><<<blocks,threads>>>(pc_m,n_m,pc_c,n_c,R_mc,t_mc,cam,
       dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(29,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
 
-  for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
-  std::cout << std::endl;
+  //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
+  //std::cout << std::endl;
   ATA.fill(0.);
   ATb.fill(0.);
   int k = 0;
@@ -159,8 +141,8 @@ void ICPStep (
   }
   count = sumAb[28];
   error = sumAb[27]/count;
-  std::cout << ATA << std::endl << ATb.transpose() << std::endl;
-  std::cout << "\terror&count " << error << " " << count << std::endl;
+  //std::cout << ATA << std::endl << ATb.transpose() << std::endl;
+  //std::cout << "\terror&count " << error << " " << count << std::endl;
 }
 
 // R_mc: R_model_current
