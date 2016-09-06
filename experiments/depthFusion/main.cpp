@@ -150,6 +150,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<bool> normalsFromTSDF("ui.TSDF normals",true,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
@@ -196,7 +197,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
-    RayTraceTSDF(cuTSDF, cuDEst, T_rd, camD, grid0, dGrid, tsdfMu); 
+    td::Image<tdp::Vector3fda> nEst = ns_c.GetImage(0);
+    RayTraceTSDF(cuTSDF, cuDEst, nEst, T_rd, camD, grid0, dGrid, tsdfMu); 
     TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
@@ -211,7 +213,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
-    tdp::Depth2Normals(cuDPyr,camD,ns_c);
+    if (normalsFromTSDF) {
+      tdp::CompletePyramid<Vector3fda,3>(ns_c, cudaMemcpyDeviceToDevice);
+    } else {
+      tdp::Depth2Normals(cuDPyr,camD,ns_c);
+    }
     TOCK("Setup Pyramids");
 
     if (runICP && numFused > 30) {

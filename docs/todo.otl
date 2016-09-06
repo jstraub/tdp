@@ -1,0 +1,14 @@
+
+Marching Cubes
+	http://www.nvidia.com/content/GTC-2010/pdfs/GTC10_session2020_HP5MC_dyken_ziegler.pdf
+		GPU: classify voxels
+		GPU: use a HistoPyramid to make use of parallelism to compute number of triangles and positions
+		GPU: compute triangle locations
+
+	http://www.ks.uiuc.edu/Research/vmd/doxygen/CUDAMarchingCubes_8cu-source.html
+		GPU: classify voxels
+		CPU: find number of triangles and positions
+		GPU: compute triangle locations
+
+RGB FUSION
+	See appendix of http://www.thomaswhelan.ie/Whelan14ijrr.pdf

@@ -101,7 +101,7 @@ void RayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
 
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d, 
-    SE3<float> T_rd, Camera<float> camD,
+    Image<Vector3fda> n, SE3<float> T_rd, Camera<float> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -128,6 +128,13 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
           // detected 0 crossing -> interpolate
           d(idx,idy) = d_d_in_r_Prev
             -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
+          // surface normal: TODO might want to do better interpolation
+          // of neighbors
+          Vector3fda ni ( 
+              (x+1 < tsdf.w_)? tsdf(x+1,y,idz) - tsdfVal : tsdfVal - tsdf(x-1,y,idz),
+              (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz)
+              (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
+          n(idx,idy) = ni / ni.norm(); 
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -186,13 +193,13 @@ void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
+void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n, 
     SE3<float> T_rd, Camera<float>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
-  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, d, T_rd, camD,
+  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, d, n, T_rd, camD,
       grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
