@@ -149,7 +149,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
-  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
@@ -266,15 +266,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
 
-    // Render point cloud from viewpoint of camera
-    // TODO: implement marching cubes and "just" render the mesh
-    //Eigen::Matrix4f T_mvMat = s_cam.GetModelViewMatrix();
-    //Eigen::Matrix4f dT = Eigen::Matrix4f::Identity();
-    //dT(1,1) = -1.;
-    //dT(2,2) = -1.;
-    //std::cout << T_mvMat << std::endl;
-    //std::cout << dT*T_mvMat << std::endl;
-    //tdp::SE3f T_mv(dT*T_mvMat);
+    // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
     RayTraceTSDF(cuTSDF, cuDView, T_mv, camView, grid0, dGrid, tsdfMu); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
