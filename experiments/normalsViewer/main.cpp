@@ -19,6 +19,7 @@
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
+#include <tdp/Stopwatch.h>
 
 #include "gui.hpp"
 
@@ -81,6 +82,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", true,true);
   pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
+  pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.05, 0.001, 0.1);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -90,16 +92,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     gui.NextFrames();
 
-    pangolin::basetime t0 = pangolin::TimeNow();
-
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     tdp::ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.);
-    pangolin::basetime tDepth = pangolin::TimeNow();
-    if (gui.verbose)
-      std::cout << "depth conversion: " <<
-        pangolin::TimeDiff_s(t0,tDepth) << std::endl;
     {
       pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
       cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
@@ -118,11 +114,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       if (dpvmfmeans) {
         n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
-        dpm.Compute(n, cuN, cuZ, maxIt);
+        dpm.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
       }
     }
     cudaDeviceSynchronize();
-    pangolin::basetime tNormal = pangolin::TimeNow();
 
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
@@ -154,6 +149,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
     }
+    Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
 }

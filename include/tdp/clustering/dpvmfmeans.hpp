@@ -7,6 +7,7 @@
 #include <tdp/managed_image.h>
 #include <tdp/image.h>
 #include <tdp/sufficientStats.h>
+#include <tdp/Stopwatch.h>
 
 namespace tdp {
 
@@ -22,7 +23,7 @@ class DPvMFmeans {
   ~DPvMFmeans() {};
 
   float Compute(const Image<Vector3fda>& n, const Image<Vector3fda>& cuN, 
-      Image<uint16_t>& cuZ, size_t maxIt);
+      Image<uint16_t>& cuZ, size_t maxIt, float minNchangePerc);
 
   uint16_t K_;
   float lambda_;
@@ -57,14 +58,37 @@ class DPvMFmeans {
 float DPvMFmeans::Compute(const Image<Vector3fda>& n, 
     const Image<Vector3fda>& cuN, 
     Image<uint16_t>& cuZ,
-    size_t maxIt) {
+    size_t maxIt, float minNchangePerc) {
   centers_.clear();
   centers_.push_back(n[0]);
   Ns_.push_back(1);
   K_ = 1;
+  uint16_t Kprev = 1;
+  std::vector<size_t> Nsprev(1,1);
   for (size_t it=0; it<maxIt; ++it) {
+    TICK("DPvMF means labels");
     UpdateLabels(n,cuN,cuZ);
+    TOCK("DPvMF means labels");
+    TICK("DPvMF means centers");
     UpdateCenters(cuN,cuZ);
+    TOCK("DPvMF means centers");
+
+    if (K_ == Kprev) {
+      uint32_t Nchange = 0;
+      uint32_t N = 0;
+      for (uint16_t k=0; k<K_; ++k) {
+        Nchange += abs((int32_t)Ns_[k] - (int32_t)Nsprev[k]); 
+        N += Ns_[k];
+      }
+      std::cout << "K:" << K_ << " # " <<  N 
+        << " change " << Nchange << " thr "
+        << minNchangePerc*N << std::endl;
+      if (Nchange < minNchangePerc*N)
+        break;
+    }
+
+    Kprev = K_;
+    Nsprev = Ns_;
   }
 }
 
@@ -120,6 +144,7 @@ void DPvMFmeans::UpdateCenters(
     ) {
 
   Eigen::Matrix<float,4,Eigen::Dynamic> ss = computeSS(cuN,cuZ);
+  std::cout << ss << std::endl;
   Ns_.clear();
   for(size_t k=0; k<K_; ++k) 
     Ns_.push_back(ss(3,k));

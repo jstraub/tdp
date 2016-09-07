@@ -29,11 +29,12 @@ void KernelSufficientStats1stOrder(
   //if (tid==0) printf("%d <? %d %d\n",idS,N,N_PER_T);
   sum[tid] = Eigen::Matrix<T,D+1,1,Eigen::DontAlign>::Zero();
   for(int i=idS; i<idE; ++i) {
-    if (!isNan(I[i]) && (!z.ptr_ || (z.ptr_ && z[i]==k))) {
+    if (!isNan(I[i]) && (z.ptr_ == nullptr || (z.ptr_ != nullptr && z[i]==k))) {
       Eigen::Matrix<T,D+1,1,Eigen::DontAlign> xi;
       xi.topRows(D) = I[i];
       xi(D) = 1.;
       sum[tid] += xi;
+      printf("%f",sum[tid](3));
     }
   }
   // old reduction.....
