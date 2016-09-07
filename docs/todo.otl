@@ -5,10 +5,15 @@ Marching Cubes
 		GPU: use a HistoPyramid to make use of parallelism to compute number of triangles and positions
 		GPU: compute triangle locations
 
+		some code which seems to do what that presentation is describing: 
+			https://github.com/smistad/GPU-Marching-Cubes/blob/master/gpu-mc.cl
+			(has a list of the numbr of triangles per combination)
+
 	http://www.ks.uiuc.edu/Research/vmd/doxygen/CUDAMarchingCubes_8cu-source.html
 		GPU: classify voxels
 		CPU: find number of triangles and positions
 		GPU: compute triangle locations
+
 
 RGB FUSION
 	See appendix of http://www.thomaswhelan.ie/Whelan14ijrr.pdf
