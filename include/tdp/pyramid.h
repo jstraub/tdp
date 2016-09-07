@@ -22,6 +22,11 @@ void PyrDown(
     const Image<Vector3fda>& Iin,
     Image<Vector3fda>& Iout
     );
+void PyrDownBlur(
+    const Image<float>& Iin,
+    Image<float>& Iout,
+    float sigma_in
+    );
 #endif
 
 template<typename T, int LEVELS>
@@ -67,6 +72,7 @@ void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemc
   CompletePyramid(P, type);
 }
 
+/// Complete pyramid from first level using pyrdown without blurr.
 template<typename T, int LEVELS>
 void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   if (type == cudaMemcpyDeviceToDevice 
@@ -94,6 +100,32 @@ void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
   }
 }
 
+template<typename T, int LEVELS>
+void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type, float sigma) {
+  P.GetImage(0).CopyFrom(I, type);
+  CompletePyramidBlur(P, type, sigma);
+}
+
+/// Use PyrDown with small Gaussian Blur.
+/// @param sigma whats the expected std on the first level - to only
+/// smooth over pixels that are within 3 sigma of the center pixel
+template<typename T, int LEVELS>
+void CompletePyramidBlur(Pyramid<T,LEVELS>& P, cudaMemcpyKind type, float sigma) {
+  if (type == cudaMemcpyDeviceToDevice 
+      || type == cudaMemcpyHostToDevice) {
+    // P is on GPU so perform downsampling on GPU
+    for (int lvl=1; lvl<LEVELS; ++lvl) {
+      Image<T> Isrc = P.GetImage(lvl-1);
+      Image<T> Idst = P.GetImage(lvl);
+      PyrDownBlur(Isrc, Idst,sigma);
+    }
+  } else {
+    assert(false);
+  }
+}
+
+/// Construct a image from a pyramid by pasting levels into a single
+/// image.
 template<typename T, int LEVELS>
 void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
   Image<T> IlvlSrc = P.GetImage(0);

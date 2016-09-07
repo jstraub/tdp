@@ -132,7 +132,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
           // of neighbors
           Vector3fda ni ( 
               (x+1 < tsdf.w_)? tsdf(x+1,y,idz) - tsdfVal : tsdfVal - tsdf(x-1,y,idz),
-              (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz)
+              (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz),
               (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
           n(idx,idy) = ni / ni.norm(); 
           break;
