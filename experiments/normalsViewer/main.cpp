@@ -17,6 +17,7 @@
 #include <tdp/camera.h>
 #include <tdp/quickView.h>
 #include <tdp/directional/hist.h>
+#include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
 
 #include "gui.hpp"
@@ -39,9 +40,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   size_t h = video.Streams()[gui.iRGB].Height();
   size_t wc = w+w%64; // for convolution
   size_t hc = h+h%64;
-  float f = 550;
-  float uc = (w-1.)/2.;
-  float vc = (h-1.)/2.;
 
   tdp::QuickView viewDebugA(wc,hc);
   gui.container().AddDisplay(viewDebugA);
@@ -64,7 +62,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<float> debugA(wc, hc);
   tdp::ManagedHostImage<float> debugB(wc, hc);
 
-  tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
+  tdp::ManagedDeviceImage<uint16_t> cuZ(wc,hc);
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
@@ -77,6 +77,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   tdp::GeodesicHist<4> normalHist;
+
+  pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", true,true);
+  pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
+  pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -89,9 +94,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
-
-    CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
-    ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.);
+    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    tdp::ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.);
     pangolin::basetime tDepth = pangolin::TimeNow();
     if (gui.verbose)
       std::cout << "depth conversion: " <<
@@ -103,18 +107,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
       Depth2Normals(cuD, cam, cuN);
       if (gui.show2DNormals) {
-        CopyImage(cuN, n2Df, cudaMemcpyDeviceToHost);
-        //ConvertPixelsMultiChannel<uint8_t,float,3>(n2D,n2Df,128,127);
-        for(size_t y=0; y < n2Df.h_; ++y) {
-          for(size_t x=0; x < n2Df.w_*3; ++x) {
-            ((uint8_t*)n2D.RowPtr((int)y))[x] = floor(((float*)n2Df.RowPtr((int)y))[x]*128+127);
-          }
-        }
+        tdp::Normals2Image(cuN, cuN2D);
+        n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       }
       if (gui.computeHist) {
         if (gui.histFrameByFrame)
           normalHist.Reset();
         normalHist.ComputeGpu(cuN);
+      }
+      if (dpvmfmeans) {
+        n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+        tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
+        dpm.Compute(n, cuN, cuZ, maxIt);
       }
     }
     cudaDeviceSynchronize();

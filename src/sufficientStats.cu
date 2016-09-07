@@ -1,6 +1,9 @@
 
 #include <tdp/eigen/dense.h>
 #include <tdp/image.h>
+#include <tdp/managed_image.h>
+#include <tdp/cuda.h>
+#include <tdp/reductions.cuh>
 
 #include <tdp/sufficientStats.h>
 
@@ -9,8 +12,8 @@ namespace tdp {
 template<typename T, size_t D, int BLK_SIZE>
 __global__
 void KernelSufficientStats1stOrder(
-    Image<Eigen::Matrix<T,D,1,Eigen::DontAlign> I,
-    Image<Eigen::Matrix<T,D+1,1,Eigen::DontAlign> Isum,
+    Image<Eigen::Matrix<T,D,1,Eigen::DontAlign>> I,
+    Image<Eigen::Matrix<T,D+1,1,Eigen::DontAlign>> Isum,
     Image<uint16_t> z,
     uint16_t k,
     int N_PER_T
@@ -44,7 +47,7 @@ void KernelSufficientStats1stOrder(
   }
   if(tid < D+1) {
     // sum the last two remaining matrixes directly into global memory
-    atomicAdd_<T>(Isum.ptr_[tid], sum[0](tid)+sum[1](tid));
+    atomicAdd_<T>(&(Isum.ptr_[0](tid)), sum[0](tid)+sum[1](tid));
   }
 }
 
@@ -70,7 +73,7 @@ Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> SufficientStats1stOrder(
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,N/10,256);
   ManagedDeviceImage<Vector4fda> Iss(K,1);
-  cudaMemset(Isum.ptr_, 0, K*sizeof(Vector4fda));
+  cudaMemset(Iss.ptr_, 0, K*sizeof(Vector4fda));
 
   for (uint16_t k=0; k<K; ++k) {
     Image<Vector4fda> Issk(1,1,&Iss[k]);
@@ -78,7 +81,7 @@ Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> SufficientStats1stOrder(
   }
   checkCudaErrors(cudaDeviceSynchronize());
 
-  Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> ss;
+  Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> ss(4,K);
   cudaMemcpy(ss.data(),Iss.ptr_, K*sizeof(Vector4fda), cudaMemcpyDeviceToHost);
   return ss;
 }
