@@ -117,6 +117,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<float> ICPassoc_m(wc, hc);
   tdp::ManagedHostImage<float> ICPassoc_c(wc, hc);
 
+  tdp::ManagedDeviceImage<tdp::Vector3fda> nEstdummy(wc,hc);
+
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
@@ -150,7 +152,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<bool> normalsFromTSDF("ui.TSDF normals",true,true);
+  pangolin::Var<bool> normalsFromTSDF("ui.TSDF normals",false,true);
+  pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",true,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
@@ -197,7 +200,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
-    td::Image<tdp::Vector3fda> nEst = ns_c.GetImage(0);
+    tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
     RayTraceTSDF(cuTSDF, cuDEst, nEst, T_rd, camD, grid0, dGrid, tsdfMu); 
     TOCK("Ray Trace TSDF");
 
@@ -207,16 +210,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-        cudaMemcpyDeviceToDevice);
+        cudaMemcpyDeviceToDevice, 0.3);
     tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-        cudaMemcpyDeviceToDevice);
+        cudaMemcpyDeviceToDevice, 0.3);
     tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
-    tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
-    if (normalsFromTSDF) {
-      tdp::CompletePyramid<Vector3fda,3>(ns_c, cudaMemcpyDeviceToDevice);
-    } else {
+    if (normalsFromDepthPyr) {
+      tdp::Depth2NormalsViaDerivativePyr(cuDPyr,camD,ns_c);
+    } else { 
       tdp::Depth2Normals(cuDPyr,camD,ns_c);
+    }
+    if (normalsFromTSDF) {
+      tdp::CompletePyramid<tdp::Vector3fda,3>(ns_m, cudaMemcpyDeviceToDevice);
+    } else {
+      if (normalsFromDepthPyr) {
+        tdp::Depth2NormalsViaDerivativePyr(cuDPyrEst,camD,ns_m);
+      } else {
+        tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
+      }
     }
     TOCK("Setup Pyramids");
 
@@ -274,7 +285,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
-    RayTraceTSDF(cuTSDF, cuDView, T_mv, camView, grid0, dGrid, tsdfMu); 
+    RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0, dGrid, tsdfMu); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 
     glEnable(GL_DEPTH_TEST);

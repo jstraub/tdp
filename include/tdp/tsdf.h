@@ -15,6 +15,7 @@ void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
     float mu);
 
 void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
+    Image<Vector3fda> n, 
     SE3<float> T_rd, Camera<float>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu);
