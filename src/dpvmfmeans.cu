@@ -28,7 +28,7 @@ __global__ void KernelDpvMFlabelAssign(
   // init
   iAction[tid] = UINT_MAX; //std::numeric_limits<uint32_t>::max();
 
-  for(int id=i0+idx*N_PER_T; id<min(n.Area(),(size_t)(idx+1)*N_PER_T); ++id)
+  for(int id=i0+idx*N_PER_T; id<min((int)n.Area(),(int)((idx+1)*N_PER_T)); ++id)
   {
     uint16_t z_i = K;
     float sim_closest = lambda + 1.;
