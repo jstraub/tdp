@@ -39,6 +39,18 @@ void Depth2Normals(
     Image<Vector3fda> cuN);
 
 template<int LEVELS>
+void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr,
+    cudaMemcpyKind type) {
+  CompletePyramid<Vector3fda,3>(cuNPyr, type);
+  // make sure all normals are propperly normalized in lower levels of
+  // pyramid
+  for (int lvl=1; lvl<LEVELS; ++lvl) {
+    Image<Vector3fda> cuN = cuNPyr.GetImage(lvl);
+    RenormalizeSurfaceNormals(cuN);
+  }
+}
+
+template<int LEVELS>
 void Depth2Normals(
     Pyramid<float,LEVELS>& cuDPyr,
     const Camera<float>& cam,
@@ -71,13 +83,7 @@ void Depth2Normals(
   float vc = cam.params_(3);
   Image<Vector3fda> cuN = cuNPyr.GetImage(0);
   ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
-  CompletePyramid<Vector3fda,3>(cuNPyr, cudaMemcpyDeviceToDevice);
-  // make sure all normals are propperly normalized in lower levels of
-  // pyramid
-  for (int lvl=1; lvl<LEVELS; ++lvl) {
-    Image<Vector3fda> cuN = cuNPyr.GetImage(lvl);
-    RenormalizeSurfaceNormals(cuN);
-  }
+  CompleteNormalPyramid<3>(cuNPyr, cudaMemcpyDeviceToDevice);
 }
 
 template<int LEVELS>

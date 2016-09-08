@@ -221,7 +221,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::Depth2Normals(cuDPyr,camD,ns_c);
     }
     if (normalsFromTSDF) {
-      tdp::CompletePyramid<tdp::Vector3fda,3>(ns_m, cudaMemcpyDeviceToDevice);
+      tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
     } else {
       if (normalsFromDepthPyr) {
         tdp::Depth2NormalsViaDerivativePyr(cuDPyrEst,camD,ns_m);
