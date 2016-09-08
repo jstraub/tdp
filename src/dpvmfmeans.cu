@@ -3,8 +3,13 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <limits.h>
 #include <tdp/image.h>
+#include <tdp/cuda.h>
+#include <tdp/managed_image.h>
+#include <tdp/eigen/dense.h>
+#include <tdp/reductions.cuh>
 
 namespace tdp {
 
@@ -13,16 +18,17 @@ __global__ void KernelDpvMFlabelAssign(
     Image<Vector3fda> n,
     Image<Vector3fda> mu,
     Image<uint16_t> z,
-    float lambda, size_t *d_iAction, size_t i0, uint16_t K
+    float lambda, uint32_t *d_iAction, uint32_t i0, uint16_t K,
+    uint32_t N_PER_T
     ) {
-  __shared__ size_t iAction[BLK_SIZE]; // id of first action (revieval/new) for one core
+  __shared__ uint32_t iAction[BLK_SIZE]; // id of first action (revieval/new) for one core
 
   const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   // init
-  iAction[tid] = std::numeric_limit<size_t>::max();
+  iAction[tid] = UINT_MAX; //std::numeric_limits<uint32_t>::max();
 
-  for(int id=i0+idx*N_PER_T; id<min(N,(idx+1)*N_PER_T); ++id)
+  for(int id=i0+idx*N_PER_T; id<min((int)n.Area(),(int)((idx+1)*N_PER_T)); ++id)
   {
     uint16_t z_i = K;
     float sim_closest = lambda + 1.;
@@ -31,7 +37,7 @@ __global__ void KernelDpvMFlabelAssign(
     if (isNan(ni))
     {
       // normal is nan -> break out here
-      z[id] = std::numeric_limits<uint16_t>::max();
+      z[id] = USHRT_MAX; //std::numeric_limits<uint16_t>::max();
       continue;
     }
     for (uint16_t k=0; k<K; ++k)
@@ -65,24 +71,25 @@ __global__ void KernelDpvMFlabelAssign(
   }
   if(tid == 0) {
     // reduce the last two remaining matrixes directly into global memory
-    atomicMin(d_iAction, min(iAction[0],iAction[1]));
+    atomicMin(d_iAction, (uint32_t)min(iAction[0],iAction[1]));
   }
 };
 
-size_t dpvMFlabelsOptimistic( 
+uint32_t dpvMFlabelsOptimistic( 
     Image<Vector3fda> n,
     Image<Vector3fda> mu,
     Image<uint16_t> z,
-    float lambda, size_t i0, uint16_t K)
+    float lambda, uint32_t i0, uint16_t K)
 {
-  size_t idAction = std::numeric_limits<size_t>::max();
-  ManagedDeviceImage<size_t> IidAction(1,1);
-  cudaMemcpy(IidAction.ptr_, idAction, sizeof(size_t), cudaMemcpyHostToDevice);
+  uint32_t idAction = std::numeric_limits<uint32_t>::max();
+  ManagedDeviceImage<uint32_t> IidAction(1,1);
+  cudaMemcpy(IidAction.ptr_, &idAction, sizeof(uint32_t), cudaMemcpyHostToDevice);
 
+  dim3 threads, blocks;
+  ComputeKernelParamsForArray(blocks,threads,n.Area()/10,256);
   KernelDpvMFlabelAssign<256><<<blocks,threads>>>(
-      n, mu, z, lambda, idAction.ptr_, i0, K);
-
-  cudaMemcpy(idAction, IidAction.ptr_, sizeof(size_t), cudaMemcpyDeviceToHost);
+      n, mu, z, lambda, IidAction.ptr_, i0, K, 10); 
+  cudaMemcpy(&idAction, IidAction.ptr_, sizeof(uint32_t), cudaMemcpyDeviceToHost);
 
   checkCudaErrors(cudaDeviceSynchronize());
   return idAction;
