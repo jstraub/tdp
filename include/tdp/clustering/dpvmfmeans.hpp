@@ -101,14 +101,15 @@ void DPvMFmeans::UpdateLabels(
   uint32_t i0 = 0;
   uint32_t idAction = UNASSIGNED;
 
-  ManagedDeviceImage<Vector3fda> cuCenters(K_,1);
-  cudaMemcpy(cuCenters.ptr_, &(centers_[0]), cuCenters.SizeBytes(),
-      cudaMemcpyHostToDevice);
-
   for (size_t count = 0; count < n.Area(); count++){
+
+    ManagedDeviceImage<Vector3fda> cuCenters(K_,1);
+    cudaMemcpy(cuCenters.ptr_, &(centers_[0]), cuCenters.SizeBytes(),
+        cudaMemcpyHostToDevice);
+
     idAction = optimisticLabelsAssign(cuN,cuCenters,cuZ,i0);
     if(idAction == UNASSIGNED) {
-      // cout<<"[ddpmeans] break." << endl;
+      //std::cout<<"[ddpmeans] done." << std::endl;
       break;
     }
     float sim = 0.;
@@ -116,8 +117,9 @@ void DPvMFmeans::UpdateLabels(
     if(z_i == K_) {
       centers_.push_back(n[idAction]);
       K_ ++;
-      //std::cout << "# " << this->cls_.size() << " K=" << this->K_ << std::endl;
-      //std::cout << this->cld_->x()->col(idAction) << std::endl;
+      //std::cout << "K=" << K_ 
+      //  << " idAction=" << idAction
+      //  << " ni=" << n[idAction].transpose() << std::endl;
     }
     i0 = idAction;
   }
@@ -144,7 +146,7 @@ void DPvMFmeans::UpdateCenters(
     ) {
 
   Eigen::Matrix<float,4,Eigen::Dynamic> ss = computeSS(cuN,cuZ);
-  std::cout << ss << std::endl;
+  //std::cout << ss << std::endl;
   Ns_.clear();
   for(size_t k=0; k<K_; ++k) 
     Ns_.push_back(ss(3,k));
@@ -156,6 +158,7 @@ void DPvMFmeans::UpdateCenters(
       centers_[k] /= centers_[k].norm();
     } else {
       centers_[k] = ss.block<3,1>(0,k) / ss(3,k);
+      //std::cout << centers_[k].transpose() << "; " << ss(3,k) << std::endl;
     }
   }
 }
@@ -169,6 +172,9 @@ Eigen::Matrix<float,4,Eigen::Dynamic> DPvMFmeans::computeSS(
 uint32_t DPvMFmeans::optimisticLabelsAssign(const Image<Vector3fda>& cuN, 
     Image<Vector3fda>& cuCenters,
     Image<uint16_t>& cuZ, uint32_t i0) {
+  //std::cout << "DPvMFmeans::optimisticLabelsAssign " << i0 
+  //  << " K=" << K_
+  //  << " lambda=" << lambda_ << std::endl;
   return dpvMFlabelsOptimistic(cuN,cuCenters,cuZ, lambda_, i0, K_);
 }
 

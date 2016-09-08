@@ -9,7 +9,6 @@
 
 namespace tdp {
 
-
 // atomic add for double
 template<>
 __device__ inline void atomicAdd_<double>(double* address, const double& val)
@@ -47,6 +46,7 @@ __device__ inline void atomicAdd_<Eigen::Vector3f>(Eigen::Vector3f* address,
   atomicAdd_<float>(&((*address)(1)),val(1));
   atomicAdd_<float>(&((*address)(2)),val(2));
 };
+
 
 template<>
 __device__ inline bool isNan(const Eigen::Vector2f& val)

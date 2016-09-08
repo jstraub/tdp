@@ -82,7 +82,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", true,true);
   pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
-  pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.05, 0.001, 0.1);
+  pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())

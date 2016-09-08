@@ -116,7 +116,7 @@ void PyrDownBlur(
     Image<float>& Iout,
     float sigma_in
     ) {
-  printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
   assert(Iin.w_ == Iout.w_*2);
   assert(Iin.h_ == Iout.h_*2);
   dim3 threads, blocks;

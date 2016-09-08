@@ -31,10 +31,10 @@ __global__ void KernelDpvMFlabelAssign(
   for(int id=i0+idx*N_PER_T; id<min((int)n.Area(),(int)((idx+1)*N_PER_T)); ++id)
   {
     uint16_t z_i = K;
-    float sim_closest = lambda + 1.;
+    float sim_closest = lambda;
     float sim_k = 0.;
     Vector3fda ni = n[id];
-    if (isNan(ni))
+    if (!IsValidNormal(ni))
     {
       // normal is nan -> break out here
       z[id] = USHRT_MAX; //std::numeric_limits<uint16_t>::max();
@@ -86,7 +86,7 @@ uint32_t dpvMFlabelsOptimistic(
   cudaMemcpy(IidAction.ptr_, &idAction, sizeof(uint32_t), cudaMemcpyHostToDevice);
 
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,n.Area()/10,256);
+  ComputeKernelParamsForArray(blocks,threads,(n.Area()-i0)/10,256);
   KernelDpvMFlabelAssign<256><<<blocks,threads>>>(
       n, mu, z, lambda, IidAction.ptr_, i0, K, 10); 
   cudaMemcpy(&idAction, IidAction.ptr_, sizeof(uint32_t), cudaMemcpyDeviceToHost);

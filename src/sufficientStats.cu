@@ -34,7 +34,6 @@ void KernelSufficientStats1stOrder(
       xi.topRows(D) = I[i];
       xi(D) = 1.;
       sum[tid] += xi;
-      printf("%f",sum[tid](3));
     }
   }
   // old reduction.....
@@ -48,7 +47,7 @@ void KernelSufficientStats1stOrder(
   }
   if(tid < D+1) {
     // sum the last two remaining matrixes directly into global memory
-    atomicAdd_<T>(&(Isum.ptr_[0](tid)), sum[0](tid)+sum[1](tid));
+    atomicAdd(&(Isum.ptr_[0](tid)), sum[0](tid)+sum[1](tid));
   }
 }
 
@@ -78,6 +77,7 @@ Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> SufficientStats1stOrder(
 
   for (uint16_t k=0; k<K; ++k) {
     Image<Vector4fda> Issk(1,1,&Iss[k]);
+    //std::cout << Issk.ptr_ << std::endl;
     KernelSufficientStats1stOrder<float,3,256><<<blocks,threads>>>(I,Issk,z,k,N/10);
   }
   checkCudaErrors(cudaDeviceSynchronize());

@@ -16,6 +16,7 @@ template<typename T>
 __device__ inline void atomicAdd_(T* address, const T& val)
 { assert(false); };
 
+
 template<typename T>
 __device__ inline bool isNan(const T& val)
 {return val!=val;};
