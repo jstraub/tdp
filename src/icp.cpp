@@ -30,7 +30,7 @@ void ICP::ComputeProjective(
 #ifdef CUDA_FOUND
       ICPStep(pcs_m.GetImage(lvl), ns_m.GetImage(lvl), 
           pcs_c.GetImage(lvl), ns_c.GetImage(lvl),
-          R_mc, t_mc, cam,
+          R_mc, t_mc, ScaleCamera<float>(cam,pow(0.5,lvl)),
           cos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,error,count);
 #endif
@@ -80,7 +80,7 @@ void ICP::ComputeProjectiveRotation(
       ICPStepRotation(ns_m.GetImage(lvl), 
           ns_c.GetImage(lvl),
           pcs_c.GetImage(lvl), 
-          R_mc, t_mc, cam,
+          R_mc, t_mc, ScaleCamera<float>(cam,pow(0.5,lvl)),
           cos(angleThr_deg*M_PI/180.),
           Nda,count);
 #endif
