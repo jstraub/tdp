@@ -88,9 +88,9 @@ void ICP::ComputeProjectiveRotation(
         std::cout << "# inliers " << count << " to small " << std::endl;
         return;
       }
-      error = (R_mc*N).trace()/count;
       // solve for R using SVD
       Eigen::Matrix3f N(Nda);
+      error = (R_mc*N).trace()/count;
       Eigen::JacobiSVD<Eigen::Matrix3f> svd(N, Eigen::ComputeThinU | Eigen::ComputeThinV);
       Eigen::Matrix3f dR = svd.matrixU()*svd.matrixV().transpose();
       // apply x to the transformation

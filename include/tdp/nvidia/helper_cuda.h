@@ -455,6 +455,28 @@ static const char *_cudaGetErrorEnum(CUresult error)
 
         case CUDA_ERROR_UNKNOWN:
             return "CUDA_ERROR_UNKNOWN";
+        case CUDA_ERROR_INVALID_PTX:
+            return "CUDA_ERROR_INVALID_PTX";
+        case CUDA_ERROR_INVALID_GRAPHICS_CONTEXT:
+            return "CUDA_ERROR_INVALID_GRAPHICS_CONTEXT";
+        case CUDA_ERROR_ILLEGAL_ADDRESS:
+          return "CUDA_ERROR_ILLEGAL_ADDRESS";
+        case CUDA_ERROR_HARDWARE_STACK_ERROR:
+          return "CUDA_ERROR_HARDWARE_STACK_ERROR";
+        case CUDA_ERROR_ILLEGAL_INSTRUCTION:
+          return "CUDA_ERROR_ILLEGAL_INSTRUCTION";
+        case CUDA_ERROR_MISALIGNED_ADDRESS:
+          return "CUDA_ERROR_MISALIGNED_ADDRESS";
+        case CUDA_ERROR_INVALID_ADDRESS_SPACE:
+          return "CUDA_ERROR_INVALID_ADDRESS_SPACE";
+        case CUDA_ERROR_INVALID_PC:
+          return "CUDA_ERROR_INVALID_PC";
+        case CUDA_ERROR_NOT_PERMITTED:
+          return "CUDA_ERROR_NOT_PERMITTED";
+        case CUDA_ERROR_NOT_SUPPORTED:
+          return "CUDA_ERROR_NOT_SUPPORTED";
+        case CUDA_ERROR_PEER_ACCESS_UNSUPPORTED:
+          return "CUDA_ERROR_PEER_ACCESS_UNSUPPORTED";
     }
 
     return "<unknown>";

@@ -239,8 +239,7 @@ __global__ void KernelICPStepRotation(
   const int tid = threadIdx.x;
   const int id_ = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = id_*N_PER_T;
-  const int N = pc_m.w_*pc_m.h_;
-  const int idE = min(N,(id_+1)*N_PER_T);
+  const int idE = min((int)pc_c.Area(),(id_+1)*N_PER_T);
   __shared__ Eigen::Matrix<float,7,1,Eigen::DontAlign> sum[BLK_SIZE];
   sum[tid] = Eigen::Matrix<float,7,1,Eigen::DontAlign>::Zero();
   for (int id=idS; id<idE; ++id) {
@@ -256,25 +255,24 @@ __global__ void KernelICPStepRotation(
     Vector2fda x_c_in_m = cam.Project(pc_c_in_m);
     const int u = floor(x_c_in_m(0)+0.5f);
     const int v = floor(x_c_in_m(1)+0.5f);
-      if (0 <= u && u < pc_c.w_ && 0 <= v && v < pc_c.h_
-          && pc_ci(2) > 0. && pc_c_in_m(2) > 0.
-          && IsValidData(pc_c_in_m)) {
-        // found association -> check thresholds;
-        Vector3fda n_c_in_m = R_mc * n_c(idx,idy);
-        Vector3fda n_mi = n_m(u,v);
-        const float dot  = n_mi.dot(n_c_in_m);
-        if (dot > dotThr && IsValidData(n_mi)) {
-          // association is good -> accumulate
-          Eigen::Matrix<float,7,1,Eigen::DontAlign> upperTriangle;
-          upperTriangle(0) = n_mi(0)*n_c_in_m(0);
-          upperTriangle(1) = n_mi(1)*n_c_in_m(0);
-          upperTriangle(2) = n_mi(2)*n_c_in_m(0);
-          upperTriangle(3) = n_mi(1)*n_c_in_m(1);
-          upperTriangle(4) = n_mi(1)*n_c_in_m(2);
-          upperTriangle(5) = n_mi(2)*n_c_in_m(2);
-          upperTriangle(6) = 1.; // to get number of data points
-          sum[tid] += upperTriangle;
-        }
+    if (0 <= u && u < pc_c.w_ && 0 <= v && v < pc_c.h_
+        && pc_ci(2) > 0. && pc_c_in_m(2) > 0.
+        && IsValidData(pc_c_in_m)) {
+      // found association -> check thresholds;
+      Vector3fda n_c_in_m = R_mc * n_c(idx,idy);
+      Vector3fda n_mi = n_m(u,v);
+      const float dot  = n_mi.dot(n_c_in_m);
+      if (dot > dotThr && IsValidData(n_mi)) {
+        // association is good -> accumulate
+        Eigen::Matrix<float,7,1,Eigen::DontAlign> upperTriangle;
+        upperTriangle(0) = n_mi(0)*n_c_in_m(0);
+        upperTriangle(1) = n_mi(1)*n_c_in_m(0);
+        upperTriangle(2) = n_mi(2)*n_c_in_m(0);
+        upperTriangle(3) = n_mi(1)*n_c_in_m(1);
+        upperTriangle(4) = n_mi(1)*n_c_in_m(2);
+        upperTriangle(5) = n_mi(2)*n_c_in_m(2);
+        upperTriangle(6) = 1.; // to get number of data points
+        sum[tid] += upperTriangle;
       }
     }
   }
@@ -303,9 +301,8 @@ void ICPStepRotation (
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
     float& count
     ) {
-  size_t N = pc_m.w_*pc_m.h_;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,N/10,32);
+  ComputeKernelParamsForArray(blocks,threads,pc_c.Area()/10,32);
   ManagedDeviceImage<float> out(7,1);
   cudaMemset(out.ptr_, 0, 7*sizeof(float));
 
@@ -322,8 +319,8 @@ void ICPStepRotation (
   for (int i=0; i<3; ++i) {
     for (int j=i; j<3; ++j) {
       float val = nUpperTri[k++];
-      ATA(i,j) = val;
-      ATA(j,i) = val;
+      N(i,j) = val;
+      N(j,i) = val;
     }
   }
   count = nUpperTri[6];

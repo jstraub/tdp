@@ -39,6 +39,18 @@ void ICPVisualizeAssoc (
     Image<float>& assoc_m,
     Image<float>& assoc_c
     );
+
+void ICPStepRotation (
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> n_c,
+    Image<Vector3fda> pc_c,
+    Matrix3fda R_mc, 
+    Vector3fda t_mc, 
+    const Camera<float>& cam,
+    float dotThr,
+    Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
+    float& count
+    );
 #endif
 
 class ICP {
@@ -62,6 +74,7 @@ class ICP {
   static void ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_c,
+    Pyramid<Vector3fda,3>& pcs_c,
     SE3f& T_mc,
     const Camera<float>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
