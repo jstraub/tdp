@@ -18,7 +18,7 @@ void KernelSufficientStats1stOrder(
     uint16_t k,
     int N_PER_T
     ) {
-  __shared__ Eigen::Matrix<T,D+1,1,Eigen::DontAlign> sum[BLK_SIZE];
+  extern __shared__ Eigen::Matrix<T,D+1,1,Eigen::DontAlign> sum[];
   //const int tid = threadIdx.x;
   const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -59,7 +59,7 @@ Vector4fda SufficientStats1stOrder(const Image<Vector3fda>& I) {
   ManagedDeviceImage<Vector4fda> Isum(1,1);
   cudaMemset(Isum.ptr_, 0, sizeof(Vector4fda));
   Image<uint16_t> z;
-  KernelSufficientStats1stOrder<float,3,256><<<blocks,threads>>>(I,Isum,z,0,N/10);
+  KernelSufficientStats1stOrder<float,3,256><<<blocks,threads>>>(I,Isum,z,0,10);
   checkCudaErrors(cudaDeviceSynchronize());
   Vector4fda sum = Vector4fda::Zero();
   cudaMemcpy(&sum,Isum.ptr_,sizeof(Vector4fda), cudaMemcpyDeviceToHost);
@@ -78,7 +78,8 @@ Eigen::Matrix<float,4,Eigen::Dynamic, Eigen::DontAlign> SufficientStats1stOrder(
   for (uint16_t k=0; k<K; ++k) {
     Image<Vector4fda> Issk(1,1,&Iss[k]);
     //std::cout << Issk.ptr_ << std::endl;
-    KernelSufficientStats1stOrder<float,3,256><<<blocks,threads>>>(I,Issk,z,k,N/10);
+    KernelSufficientStats1stOrder<float,3,256><<<blocks,threads, 
+      256*sizeof(Eigen::Matrix<float,4,1,Eigen::DontAlign>)>>>(I,Issk,z,k,10);
   }
   checkCudaErrors(cudaDeviceSynchronize());
 
