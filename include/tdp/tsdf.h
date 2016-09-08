@@ -14,8 +14,17 @@ void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
     Vector3fda grid0, Vector3fda dGrid,
     float mu);
 
+// get depth image and surface normals from pose T_rd
 void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
     Image<Vector3fda> n, 
+    SE3<float> T_rd, Camera<float>camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
+// get point cloud and surface normals from T_rd in reference
+// coordiante frame
+void RayTraceTSDF(Volume<float> tsdf, 
+    Image<Vector3fda> pc_r, 
+    Image<Vector3fda> n_r, 
     SE3<float> T_rd, Camera<float>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu);

@@ -99,6 +99,7 @@ void RayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+// ray trace and compute depth image as well as normals from pose T_rd
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d, 
     Image<Vector3fda> n, SE3<float> T_rd, Camera<float> camD,
@@ -109,16 +110,21 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
   if (idx < d.w_ && idy < d.h_) {
     d(idx,idy) = NAN;
     //Eigen::Vector3fda n(0,0,-1);
+    // ray of depth image d 
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
+    // ray of depth image d in reference coordinates (TSDF)
     Vector3fda r_d_in_r = T_rd.rotation().matrix() * r_d;
     // iterate over z in TSDF; detect 0 crossing in TSDF
     float tsdfValPrev = -1.01;
     float d_d_in_r_Prev = 0.;
     for (size_t idz=0; idz<tsdf.d_; ++idz) {
       float z = grid0(2)+idz*dGrid(2);  // depth
+      // intersect r_d_in_r with plane at depth z in TSDF coordinates
+      // to get depth along r_d_in_r
       //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
       // since n is (0,0,-1):
       float d_d_in_r = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
+      // get intersection point in TSDF volume at depth z
       Vector2fda u_r = T_rd.translation().topRows(2) + r_d_in_r*d_d_in_r;
       int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
       int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
@@ -135,7 +141,8 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
               (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz),
               (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
           // negate to flip the normals to face the camera
-          n(idx,idy) = -ni / ni.norm(); 
+          // and compute the normal in the depth frame of reference
+          n(idx,idy) = - (T_rd.rotation().matrix().transpose() * ni) / ni.norm(); 
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -204,5 +211,77 @@ void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n,
       grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+__global__
+void KernelRayTraceTSDF(Volume<float> tsdf, 
+    Image<Vector3fda> pc_r, 
+    Image<Vector3fda> n_r, 
+    SE3<float> T_rd, Camera<float> camD,
+    Vector3fda grid0, Vector3fda dGrid, float mu) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < pc_r.w_ && idy < pc_r.h_) {
+    pc_r(idx,idy)(0) = NAN;
+    pc_r(idx,idy)(1) = NAN;
+    pc_r(idx,idy)(2) = NAN;
+    //Eigen::Vector3fda n(0,0,-1);
+    // ray of depth image d 
+    Vector3fda r_d = camD.Unproject(idx, idy, 1.);
+    // ray of depth image d in reference coordinates (TSDF)
+    Vector3fda r_d_in_r = T_rd.rotation().matrix() * r_d;
+    // iterate over z in TSDF; detect 0 crossing in TSDF
+    float tsdfValPrev = -1.01;
+    float d_d_in_r_Prev = 0.;
+    for (size_t idz=0; idz<tsdf.d_; ++idz) {
+      float z = grid0(2)+idz*dGrid(2);  // depth
+      // intersect r_d_in_r with plane at depth z in TSDF coordinates
+      // to get depth along r_d_in_r
+      //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
+      // since n is (0,0,-1):
+      float d_d_in_r = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
+      // get intersection point in TSDF volume at depth z
+      Vector2fda u_r = T_rd.translation().topRows(2) 
+        + r_d_in_r.topRows(2)*d_d_in_r;
+      int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
+      int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
+      if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
+        float tsdfVal = tsdf(x,y,idz);
+        if (-1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
+          // detected 0 crossing -> interpolate
+          float d = d_d_in_r_Prev
+            -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
+          // point at that depth in the reference coordinate frame
+          pc_r(idx,idy) = T_rd.translation() + r_d_in_r*d;
+          // surface normal: TODO might want to do better interpolation
+          // of neighbors
+          Vector3fda ni ( 
+              (x+1 < tsdf.w_)? tsdf(x+1,y,idz) - tsdfVal : tsdfVal - tsdf(x-1,y,idz),
+              (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz),
+              (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
+          // negate to flip the normals to face the camera
+          n_r(idx,idy) = - ni / ni.norm(); 
+          break;
+        }
+        tsdfValPrev = tsdfVal;
+      }
+      d_d_in_r_Prev = d_d_in_r;
+    }
+  }
+}
+
+void RayTraceTSDF(Volume<float> tsdf, 
+    Image<Vector3fda> pc_r, 
+    Image<Vector3fda> n_r, 
+    SE3<float> T_rd, Camera<float>camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_r,32,32);
+  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, pc_r, n_r, T_rd, camD,
+      grid0, dGrid, mu);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 
 }

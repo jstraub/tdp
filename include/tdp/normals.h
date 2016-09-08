@@ -126,8 +126,8 @@ void Depth2NormalsViaDerivativePyr(
     float f = camLvl.params_(0);
     float uc = camLvl.params_(2);
     float vc = camLvl.params_(3);
-    std::cout << "normals pyramid @" << lvl << " f=" << f 
-      << " uc=" << uc << " vc=" << vc << std::endl;
+    //std::cout << "normals pyramid @" << lvl << " f=" << f 
+    //  << " uc=" << uc << " vc=" << vc << std::endl;
     Image<Vector3fda> cuN = cuNPyr.GetImage(lvl);
     cuD = cuDPyr.GetImage(lvl);
     cuDu = cuDuPyr.GetImage(lvl);
