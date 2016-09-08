@@ -210,9 +210,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-        cudaMemcpyDeviceToDevice, 0.3);
+        cudaMemcpyDeviceToDevice, 0.03);
     tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-        cudaMemcpyDeviceToDevice, 0.3);
+        cudaMemcpyDeviceToDevice, 0.03);
     tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     if (normalsFromDepthPyr) {
