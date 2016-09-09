@@ -1,5 +1,5 @@
 
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/managed_image.h>
 
 namespace tdp {

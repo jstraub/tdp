@@ -175,10 +175,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",0,0,10);
   pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",0,0,10);
 
-  //pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
-  //pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
-  //pangolin::Var<float> offsettz("ui.tz",0.,-0.1,0.1);
-
   pangolin::Var<bool> showIcpError("ui.show ICP",false,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
 
@@ -215,8 +211,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
-    //tdp::Vector3fda offsett(offsettx,offsetty,offsettz);
-    //T_mc.matrix().topRightCorner(3,1) += offsett;
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
@@ -308,15 +302,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
-      //offsettx = 0.;
-      //offsetty = 0.;
-      //offsettz = 0.;
     }
     if (pangolin::Pushed(resetICP)) {
       T_mc.matrix() = Eigen::Matrix4f::Identity();
-      //offsettx = 0.;
-      //offsetty = 0.;
-      //offsettz = 0.;
     }
 
     if (fuseTSDF || numFused <= 30) {
