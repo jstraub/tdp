@@ -90,9 +90,12 @@ void ICP::ComputeProjectiveRotation(
       }
       // solve for R using SVD
       Eigen::Matrix3f N(Nda);
-      error = (R_mc*N).trace()/count;
-      Eigen::JacobiSVD<Eigen::Matrix3f> svd(N, Eigen::ComputeThinU | Eigen::ComputeThinV);
+      error = N.trace()/count;
+      Eigen::JacobiSVD<Eigen::Matrix3f> svd(N,
+          Eigen::ComputeFullU | Eigen::ComputeFullV);
       Eigen::Matrix3f dR = svd.matrixU()*svd.matrixV().transpose();
+      std::cout << N <<  std::endl;
+      std::cout << dR <<  std::endl;
       // apply x to the transformation
       T_mc.matrix().topLeftCorner(3,3) = dR * T_mc.matrix().topLeftCorner(3,3);
       std::cout << "lvl " << lvl << " it " << it 

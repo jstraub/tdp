@@ -20,6 +20,7 @@
 #include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/Stopwatch.h>
+#include <tdp/blur.h>
 
 #include "gui.hpp"
 
@@ -74,12 +75,22 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
+  tdp::ManagedDeviceImage<float> cuDrawf(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   tdp::GeodesicHist<4> normalHist;
 
-  pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", true,true);
+  pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
+  pangolin::Var<bool>  show2DNormals("ui.show 2D Normals",true,true);
+  pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
+  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame",false,true);
+  pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
+  pangolin::Var<bool> histLogScale("ui.hist log scale",false,true);
+  pangolin::Var<bool>  dispGrid("ui.Show Grid",false,true);
+  pangolin::Var<bool>  dispNormals("ui.Show Normals",false,true);
+
+  pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", false,true);
   pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
@@ -90,48 +101,64 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
+    TICK("Read frame");
     gui.NextFrames();
-
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
+    TOCK("Read frame");
+
+    TICK("Convert Depth");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    tdp::ConvertDepthGpu(cuDraw, cuD, 1e-4, 0.1, 4.);
+    tdp::ConvertDepthGpu(cuDraw, cuDrawf, 1e-4, 0.1, 4.);
+    tdp::Blur5(cuDrawf, cuD, 0.03);
+    TOCK("Convert Depth");
     {
+      TICK("Compute Normals");
       pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
       cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
       Depth2Normals(cuD, cam, cuN);
-      if (gui.show2DNormals) {
+      TOCK("Compute Normals");
+      if (show2DNormals) {
+        TICK("Compute 2D normals image");
         tdp::Normals2Image(cuN, cuN2D);
         n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+        TOCK("Compute 2D normals image");
       }
-      if (gui.computeHist) {
-        if (gui.histFrameByFrame)
+      if (computeHist) {
+        TICK("Compute Hist");
+        if (histFrameByFrame)
           normalHist.Reset();
         normalHist.ComputeGpu(cuN);
+        TOCK("Compute Hist");
       }
       if (dpvmfmeans) {
+        TICK("Compute DPvMFClustering");
         n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
         dpm.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
+        TOCK("Compute DPvMFClustering");
       }
     }
     cudaDeviceSynchronize();
 
+    TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     pangolin::glDrawAxis(1);
-    if (gui.dispNormals) {
+    if (dispNormals) {
       pangolin::RenderVbo(cuNbuf);
     }
-    if (gui.computeHist) {
-      if (gui.dispGrid) {
+    if (computeHist) {
+      if (dispGrid) {
         normalHist.geoGrid_.Render3D();
       }
-      normalHist.Render3D(gui.histScale);
+      normalHist.Render3D(histScale, histLogScale);
     }
+    TOCK("Render 3D");
 
+    TICK("Render 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
@@ -139,9 +166,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     viewDebugA.SetImage(debugA);
     viewDebugB.SetImage(debugB);
-    if (gui.show2DNormals) {
+    if (show2DNormals) {
       viewN2D.SetImage(n2D);
     }
+    TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

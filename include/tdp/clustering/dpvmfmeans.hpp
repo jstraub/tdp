@@ -22,7 +22,7 @@ class DPvMFmeans {
   DPvMFmeans(float lambda) : lambda_(lambda) {};
   ~DPvMFmeans() {};
 
-  float Compute(const Image<Vector3fda>& n, const Image<Vector3fda>& cuN, 
+  void Compute(const Image<Vector3fda>& n, const Image<Vector3fda>& cuN, 
       Image<uint16_t>& cuZ, size_t maxIt, float minNchangePerc);
 
   uint16_t K_;
@@ -55,7 +55,7 @@ class DPvMFmeans {
   uint16_t indOfClosestCluster(const Vector3fda& ni, float& sim_closest);
 };
 
-float DPvMFmeans::Compute(const Image<Vector3fda>& n, 
+void DPvMFmeans::Compute(const Image<Vector3fda>& n, 
     const Image<Vector3fda>& cuN, 
     Image<uint16_t>& cuZ,
     size_t maxIt, float minNchangePerc) {
@@ -86,7 +86,6 @@ float DPvMFmeans::Compute(const Image<Vector3fda>& n,
       if (Nchange < minNchangePerc*N)
         break;
     }
-
     Kprev = K_;
     Nsprev = Ns_;
   }

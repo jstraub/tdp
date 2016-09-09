@@ -19,7 +19,7 @@ class GeodesicHist {
   GeodesicHist();
   ~GeodesicHist() {}
   
-  void Render3D(float scale);
+  void Render3D(float scale, bool logScale);
   void Reset() { cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes()); }
   void ComputeGpu(Image<tdp::Vector3fda>& cuN);
 
@@ -28,11 +28,13 @@ class GeodesicHist {
   ManagedDeviceImage<tdp::Vector3fda> cuTriCenters_;
   ManagedDeviceImage<uint32_t> cuHist_;
 
-  std::vector<tdp::Vector3fda> lines;
+  std::vector<tdp::Vector3fda> lines_;
+  std::vector<tdp::Vector3bda> lineColors_;
   ManagedHostImage<uint32_t> hist_;
   pangolin::GlBuffer vbo_;
+  pangolin::GlBuffer cbo_;
 
-  void RefreshLines(float scale);
+  void RefreshLines(float scale, bool logScale);
 };
 
 template<uint32_t D>
@@ -51,33 +53,62 @@ void GeodesicHist<D>::ComputeGpu(Image<tdp::Vector3fda>& cuN) {
 }
 
 template<uint32_t D>
-void GeodesicHist<D>::RefreshLines(float scale) {
+void GeodesicHist<D>::RefreshLines(float scale, bool logScale) {
   float sum  =0.;
-  for (size_t i=0; i<hist_.w_; ++i) sum += hist_[i];
-  std::cout << "# data in hist: " << sum << std::endl;
+  for (size_t i=0; i<hist_.w_; ++i) 
+    sum += logScale? log(hist_[i]==0?1:hist_[i]) : hist_[i];
+  std::pair<double,double> minMax = hist_.MinMax();
+  if (logScale) {
+    minMax.first = log(minMax.first==0?1:minMax.first);
+    minMax.second = log(minMax.second);
+  }
+  //std::cout << "# data in hist: " << sum << std::endl;
   std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
-  lines.clear();
-  lines.reserve(cs.size()*2);
+  lines_.clear();
+  lines_.reserve(cs.size()*2);
+  lineColors_.clear();
+  lineColors_.reserve(cs.size()*2);
   for (size_t i=0; i<cs.size(); ++i) {
-    lines.push_back(cs[i]);
-    lines.push_back(cs[i]*(1+scale*float(hist_[i])/sum));
+    float hVal = logScale? log(hist_[i]==0?1:hist_[i]) : hist_[i];
+    lines_.push_back(cs[i]);
+    lines_.push_back(cs[i]*(1+scale*hVal/sum));
+    float cVal = (hVal-minMax.first)/minMax.second;
+    Vector3bda hot(
+          cVal<0.20 ? 255*cVal*5 : 255,
+          cVal<0.40 ? 0 : cVal < 0.80 ? 255*(cVal-.4)*2.5 : 255,
+          cVal<0.80 ? 0 : 255*(cVal-0.8)*5 );
+    lineColors_.push_back(hot);
+    lineColors_.push_back(hot);
   }
 }
 
 template<uint32_t D>
-void GeodesicHist<D>::Render3D(float scale) {
-  RefreshLines(scale); 
-  vbo_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,lines.size(),GL_FLOAT,3,GL_DYNAMIC_DRAW);
-  vbo_.Upload(&(lines[0]),lines.size()*sizeof(tdp::Vector3fda));
+void GeodesicHist<D>::Render3D(float scale, bool logScale) {
+  RefreshLines(scale, logScale); 
+  vbo_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,lines_.size(),
+      GL_FLOAT,3,GL_DYNAMIC_DRAW);
+  vbo_.Upload(&(lines_[0]),lines_.size()*sizeof(tdp::Vector3fda));
+
+  cbo_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,lineColors_.size(),
+      GL_UNSIGNED_BYTE,3,GL_DYNAMIC_DRAW);
+  cbo_.Upload(&(lineColors_[0]),lineColors_.size()*sizeof(tdp::Vector3bda));
+
+  cbo_.Bind();
+  glColorPointer(cbo_.count_per_element, cbo_.datatype, 0, 0);
+  glEnableClientState(GL_COLOR_ARRAY);
 
   vbo_.Bind();
   glVertexPointer(vbo_.count_per_element, vbo_.datatype, 0, 0);
   glEnableClientState(GL_VERTEX_ARRAY);
+
   glLineWidth(4.0);
-  glColor4f(0,0,1,1);
   glDrawArrays(GL_LINES, 0, vbo_.num_elements);
+
   glDisableClientState(GL_VERTEX_ARRAY);
   vbo_.Unbind();
+
+  glDisableClientState(GL_COLOR_ARRAY);
+  cbo_.Unbind();
 }
   
 }

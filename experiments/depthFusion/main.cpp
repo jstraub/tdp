@@ -170,10 +170,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",5,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",3,0,10);
 
+  pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
+  pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",3,0,10);
+  pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",0,0,10);
+  pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",0,0,10);
+
   pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
   pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
   pangolin::Var<float> offsettz("ui.tz",0.,-0.1,0.1);
 
+  pangolin::Var<bool> showIcpError("ui.show ICP",false,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
 
   size_t numFused = 0;
@@ -241,30 +247,42 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_mc.matrix() = Eigen::Matrix4f::Identity();
-      tdp::SE3f dT;
+      tdp::SE3f dTRot;
+      if (icpRot) {
+        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+            camD, maxItRot, icpAngleThr_deg); 
+        std::cout << dTRot.matrix3x4() << std::endl;
+      }
+      tdp::SE3f dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
 //      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
+      if (icpRot) 
+        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
+      std::cout << dT.matrix3x4() << std::endl;
       T_mc.matrix() = dT.matrix()*T_mc.matrix();
       //std::cout << "T_mc" << std::endl << T_mc.matrix3x4() << std::endl;
       TOCK("ICP");
     }
 
-    tdp::Image<tdp::Vector3fda> pc_m = pcs_m.GetImage(icpErrorLvl);
-    ICPassoc_c.Reinitialise(pc_m.w_, pc_m.h_);
-    ICPassoc_m.Reinitialise(pc_m.w_, pc_m.h_);
-    cuICPassoc_c.Reinitialise(pc_m.w_, pc_m.h_);
-    cuICPassoc_m.Reinitialise(pc_m.w_, pc_m.h_);
-    ICPassoc_c.Fill(-1.);
-    ICPassoc_m.Fill(-1.);
-    cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
-    cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
-    tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
+    if (showIcpError) {
+      tdp::Image<tdp::Vector3fda> pc_m = pcs_m.GetImage(icpErrorLvl);
+      ICPassoc_c.Reinitialise(pc_m.w_, pc_m.h_);
+      ICPassoc_m.Reinitialise(pc_m.w_, pc_m.h_);
+      cuICPassoc_c.Reinitialise(pc_m.w_, pc_m.h_);
+      cuICPassoc_m.Reinitialise(pc_m.w_, pc_m.h_);
+      ICPassoc_c.Fill(-1.);
+      ICPassoc_m.Fill(-1.);
+      cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
+      cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
+      tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
         pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), T_mc,
-          tdp::ScaleCamera<float>(camD,pow(0.5,icpErrorLvl)), 
-          icpAngleThr_deg, icpDistThr, cuICPassoc_m,
-          cuICPassoc_c);
+        tdp::ScaleCamera<float>(camD,pow(0.5,icpErrorLvl)), 
+        icpAngleThr_deg, icpDistThr, cuICPassoc_m,
+        cuICPassoc_c);
+    }
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mc.matrix() = Eigen::Matrix4f::Identity();
@@ -373,10 +391,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
     viewNormalsPyr.SetImage(dispNormals2dPyr);
 
-    ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
-    ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
-    viewICPassocM.SetImage(ICPassoc_m);
-    viewICPassocC.SetImage(ICPassoc_c);
+    if (showIcpError) {
+      ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
+      ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
+      viewICPassocM.SetImage(ICPassoc_m);
+      viewICPassocC.SetImage(ICPassoc_c);
+    }
     TOCK("Draw 2D");
 
     // leave in pixel orthographic for slider to render.
