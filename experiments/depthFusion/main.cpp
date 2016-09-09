@@ -167,20 +167,35 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",7,0,10);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",5,0,10);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",3,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",3,0,10);
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",0,0,10);
   pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",0,0,10);
 
-  pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
-  pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
-  pangolin::Var<float> offsettz("ui.tz",0.,-0.1,0.1);
+  //pangolin::Var<float> offsettx("ui.tx",0.,-0.1,0.1);
+  //pangolin::Var<float> offsetty("ui.ty",0.,-0.1,0.1);
+  //pangolin::Var<float> offsettz("ui.tz",0.,-0.1,0.1);
 
   pangolin::Var<bool> showIcpError("ui.show ICP",false,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
+
+  if (false) {
+    // for the SR300 or F200
+    //depthSensorScale = 1e-4;
+    //grid0x = -1.;
+    //grid0y = -1.;
+    //grid0z = 0.;
+    //gridEx = 1.;
+    //gridEy = 1.;
+    //gridEz = 2.;
+    //tsdfMu = 0.2;
+    grid0z = 1.;
+    gridEz = 6.;
+    icpDistThr = 1.;
+  }
 
   size_t numFused = 0;
   // Stream and display video
@@ -200,9 +215,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
-    tdp::Vector3fda offsett(offsettx,offsetty,offsettz);
-
-    T_mc.matrix().topRightCorner(3,1) += offsett;
+    //tdp::Vector3fda offsett(offsettx,offsetty,offsettz);
+    //T_mc.matrix().topRightCorner(3,1) += offsett;
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
@@ -243,6 +257,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     TOCK("Setup Pyramids");
 
+    tdp::SE3f dT;
     if (runICP && numFused > 30) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -254,7 +269,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
             camD, maxItRot, icpAngleThr_deg); 
         std::cout << dTRot.matrix3x4() << std::endl;
       }
-      tdp::SE3f dT = dTRot;
+      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
 //      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
@@ -278,7 +293,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
       cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
       tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
-        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), T_mc,
+        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), dT,
         tdp::ScaleCamera<float>(camD,pow(0.5,icpErrorLvl)), 
         icpAngleThr_deg, icpDistThr, cuICPassoc_m,
         cuICPassoc_c);
@@ -293,15 +308,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
-      offsettx = 0.;
-      offsetty = 0.;
-      offsettz = 0.;
+      //offsettx = 0.;
+      //offsetty = 0.;
+      //offsettz = 0.;
     }
     if (pangolin::Pushed(resetICP)) {
       T_mc.matrix() = Eigen::Matrix4f::Identity();
-      offsettx = 0.;
-      offsetty = 0.;
-      offsettz = 0.;
+      //offsettx = 0.;
+      //offsetty = 0.;
+      //offsettz = 0.;
     }
 
     if (fuseTSDF || numFused <= 30) {

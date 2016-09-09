@@ -193,6 +193,7 @@ __global__ void KernelICPVisualizeAssoc(
           //assoc_c(idx,idy) = n_mi.dot(-pc_mi+pc_c_in_m);
           assoc_m(u,v) = (-pc_mi+pc_c_in_m).norm();
           assoc_c(idx,idy) = (-pc_mi+pc_c_in_m).norm();
+//          if (threadIdx.x < 3) printf("%d,%d and %d,%d\n", idx,idy,u,v);
         }
       }
     }
