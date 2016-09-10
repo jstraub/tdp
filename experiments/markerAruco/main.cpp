@@ -70,7 +70,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewN2D);
 
   // camera model for computing point cloud and normals
-  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
+  tdp::Camera<float> cam(Eigen::Vector4f(5.3553511437053305e+02,5.3471793850879351e+02,3.1625907382957985e+02,2.3559181421655782e+02)); 
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -128,7 +128,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     std::vector<aruco::Marker> markers = detector.detect(cvRgb);
     TOCK("aruco marker detect");
     numMarkers = markers.size();
-    Eigen::Matrix3f K_ = cam.GetK();
+    Eigen::Matrix<float,3,3,Eigen::RowMajor> K_ = cam.GetK();
     cv::Mat K(3,3, CV_32F, K_.data());
     Eigen::Vector4f dist_(0,0,0,0);
     cv::Mat distortion (4,1, CV_32F, dist_.data());
