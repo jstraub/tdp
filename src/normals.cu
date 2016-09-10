@@ -1,7 +1,7 @@
 
 #include <tdp/eigen/dense.h>
 #include <tdp/cuda.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/normals.h>
 #include <tdp/nvidia/helper_cuda.h>
 

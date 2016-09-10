@@ -4,7 +4,7 @@
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/glvbo.h>
 #include <tdp/directional/geodesic_grid.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

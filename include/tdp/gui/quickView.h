@@ -5,7 +5,7 @@
 #include <pangolin/display/view.h>
 #include <pangolin/handler/handler_image.h>
 #include <tdp/pixelFormat.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

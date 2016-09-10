@@ -5,7 +5,7 @@
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/depth.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

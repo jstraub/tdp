@@ -2,8 +2,8 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <tdp/reductions.cuh>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 

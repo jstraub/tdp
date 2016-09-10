@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/eigen/dense.h>
 
 namespace tdp {

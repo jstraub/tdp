@@ -1,6 +1,6 @@
 
 #include <Eigen/Dense>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/calibration/planeEstimation.h>
 #include <tdp/camera.h>
 #include <tdp/nvidia/helper_cuda.h>

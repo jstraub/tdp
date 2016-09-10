@@ -6,7 +6,7 @@
 #include <iostream>
 #include <stddef.h>
 #include <algorithm>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda.h>
 #endif

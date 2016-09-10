@@ -1,7 +1,7 @@
 #pragma once
 #include <tdp/camera.h>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/opt/gradientDescent.h>
 #include <tdp/reductions.cuh>
 

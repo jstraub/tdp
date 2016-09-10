@@ -9,7 +9,7 @@
 #include <pangolin/gl/glcuda.h>
 
 #include <tdp/eigen/dense.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/managed_image.h>
 
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
@@ -19,7 +19,7 @@
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
-#include <tdp/Stopwatch.h>
+#include <tdp/utils/Stopwatch.h>
 #include <tdp/blur.h>
 
 #include "gui.hpp"

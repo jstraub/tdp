@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 #include <tdp/volume.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda.h>

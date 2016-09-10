@@ -4,7 +4,7 @@
 #ifdef CUDA_FOUND
 #  include <tdp/allocator_gpu.h>
 #endif
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <iostream>
 
 namespace tdp {

@@ -4,7 +4,7 @@
 
 #pragma once
 #include <stdint.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
   void labelMap(Image<uint32_t>& cuZ, Image<uint32_t>& cuMap);

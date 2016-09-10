@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 #include <tdp/labelMap.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 

@@ -4,8 +4,8 @@
 #pragma once
 
 #include <tdp/eigen/dense.h>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/pyramid.h>
 #include <tdp/managed_pyramid.h>
 #include <tdp/camera.h>

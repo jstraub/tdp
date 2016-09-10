@@ -1,5 +1,5 @@
 #pragma once
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/camera.h>
 #include <tdp/pyramid.h>
 #include <tdp/eigen/dense.h>

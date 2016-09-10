@@ -13,7 +13,7 @@
 #include <pangolin/gl/gldraw.h>
 
 #include <Eigen/Dense>
-#include <tdp/managed_image.h>
+#include <tdp/data/managed_image.h>
 
 #include <tdp/convolutionSeparable.h>
 #include <tdp/depth.h>
@@ -22,7 +22,7 @@
 #include <tdp/gui/quickView.h>
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/icp.h>
 #include <tdp/tsdf.h>
@@ -30,7 +30,7 @@
 #include <tdp/managed_pyramid.h>
 #include <tdp/nvidia/helper_cuda.h>
 
-#include <tdp/Stopwatch.h>
+#include <tdp/utils/Stopwatch.h>
 
 #include "gui.hpp"
 

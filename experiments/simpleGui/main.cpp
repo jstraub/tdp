@@ -15,7 +15,7 @@
 #include <pangolin/image/image_io.h>
 
 #include <tdp/eigen/dense.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/managed_image.h>
 
 #include <tdp/depth.h>
 #include <tdp/pc.h>

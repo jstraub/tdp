@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <tdp/eigen/dense.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/pyramid.h>
 #include <tdp/camera.h>
 #include <tdp/manifold/SO3.h>

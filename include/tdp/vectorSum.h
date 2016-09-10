@@ -4,7 +4,7 @@
 
 #pragma once
 #include <stdint.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
 
 namespace tdp {

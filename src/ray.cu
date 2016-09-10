@@ -2,7 +2,7 @@
 #include <cuda.h>
 #include <Eigen/Core>
 #include <Eigen/Dense>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

@@ -2,7 +2,7 @@
 
 #include <tdp/volume.h>
 #include <tdp/camera.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {

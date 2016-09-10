@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 #include <math.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

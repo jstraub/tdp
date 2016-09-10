@@ -9,12 +9,12 @@
 #include <pangolin/gl/glcuda.h>
 
 #include <Eigen/Dense>
-#include <tdp/managed_image.h>
+#include <tdp/data/managed_image.h>
 
 #include <tdp/depth.h>
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/hist.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/calibration/planeEstimation.h>

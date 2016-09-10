@@ -1,6 +1,6 @@
 
 #include <tdp/eigen/dense.h>
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 
 namespace tdp {
 

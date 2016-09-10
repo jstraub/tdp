@@ -6,8 +6,8 @@
 #include <cuda_runtime_api.h>
 #include <tdp/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
-#include <tdp/image.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 
 namespace tdp {
 

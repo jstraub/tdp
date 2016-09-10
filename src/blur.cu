@@ -1,5 +1,5 @@
 
-#include <tdp/image.h>
+#include <tdp/data/image.h>
 #include <tdp/blur.h>
 #include <tdp/cuda.h>
 

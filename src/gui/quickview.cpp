@@ -1,6 +1,6 @@
 
 #include <tdp/gui/quickView.h>
-#include <tdp/managed_image.h>
+#include <tdp/data/managed_image.h>
 
 namespace tdp {
 
