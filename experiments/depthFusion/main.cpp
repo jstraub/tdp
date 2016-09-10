@@ -19,7 +19,7 @@
 #include <tdp/depth.h>
 #include <tdp/normals.h>
 #include <tdp/pc.h>
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/volume.h>
 #include <tdp/managed_volume.h>
 #include <tdp/image.h>

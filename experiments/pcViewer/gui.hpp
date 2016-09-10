@@ -8,7 +8,7 @@
 #include <pangolin/video/video.h>
 #include <pangolin/video/video_record_repeat.h>
 
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 
 class GUI {

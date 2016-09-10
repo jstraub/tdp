@@ -20,7 +20,7 @@
 #include <tdp/depth.h>
 #include <tdp/pc.h>
 #include <tdp/camera.h>
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
 #include <tdp/normals.h>
@@ -44,6 +44,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   size_t w = video.Streams()[gui.iD].Width();
   size_t h = video.Streams()[gui.iD].Height();
+  // width and height need to be multiple of 64 for convolution
+  // algorithm to compute normals.
+  w += w%64;
+  h += h%64;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -67,7 +71,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // device image: image in GPU memory
-  tdp::ManagedDeviceImage<float> cuDraw(w, h);
+  tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
@@ -111,9 +115,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
-    d_cam.Actiisplay vate(s_cam);
+    d_cam.Activate(s_cam);
     // draw the axis
-    pangolin::glDrawisplayAxis(0.1);
+    pangolin::glDrawAxis(0.1);
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     // render point cloud

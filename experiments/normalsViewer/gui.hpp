@@ -5,7 +5,7 @@
 #include <pangolin/pangolin.h>
 #include <pangolin/var/var.h>
 #include <pangolin/display/display.h>
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <pangolin/video/video.h>
 #include <pangolin/video/video_record_repeat.h>
 

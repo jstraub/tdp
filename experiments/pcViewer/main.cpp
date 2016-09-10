@@ -20,7 +20,7 @@
 #include <tdp/depth.h>
 #include <tdp/pc.h>
 #include <tdp/camera.h>
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
 #include <tdp/normals.h>

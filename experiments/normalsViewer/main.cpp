@@ -15,7 +15,7 @@
 #include <tdp/depth.h>
 #include <tdp/normals.h>
 #include <tdp/camera.h>
-#include <tdp/quickView.h>
+#include <tdp/gui/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
