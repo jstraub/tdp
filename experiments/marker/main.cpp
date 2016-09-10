@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <algorithm>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -31,6 +32,158 @@
 
 #include <tdp/gui/gui.hpp>
 
+/// Suppress non-maxima by examining the norm values in plus minus
+/// gradient direction.
+void NonMaxSuppression(
+    tdp::Image<uint8_t> Iedge,
+    tdp::Image<float> Inorm,
+    tdp::Image<float> Itheta
+    ) {
+  for (int x=1; x<(int)Iedge.w_-1; ++x) 
+    for (int y=1; y<(int)Iedge.h_-1; ++y) {
+      if (Iedge(x,y) > 128) {
+        float norm = Inorm(x,y);
+        float ang = Itheta(x,y);
+        float xp = std::max(0.f,std::min((float)Iedge.w_-1,x+cosf(ang)));
+        float yp = std::max(0.f,std::min((float)Iedge.h_-1,y+sinf(ang)));
+        float xn = std::max(0.f,std::min((float)Iedge.w_-1,x-cosf(ang)));
+        float yn = std::max(0.f,std::min((float)Iedge.h_-1,y-sinf(ang)));
+        float normP = Inorm.GetBilinear(xp,yp);
+        float normN = Inorm.GetBilinear(xn,yn);
+        if (norm <= normP || norm <= normN) {
+          Iedge(x,y) = 0;
+        }
+      }
+    }
+}
+
+/// Find contours in an edge image (no edge I<128; edge I>=128)
+uint16_t FindContours(
+    tdp::Image<uint8_t> Iedge,
+    tdp::Image<uint16_t> cId,
+    uint16_t minLen
+    )
+{
+  const int w = Iedge.w_;
+  const int h = Iedge.h_;
+  cId.Fill(0);
+  int16_t id = 1;
+  std::vector<uint16_t> cCounts;
+  for (size_t i=0; i<Iedge.Area(); ++i) {
+    if (Iedge[i] > 128) {
+      cCounts.push_back(1);
+      // found a starting point for a contour
+      // lok at starting location twice to get both directions
+      for (size_t j=0; j<2; ++j) {
+        int x = i%w;  
+        int y = i/w;  
+        cId[i] = id;
+        Iedge[i] = 0; 
+        // follow contour 
+        bool foundPath = true;
+        while (foundPath) {
+          int r = (std::min(w-1,x+1)) + y*w;
+          if (Iedge[r] > 128) {
+            cId[r] = id;
+            Iedge[r] = 0; 
+            x = r%w; y = r/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int rd = (std::min(w-1,x+1)) + std::min(h-1,y+1)*w;
+          if (Iedge[rd] > 128) {
+            cId[rd] = id;
+            Iedge[rd] = 0; 
+            x = rd%w; y = rd/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int d = x + std::min(h-1,y+1)*w;
+          if (Iedge[d] > 128) {
+            cId[d] = id;
+            Iedge[d] = 0; 
+            x = d%w; y = d/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int ld = (std::max(0,x-1)) + std::min(h-1,y+1)*w;
+          if (Iedge[ld] > 128) {
+            cId[ld] = id;
+            Iedge[ld] = 0; 
+            x = ld%w; y = ld/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int l = (std::max(0,x-1)) + y*w;
+          if (Iedge[l] > 128) {
+            cId[l] = id;
+            Iedge[l] = 0; 
+            x = l%w; y = l/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int lu = (std::max(0,x-1)) + std::max(0,y-1)*w;
+          if (Iedge[lu] > 128) {
+            cId[lu] = id;
+            Iedge[lu] = 0; 
+            x = lu%w; y = lu/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int u = x + std::max(0,y-1)*w;
+          if (Iedge[u] > 128) {
+            cId[u] = id;
+            Iedge[u] = 0; 
+            x = u%w; y = u/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          int ru = (std::min(w-1,x+1)) + std::max(0,y-1)*w;
+          if (Iedge[ru] > 128) {
+            cId[ru] = id;
+            Iedge[ru] = 0; 
+            x = ru%w; y = ru/w;
+            cCounts[id-1] ++;
+            continue;
+          } 
+          foundPath = false;
+//          if (cId[l] > 0 || cId[lu] > 0 || cId[u] > 0 || cId[ru] > 0 || 
+//              cId[r] > 0 || cId[rd] > 0 || cId[d] > 0 || cId[ld] > 0) {
+//            std::cout << "collided with other contour "
+//              << id  << " "
+//              <<  cCounts[id-1] << ": "
+//              << cId[l] << "," 
+//              << cId[lu] << "," 
+//              << cId[u] << "," 
+//              << cId[ru] << "," 
+//              << cId[r] << "," 
+//              << cId[rd] << "," 
+//              << cId[d] << "," 
+//              << cId[ld] << "," 
+//              << std::endl;
+//          }
+        }
+      }
+      id ++;
+    }
+  }
+  for (size_t i=0; i<cId.Area(); ++i) {
+    if (cId[i] > 0) {
+      if (cCounts[cId[i]-1] < minLen) {
+        cId[i] = 0;
+      }
+    }
+  }
+
+  // count number of contours passing threshold
+  id = 0;
+  for (auto count: cCounts) 
+    if (count >= minLen) 
+      id++;
+  return id;
+}
+
+
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
 
@@ -47,7 +200,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   size_t w = video.Streams()[gui.iD].Width();
   size_t h = video.Streams()[gui.iD].Height();
-  // width and height need to be multiple of 64 for convolution
+  size_t wOrig = w;
+  size_t hOrig = h;
+// width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
   w += w%64;
   h += h%64;
@@ -64,10 +219,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   // add a simple image viewer
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
-  tdp::QuickView viewThr(w,h);
-  gui.container().AddDisplay(viewThr);
-  tdp::QuickView viewThrBinary(w,h);
-  gui.container().AddDisplay(viewThrBinary);
   tdp::QuickView viewGrey(w,h);
   gui.container().AddDisplay(viewGrey);
   tdp::QuickView viewGreyDu(w,h);
@@ -80,6 +231,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewGreyDtheta);
   tdp::QuickView viewGreyDnormThr(w,h);
   gui.container().AddDisplay(viewGreyDnormThr);
+  tdp::QuickView viewContourId(w,h);
+  gui.container().AddDisplay(viewContourId);
+  tdp::QuickView viewThr(w,h);
+  gui.container().AddDisplay(viewThr);
+  tdp::QuickView viewThrBinary(w,h);
+  gui.container().AddDisplay(viewThrBinary);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -98,13 +255,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<float> greydtheta(w, h);
   tdp::ManagedHostImage<uint8_t> dNormThr(w, h);
 
+  tdp::ManagedHostImage<uint16_t> cId(w, h);
+
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
   tdp::ManagedDeviceImage<float> cuGrey(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wOrig, hOrig);
   tdp::ManagedDeviceImage<float> cuThr(w, h);
   tdp::ManagedDeviceImage<uint8_t> cuThrBinary(w, h);
   tdp::ManagedDeviceImage<uint8_t> cuDnormThr(w, h);
@@ -123,7 +282,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<int> thrDiameter("ui.thr D",5,3,9);
   pangolin::Var<float> threshold("ui.thr",5.,-1.,10.);
-  pangolin::Var<float> thresholdGradNorm("ui.thr grad norm",20.,1.,30.);
+  pangolin::Var<float> thresholdGradNorm("ui.thr grad norm",30.,10.,40.);
+  pangolin::Var<int> minContourLen("ui.min len",20,1,100);
+  pangolin::Var<int> numContours("ui.# contours",0,0,0);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -174,6 +335,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Threshold(cuGreydnorm,cuDnormThr, thresholdGradNorm);
     dNormThr.CopyFrom(cuDnormThr,cudaMemcpyDeviceToHost);
 
+    tdp::Image<uint8_t> Iedge(w,h,dNormThr.ptr_);
+    NonMaxSuppression(Iedge, greydnorm, greydtheta);
+    numContours = FindContours(Iedge, cId, minContourLen);
+
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
@@ -198,6 +363,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     viewGreyDnorm.SetImage(greydnorm);
     viewGreyDtheta.SetImage(greydtheta);
     viewGreyDnormThr.SetImage(dNormThr);
+    viewContourId.SetImage(cId);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

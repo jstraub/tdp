@@ -23,7 +23,7 @@ void Rgb2Grey(
   Image<float>& cuGrey
     ) {
   dim3 threads, blocks;
-  ComputeKernelParamsForImage(blocks,threads,cuRgb,32,32);
+  ComputeKernelParamsForImage(blocks,threads,cuGrey,32,32);
   //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
   KernelRgb2Grey<<<blocks,threads>>>(cuRgb,cuGrey);
   checkCudaErrors(cudaDeviceSynchronize());

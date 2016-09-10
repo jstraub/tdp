@@ -3,6 +3,8 @@
  */
 #pragma once 
 #include <limits>
+#include <cmath>
+#include <algorithm>
 #include <assert.h>
 #include <tdp/config.h>
 #include <sstream>
@@ -55,6 +57,17 @@ class Image {
   TDP_HOST_DEVICE
   T* RowPtr(size_t v) const { 
     return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_); }
+
+  TDP_HOST_DEVICE
+  T GetBilinear(float x, float y) {
+    int xl = std::max(0,(int)std::floor(x-0.5f));
+    int xr = std::min((int)w_-1,(int)std::floor(x+0.5f));
+    int yu = std::max(0,(int)std::floor(y-0.5f));
+    int yd = std::min((int)h_-1,(int)std::floor(y+0.5f));
+    T valU = (xr-x)*RowPtr(yu)[xl] + (x-xl)*RowPtr(yu)[xr];
+    T valD = (xr-x)*RowPtr(yd)[xl] + (x-xl)*RowPtr(yd)[xr];
+    return (yd-y)*valU + (y-yu)*valD;
+  }
 
   TDP_HOST_DEVICE
   size_t SizeBytes() const { return pitch_*h_; }
