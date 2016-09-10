@@ -26,7 +26,7 @@
 #include <tdp/preproc/normals.h>
 #endif
 
-#include "gui.hpp"
+#include <tdp/gui/gui.hpp>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -40,15 +40,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     return;
   }
 
-  GUI gui(1200,800,video);
+  tdp::GUI gui(1200,800,video);
 
   size_t w = video.Streams()[gui.iD].Width();
   size_t h = video.Streams()[gui.iD].Height();
   size_t wc = w;
   size_t hc = h;
-  float f = 550;
-  float uc = (w-1.)/2.;
-  float vc = (h-1.)/2.;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -98,6 +95,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       "/home/jstraub/workspace/research/tdp/shaders/normal.jpg");
   matcapTex.Upload(matcapImg.ptr,GL_RGB,GL_UNSIGNED_BYTE);
 
+  pangolin::Var<bool> useMatCap("ui.use matcap", false,true);
+
 #ifdef CUDA_FOUND
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(wc, hc);
@@ -136,7 +135,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-    if (gui.useMatCap) {
+    if (useMatCap) {
       pcVbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
       pcNbo.Bind();
@@ -174,7 +173,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     glDrawElements(GL_TRIANGLE_STRIP,pcIbo.num_elements, pcIbo.datatype, 0);
     pcIbo.Unbind();
 
-    if (gui.useMatCap) {
+    if (useMatCap) {
       //glBindSampler(2,0);
       matcapTex.Unbind();
       matcap.Unbind();

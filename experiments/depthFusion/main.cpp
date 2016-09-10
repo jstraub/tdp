@@ -32,7 +32,7 @@
 
 #include <tdp/utils/Stopwatch.h>
 
-#include "gui.hpp"
+#include <tdp/gui/gui.hpp>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -45,7 +45,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     return;
   }
 
-  GUI gui(1200,800,video);
+  tdp::GUI gui(1200,800,video);
   size_t w = video.Streams()[gui.iRGB].Width();
   size_t h = video.Streams()[gui.iRGB].Height();
   size_t wc = w+w%64; // for convolution
