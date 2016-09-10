@@ -24,6 +24,14 @@ inline bool IsValidNormal(const Vector3fda& n) {
   return IsValidData(n) && fabs(n.squaredNorm()-1.0f) < 1e-3f;
 }
 
+template<typename T>
+TDP_HOST_DEVICE inline bool isNan(const T& val)
+{return val!=val;};
+
+template<>
+TDP_HOST_DEVICE inline bool isNan(const Vector3fda& val)
+{return isNan<float>(val(0)) || isNan<float>(val(1)) || isNan<float>(val(2));};
+
 #ifdef CUDA_FOUND
 void ComputeKernelParamsForArray(dim3& blocks, dim3& threads,
     size_t size, size_t numThreads, size_t numDataPerThread=1);

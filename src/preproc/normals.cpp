@@ -15,19 +15,8 @@ void Depth2Normals(
   assert(hc%64 == 0);
   ManagedDeviceImage<float> cuDu(wc, hc);
   ManagedDeviceImage<float> cuDv(wc, hc);
-  ManagedDeviceImage<float> cuTmp(wc, hc);
-  // upload to gpu and get derivatives using shar kernel
-  float kernelA[3] = {1,0,-1};
-  setConvolutionKernel(kernelA);
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  float kernelB[3] = {3/32.,10/32.,3/32.};
-  setConvolutionKernel(kernelB);
-  convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  setConvolutionKernel(kernelA);
-  convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
+
+  Gradient(cuD, cuDu, cuDv);
 
   float f = cam.params_(0);
   int uc = cam.params_(2);

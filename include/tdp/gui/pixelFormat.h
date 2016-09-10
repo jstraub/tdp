@@ -30,6 +30,15 @@ inline pangolin::GlPixFormat PixFormatFromType<float>(void) {
   return fmt;
 }
 template <>
+inline pangolin::GlPixFormat PixFormatFromType<uint8_t>(void) { 
+  pangolin::GlPixFormat fmt;
+  fmt.glformat = GL_LUMINANCE;
+  fmt.gltype = GL_UNSIGNED_BYTE;
+  fmt.scalable_internal_format = GL_LUMINANCE;
+  //std::cout << "GL_LUMINANCE; GL_FLOAT; GL_LUMINANCE32F_ARB;" << std::endl;
+  return fmt;
+}
+template <>
 inline pangolin::GlPixFormat PixFormatFromType<Eigen::Matrix<float,3,1>>(void) { 
   pangolin::GlPixFormat fmt;
   fmt.glformat = GL_RGB;

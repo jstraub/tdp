@@ -16,15 +16,6 @@ template<typename T>
 __device__ inline void atomicAdd_(T* address, const T& val)
 { assert(false); };
 
-
-template<typename T>
-__device__ inline bool isNan(const T& val)
-{return val!=val;};
-
-template<>
-__device__ inline bool isNan(const Vector3fda& val)
-{return isNan<float>(val(0)) || isNan<float>(val(1)) || isNan<float>(val(2));};
-
 template<typename T>
 __device__ inline T zero()
 {return 0;};

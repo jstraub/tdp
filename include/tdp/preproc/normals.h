@@ -11,7 +11,7 @@
 #include <tdp/camera/camera.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda/cuda.h>
-#include <tdp/preproc/convolutionSeparable.h>
+#include <tdp/preproc/grad.h>
 #endif
 
 namespace tdp {
@@ -64,19 +64,8 @@ void Depth2Normals(
   assert(hc%64 == 0);
   ManagedDeviceImage<float> cuDu(wc, hc);
   ManagedDeviceImage<float> cuDv(wc, hc);
-  ManagedDeviceImage<float> cuTmp(wc, hc);
-  // upload to gpu and get derivatives using shar kernel
-  float kernelA[3] = {1,0,-1};
-  setConvolutionKernel(kernelA);
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  float kernelB[3] = {3/32.,10/32.,3/32.};
-  setConvolutionKernel(kernelB);
-  convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  setConvolutionKernel(kernelA);
-  convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
+
+  Gradient(cuD, cuDu, cuDv);
 
   float f = cam.params_(0);
   float uc = cam.params_(2);
@@ -102,19 +91,8 @@ void Depth2NormalsViaDerivativePyr(
   ManagedDevicePyramid<float,3> cuDvPyr(wc, hc);
   Image<float> cuDu = cuDuPyr.GetImage(0);
   Image<float> cuDv = cuDvPyr.GetImage(0);
-  ManagedDeviceImage<float> cuTmp(wc, hc);
-  // upload to gpu and get derivatives using shar kernel
-  float kernelA[3] = {1,0,-1};
-  setConvolutionKernel(kernelA);
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  float kernelB[3] = {3/32.,10/32.,3/32.};
-  setConvolutionKernel(kernelB);
-  convolutionColumnsGPU((float*)cuDu.ptr_,(float*)cuTmp.ptr_,wc,hc);
-  checkCudaErrors(cudaDeviceSynchronize());
-  convolutionRowsGPU((float*)cuTmp.ptr_,(float*)cuD.ptr_,wc,hc);
-  setConvolutionKernel(kernelA);
-  convolutionColumnsGPU((float*)cuDv.ptr_,(float*)cuTmp.ptr_,wc,hc);
+
+  Gradient(cuD, cuDu, cuDv);
 
   tdp::CompletePyramid<float,3>(cuDuPyr, cudaMemcpyDeviceToDevice);
   tdp::CompletePyramid<float,3>(cuDvPyr, cudaMemcpyDeviceToDevice);
