@@ -1,7 +1,7 @@
 
-#include <tdp/icp.h>
-#include <tdp/pyramid.h>
-#include <tdp/camera.h>
+#include <tdp/icp/icp.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/camera/camera.h>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {

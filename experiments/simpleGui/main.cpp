@@ -17,13 +17,13 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
 
-#include <tdp/depth.h>
-#include <tdp/pc.h>
-#include <tdp/camera.h>
+#include <tdp/preproc/depth.h>
+#include <tdp/preproc/pc.h>
+#include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
-#include <tdp/normals.h>
+#include <tdp/preproc/normals.h>
 #endif
 
 #include <tdp/gui/gui.hpp>

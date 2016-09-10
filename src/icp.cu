@@ -4,12 +4,12 @@
 
 #include <assert.h>
 #include <tdp/eigen/dense.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
-#include <tdp/camera.h>
-#include <tdp/reductions.cuh>
+#include <tdp/camera/camera.h>
+#include <tdp/reductions/reductions.cuh>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {

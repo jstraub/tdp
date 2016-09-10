@@ -1,5 +1,5 @@
 
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 
 namespace tdp {
 

@@ -6,10 +6,10 @@
 #include <stddef.h>
 #include <limits.h>
 #include <tdp/data/image.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/eigen/dense.h>
-#include <tdp/reductions.cuh>
+#include <tdp/reductions/reductions.cuh>
 
 namespace tdp {
 

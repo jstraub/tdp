@@ -6,7 +6,7 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/data/image.h>
-#include <tdp/sufficientStats.h>
+#include <tdp/stats/sufficientStats.h>
 #include <tdp/utils/Stopwatch.h>
 
 namespace tdp {

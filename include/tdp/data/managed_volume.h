@@ -1,11 +1,11 @@
 
 #pragma once
 #include <assert.h>
-#include <tdp/allocator.h>
+#include <tdp/data/allocator.h>
 #ifdef CUDA_FOUND
-#  include <tdp/allocator_gpu.h>
+#  include <tdp/data/allocator_gpu.h>
 #endif
-#include <tdp/volume.h>
+#include <tdp/data/volume.h>
 
 namespace tdp {
 

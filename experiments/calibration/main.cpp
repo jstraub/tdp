@@ -11,11 +11,11 @@
 #include <Eigen/Dense>
 #include <tdp/data/managed_image.h>
 
-#include <tdp/depth.h>
-#include <tdp/volume.h>
-#include <tdp/managed_volume.h>
+#include <tdp/preproc/depth.h>
+#include <tdp/data/volume.h>
+#include <tdp/data/managed_volume.h>
 #include <tdp/data/image.h>
-#include <tdp/hist.h>
+#include <tdp/stats/hist.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/calibration/planeEstimation.h>
 

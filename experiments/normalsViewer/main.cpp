@@ -11,16 +11,16 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
 
-#include <tdp/convolutionSeparable.h>
-#include <tdp/depth.h>
-#include <tdp/normals.h>
-#include <tdp/camera.h>
+#include <tdp/preproc/convolutionSeparable.h>
+#include <tdp/preproc/depth.h>
+#include <tdp/preproc/normals.h>
+#include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/utils/Stopwatch.h>
-#include <tdp/blur.h>
+#include <tdp/preproc/blur.h>
 
 #include "gui.hpp"
 

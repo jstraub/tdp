@@ -1,8 +1,8 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include <tdp/depth.h>
-#include <tdp/image.h>
+#include <tdp/preproc/depth.h>
+#include <tdp/data/image.h>
 #include <iostream>
 #include <math.h>
 

@@ -3,9 +3,9 @@
 #include <iostream>
 #include <Eigen/Core>
 #include <Eigen/Dense>
-#include <tdp/cuda.h>
-#include <tdp/tsdf.h>
-#include <tdp/projective_math.h>
+#include <tdp/cuda/cuda.h>
+#include <tdp/tsdf/tsdf.h>
+#include <tdp/camera/projective_math.h>
 
 namespace tdp {
 

@@ -2,10 +2,10 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/eigen/dense.h>
-#include <tdp/reductions.cuh>
+#include <tdp/reductions/reductions.cuh>
 
 namespace tdp {
 

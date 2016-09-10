@@ -10,10 +10,10 @@
  */
 
 #include <stdint.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <assert.h>
 #include <tdp/nvidia/helper_cuda.h>
-#include <tdp/convolutionSeparable.h>
+#include <tdp/preproc/convolutionSeparable.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Convolution kernel storage

@@ -1,8 +1,8 @@
 #pragma once
-#include <tdp/pyramid.h>
-#include <tdp/allocator.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/data/allocator.h>
 #ifdef CUDA_FOUND
-#  include <tdp/allocator_gpu.h>
+#  include <tdp/data/allocator_gpu.h>
 #endif
 
 namespace tdp {

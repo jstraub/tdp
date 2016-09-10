@@ -1,9 +1,9 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include <tdp/labelMap.h>
+#include <tdp/utils/labelMap.h>
 #include <tdp/data/image.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {

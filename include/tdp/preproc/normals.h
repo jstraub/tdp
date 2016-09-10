@@ -6,12 +6,12 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
-#include <tdp/pyramid.h>
-#include <tdp/managed_pyramid.h>
-#include <tdp/camera.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/data/managed_pyramid.h>
+#include <tdp/camera/camera.h>
 #ifdef CUDA_FOUND
-#include <tdp/cuda.h>
-#include <tdp/convolutionSeparable.h>
+#include <tdp/cuda/cuda.h>
+#include <tdp/preproc/convolutionSeparable.h>
 #endif
 
 namespace tdp {

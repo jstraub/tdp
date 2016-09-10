@@ -8,7 +8,7 @@
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/eigen/dense.h>
-#include <tdp/reductions.cuh>
+#include <tdp/reductions/reductions.cuh>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {

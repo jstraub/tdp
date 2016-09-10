@@ -4,11 +4,11 @@
 #pragma once
 
 #include <stddef.h>
-#include <tdp/volume.h>
+#include <tdp/data/volume.h>
 #include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #endif
 

@@ -3,8 +3,8 @@
 #include <vector>
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
-#include <tdp/pyramid.h>
-#include <tdp/camera.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/camera/camera.h>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
 

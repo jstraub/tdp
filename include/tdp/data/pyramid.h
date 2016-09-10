@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <tdp/data/image.h>
 #ifdef CUDA_FOUND
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #endif
 
 namespace tdp {

@@ -1,10 +1,10 @@
 
 #include <iostream>
 #include <Eigen/Dense>
-#include <tdp/reductions.cuh>
+#include <tdp/reductions/reductions.cuh>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {

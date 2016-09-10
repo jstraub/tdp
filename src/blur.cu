@@ -1,7 +1,7 @@
 
 #include <tdp/data/image.h>
-#include <tdp/blur.h>
-#include <tdp/cuda.h>
+#include <tdp/preproc/blur.h>
+#include <tdp/cuda/cuda.h>
 
 namespace tdp {
 

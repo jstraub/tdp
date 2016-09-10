@@ -4,7 +4,7 @@
 #include <pangolin/gl/glsl.h>
 #include <pangolin/display/view.h>
 #include <pangolin/handler/handler_image.h>
-#include <tdp/pixelFormat.h>
+#include <tdp/gui/pixelFormat.h>
 #include <tdp/data/image.h>
 
 namespace tdp {

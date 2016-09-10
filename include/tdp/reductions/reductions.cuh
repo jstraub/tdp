@@ -1,10 +1,10 @@
 #pragma once
 #include <Eigen/Dense>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <stdio.h>
 #include <assert.h>
 #include <cuda_runtime_api.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>

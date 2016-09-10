@@ -2,10 +2,10 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
-#include <tdp/cuda.h>
-#include <tdp/reductions.cuh>
+#include <tdp/cuda/cuda.h>
+#include <tdp/reductions/reductions.cuh>
 
-#include <tdp/sufficientStats.h>
+#include <tdp/stats/sufficientStats.h>
 
 namespace tdp {
 

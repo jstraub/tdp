@@ -1,7 +1,7 @@
 #pragma once
 
-#include <tdp/volume.h>
-#include <tdp/camera.h>
+#include <tdp/data/volume.h>
+#include <tdp/camera/camera.h>
 #include <tdp/data/image.h>
 #include <tdp/manifold/SE3.h>
 

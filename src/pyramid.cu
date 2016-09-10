@@ -3,10 +3,10 @@
  */
 
 #include <assert.h>
-#include <tdp/pyramid.h>
+#include <tdp/data/pyramid.h>
 #include <tdp/data/image.h>
-#include <tdp/cuda.h>
-#include <tdp/reductions.cuh>
+#include <tdp/cuda/cuda.h>
+#include <tdp/reductions/reductions.cuh>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {

@@ -1,8 +1,8 @@
 
 #include <tdp/eigen/dense.h>
-#include <tdp/cuda.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/data/image.h>
-#include <tdp/normals.h>
+#include <tdp/preproc/normals.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 namespace tdp {

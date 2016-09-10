@@ -1,6 +1,6 @@
 
 #include <assert.h>
-#include <tdp/normals.h>
+#include <tdp/preproc/normals.h>
 
 namespace tdp {
 

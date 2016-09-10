@@ -1,7 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
 #include <tdp/manifold/SE3.h>
-#include <tdp/camera.h>
+#include <tdp/camera/camera.h>
 
 namespace tdp {
 

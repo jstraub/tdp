@@ -15,19 +15,19 @@
 #include <Eigen/Dense>
 #include <tdp/data/managed_image.h>
 
-#include <tdp/convolutionSeparable.h>
-#include <tdp/depth.h>
-#include <tdp/normals.h>
-#include <tdp/pc.h>
+#include <tdp/preproc/convolutionSeparable.h>
+#include <tdp/preproc/depth.h>
+#include <tdp/preproc/normals.h>
+#include <tdp/preproc/pc.h>
 #include <tdp/gui/quickView.h>
-#include <tdp/volume.h>
-#include <tdp/managed_volume.h>
+#include <tdp/data/volume.h>
+#include <tdp/data/managed_volume.h>
 #include <tdp/data/image.h>
 #include <tdp/manifold/SE3.h>
-#include <tdp/icp.h>
-#include <tdp/tsdf.h>
-#include <tdp/pyramid.h>
-#include <tdp/managed_pyramid.h>
+#include <tdp/icp/icp.h>
+#include <tdp/tsdf/tsdf.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/data/managed_pyramid.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 #include <tdp/utils/Stopwatch.h>

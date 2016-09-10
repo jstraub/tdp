@@ -1,9 +1,9 @@
 #pragma once
-#include <tdp/camera.h>
+#include <tdp/camera/camera.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/opt/gradientDescent.h>
-#include <tdp/reductions.cuh>
+#include <tdp/reductions/reductions.cuh>
 
 namespace tdp {
 
