@@ -91,10 +91,32 @@ void AdaptiveThreshold(
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,cuGrey,32,32);
-  //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
   KernelAdaptiveThreshold<<<blocks,threads>>>(cuGrey,cuThr,D,thr);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__
+void KernelThreshold(
+  const Image<float> grey, 
+  Image<uint8_t> Ithr,
+  float thr
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < grey.w_ && idy < grey.h_) {
+    Ithr(idx,idy) = grey(idx, idy) > thr? 255 : 0;
+  }
+}
+
+void Threshold(
+  const Image<float> cuGrey, 
+  Image<uint8_t> cuThr,
+  float thr
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,cuGrey,32,32);
+  KernelThreshold<<<blocks,threads>>>(cuGrey,cuThr,thr);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
 
 }

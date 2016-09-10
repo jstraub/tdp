@@ -78,6 +78,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewGreyDnorm);
   tdp::QuickView viewGreyDtheta(w,h);
   gui.container().AddDisplay(viewGreyDtheta);
+  tdp::QuickView viewGreyDnormThr(w,h);
+  gui.container().AddDisplay(viewGreyDnormThr);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -94,6 +96,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::ManagedHostImage<float> greydnorm(w, h);
   tdp::ManagedHostImage<float> greydtheta(w, h);
+  tdp::ManagedHostImage<uint8_t> dNormThr(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -104,6 +107,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(w, h);
   tdp::ManagedDeviceImage<float> cuThr(w, h);
   tdp::ManagedDeviceImage<uint8_t> cuThrBinary(w, h);
+  tdp::ManagedDeviceImage<uint8_t> cuDnormThr(w, h);
 
   tdp::ManagedDeviceImage<float> cuGreydu(w, h);
   tdp::ManagedDeviceImage<float> cuGreydv(w, h);
@@ -119,6 +123,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<int> thrDiameter("ui.thr D",5,3,9);
   pangolin::Var<float> threshold("ui.thr",5.,-1.,10.);
+  pangolin::Var<float> thresholdGradNorm("ui.thr grad norm",20.,1.,30.);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -166,6 +171,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     greydnorm.CopyFrom(cuGreydnorm, cudaMemcpyDeviceToHost);
     greydtheta.CopyFrom(cuGreydtheta, cudaMemcpyDeviceToHost);
 
+    tdp::Threshold(cuGreydnorm,cuDnormThr, thresholdGradNorm);
+    dNormThr.CopyFrom(cuDnormThr,cudaMemcpyDeviceToHost);
+
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
@@ -189,6 +197,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     viewGreyDv.SetImage(greydv);
     viewGreyDnorm.SetImage(greydnorm);
     viewGreyDtheta.SetImage(greydtheta);
+    viewGreyDnormThr.SetImage(dNormThr);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

@@ -4,6 +4,7 @@
 #include <tdp/eigen/dense.h>
 
 namespace tdp { 
+
   void AdaptiveThreshold(const Image<float> cuGrey, 
       Image<float> cuThr,
       int32_t D
@@ -11,6 +12,11 @@ namespace tdp {
   void AdaptiveThreshold(const Image<float> cuGrey, 
       Image<uint8_t> cuThr,
       int32_t D,
+      float thr
+    );
+
+  void Threshold(const Image<float> cuGrey, 
+      Image<uint8_t> cuThr,
       float thr
     );
 }
