@@ -1,7 +1,7 @@
 #include <tdp/testing/testing.h>
 #include <tdp/manifold/SE3.h>
-#include <tdp/camera.h>
-#include <tdp/projective_math.h>
+#include <tdp/camera/camera.h>
+#include <tdp/camera/projective_math.h>
 
 TEST(projective_math, TransformHomography) {
   tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());

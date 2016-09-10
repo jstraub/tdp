@@ -1,6 +1,6 @@
 #include <tdp/testing/testing.h>
-#include <tdp/volume.h>
-#include <tdp/managed_volume.h>
+#include <tdp/data/volume.h>
+#include <tdp/data/managed_volume.h>
 
 TEST(volume, setup) {
   float data[100*100*100];

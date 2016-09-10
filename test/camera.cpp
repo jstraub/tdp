@@ -1,5 +1,5 @@
 #include <tdp/testing/testing.h>
-#include <tdp/camera.h>
+#include <tdp/camera/camera.h>
 
 TEST(setup, camera) {
   tdp::Cameraf::Parameters pf(4);
