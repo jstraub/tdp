@@ -1,4 +1,4 @@
-#include <tdp/testing.h>
+#include <tdp/testing/testing.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera.h>
 #include <tdp/projective_math.h>

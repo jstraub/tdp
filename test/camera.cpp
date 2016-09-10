@@ -1,4 +1,4 @@
-#include <tdp/testing.h>
+#include <tdp/testing/testing.h>
 #include <tdp/camera.h>
 
 TEST(setup, camera) {
