@@ -10,7 +10,7 @@ IF(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug) # Release; debug; ...
 ENDIF()
 
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH} "/home/jstraub/workspace/research/3rdparty/install/lib/cmake/")
 message(${CMAKE_MODULE_PATH})
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -38,6 +38,12 @@ message(${Pangolin_DIR}/include)
 find_package (Eigen3 3.2.93 REQUIRED)
 #set(EIGEN3_INCLUDE_DIR "/home/jstraub/workspace/research/3rdparty/eigen/")
 message(${EIGEN3_INCLUDE_DIR})
+
+find_package(aruco 2.0.9 QUIET)
+if (aruco_FOUND) 
+  include_directories(${aruco_INCLUDE_DIRS})
+  link_directories(${aruco_LIB_DIR})
+endif()
 
 include_directories(
   include
