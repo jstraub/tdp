@@ -22,11 +22,12 @@
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/utils/Stopwatch.h>
 #ifdef CUDA_FOUND
 #include <tdp/preproc/normals.h>
 #endif
 
-#include <tdp/gui/gui.hpp>
+#include "gui.hpp"
 #include <tdp/camera/rig.h>
 #include <pangolin/video/drivers/openni2.h>
 
@@ -38,7 +39,7 @@ void VideoViewer(const std::string& input_uri,
 
   // Read rig file
   tdp::Rig<tdp::Cameraf> rig;
-  if (!rig.FromFile(configPath, false)) return;
+  if (!rig.FromFile(configPath, true)) return;
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -75,14 +76,15 @@ void VideoViewer(const std::string& input_uri,
         << " " << rig.config_[camId]["camera"]["description"].get<std::string>()
         << std::endl;
     }
-    stream2cam.push_back(camId); // rgb
-    stream2cam.push_back(camId); // d
+    stream2cam.push_back(camId); // 
   }
 
-  tdp::GUI gui(1200,800,video);
+  tdp::GUInoViews gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iD].Width();
-  size_t h = video.Streams()[gui.iD].Height();
+  size_t wSingle = video.Streams()[0].Width();
+  size_t hSingle = video.Streams()[0].Height();
+  size_t w = wSingle;
+  size_t h = 3*hSingle;
   // width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
   w += w%64;
@@ -97,16 +99,18 @@ void VideoViewer(const std::string& input_uri,
   pangolin::View& d_cam = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
-  // add a simple image viewer
+
+  tdp::QuickView viewRgb(w,h);
+  gui.container().AddDisplay(viewRgb);
+  tdp::QuickView viewD(w,h);
+  gui.container().AddDisplay(viewD);
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
-
-  // camera model for computing point cloud and normals
-  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // device image: image in GPU memory
@@ -114,6 +118,7 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDeviceImage<float> cuD(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -132,25 +137,58 @@ void VideoViewer(const std::string& input_uri,
     // get next frames from the video source
     gui.NextFrames();
 
+    TICK("rgb collection");
     // get rgb image
-    tdp::Image<tdp::Vector3bda> rgb;
-    if (!gui.ImageRGB(rgb)) continue;
+    for (size_t sId=0; sId < stream2cam.size(); sId++) {
+      tdp::Image<tdp::Vector3bda> rgbStream;
+      if (!gui.ImageRGB(rgbStream, sId)) continue;
+      int32_t cId = stream2cam[sId]; 
+      // Get ROI
+      tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
+          rgb.ptr_+cId*rgbStream.Area());
+      rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
+    }
+    TOCK("rgb collection");
+    TICK("depth collection");
     // get depth image
-    tdp::Image<uint16_t> dRaw;
-    if (!gui.ImageD(dRaw)) continue;
-    // copy raw image to gpu
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    // convet depth image from uint16_t to float [m]
+    for (size_t sId=0; sId < stream2cam.size(); sId++) {
+      tdp::Image<uint16_t> dStream;
+      if (!gui.ImageD(dStream, sId)) continue;
+      int32_t cId = stream2cam[sId]; 
+      // Get ROI
+      tdp::Image<uint16_t> d_i(wSingle, hSingle,
+          cuDraw.ptr_+cId*dStream.Area());
+      d_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+    }
+    TOCK("depth collection");
+    TICK("pc and normals");
+    // convert depth image from uint16_t to float [m]
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     // compute point cloud (on CPU)
-    tdp::Depth2PC(d,cam,pc);
-    // compute normals
-    tdp::Depth2Normals(cuD, cam, cuN);
+    for (size_t sId=0; sId < stream2cam.size(); sId++) {
+      int32_t cId = stream2cam[sId]; 
+      tdp::Cameraf cam = rig.cams_[cId];
+      tdp::SE3f T_rc = rig.T_rcs_[cId];
+
+      tdp::Image<tdp::Vector3fda> cuN_i(wSingle, hSingle,
+          cuN.ptr_+cId*wSingle*hSingle);
+      tdp::Image<tdp::Vector3fda> cuPc_i(wSingle, hSingle,
+          cuPc.ptr_+cId*wSingle*hSingle);
+      tdp::Image<float> cuD_i(wSingle, hSingle,
+          cuD.ptr_+cId*wSingle*hSingle);
+
+      // compute depth
+      tdp::Depth2PCGpu(cuD_i,cam,T_rc,cuPc_i);
+      // compute normals
+      tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
+    }
+    TOCK("pc and normals");
     // convert normals to RGB image
     tdp::Normals2Image(cuN, cuN2D);
-    // copy normals image to CPU memory
+    // copy to CPU memory for vis
+    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+    pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -164,9 +202,8 @@ void VideoViewer(const std::string& input_uri,
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
-    // SHowFrames renders the raw input streams (in our case RGB and D)
-    gui.ShowFrames();
-    // render normals image
+    viewRgb.SetImage(rgb);
+    viewD.SetImage(d);
     viewN2D.SetImage(n2D);
 
     // leave in pixel orthographic for slider to render.
@@ -177,6 +214,7 @@ void VideoViewer(const std::string& input_uri,
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
     }
     // finish this frame
+    Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
 }

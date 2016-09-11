@@ -83,6 +83,11 @@ const SE3<T> SE3<T>::operator+(const Eigen::Matrix<T,6,1>& w) {
   return SE3<T>(*this) += w;
 }
 
+template<typename T>
+Eigen::Matrix<T,3,1> SE3<T>::operator*(const Eigen::Matrix<T,3,1>& x) {
+  return rotation()*x + translation();
+}
+
 //template<typename T>
 //SE3<T> operator+(const SE3<T>& lhs, const SE3<T>& rhs) {
 //  SE3<T> res(lhs);

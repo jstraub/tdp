@@ -18,6 +18,8 @@ class Camera : public CameraBase<T,4,Camera<T>> {
   // parameters: fu, fv, uc, vc
   Camera(const Parameters& params) : CameraBase<T,4,Camera<T>>(params)
   {}
+  Camera(const Camera& other) : CameraBase<T,4,Camera<T>>(other.params_)
+  {}
   ~Camera()
   {}
 

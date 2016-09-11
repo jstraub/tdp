@@ -9,6 +9,7 @@
 #include <tdp/data/pyramid.h>
 #include <tdp/data/managed_pyramid.h>
 #include <tdp/camera/camera.h>
+#include <tdp/manifold/SO3.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda/cuda.h>
 #include <tdp/preproc/grad.h>
@@ -17,6 +18,14 @@
 namespace tdp {
 
 #ifdef CUDA_FOUND
+void ComputeNormals(
+    const Image<float>& d,
+    const Image<float>& ddu,
+    const Image<float>& ddv,
+    const Image<Vector3fda>& n,
+    const SO3<float>& R_rc,
+    float f, float uc, float vc);
+
 void ComputeNormals(
     const Image<float>& d,
     const Image<float>& ddu,
@@ -36,6 +45,12 @@ void RenormalizeSurfaceNormals(
 void Depth2Normals(
     const Image<float>& cuD,
     const Camera<float>& cam,
+    Image<Vector3fda> cuN);
+
+void Depth2Normals(
+    const Image<float>& cuD,
+    const Camera<float>& cam,
+    const SO3<float>& R_rc,
     Image<Vector3fda> cuN);
 
 template<int LEVELS>

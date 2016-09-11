@@ -48,6 +48,10 @@ class SO3 : Manifold<T,3> {
   SO3<T>& operator+=(const Eigen::Matrix<T,3,1>& w);
   const SO3<T> operator+(const Eigen::Matrix<T,3,1>& w);
 
+  // transform 3D data point
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x);
+
   static Eigen::Matrix<T,3,3> invVee(const Eigen::Matrix<T,3,1>& w);
   static Eigen::Matrix<T,3,1> vee(const Eigen::Matrix<T,3,3>& W);
   static Eigen::Matrix<T,3,3> skew(const Eigen::Matrix<T,3,3>& W);

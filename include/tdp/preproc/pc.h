@@ -3,13 +3,21 @@
 #include <tdp/camera/camera.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/manifold/SE3.h>
 
 namespace tdp {
 
 void Depth2PCGpu(
     const Image<float>& d,
     const Camera<float>& cam,
-    Image<Vector3fda>& pc
+    Image<Vector3fda>& pc_c
+    );
+
+void Depth2PCGpu(
+    const Image<float>& d,
+    const Camera<float>& cam,
+    const SE3<float>& T_rc,
+    Image<Vector3fda>& pc_r
     );
 
 void Depth2PC(

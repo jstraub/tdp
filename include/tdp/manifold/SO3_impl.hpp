@@ -114,6 +114,11 @@ const SO3<T> SO3<T>::operator+(const Eigen::Matrix<T,3,1>& w) {
   return SO3<T>(*this) += w;
 }
 
+template<typename T>
+Eigen::Matrix<T,3,1> SO3<T>::operator*(const Eigen::Matrix<T,3,1>& x) {
+  return this->R_*x;
+}
+
 //template<typename T>
 //SO3<T> operator+(const SO3<T>& lhs, const SO3<T>& rhs) {
 //  SO3<T> res(lhs);

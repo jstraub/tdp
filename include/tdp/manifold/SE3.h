@@ -60,6 +60,10 @@ class SE3 : Manifold<T,6> {
   SE3<T>& operator+=(const Eigen::Matrix<T,6,1>& w);
   const SE3<T> operator+(const Eigen::Matrix<T,6,1>& w);
 
+  // transform 3D data point
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x);
+
 //  /// Generator matrices of SE3
 //  static Eigen::Matrix<T,3,3> G1();
 //  static Eigen::Matrix<T,3,3> G2();
