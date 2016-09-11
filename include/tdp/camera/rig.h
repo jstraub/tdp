@@ -12,25 +12,31 @@ namespace tdp {
 template <class Cam>
 struct Rig {
 
-  bool FromFile(std::string pathToConfig) {
+  bool FromFile(std::string pathToConfig, bool verbose) {
     pangolin::json::value file_json(pangolin::json::object_type,true); 
     std::ifstream f(pathToConfig);
     if (f.is_open()) {
       std::string err = pangolin::json::parse(file_json,f);
       if (!err.empty()) {
-        std::cout << file_json.serialize(true) << std::endl;
+        //std::cout << file_json.serialize(true) << std::endl;
         if (file_json.size() > 0) {
           std::cout << "found " << file_json.size() << " elements" << std::endl ;
           for (size_t i=0; i<file_json.size(); ++i) {
             if (file_json[i].contains("camera")) {
+              // serial number
+              if (file_json[i]["camera"].contains("serialNumber")) {
+                serials_.push_back(
+                    file_json[i]["camera"]["serialNumber"].get<std::string>());
+                if (verbose) 
+                  std::cout << "Serial ID: " << serials_.back() 
+                    << std::endl;
+              }
               Cam cam;
               if (cam.FromJson(file_json[i]["camera"])) {
-                std::cout << "found camera" << std::endl 
-                  << file_json[i].serialize(true)
-                  << std::endl;
+                if (verbose) 
+                  std::cout << "found camera model" << std::endl ;
               }
               cams_.push_back(cam);
-              // TODO: poses
               SE3f T_rc;
               if (file_json[i]["camera"].contains("T_rc")) {
                 pangolin::json::value q_json = file_json[i]["camera"]["T_rc"]["q_wxyz"];
@@ -45,24 +51,39 @@ struct Rig {
                     t_json[2].get<double>());
                 Eigen::Matrix3f R_rc = q.toRotationMatrix();
                 T_rc = SE3f(R_rc, t);
-                std::cout << "found T_rc" << std::endl 
-                  << q.coeffs().transpose() << std::endl
-                  << R_rc << std::endl
-                  << T_rc << std::endl;
+                if (verbose) 
+                  std::cout << "found T_rc" << std::endl << T_rc << std::endl;
               }
               T_rcs_.push_back(T_rc);
             }
           }
+        } else {
+          std::cerr << "error json file seems empty"  << std::endl
+            << file_json.serialize(true) << std::endl;
+          return false;
         }
       } else {
         std::cerr << "error reading json file: " << err << std::endl;
+        return false;
       }
+    } else {
+      std::cerr << "couldnt open file: " << pathToConfig << std::endl;
+      return false;
     }
+    config_ = file_json;
+    return true;
   }
+
+
+
   // camera to rig transformations
   std::vector<SE3f> T_rcs_; 
   // cameras
   std::vector<Cam> cams_;
+  // camera serial IDs
+  std::vector<std::string> serials_;
+  // raw properties
+  pangolin::json::value config_;
 };
 
 }

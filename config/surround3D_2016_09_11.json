@@ -9,9 +9,9 @@
       "vc" : 2.3960165449994125e+02,
       "distortion" : [4.2048707642738353e-02, -2.3051403303450899e-01,
       7.3176038224393055e-04, 1.3527597243523962e-03,
-      1.9777627590006791e-01],
+      1.9777627590006791e-01]
     },
-    "serialNumber" : 1402270118,
+    "serialNumber" : "1402270118",
     "description" : "low position on the rig",
     "T_rc" : {
       "q_wxyz" : [1,0,0,0], 
@@ -31,8 +31,8 @@
        4.8463272825435681e-04, -3.0711047165034295e-04,
        1.9755241625170392e-01]
     },
-    "serialNumber" : 1504270177,
-    "description" : "midel position on the rig",
+    "serialNumber" : "1504270177",
+    "description" : "middle position on the rig",
     "T_rc" : {
       "q_wxyz" : [1,0,0,0], 
       "t_xyz" : [0,0,0] 
@@ -51,7 +51,7 @@
       7.0941101053559872e-05, 1.6119210204721265e-03,
       1.0720489539180977e-01 ]
     },
-    "serialNumber" : 1402240016,
+    "serialNumber" : "1402240016",
     "description" : "upper position on the rig",
     "T_rc" : {
       "q_wxyz" : [1,0,0,0], 

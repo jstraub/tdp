@@ -4,7 +4,7 @@
 
 TEST(setup, rig) {
   tdp::Rig<tdp::Cameraf> rig;
-  rig.FromFile("../config/testRig.json");
+  rig.FromFile("../config/testRig.json", true);
 
 }
 

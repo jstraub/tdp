@@ -27,11 +27,18 @@
 #endif
 
 #include <tdp/gui/gui.hpp>
+#include <tdp/camera/rig.h>
 #include <pangolin/video/drivers/openni2.h>
 
-void VideoViewer(const std::string& input_uri, const std::string& output_uri)
+void VideoViewer(const std::string& input_uri, 
+    const std::string& configPath,
+    const std::string& output_uri)
 {
   std::cout << " -!!- this application works only with openni2 devices (tested with Xtion PROs) -!!- " << std::endl;
+
+  // Read rig file
+  tdp::Rig<tdp::Cameraf> rig;
+  if (!rig.FromFile(configPath, false)) return;
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -49,10 +56,27 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::json::value devProps = openni->DeviceProperties();
   if (! devProps.contains("openni") ) return;
   pangolin::json::value jsDevices = devProps["openni"]["devices"];
+
+  std::vector<int32_t> stream2cam;
   for (size_t i=0; i<jsDevices.size(); ++i) {
-    std::cout << "Device " << i << " serial #: " 
-      <<  jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>() 
-      << std::endl;
+    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+    std::cout << "Device " << i << " serial #: " << serial << std::endl;
+    int32_t camId = -1;
+    for (size_t j=0; j<rig.cams_.size(); ++j) {
+      if (rig.serials_[j].compare(serial) == 0) {
+        camId = j;
+        break;
+      }
+    }
+    if (camId < 0) {
+      std::cerr << "no matching camera found in calibration!" << std::endl;
+    } else {
+      std::cout << "matching camera in config: " << camId 
+        << " " << rig.config_[camId]["camera"]["description"].get<std::string>()
+        << std::endl;
+    }
+    stream2cam.push_back(camId); // rgb
+    stream2cam.push_back(camId); // d
   }
 
   tdp::GUI gui(1200,800,video);
@@ -164,9 +188,9 @@ int main( int argc, char* argv[] )
 
   if( argc > 1 ) {
     const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
+    const std::string configPath = (argc > 2) ? std::string(argv[2]) : "../config/surround3D_2016_09_11.json";
     try{
-      VideoViewer(input_uri, output_uri);
+      VideoViewer(input_uri, configPath, dflt_output_uri);
     } catch (pangolin::VideoException e) {
       std::cout << e.what() << std::endl;
     }
@@ -192,16 +216,6 @@ int main( int argc, char* argv[] )
     std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
     std::cout << "\topenni:[img1=rgb]//" << std::endl;
     std::cout << std::endl;
-
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
   }
 
   return 0;
