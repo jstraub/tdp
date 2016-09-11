@@ -13,6 +13,9 @@ if (GTEST_FOUND)
   add_executable(testProjective_math projective_math.cpp)
   target_link_libraries(testProjective_math tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+  add_executable(testRig rig.cpp)
+  target_link_libraries(testRig tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
   add_executable(testSO3 SO3.cpp)
   target_link_libraries(testSO3 tdp)
 

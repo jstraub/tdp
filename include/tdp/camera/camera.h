@@ -13,6 +13,8 @@ class Camera : public CameraBase<T,4,Camera<T>> {
   typedef Eigen::Matrix<T,2,1> Point2;
   typedef Eigen::Matrix<T,4,1> Parameters;
 
+  Camera() : CameraBase<T,4,Camera<T>>()
+  {}
   // parameters: fu, fv, uc, vc
   Camera(const Parameters& params) : CameraBase<T,4,Camera<T>>(params)
   {}
@@ -59,18 +61,27 @@ class Camera : public CameraBase<T,4,Camera<T>> {
   }
 
   bool FromJson(pangolin::json::value& val){
-    this->params_(0) = val["fu"]; 
-    this->params_(1) = val["fv"]; 
-    this->params_(2) = val["uc"]; 
-    this->params_(3) = val["vc"]; 
+    if (!val.contains("model"))
+      return false;
+    if (!val["model"].contains("type"))
+      return false;
+    if (val["model"]["type"].get<std::string>().compare("pinhole") != 0)
+      return false;
+    this->params_(0) = val["model"]["fu"].get<double>(); 
+    this->params_(1) = val["model"]["fv"].get<double>(); 
+    this->params_(2) = val["model"]["uc"].get<double>(); 
+    this->params_(3) = val["model"]["vc"].get<double>(); 
+    return true;
   }
 
   pangolin::json::value ToJson(){
     pangolin::json::value val;
-    val["fu"] = this->params_(0); 
-    val["fv"] = this->params_(1); 
-    val["uc"] = this->params_(2); 
-    val["vc"] = this->params_(3); 
+    val["model"] = pangolin::json::value();
+    val["model"]["fu"] = this->params_(0); 
+    val["model"]["fv"] = this->params_(1); 
+    val["model"]["uc"] = this->params_(2); 
+    val["model"]["vc"] = this->params_(3); 
+    val["model"]["type"] = "pinhole";
     return val;
   }
 };
