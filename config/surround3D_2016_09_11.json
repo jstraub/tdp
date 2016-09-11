@@ -35,7 +35,7 @@
     "description" : "middle position on the rig",
     "T_rc" : {
       "q_wxyz" : [1,0,0,0], 
-      "t_xyz" : [0,0,-0.15] 
+      "t_xyz" : [0,0,0] 
     }
   }
 },

@@ -29,6 +29,7 @@
 
 #include "gui.hpp"
 #include <tdp/camera/rig.h>
+#include <tdp/marker/aruco.h>
 #include <pangolin/video/drivers/openni2.h>
 
 void VideoViewer(const std::string& input_uri, 
@@ -128,6 +129,9 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
+  pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
+
+  tdp::ArucoDetector detector(0.158);
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -183,6 +187,26 @@ void VideoViewer(const std::string& input_uri,
       tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
     }
     TOCK("pc and normals");
+
+
+    if (doRigPoseCalib) {
+      for (size_t sId=0; sId < stream2cam.size(); sId++) {
+        tdp::Image<tdp::Vector3bda> rgbStream;
+        if (!gui.ImageRGB(rgbStream, sId)) continue;
+        int32_t cId = stream2cam[sId]; 
+        tdp::Cameraf cam = rig.cams_[cId];
+        tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
+            rgb.ptr_+cId*rgbStream.Area());
+        TICK("aruco marker detect");
+        std::vector<tdp::Marker> markers = detector.detect(rgb_i, cam);
+        TOCK("aruco marker detect");
+        for (size_t i=0; i<markers.size(); ++i) {
+          markers[i].drawToImage(rgb_i, tdp::Vector3bda(0,0,255), 1);
+        }
+      }
+    }
+
+
     // convert normals to RGB image
     tdp::Normals2Image(cuN, cuN2D);
     // copy to CPU memory for vis
