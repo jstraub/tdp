@@ -18,6 +18,11 @@ SO3<T>::SO3(const SO3<T>& other)
 {}
 
 template<typename T>
+SO3<T>::SO3(const Eigen::Quaternion<T>& q)
+  : R_(q.toRotationMatrix())
+{}
+
+template<typename T>
 Eigen::Matrix<T,3,1> SO3<T>::vee() const {
   return vee(R_);
 }

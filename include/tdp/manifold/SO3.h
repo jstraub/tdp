@@ -19,12 +19,17 @@ class SO3 : Manifold<T,3> {
   SO3(const SO3<T>& other);
 
   TDP_HOST_DEVICE
-  ~SO3() {};
+  SO3(const Eigen::Quaternion<T>& q);
 
   TDP_HOST_DEVICE
-  const Eigen::Matrix<T,3,3>& matrix() const { return R_;};
+  ~SO3() {}
+
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,3>& matrix() { return R_;};
+  const Eigen::Matrix<T,3,3>& matrix() const { return R_;}
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,3>& matrix() { return R_;}
+
+  Eigen::Quaternion<T> quat() { return Eigen::Quaternion<T>(R_); }
 
   TDP_HOST_DEVICE
   SO3<T> Inverse() const ;
