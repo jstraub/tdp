@@ -13,4 +13,6 @@ else()
 endif()
 message ("${SRCS}")
 
-target_link_libraries(tdp pangolin)
+target_link_libraries(tdp pangolin
+  ${aruco_LIBS}
+  )

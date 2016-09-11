@@ -28,10 +28,9 @@
 #include <tdp/preproc/normals.h>
 #endif
 
-#include <aruco/aruco.h>
-#include <opencv2/highgui/highgui.hpp>
 
 #include <tdp/gui/gui.hpp>
+#include <tdp/marker/aruco.h>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -93,7 +92,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   pangolin::Var<int> numMarkers("ui.# markers",0,0,0);
 
-  aruco::MarkerDetector detector;
+  tdp::ArucoDetector detector(0.158);
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -123,21 +122,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // copy normals image to CPU memory
     n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
 
-    cv::Mat cvRgb(hOrig, wOrig, CV_8UC3, rgb.ptr_);
     TICK("aruco marker detect");
-    std::vector<aruco::Marker> markers = detector.detect(cvRgb);
+    std::vector<tdp::Marker> markers = detector.detect(rgb, cam);
     TOCK("aruco marker detect");
     numMarkers = markers.size();
-    Eigen::Matrix<float,3,3,Eigen::RowMajor> K_ = cam.GetK();
-    cv::Mat K(3,3, CV_32F, K_.data());
-    Eigen::Vector4f dist_(0,0,0,0);
-    cv::Mat distortion (4,1, CV_32F, dist_.data());
-    aruco::CameraParameters CP(K,distortion,
-        cv::Size(hOrig,wOrig));
     for (size_t i=0; i<markers.size(); ++i) {
-      markers[i].calculateExtrinsics(0.139, CP, true);
-      std::cout << markers[i] << std::endl;
-      markers[i].draw(cvRgb, cv::Scalar(0,0,255), 2);
+      markers[i].drawToImage(rgb, tdp::Vector3bda(0,0,255), 1);
     }
 
     // Draw 3D stuff
@@ -153,13 +143,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     for (size_t i=0; i<markers.size(); ++i) {
       // transformation from marker coordinate system to camera
       // coordinate system;
-      Eigen::Matrix<float,6,1> x; 
-      x.topRows(3) = Eigen::Map<Eigen::Vector3f>((float*)markers[i].Rvec.data);
-      x.bottomRows(3) = Eigen::Map<Eigen::Vector3f>((float*)markers[i].Tvec.data);
-      tdp::SE3f T_cm(tdp::SE3f::Exp_(x));
-      pangolin::glSetFrameOfReference(T_cm.matrix());
-      pangolin::glDrawAxis(0.1f);
-      pangolin::glUnsetFrameOfReference();
+      markers[i].draw3D();
     }
 
     glDisable(GL_DEPTH_TEST);
