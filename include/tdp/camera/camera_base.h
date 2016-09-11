@@ -1,8 +1,10 @@
 #pragma once
 #include <Eigen/Dense>
 #include <tdp/config.h>
+#include <pangolin/utils/picojson.h>
 
 namespace tdp {
+
 template <class T, size_t D, class B>
 class CameraBase {
  public:
@@ -10,6 +12,8 @@ class CameraBase {
   typedef Eigen::Matrix<T,2,1> Point2;
   typedef Eigen::Matrix<T,D,1> Parameters;
 
+  CameraBase()
+  {}
   CameraBase(const Parameters& params) : params_(params)
   {}
   ~CameraBase()

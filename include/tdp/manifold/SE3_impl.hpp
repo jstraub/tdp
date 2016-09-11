@@ -14,7 +14,7 @@ template<typename T>
 SE3<T>::SE3(const Eigen::Matrix<T,3,3>& Rmat, const
     Eigen::Matrix<T,3,1>& tmat) : SE3<T>() {
   T_.topLeftCorner(3,3) = Rmat;
-  T_.topRightCorner(3,3) = tmat;
+  T_.topRightCorner(3,1) = tmat;
 }
 
 template<typename T>
