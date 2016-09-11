@@ -49,6 +49,21 @@ TEST(projectUnprojectThereAndBack, camera) {
   ASSERT_NEAR(x1(2),x1_(2),EPS);
 }
 
+TEST(json, camera) {
+  tdp::Cameraf::Parameters p(4);
+  p << 550, 550, 319.5, 239.5;
+  tdp::Cameraf c(p);
+  pangolin::json::value cam = c.ToJson();
+  p << 0, 0, 0, 0;
+  tdp::Cameraf c2(p);
+  c2.FromJson(cam);
+  
+  ASSERT_NEAR(c.params_(0), c2.params_(0), EPS);
+  ASSERT_NEAR(c.params_(1), c2.params_(1), EPS);
+  ASSERT_NEAR(c.params_(2), c2.params_(2), EPS);
+  ASSERT_NEAR(c.params_(3), c2.params_(3), EPS);
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -2,40 +2,10 @@
 #include <Eigen/Dense>
 #include <tdp/config.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/camera/camera_base.h>
+#include <pangolin/utils/picojson.h>
 
 namespace tdp {
-
-template <class T, size_t D, class B>
-class CameraBase {
- public:
-  typedef Eigen::Matrix<T,3,1> Point3;
-  typedef Eigen::Matrix<T,2,1> Point2;
-  typedef Eigen::Matrix<T,D,1> Parameters;
-
-  CameraBase(const Parameters& params) : params_(params)
-  {}
-  ~CameraBase()
-  {}
-
-  TDP_HOST_DEVICE
-  Point2 Project(const Point3& p) const {
-    return static_cast<B*>(this)->Project(p);
-  }
-
-  //TDP_HOST_DEVICE
-  //Vector2fda Project(const Vector3fda& p) const {
-  //  return static_cast<B*>(this)->Project(p);
-  //}
-
-  TDP_HOST_DEVICE
-  Point3 Unproject(T u, T v, T z) const {
-    return static_cast<B*>(this)->Unproject(u,v,z);
-  }
-
-  Parameters params_;
- private:
-};
-
 template <class T>
 class Camera : public CameraBase<T,4,Camera<T>> {
  public:
@@ -87,6 +57,22 @@ class Camera : public CameraBase<T,4,Camera<T>> {
     Kinv(1,2) = -this->params_(3)/this->params_(1);
     return Kinv;
   }
+
+  bool FromJson(pangolin::json::value& val){
+    this->params_(0) = val["fu"]; 
+    this->params_(1) = val["fv"]; 
+    this->params_(2) = val["uc"]; 
+    this->params_(3) = val["vc"]; 
+  }
+
+  pangolin::json::value ToJson(){
+    pangolin::json::value val;
+    val["fu"] = this->params_(0); 
+    val["fv"] = this->params_(1); 
+    val["uc"] = this->params_(2); 
+    val["vc"] = this->params_(3); 
+    return val;
+  }
 };
 
 typedef Camera<float> Cameraf;
@@ -102,5 +88,4 @@ Camera<T> ScaleCamera(const Camera<T>& cam, T scale) {
   paramsScaled(3) = (paramsScaled(3)+0.5)*scale-0.5;
   return Camera<T>(paramsScaled);
 };
-
 }
