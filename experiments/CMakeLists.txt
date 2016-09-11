@@ -6,7 +6,7 @@ if (CUDA_FOUND)
   add_subdirectory(./depthFusion)
   add_subdirectory(./normalsViewer)
   add_subdirectory(./calibration)
-
+  add_subdirectory(./surround3D)
   if (aruco_FOUND)
     add_subdirectory(./markerAruco)
   endif()

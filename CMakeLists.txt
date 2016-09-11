@@ -41,8 +41,16 @@ message(${EIGEN3_INCLUDE_DIR})
 
 find_package(aruco 2.0.9 QUIET)
 if (aruco_FOUND) 
+  message("found aruco")
   include_directories(${aruco_INCLUDE_DIRS})
   link_directories(${aruco_LIB_DIR})
+endif()
+
+find_package (OpenNI2 QUIET)
+if (OPENNI2_FOUND) 
+  message("found OpenNI2")
+  include_directories(${OPENNI2_INCLUDE_DIRS})
+  link_directories(${OPENNI2_LIB_DIR})
 endif()
 
 include_directories(
