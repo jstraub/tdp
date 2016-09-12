@@ -138,6 +138,17 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
   pangolin::Var<bool> updateCalib("ui.update Calib", false, false);
 
+  pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
+  pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
+  pangolin::Var<float> cam3fu("ui.cam3 fu",rig.cams_[3].params_(0),500,600);
+  pangolin::Var<float> cam3fv("ui.cam3 fv",rig.cams_[3].params_(1),500,600);
+  pangolin::Var<float> cam5fu("ui.cam5 fu",rig.cams_[5].params_(0),500,600);
+  pangolin::Var<float> cam5fv("ui.cam5 fv",rig.cams_[5].params_(1),500,600);
+
+  pangolin::Var<float> cam3tx("ui.cam3 tx",rig.T_rcs_[3].translation()(0),0,0.1);
+  pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
+  pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
+
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       int cId = rgbdStream2cam[sId];
@@ -164,6 +175,17 @@ void VideoViewer(const std::string& input_uri,
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (cam1fu.GuiChanged()) rig.cams_[1].params_(0) = cam1fu;
+    if (cam1fv.GuiChanged()) rig.cams_[1].params_(1) = cam1fv;
+    if (cam3fu.GuiChanged()) rig.cams_[3].params_(0) = cam3fu;
+    if (cam3fv.GuiChanged()) rig.cams_[3].params_(1) = cam3fv;
+    if (cam5fu.GuiChanged()) rig.cams_[5].params_(0) = cam5fu;
+    if (cam5fv.GuiChanged()) rig.cams_[5].params_(1) = cam5fv;
+
+    if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
+    if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
+    if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -188,7 +210,7 @@ void VideoViewer(const std::string& input_uri,
       tdp::Image<uint16_t> dStream;
       if (!gui.ImageD(dStream, sId)) continue;
       int32_t cId = rgbdStream2cam[sId]; 
-      std::cout << sId << " " << cId << std::endl;
+      //std::cout << sId << " " << cId << std::endl;
       // Get ROI
       tdp::Image<uint16_t> d_i(wSingle, hSingle,
           cuDraw.ptr_+cId*dStream.Area());
@@ -203,6 +225,9 @@ void VideoViewer(const std::string& input_uri,
       int32_t cId = dStream2cam[sId]; 
       tdp::Cameraf cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
+
+      std::cout << cId << ": " << cam.params_.transpose() << std::endl
+        << T_rc << std::endl;
 
       tdp::Image<tdp::Vector3fda> cuN_i(wSingle, hSingle,
           cuN.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
