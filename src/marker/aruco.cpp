@@ -20,12 +20,12 @@ std::vector<Marker> ArucoDetector::detect(Image<uint8_t> grey, const
   Eigen::Vector4f dist_(0,0,0,0);
   cv::Mat distortion (4,1, CV_32F, dist_.data());
   aruco::CameraParameters CP(K,distortion,cv::Size(grey.h_,grey.w_));
-  std::vector<aruco::Marker> arucoMarkers = detector_.detect(cvGrey, CP,
-      markerSideLength_);
+  std::vector<aruco::Marker> arucoMarkers = detector_.detect(cvGrey);
+  //, CP, markerSideLength_);
   std::vector<Marker> markers(arucoMarkers.size());
 
   for (size_t i=0; i<arucoMarkers.size(); ++i) {
-    //arucoMarkers[i].calculateExtrinsics(markerSideLength_, CP, true);
+    arucoMarkers[i].calculateExtrinsics(markerSideLength_, CP, true);
     Eigen::Matrix<float,6,1> x; 
     x.topRows(3) = Eigen::Map<Eigen::Vector3f>(
         (float*)arucoMarkers[i].Rvec.data);
@@ -33,6 +33,7 @@ std::vector<Marker> ArucoDetector::detect(Image<uint8_t> grey, const
         (float*)arucoMarkers[i].Tvec.data);
     markers[i].T_cm = tdp::SE3f(tdp::SE3f::Exp_(x));
     markers[i].aruco_ = arucoMarkers[i];
+    markers[i].id = arucoMarkers[i].id;
   }
 
   return markers;

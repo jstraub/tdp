@@ -143,7 +143,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     for (size_t i=0; i<markers.size(); ++i) {
       // transformation from marker coordinate system to camera
       // coordinate system;
-      markers[i].draw3D();
+      //markers[i].draw3D();
+      pangolin::glSetFrameOfReference(markers[i].T_cm.matrix());
+      pangolin::glDrawAxis(0.1f);
+      pangolin::glUnsetFrameOfReference();
     }
 
     glDisable(GL_DEPTH_TEST);

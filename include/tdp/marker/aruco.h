@@ -14,7 +14,7 @@ namespace tdp {
 /// Wrapper around aruco Marker
 struct Marker {
   SE3f T_cm;
-
+  size_t id;
   aruco::Marker aruco_;
 
   void drawToImage(Image<Vector3bda>& rgb, Vector3bda color, int lineWidth) {

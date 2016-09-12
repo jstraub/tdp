@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <vector>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -30,6 +31,7 @@
 #include "gui.hpp"
 #include <tdp/camera/rig.h>
 #include <tdp/marker/aruco.h>
+#include <tdp/manifold/SE3.h>
 #include <pangolin/video/drivers/openni2.h>
 
 void VideoViewer(const std::string& input_uri, 
@@ -130,8 +132,15 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
+  pangolin::Var<bool> updateCalib("ui.update Calib", false, false);
 
   tdp::ArucoDetector detector(0.158);
+  // observed transformations from upper camera to middle camera (rig
+  // cosy)
+  std::vector<tdp::SE3f> T_rcu; 
+  // observed transformations from lower camera to middle camera (rig
+  // cosy)
+  std::vector<tdp::SE3f> T_rcl;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -188,7 +197,7 @@ void VideoViewer(const std::string& input_uri,
     }
     TOCK("pc and normals");
 
-
+    std::vector<std::vector<tdp::Marker>> markersPerCam(stream2cam.size());
     if (doRigPoseCalib) {
       for (size_t sId=0; sId < stream2cam.size(); sId++) {
         tdp::Image<tdp::Vector3bda> rgbStream;
@@ -200,9 +209,58 @@ void VideoViewer(const std::string& input_uri,
         TICK("aruco marker detect");
         std::vector<tdp::Marker> markers = detector.detect(rgb_i, cam);
         TOCK("aruco marker detect");
+        markersPerCam[cId] = markers;
         for (size_t i=0; i<markers.size(); ++i) {
           markers[i].drawToImage(rgb_i, tdp::Vector3bda(0,0,255), 1);
         }
+      }
+      // add observations between rig and upper cam
+      // upper = cId=0
+      // rig/middle = cId=1
+      for (size_t i=0; i<markersPerCam[0].size(); ++i) {
+        for (size_t j=0; j<markersPerCam[1].size(); ++j) {
+          if (markersPerCam[0][i].id == markersPerCam[1][j].id) {
+            tdp::SE3f T_cum = markersPerCam[0][i].T_cm;
+            tdp::SE3f T_crm = markersPerCam[1][j].T_cm;
+            T_rcu.push_back(T_crm+T_cum.Inverse());
+          }
+        }
+      }
+      // add observations between rig and lower cam
+      // lower = cId=2
+      // rig/middle = cId=1
+      for (size_t i=0; i<markersPerCam[2].size(); ++i) {
+        for (size_t j=0; j<markersPerCam[1].size(); ++j) {
+          if (markersPerCam[2][i].id == markersPerCam[1][j].id) {
+            tdp::SE3f T_clm = markersPerCam[2][i].T_cm;
+            tdp::SE3f T_crm = markersPerCam[1][j].T_cm;
+            T_rcl.push_back(T_crm+T_clm.Inverse());
+          }
+        }
+      }
+      std::cout << " # obs upper: " << T_rcu.size()
+        << " # obs lower: " << T_rcl.size() << std::endl;
+      // update rig transformations
+      Eigen::Matrix<float,6,1> xSum;
+      if (T_rcu.size() > 0 && updateCalib) {
+        for (size_t i=0; i<T_rcu.size(); ++i) {
+          xSum += rig.T_rcs_[0].Log(T_rcu[i]);
+          std::cout << "T_rcu obs: " << i << ": " << std::endl
+            << T_rcu[i] << std::endl;
+        }
+        std::cout << xSum/float(T_rcu.size()) << std::endl;
+        std::cout << rig.T_rcs_[0] << std::endl;
+        rig.T_rcs_[0] = rig.T_rcs_[0].Exp(xSum/float(T_rcu.size())); 
+        std::cout << "current T_rcu: " << std::endl
+          << rig.T_rcs_[0] << std::endl;
+      }
+
+      if (T_rcl.size() > 0 && pangolin::Pushed(updateCalib)) {
+        xSum.fill(0.);
+        for (size_t i=0; i<T_rcl.size(); ++i) {
+          xSum += rig.T_rcs_[2].Log(T_rcl[i]);
+        }
+        rig.T_rcs_[2] = rig.T_rcs_[2].Exp(xSum/float(T_rcl.size())); 
       }
     }
 
@@ -223,6 +281,14 @@ void VideoViewer(const std::string& input_uri,
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     // render point cloud
     pangolin::RenderVboCbo(vbo,cbo,true);
+
+    for (size_t i=0; i<rig.cams_.size(); ++i) {
+      for (size_t j=0; j<markersPerCam[i].size(); ++j) {
+        pangolin::glSetFrameOfReference((rig.T_rcs_[i]+markersPerCam[i][j].T_cm).matrix());
+        pangolin::glDrawAxis(0.1f);
+        pangolin::glUnsetFrameOfReference();
+      }
+    }
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
