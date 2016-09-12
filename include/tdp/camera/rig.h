@@ -74,7 +74,8 @@ struct Rig {
     return true;
   }
 
-
+  bool ToFile(std::string pathToConfig, bool verbose) {
+  }
 
   // camera to rig transformations
   std::vector<SE3f> T_rcs_; 
