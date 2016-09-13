@@ -45,12 +45,14 @@ void Imu3DMGX3_45::Start() {
   serial_.set_option(FLOW_CTRL);
   serial_.set_option(STOP);
 
+  //while(!Reset()) {}
+  //std::cout << "reset device" << std::endl;
+
   if (SendNoDataCmd(CMD_SET_BASIC, CMD_BASIC_PING)) {
     std::cout << "ping successfull" << std::endl;
   }
-  if (SetToIdle()) {
-    std::cout << "set to idle" << std::endl;
-  }
+  while(!SetToIdle()) {}
+  std::cout << "set to idle" << std::endl;
   if (SetStream(STREAM_NAV,false)) {
     std::cout << "NAV stream stopped" << std::endl;
   }
@@ -311,18 +313,18 @@ bool Imu3DMGX3_45::ReceiveAHRS(ImuObs& imuObs) {
 		return false;
 	}
 
-	imuObs.mag(0) = ExtractFloat(&recv[18]); // 0x05
-	imuObs.mag(1) = ExtractFloat(&recv[18+4]);
-	imuObs.mag(2) = ExtractFloat(&recv[18+8]);
+	imuObs.omega(0) = ExtractFloat(&recv[18]); // 0x05
+	imuObs.omega(1) = ExtractFloat(&recv[18+4]);
+	imuObs.omega(2) = ExtractFloat(&recv[18+8]);
 
 	if (recv[30] != 0x0E || recv[31] != 0x0C) {
     std::cerr << "AHRS: Wrong msg format (0x0C)." << std::endl;
 		return false;
 	}
 
-	 imuObs.omega(0)= ExtractFloat(&recv[32]); // 0x0C
-	 imuObs.omega(1)= ExtractFloat(&recv[32+4]);
-	 imuObs.omega(2)= ExtractFloat(&recv[32+8]);
+	 imuObs.rpy(0)= ExtractFloat(&recv[32]); // 0x0C
+	 imuObs.rpy(1)= ExtractFloat(&recv[32+4]);
+	 imuObs.rpy(2)= ExtractFloat(&recv[32+8]);
 
 	/*quat.q0 = extractFloat(&recv[6]);
 	quat.q1 = extractFloat(&recv[6+4]);

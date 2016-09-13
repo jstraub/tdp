@@ -50,12 +50,12 @@ int main( int argc, char* argv[] )
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
-  pangolin::DataLog logOmega;
-  pangolin::Plotter plotOmega(&logOmega, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
-  plotters.AddDisplay(plotOmega);
   pangolin::DataLog logAcc;
   pangolin::Plotter plotAcc(&logAcc, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
   plotters.AddDisplay(plotAcc);
+  pangolin::DataLog logOmega;
+  pangolin::Plotter plotOmega(&logOmega, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotOmega);
   pangolin::DataLog logMag;
   pangolin::Plotter plotMag(&logMag, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
   plotters.AddDisplay(plotMag);
@@ -77,10 +77,10 @@ int main( int argc, char* argv[] )
     while(imu.GrabNext(imuObs)) {
 
       logAcc.Log(imuObs.acc(0),imuObs.acc(1),imuObs.acc(2));
-      logMag.Log(imuObs.mag(0), imuObs.mag(1), imuObs.mag(2));
+      logMag.Log(imuObs.rpy(0), imuObs.rpy(1), imuObs.rpy(2));
       logOmega.Log(imuObs.omega(0), imuObs.omega(1), imuObs.omega(2));
 
-      R_wi = R_wi.Exp(imuObs.mag*1e-9*(imuObs.t_host-imuObsPrev.t_host));
+      R_wi = R_wi.Exp(imuObs.omega*1e-9*(imuObs.t_host-imuObsPrev.t_host));
       imuObsPrev = imuObs;
       numObs ++;
     }
@@ -94,7 +94,11 @@ int main( int argc, char* argv[] )
     d_cam.Activate(s_cam);
     // draw the axis
     tdp::SE3f T_wi(R_wi.matrix(), Eigen::Vector3f(0,0,0));
-    pangolin::glDrawAxis<float>(T_wi.matrix(),0.1f);
+    pangolin::glDrawAxis<float>(T_wi.matrix(),1.1f);
+
+    R_wi = tdp::SO3f::R_rpy(imuObs.rpy);
+    T_wi = tdp::SE3f(R_wi.matrix(), Eigen::Vector3f(1,0,0));
+    pangolin::glDrawAxis<float>(T_wi.matrix(),1.1f);
     glDisable(GL_DEPTH_TEST);
     // finish this frame
     pangolin::FinishFrame();

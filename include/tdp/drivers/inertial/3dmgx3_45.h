@@ -23,7 +23,7 @@ class Imu3DMGX3_45 : public ImuInterface {
   Imu3DMGX3_45(const std::string& port, int rate) : io_(), 
     serial_(io_), port_(port), 
     timer_(io_, timeout_),
-    timeout_(boost::posix_time::seconds(1.0)), 
+    timeout_(boost::posix_time::seconds(10.0)), 
     bytesTransferred_(0) ,
     rate_(rate),
     circBuf_(10000)
@@ -118,6 +118,9 @@ class Imu3DMGX3_45 : public ImuInterface {
   }
   bool SetToIdle() {
     return SendNoDataCmd(CMD_SET_BASIC, CMD_BASIC_SET_TO_IDLE);
+  }
+  bool Reset() {
+    return SendNoDataCmd(CMD_SET_BASIC, CMD_BASIC_RESET);
   }
 
   bool PollAHRS(ImuObs& imuObs);

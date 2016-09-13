@@ -71,6 +71,11 @@ class SO3 : Manifold<T,3> {
   static SO3<T> Ry(T alpha);
   static SO3<T> Rz(T alpha);
 
+  /// Rotation matrix from roll pitch yaw (rpy) angles;
+  static SO3<T> R_rpy(Eigen::Matrix<T,3,1> rpy) {
+    return Rz(rpy(0))+Ry(rpy(1))+Rz(rpy(2)); 
+  }
+
  private:
   Eigen::Matrix<T,3,3> R_;
 };
