@@ -62,14 +62,15 @@ class GUInoViews {
   pangolin::Var<bool> video_newest;
   pangolin::Var<bool> verbose;
 
+  pangolin::VideoRecordRepeat& video;
+  std::vector<pangolin::Image<unsigned char> > images;
+
  private:
   size_t w;
   size_t h;
-  pangolin::VideoRecordRepeat& video;
   pangolin::VideoPlaybackInterface* video_playback;
 
   std::vector<unsigned char> buffer;
-  std::vector<pangolin::Image<unsigned char> > images;
 
 };
 

@@ -61,7 +61,9 @@ void VideoViewer(const std::string& input_uri,
   if (! devProps.contains("openni") ) return;
   pangolin::json::value jsDevices = devProps["openni"]["devices"];
 
-  std::vector<int32_t> stream2cam;
+  std::vector<int32_t> rgbStream2cam;
+  std::vector<int32_t> dStream2cam;
+  std::vector<int32_t> rgbdStream2cam;
   for (size_t i=0; i<jsDevices.size(); ++i) {
     std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
     std::cout << "Device " << i << " serial #: " << serial << std::endl;
@@ -79,7 +81,9 @@ void VideoViewer(const std::string& input_uri,
         << " " << rig.config_[camId]["camera"]["description"].get<std::string>()
         << std::endl;
     }
-    stream2cam.push_back(camId); // 
+    rgbStream2cam.push_back(camId); // rgb
+    dStream2cam.push_back(camId+1); // ir/depth
+    rgbdStream2cam.push_back(camId/2); // rgbd
   }
 
   tdp::GUInoViews gui(1200,800,video);
@@ -134,6 +138,33 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
   pangolin::Var<bool> updateCalib("ui.update Calib", false, false);
 
+  pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
+  pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
+  pangolin::Var<float> cam3fu("ui.cam3 fu",rig.cams_[3].params_(0),500,600);
+  pangolin::Var<float> cam3fv("ui.cam3 fv",rig.cams_[3].params_(1),500,600);
+  pangolin::Var<float> cam5fu("ui.cam5 fu",rig.cams_[5].params_(0),500,600);
+  pangolin::Var<float> cam5fv("ui.cam5 fv",rig.cams_[5].params_(1),500,600);
+
+  pangolin::Var<float> cam3tx("ui.cam3 tx",rig.T_rcs_[3].translation()(0),0,0.1);
+  pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
+  pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
+
+  pangolin::RegisterKeyPressCallback('c', [&](){
+      for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
+      int cId = rgbdStream2cam[sId];
+      std::stringstream ss;
+      ss << "capture_cam" << cId << ".png";
+      try{
+      pangolin::SaveImage(
+        gui.images[gui.iRGB[sId]], gui.video.Streams()[gui.iRGB[sId]].PixFormat(),
+        pangolin::MakeUniqueFilename(ss.str())
+        );
+      }catch(std::exception e){
+      pango_print_error("Unable to save frame: %s\n", e.what());
+      }
+      }
+      } );
+
   tdp::ArucoDetector detector(0.158);
   // observed transformations from upper camera to middle camera (rig
   // cosy)
@@ -144,6 +175,17 @@ void VideoViewer(const std::string& input_uri,
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (cam1fu.GuiChanged()) rig.cams_[1].params_(0) = cam1fu;
+    if (cam1fv.GuiChanged()) rig.cams_[1].params_(1) = cam1fv;
+    if (cam3fu.GuiChanged()) rig.cams_[3].params_(0) = cam3fu;
+    if (cam3fv.GuiChanged()) rig.cams_[3].params_(1) = cam3fv;
+    if (cam5fu.GuiChanged()) rig.cams_[5].params_(0) = cam5fu;
+    if (cam5fv.GuiChanged()) rig.cams_[5].params_(1) = cam5fv;
+
+    if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
+    if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
+    if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -152,10 +194,10 @@ void VideoViewer(const std::string& input_uri,
 
     TICK("rgb collection");
     // get rgb image
-    for (size_t sId=0; sId < stream2cam.size(); sId++) {
+    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       tdp::Image<tdp::Vector3bda> rgbStream;
       if (!gui.ImageRGB(rgbStream, sId)) continue;
-      int32_t cId = stream2cam[sId]; 
+      int32_t cId = rgbdStream2cam[sId]; 
       // Get ROI
       tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
           rgb.ptr_+cId*rgbStream.Area());
@@ -164,10 +206,11 @@ void VideoViewer(const std::string& input_uri,
     TOCK("rgb collection");
     TICK("depth collection");
     // get depth image
-    for (size_t sId=0; sId < stream2cam.size(); sId++) {
+    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       tdp::Image<uint16_t> dStream;
       if (!gui.ImageD(dStream, sId)) continue;
-      int32_t cId = stream2cam[sId]; 
+      int32_t cId = rgbdStream2cam[sId]; 
+      //std::cout << sId << " " << cId << std::endl;
       // Get ROI
       tdp::Image<uint16_t> d_i(wSingle, hSingle,
           cuDraw.ptr_+cId*dStream.Area());
@@ -178,17 +221,20 @@ void VideoViewer(const std::string& input_uri,
     // convert depth image from uint16_t to float [m]
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     // compute point cloud (on CPU)
-    for (size_t sId=0; sId < stream2cam.size(); sId++) {
-      int32_t cId = stream2cam[sId]; 
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId = dStream2cam[sId]; 
       tdp::Cameraf cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
+      std::cout << cId << ": " << cam.params_.transpose() << std::endl
+        << T_rc << std::endl;
+
       tdp::Image<tdp::Vector3fda> cuN_i(wSingle, hSingle,
-          cuN.ptr_+cId*wSingle*hSingle);
+          cuN.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
       tdp::Image<tdp::Vector3fda> cuPc_i(wSingle, hSingle,
-          cuPc.ptr_+cId*wSingle*hSingle);
+          cuPc.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
       tdp::Image<float> cuD_i(wSingle, hSingle,
-          cuD.ptr_+cId*wSingle*hSingle);
+          cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
 
       // compute depth
       tdp::Depth2PCGpu(cuD_i,cam,T_rc,cuPc_i);
@@ -197,19 +243,19 @@ void VideoViewer(const std::string& input_uri,
     }
     TOCK("pc and normals");
 
-    std::vector<std::vector<tdp::Marker>> markersPerCam(stream2cam.size());
+    std::vector<std::vector<tdp::Marker>> markersPerCam(rgbStream2cam.size());
     if (doRigPoseCalib) {
-      for (size_t sId=0; sId < stream2cam.size(); sId++) {
+      for (size_t sId=0; sId < rgbStream2cam.size(); sId++) {
         tdp::Image<tdp::Vector3bda> rgbStream;
         if (!gui.ImageRGB(rgbStream, sId)) continue;
-        int32_t cId = stream2cam[sId]; 
+        int32_t cId = rgbStream2cam[sId]; 
         tdp::Cameraf cam = rig.cams_[cId];
         tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
-            rgb.ptr_+cId*rgbStream.Area());
+            rgb.ptr_+rgbdStream2cam[sId]*rgbStream.Area());
         TICK("aruco marker detect");
         std::vector<tdp::Marker> markers = detector.detect(rgb_i, cam);
         TOCK("aruco marker detect");
-        markersPerCam[cId] = markers;
+        markersPerCam[cId/2] = markers;
         for (size_t i=0; i<markers.size(); ++i) {
           markers[i].drawToImage(rgb_i, tdp::Vector3bda(0,0,255), 1);
         }
@@ -240,7 +286,7 @@ void VideoViewer(const std::string& input_uri,
       }
       std::cout << " # obs upper: " << T_rcu.size()
         << " # obs lower: " << T_rcl.size() << std::endl;
-      // update rig transformations
+      // update upper rig transformations
       Eigen::Matrix<float,6,1> xSum;
       if (T_rcu.size() > 0 && updateCalib) {
         for (size_t i=0; i<T_rcu.size(); ++i) {
@@ -251,19 +297,20 @@ void VideoViewer(const std::string& input_uri,
         std::cout << xSum/float(T_rcu.size()) << std::endl;
         std::cout << rig.T_rcs_[0] << std::endl;
         rig.T_rcs_[0] = rig.T_rcs_[0].Exp(xSum/float(T_rcu.size())); 
+        rig.T_rcs_[1] = rig.T_rcs_[0]; 
         std::cout << "current T_rcu: " << std::endl
           << rig.T_rcs_[0] << std::endl;
       }
-
+      // update lower rig transformations
       if (T_rcl.size() > 0 && pangolin::Pushed(updateCalib)) {
         xSum.fill(0.);
         for (size_t i=0; i<T_rcl.size(); ++i) {
-          xSum += rig.T_rcs_[2].Log(T_rcl[i]);
+          xSum += rig.T_rcs_[4].Log(T_rcl[i]);
         }
-        rig.T_rcs_[2] = rig.T_rcs_[2].Exp(xSum/float(T_rcl.size())); 
+        rig.T_rcs_[4] = rig.T_rcs_[4].Exp(xSum/float(T_rcl.size())); 
+        rig.T_rcs_[5] = rig.T_rcs_[4];
       }
     }
-
 
     // convert normals to RGB image
     tdp::Normals2Image(cuN, cuN2D);
@@ -282,9 +329,10 @@ void VideoViewer(const std::string& input_uri,
     // render point cloud
     pangolin::RenderVboCbo(vbo,cbo,true);
 
-    for (size_t i=0; i<rig.cams_.size(); ++i) {
+    for (size_t i=0; i<rgbStream2cam.size(); ++i) {
       for (size_t j=0; j<markersPerCam[i].size(); ++j) {
-        pangolin::glSetFrameOfReference((rig.T_rcs_[i]+markersPerCam[i][j].T_cm).matrix());
+        pangolin::glSetFrameOfReference((rig.T_rcs_[rgbStream2cam[i]]
+              +markersPerCam[i][j].T_cm).matrix());
         pangolin::glDrawAxis(0.1f);
         pangolin::glUnsetFrameOfReference();
       }
