@@ -13,6 +13,7 @@
 #include <pangolin/gl/gldraw.h>
 
 #include <tdp/gui/quickView.h>
+#include <tdp/drivers/inertial/3dmgx3_45.h>
 
 int main( int argc, char* argv[] )
 {
@@ -45,12 +46,17 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
 
+  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0");
+  imu.Start();
+
   while(!pangolin::ShouldQuit())
   {
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
+    tdp::ImuObs imuObs;
+    imu.GrabNext(imuObs);
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -61,6 +67,7 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
+  imu.Stop();
 
   return 0;
 }

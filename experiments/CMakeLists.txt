@@ -1,5 +1,8 @@
 
 add_subdirectory(./pcViewer)
+if (ASIO_FOUND)
+  add_subdirectory(./imuViewer)
+endif()
 if (CUDA_FOUND)
   add_subdirectory(./simpleGui)
   add_subdirectory(./marker)

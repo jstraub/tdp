@@ -53,6 +53,12 @@ if (OPENNI2_FOUND)
   link_directories(${OPENNI2_LIB_DIR})
 endif()
 
+find_package (ASIO QUIET)
+if (ASIO_FOUND) 
+  message("found ASIO")
+  include_directories(${ASIO_INCLUDE_DIRS})
+endif()
+
 include_directories(
   include
   ${EIGEN3_INCLUDE_DIR}
