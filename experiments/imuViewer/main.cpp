@@ -14,6 +14,8 @@
 
 #include <tdp/gui/quickView.h>
 #include <tdp/drivers/inertial/3dmgx3_45.h>
+#include <tdp/manifold/SO3.h>
+#include <tdp/manifold/SE3.h>
 
 int main( int argc, char* argv[] )
 {
@@ -46,9 +48,24 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
 
-  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0");
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+  pangolin::DataLog logOmega;
+  pangolin::Plotter plotOmega(&logOmega, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotOmega);
+  pangolin::DataLog logAcc;
+  pangolin::Plotter plotAcc(&logAcc, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotAcc);
+  pangolin::DataLog logMag;
+  pangolin::Plotter plotMag(&logMag, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotMag);
+  container.AddDisplay(plotters);
+
+  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0", 10);
   imu.Start();
 
+  tdp::SO3f R_wi;
+  tdp::ImuObs imuObsPrev;
   while(!pangolin::ShouldQuit())
   {
     // clear the OpenGL render buffers
@@ -56,13 +73,28 @@ int main( int argc, char* argv[] )
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
     tdp::ImuObs imuObs;
-    imu.GrabNext(imuObs);
+    size_t numObs = 0;
+    while(imu.GrabNext(imuObs)) {
+
+      logAcc.Log(imuObs.acc(0),imuObs.acc(1),imuObs.acc(2));
+      logMag.Log(imuObs.mag(0), imuObs.mag(1), imuObs.mag(2));
+      logOmega.Log(imuObs.omega(0), imuObs.omega(1), imuObs.omega(2));
+
+      R_wi = R_wi.Exp(imuObs.mag*1e-9*(imuObs.t_host-imuObsPrev.t_host));
+      imuObsPrev = imuObs;
+      numObs ++;
+    }
+
+    plotAcc.ScrollView(numObs,0);
+    plotMag.ScrollView(numObs,0);
+    plotOmega.ScrollView(numObs,0);
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // draw the axis
-    pangolin::glDrawAxis(0.1);
+    tdp::SE3f T_wi(R_wi.matrix(), Eigen::Vector3f(0,0,0));
+    pangolin::glDrawAxis<float>(T_wi.matrix(),0.1f);
     glDisable(GL_DEPTH_TEST);
     // finish this frame
     pangolin::FinishFrame();

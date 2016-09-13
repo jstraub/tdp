@@ -9,7 +9,8 @@ class ImuInterface {
   ImuInterface() {}
   virtual ~ImuInterface() {}
 
-  virtual void GrabNext(ImuObs& obs) = 0;
+  virtual bool GrabNext(ImuObs& obs) = 0;
+  virtual bool GrabNewest(ImuObs& obs) = 0;
 
   virtual void Start() = 0;
   virtual void Stop() = 0;
