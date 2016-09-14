@@ -38,8 +38,9 @@
 
 namespace tdp {
 
+template<int D, typename Derived>
 std::vector<int> PnPRansac(
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const std::vector<Eigen::Vector2d,
       Eigen::aligned_allocator<Eigen::Vector2d> >& pts2D,
     const std::vector<Eigen::Vector3d, 
@@ -66,8 +67,8 @@ std::vector<int> PnPRansac(
     int ideal_point_id = candidate_map[i];
     if (ideal_point_id >= 0)
     {
-      const Eigen::Vector3d img_center_pts = cam.Unproject(pts2D[i](0),
-          pts2D[i](1),1.).cast<double>();
+      const Eigen::Vector3f img_center_pts = cam.Unproject(pts2D[i](0),
+          pts2D[i](1),1.);
       Eigen::Vector2d center(img_center_pts[0]/img_center_pts[2],
           img_center_pts[1]/img_center_pts[2]);
       // const Eigen::Vector2d center = cam.Unmap(pts2D[i]);

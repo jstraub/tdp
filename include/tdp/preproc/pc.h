@@ -23,11 +23,18 @@ void Depth2PCGpu(
     Image<Vector3fda>& pc_r
     );
 
+template<int D, typename Derived>
 void Depth2PC(
     const Image<float>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& pc
-    );
+    ) {
+  for (size_t v=0; v<pc.h_; ++v)
+    for (size_t u=0; u<pc.w_; ++u) 
+      if (u<d.w_ && v<d.h_) {
+        pc(u,v) = cam.Unproject(u,v,d(u,v));
+      }
+}
 
 template<int LEVELS>
 void Depth2PCs(
