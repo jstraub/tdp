@@ -166,15 +166,15 @@ bool Imu3DMGX3_45::SetAHRSMsgFormat() {
 	data.push_back(FUN_USE_NEW);
 	data.push_back(0x03); // desc count
 
-	data.push_back(0x04); // accelerometer vector
+	data.push_back(0x04); // accelerometer vector (fully compensated)
 	data.push_back(0x0);
 	data.push_back(100/rate_); // 20 Hz
 
-	data.push_back(0x05); // gyro vector
+	data.push_back(0x05); // gyro vector (fully compensated)
 	data.push_back(0x0);
 	data.push_back(100/rate_); // 20 Hz
 
-	data.push_back(0x0C); // euler angles
+	data.push_back(0x0C); // euler angles (integration on sensor)
 	data.push_back(0x0);
 	data.push_back(100/rate_); // rate decimation -> 20 Hz
 

@@ -92,13 +92,14 @@ int main( int argc, char* argv[] )
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
+    pangolin::glDrawAxis(1.0f);
     // draw the axis
     tdp::SE3f T_wi(R_wi.matrix(), Eigen::Vector3f(0,0,0));
-    pangolin::glDrawAxis<float>(T_wi.matrix(),1.1f);
+    pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
 
-    R_wi = tdp::SO3f::R_rpy(imuObs.rpy);
-    T_wi = tdp::SE3f(R_wi.matrix(), Eigen::Vector3f(1,0,0));
-    pangolin::glDrawAxis<float>(T_wi.matrix(),1.1f);
+    T_wi = tdp::SE3f(tdp::SO3f::R_rpy(imuObs.rpy).matrix(), 
+        Eigen::Vector3f(1,0,0));
+    pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
     glDisable(GL_DEPTH_TEST);
     // finish this frame
     pangolin::FinishFrame();
