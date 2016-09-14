@@ -9,6 +9,7 @@
 #include <tdp/data/pyramid.h>
 #include <tdp/data/managed_pyramid.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_base.h>
 #include <tdp/manifold/SO3.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda/cuda.h>
@@ -47,11 +48,27 @@ void Depth2Normals(
     const Camera<float>& cam,
     Image<Vector3fda> cuN);
 
+template<int D, typename Derived>
 void Depth2Normals(
     const Image<float>& cuD,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const SO3<float>& R_rc,
-    Image<Vector3fda> cuN);
+    Image<Vector3fda> cuN) {
+  size_t wc = cuD.w_;
+  size_t hc = cuD.h_;
+  assert(wc%64 == 0);
+  assert(hc%64 == 0);
+  ManagedDeviceImage<float> cuDu(wc, hc);
+  ManagedDeviceImage<float> cuDv(wc, hc);
+
+  Gradient(cuD, cuDu, cuDv);
+
+  Eigen::Matrix3f K = cam.GetK();
+  float f = K(0,0);
+  int uc = K(0,2);
+  int vc = K(1,2);
+  ComputeNormals(cuD, cuDu, cuDv, cuN, R_rc, f, uc, vc);
+}
 
 template<int LEVELS>
 void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr,

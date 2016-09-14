@@ -1,5 +1,6 @@
 #pragma once
 #include <tdp/data/image.h>
+#include <tdp/camera/camera_base.h>
 #include <tdp/camera/camera.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/eigen/dense.h>
@@ -7,15 +8,17 @@
 
 namespace tdp {
 
+
 void Depth2PCGpu(
     const Image<float>& d,
     const Camera<float>& cam,
     Image<Vector3fda>& pc_c
     );
 
+template<int D, typename Derived>
 void Depth2PCGpu(
     const Image<float>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const SE3<float>& T_rc,
     Image<Vector3fda>& pc_r
     );

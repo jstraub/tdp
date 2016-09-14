@@ -2,12 +2,12 @@
 {
   "camera":{
     "model" : {
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 538.4258,
       "fv" : 537.3621,
       "uc" : 311.0811,
       "vc" : 238.7801,
-      "distortion" : []
+      "distortion" : [ 0.05804268, -0.2323788, 0.1970008 ]
     },
     "type" : "rgb",
     "serialNumber" : "1402270118",
@@ -21,12 +21,12 @@
 {
   "camera":{
     "model" : {
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 5.7934830826096436e+02, 
       "fv" : 5.7747493467278173e+02,
       "uc" : 3.1455418250053361e+02,
       "vc" : 2.4590903687276767e+02,
-      "distortion" : []
+      "distortion" : [0,0,0]
     },
     "type" : "ir",
     "serialNumber" : "1402270118",
@@ -40,12 +40,12 @@
 {
   "camera" : {
     "model":{
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 537.2258,
       "fv" : 537.1214,
       "uc" : 319.8675,
       "vc" : 239.4572,
-      "distortion" : []
+      "distortion" : [0.06492601, -0.2724109, 0.2865513]
     },
     "type" : "rgb",
     "serialNumber" : "1504270177",
@@ -59,12 +59,12 @@
 {
   "camera" : {
     "model":{
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 5.8031660454179587e+02,
       "fv" : 5.7934783577737051e+02,
       "uc" : 3.2290204775549574e+02,
       "vc" : 2.4070078941661976e+02,
-      "distortion" : []
+      "distortion" : [0,0,0]
     },
     "type" : "ir",
     "serialNumber" : "1504270177",
@@ -78,12 +78,12 @@
 {
   "camera" : {
     "model":{
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 537.5463,
       "fv" : 536.4478,
       "uc" : 313.5894,
       "vc" : 243.5083,
-      "distortion" : []
+      "distortion" : [0.07766051, -0.3148547, 0.3002543 ]
     },
     "type" : "rgb",
     "serialNumber" : "1402240016",
@@ -97,12 +97,12 @@
 {
   "camera" : {
     "model":{
-      "type" : "pinhole",
+      "type" : "poly3",
       "fu" : 5.7345745467692427e+02,
       "fv" : 5.7122053584516084e+02,
       "uc" : 3.2410836113205056e+02,
       "vc" : 2.4723452756862739e+02,
-      "distortion" : []
+      "distortion" : [0,0,0]
     },
     "type" : "ir",
     "serialNumber" : "1402240016",

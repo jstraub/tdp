@@ -2,7 +2,9 @@
 #include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/data/image.h>
+#include <tdp/camera/camera_base.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/manifold/SE3.h>
 
@@ -47,9 +49,10 @@ void Depth2PCGpu(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+template<int D, typename Derived>
 __global__ void KernelDepth2PC(
     Image<float> d,
-    Camera<float> cam,
+    CameraBase<float,D,Derived> cam,
     SE3<float> T_rc,
     Image<Vector3fda> pc_r
     ) {
@@ -59,6 +62,8 @@ __global__ void KernelDepth2PC(
     const float di = d(idx,idy);
     //if (100<idx&&idx<110 && 100<idy&&idy<110) printf("%f\n",di);
     if (di > 0) {
+      //printf("%f",di);
+      //printf("%f %f %f",cam.params_(0),cam.params_(1),cam.params_(2));
       pc_r(idx,idy) = T_rc*cam.Unproject(idx,idy,di);
       //if (100<idx&&idx<110 && 100<idy&&idy<110) printf("%f %f %f\n",
       //    pc_r(idx,idy)(0),pc_r(idx,idy)(1),pc_r(idx,idy)(2));
@@ -75,16 +80,31 @@ __global__ void KernelDepth2PC(
   }
 }
 
+template<int D, typename Derived>
 void Depth2PCGpu(
     const Image<float>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const SE3<float>& T_rc,
     Image<Vector3fda>& pc_r
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
-  KernelDepth2PC<<<blocks,threads>>>(d,cam,T_rc,pc_r);
+  KernelDepth2PC<D,Derived><<<blocks,threads>>>(d,cam,T_rc,pc_r);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+// explicit instantiations
+template void Depth2PCGpu(
+    const Image<float>& d,
+    const CameraBase<float,7,CameraPoly3<float>>& cam,
+    const SE3<float>& T_rc,
+    Image<Vector3fda>& pc_r
+    );
+template void Depth2PCGpu(
+    const Image<float>& d,
+    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    const SE3<float>& T_rc,
+    Image<Vector3fda>& pc_r
+    );
 
 }

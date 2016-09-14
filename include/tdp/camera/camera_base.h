@@ -5,44 +5,53 @@
 
 namespace tdp {
 
-template <class T, size_t D, class B>
+template <class T, int D, class Derived>
 class CameraBase {
  public:
-  typedef Eigen::Matrix<T,3,1> Point3;
-  typedef Eigen::Matrix<T,2,1> Point2;
-  typedef Eigen::Matrix<T,D,1> Parameters;
 
   CameraBase()
   {}
-  CameraBase(const Parameters& params) : params_(params)
+  CameraBase(Eigen::Matrix<T,D,1> params) : params_(params)
+  {}
+  CameraBase(const CameraBase<T,D,Derived>& other) : params_(other.params_)
   {}
   ~CameraBase()
   {}
 
   TDP_HOST_DEVICE
-  Point2 Project(const Point3& p) const {
-    return static_cast<B*>(this)->Project(p);
+  Eigen::Matrix<T,2,1> Project(const Eigen::Matrix<T,3,1>& p) const {
+    return static_cast<Derived*>(this)->Project(p);
   }
 
   //TDP_HOST_DEVICE
   //Vector2fda Project(const Vector3fda& p) const {
-  //  return static_cast<B*>(this)->Project(p);
+  //  return static_cast<Derived*>(this)->Project(p);
   //}
 
   TDP_HOST_DEVICE
-  Point3 Unproject(T u, T v, T z) const {
-    return static_cast<B*>(this)->Unproject(u,v,z);
+  Eigen::Matrix<T,3,1> Unproject(T u, T v, T z) const {
+    return static_cast<const Derived*>(this)->Unproject(u,v,z);
+  }
+
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,3> GetK() const {
+    return static_cast<const Derived*>(this)->GetK();
+  }
+
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,3> GetKinv() const {
+    return static_cast<const Derived*>(this)->GetKinv();
   }
 
   bool FromJson(pangolin::json::value& val){
-    return static_cast<B*>(this)->FromJson(val);
+    return static_cast<Derived*>(this)->FromJson(val);
   }
 
-  pangolin::json::value ToJson(){
-    return static_cast<B*>(this)->ToJson();
+  pangolin::json::value ToJson() const {
+    return static_cast<const Derived*>(this)->ToJson();
   }
 
-  Parameters params_;
+  Eigen::Matrix<T,D,1,Eigen::DontAlign> params_;
  private:
 };
 }

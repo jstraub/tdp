@@ -21,6 +21,7 @@
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/utils/Stopwatch.h>
@@ -34,6 +35,8 @@
 #include <tdp/manifold/SE3.h>
 #include <pangolin/video/drivers/openni2.h>
 
+typedef tdp::CameraPoly3<float> CameraT;
+
 void VideoViewer(const std::string& input_uri, 
     const std::string& configPath,
     const std::string& output_uri)
@@ -41,7 +44,7 @@ void VideoViewer(const std::string& input_uri,
   std::cout << " -!!- this application works only with openni2 devices (tested with Xtion PROs) -!!- " << std::endl;
 
   // Read rig file
-  tdp::Rig<tdp::Cameraf> rig;
+  tdp::Rig<CameraT> rig;
   if (!rig.FromFile(configPath, true)) return;
 
   // Open Video by URI
@@ -52,39 +55,12 @@ void VideoViewer(const std::string& input_uri,
     pango_print_error("No video streams from device.\n");
     return;
   }
-  std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-
-  std::cout << streams.size() << " " << num_streams << std::endl;
-  pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
-  openni->UpdateProperties();
-  pangolin::json::value devProps = openni->DeviceProperties();
-  if (! devProps.contains("openni") ) return;
-  pangolin::json::value jsDevices = devProps["openni"]["devices"];
-
   std::vector<int32_t> rgbStream2cam;
   std::vector<int32_t> dStream2cam;
   std::vector<int32_t> rgbdStream2cam;
-  for (size_t i=0; i<jsDevices.size(); ++i) {
-    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
-    std::cout << "Device " << i << " serial #: " << serial << std::endl;
-    int32_t camId = -1;
-    for (size_t j=0; j<rig.cams_.size(); ++j) {
-      if (rig.serials_[j].compare(serial) == 0) {
-        camId = j;
-        break;
-      }
-    }
-    if (camId < 0) {
-      std::cerr << "no matching camera found in calibration!" << std::endl;
-    } else {
-      std::cout << "matching camera in config: " << camId 
-        << " " << rig.config_[camId]["camera"]["description"].get<std::string>()
-        << std::endl;
-    }
-    rgbStream2cam.push_back(camId); // rgb
-    dStream2cam.push_back(camId+1); // ir/depth
-    rgbdStream2cam.push_back(camId/2); // rgbd
-  }
+  std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+  tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
+      dStream2cam, rgbdStream2cam);
 
   tdp::GUInoViews gui(1200,800,video);
 
@@ -131,7 +107,9 @@ void VideoViewer(const std::string& input_uri,
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<float> depthSensor1Scale("ui.depth1 scale",1e-3,8e-4,1e-3);
+  pangolin::Var<float> depthSensor2Scale("ui.depth2 scale",1e-3,8e-4,1e-3);
+  pangolin::Var<float> depthSensor3Scale("ui.depth3 scale",1e-3,8e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
@@ -212,18 +190,25 @@ void VideoViewer(const std::string& input_uri,
       int32_t cId = rgbdStream2cam[sId]; 
       //std::cout << sId << " " << cId << std::endl;
       // Get ROI
-      tdp::Image<uint16_t> d_i(wSingle, hSingle,
+      tdp::Image<uint16_t> cuDraw_i(wSingle, hSingle,
           cuDraw.ptr_+cId*dStream.Area());
-      d_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+      cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+      // convert depth image from uint16_t to float [m]
+      tdp::Image<float> cuD_i(wSingle, hSingle,
+          cuD.ptr_+cId*dStream.Area());
+      float depthSensorScale = depthSensor1Scale;
+      if (cId==1) depthSensorScale = depthSensor2Scale;
+      if (cId==2) depthSensorScale = depthSensor3Scale;
+      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
     }
     TOCK("depth collection");
     TICK("pc and normals");
     // convert depth image from uint16_t to float [m]
-    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
+    //tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     // compute point cloud (on CPU)
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId = dStream2cam[sId]; 
-      tdp::Cameraf cam = rig.cams_[cId];
+      CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
       std::cout << cId << ": " << cam.params_.transpose() << std::endl
@@ -249,7 +234,7 @@ void VideoViewer(const std::string& input_uri,
         tdp::Image<tdp::Vector3bda> rgbStream;
         if (!gui.ImageRGB(rgbStream, sId)) continue;
         int32_t cId = rgbStream2cam[sId]; 
-        tdp::Cameraf cam = rig.cams_[cId];
+        CameraT cam = rig.cams_[cId];
         tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
             rgb.ptr_+rgbdStream2cam[sId]*rgbStream.Area());
         TICK("aruco marker detect");

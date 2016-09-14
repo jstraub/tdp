@@ -3,10 +3,13 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera.h>
 #include <pangolin/utils/picojson.h>
+#include <pangolin/video/video_record_repeat.h>
+#include <pangolin/video/drivers/openni2.h>
 
 namespace tdp {
 template <class Cam>
@@ -102,5 +105,51 @@ struct Rig {
   // raw properties
   pangolin::json::value config_;
 };
+
+/// Uses serial number in openni device props and rig to find
+/// correspondences.
+template<class Cam>
+bool CorrespondOpenniStreams2Cams(
+    const std::vector<pangolin::VideoInterface*>& streams,
+    const tdp::Rig<Cam>& rig,
+    std::vector<int32_t>& rgbStream2cam,
+    std::vector<int32_t>& dStream2cam,
+    std::vector<int32_t>& rgbdStream2cam
+    ) {
+
+  rgbStream2cam.clear();
+  dStream2cam.clear();
+  rgbdStream2cam.clear();
+
+  pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
+  openni->UpdateProperties();
+  pangolin::json::value devProps = openni->DeviceProperties();
+  if (! devProps.contains("openni") ) 
+    return false;
+  pangolin::json::value jsDevices = devProps["openni"]["devices"];
+
+  for (size_t i=0; i<jsDevices.size(); ++i) {
+    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+    std::cout << "Device " << i << " serial #: " << serial << std::endl;
+    int32_t camId = -1;
+    for (size_t j=0; j<rig.cams_.size(); ++j) {
+      if (rig.serials_[j].compare(serial) == 0) {
+        camId = j;
+        break;
+      }
+    }
+    if (camId < 0) {
+      std::cerr << "no matching camera found in calibration!" << std::endl;
+    } else {
+      std::cout << "matching camera in config: " << camId << " " 
+        << rig.config_[camId]["camera"]["description"].template get<std::string>()
+        << std::endl;
+    }
+    rgbStream2cam.push_back(camId); // rgb
+    dStream2cam.push_back(camId+1); // ir/depth
+    rgbdStream2cam.push_back(camId/2); // rgbd
+  }
+  return true;
+}
 
 }
