@@ -17,6 +17,14 @@ else()
 endif()
 message ("${SRCS}")
 
+if (Calibu_FOUND) 
+  list(APPEND LIBS ${Calibu_LIBRARIES})
+endif()
+
+if (aruco_FOUND) 
+  list(APPEND LIBS ${aruco_LIBS})
+endif()
+
 target_link_libraries(tdp pangolin
-  ${aruco_LIBS}
+  ${LIBS}
   )

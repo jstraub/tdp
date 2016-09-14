@@ -53,6 +53,13 @@ if (OPENNI2_FOUND)
   link_directories(${OPENNI2_LIB_DIR})
 endif()
 
+find_package (Calibu QUIET)
+if (Calibu_FOUND) 
+  message("found Calibu")
+  include_directories(${Calibu_INCLUDE_DIRS})
+  link_directories(${Calibu_LIBRARY_DIRS})
+endif()
+
 find_package (ASIO QUIET)
 if (ASIO_FOUND) 
   message("found ASIO")
