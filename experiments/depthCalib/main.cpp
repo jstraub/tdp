@@ -88,9 +88,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<uint8_t> grey(w,h);
   tdp::ManagedHostImage<uint8_t> mask(w,h);
-  tdp::ManagedHostImage<float> scaleSum(w,h);
   tdp::ManagedHostImage<float> scaleN(w,h);
   tdp::ManagedHostImage<float> scale(w,h);
+  tdp::ManagedDeviceImage<float> cuScale(w,h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -104,7 +104,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
-  pangolin::Var<bool> resetScale("ui.reset scale",false,false);
+  pangolin::Var<bool> estimateScale("ui.est scale",false,true);
+  pangolin::Var<bool> applyScale("ui.apply scale",false,true);
+  pangolin::Var<bool> resetScale("ui.reset scale est",false,false);
+  pangolin::Var<int> patchBoundary("ui.patch boundary",7,0,10);
+  pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
+  pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
 
   // Default number of grid rows.
   int grid_rows = 12;
@@ -128,16 +133,23 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   std::vector<tdp::SE3f> T_hws;
 
-  scaleSum.Fill(1.);
-  scaleN.Fill(1.);
+  scale.Fill(1.);
+  scaleN.Fill(0.);
+
+  if (pangolin::FileExists("depthCalib.png")) {
+    pangolin::TypedImage scale8bit = pangolin::LoadImage("depthCalib.png");
+    tdp::Image<float> scaleWrap(w,h,(float*)scale8bit.ptr);
+    scale.CopyFrom(scaleWrap, cudaMemcpyHostToHost);
+  }
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
     if (pangolin::Pushed(resetScale)) {
-      scaleSum.Fill(1.);
-      scaleN.Fill(1.);
+      scale.Fill(1.);
+      scaleN.Fill(0.);
     }
+    if (estimateScale) applyScale = false;
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -153,7 +165,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // copy raw image to gpu
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     // convet depth image from uint16_t to float [m]
-    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
+    if (!applyScale) {
+      tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
+    } else {
+      cuScale.CopyFrom(scale,cudaMemcpyHostToDevice);
+      tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, dMin, dMax);
+    }
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     // compute point cloud (on CPU)
     tdp::Depth2PC(d,cam,pc);
@@ -189,24 +206,38 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       mask.Fill(0);
       for( size_t i=0; i < conics.size(); ++i ) {
         if (ellipse_target_map[i] > 0) {
-          for (size_t y=conics[i].bbox.y1; y<=conics[i].bbox.y2; ++y) {
-            for (size_t x=conics[i].bbox.x1; x<=conics[i].bbox.x2; ++x) {
+          for (size_t y=std::max(0,conics[i].bbox.y1-patchBoundary); 
+              y<=std::min((int)h-1,conics[i].bbox.y2+patchBoundary); ++y) {
+            for (size_t x=std::max(0,conics[i].bbox.x1-patchBoundary); 
+              x<=std::min((int)w-1,conics[i].bbox.x2+patchBoundary); ++x) {
               mask(x,y) = 255;
             }
           }
         }
       }
-      for (size_t i=0; i<mask.Area(); ++i) {
-        if (mask[i] > 0) {
-          scaleSum[i] += (-T_hw.Inverse().translation()(2))/d[i];
-          scaleN[i] ++;
+      if (estimateScale) {
+        tdp::SE3f T_wh = T_hw.Inverse();
+        for (size_t i=0; i<mask.Area(); ++i) {
+          if (mask[i] > 0 && !std::isnan(d[i])) {
+            // true depth over observed depth
+            float scale_i = (-T_wh.translation()(2))/d[i];
+            // dot product between plane normal and ray direction
+            Eigen::Vector3f ray_w = T_wh.rotation()*cam.Unproject(i%w,i/h,1.f);
+            float w_i = ray_w(2)/ray_w.norm();
+            //std::cout << w_i << std::endl;
+            scale[i] = (scale[i]*scaleN[i]+scale_i*w_i)/(scaleN[i]+w_i);
+            scaleN[i] = std::min(scaleN[i]+w_i,numScaleObs.Get());
+          }
         }
-      }
-      for (size_t i=0; i<scale.Area(); ++i) {
-        scale[i] = scaleSum[i]/scaleN[i];
       }
     }
 
+    if (pangolin::Pushed(saveScaleCalib)) {
+      pangolin::Image<uint8_t> scale8bit(w*sizeof(float),h,
+          w*sizeof(float),(uint8_t*)scale.ptr_);
+      pangolin::SaveImage(scale8bit,pangolin::VideoFormatFromString("GRAY8"),
+          "depthCalib.png");
+    }
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
