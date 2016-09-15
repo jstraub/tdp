@@ -17,6 +17,7 @@
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
+#include <tdp/data/managed_pyramid.h>
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
@@ -75,7 +76,7 @@ void VideoViewer(const std::string& input_uri,
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
-      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+      pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
@@ -104,6 +105,15 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
   tdp::ManagedDeviceImage<float> cuScale(w,h);
 
+//  tdp::ManagedHostPyramid<float,3> dPyr(w,h);
+//  tdp::ManagedHostPyramid<float,3> dPyrEst(w,h);
+//  tdp::ManagedDevicePyramid<float,3> cuDPyr(w,h);
+//  tdp::ManagedDevicePyramid<float,3> cuDPyrEst(w,h);
+//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
+//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(w,h);
+//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
+//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(w,h);
+
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
@@ -113,9 +123,6 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> depthSensor3Scale("ui.depth3 scale",1e-3,8e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
-
-  pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
-  pangolin::Var<bool> updateCalib("ui.update Calib", false, false);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
@@ -144,15 +151,11 @@ void VideoViewer(const std::string& input_uri,
       pango_print_error("Unable to save frame: %s\n", e.what());
       }
       }
-      } );
+      });
 
+  // TODO: figure out why removing this will crash my computer...
   tdp::ArucoDetector detector(0.158);
-  // observed transformations from upper camera to middle camera (rig
-  // cosy)
-  std::vector<tdp::SE3f> T_rcu; 
-  // observed transformations from lower camera to middle camera (rig
-  // cosy)
-  std::vector<tdp::SE3f> T_rcl;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -241,74 +244,26 @@ void VideoViewer(const std::string& input_uri,
     }
     TOCK("pc and normals");
 
-    std::vector<std::vector<tdp::Marker>> markersPerCam(rgbStream2cam.size());
-    if (doRigPoseCalib) {
-      for (size_t sId=0; sId < rgbStream2cam.size(); sId++) {
-        tdp::Image<tdp::Vector3bda> rgbStream;
-        if (!gui.ImageRGB(rgbStream, sId)) continue;
-        int32_t cId = rgbStream2cam[sId]; 
-        CameraT cam = rig.cams_[cId];
-        tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
-            rgb.ptr_+rgbdStream2cam[sId]*rgbStream.Area());
-        TICK("aruco marker detect");
-        std::vector<tdp::Marker> markers = detector.detect(rgb_i, cam);
-        TOCK("aruco marker detect");
-        markersPerCam[cId/2] = markers;
-        for (size_t i=0; i<markers.size(); ++i) {
-          markers[i].drawToImage(rgb_i, tdp::Vector3bda(0,0,255), 1);
-        }
-      }
-      // add observations between rig and upper cam
-      // upper = cId=0
-      // rig/middle = cId=1
-      for (size_t i=0; i<markersPerCam[0].size(); ++i) {
-        for (size_t j=0; j<markersPerCam[1].size(); ++j) {
-          if (markersPerCam[0][i].id == markersPerCam[1][j].id) {
-            tdp::SE3f T_cum = markersPerCam[0][i].T_cm;
-            tdp::SE3f T_crm = markersPerCam[1][j].T_cm;
-            T_rcu.push_back(T_crm+T_cum.Inverse());
-          }
-        }
-      }
-      // add observations between rig and lower cam
-      // lower = cId=2
-      // rig/middle = cId=1
-      for (size_t i=0; i<markersPerCam[2].size(); ++i) {
-        for (size_t j=0; j<markersPerCam[1].size(); ++j) {
-          if (markersPerCam[2][i].id == markersPerCam[1][j].id) {
-            tdp::SE3f T_clm = markersPerCam[2][i].T_cm;
-            tdp::SE3f T_crm = markersPerCam[1][j].T_cm;
-            T_rcl.push_back(T_crm+T_clm.Inverse());
-          }
-        }
-      }
-      std::cout << " # obs upper: " << T_rcu.size()
-        << " # obs lower: " << T_rcl.size() << std::endl;
-      // update upper rig transformations
-      Eigen::Matrix<float,6,1> xSum;
-      if (T_rcu.size() > 0 && updateCalib) {
-        for (size_t i=0; i<T_rcu.size(); ++i) {
-          xSum += rig.T_rcs_[0].Log(T_rcu[i]);
-          std::cout << "T_rcu obs: " << i << ": " << std::endl
-            << T_rcu[i] << std::endl;
-        }
-        std::cout << xSum/float(T_rcu.size()) << std::endl;
-        std::cout << rig.T_rcs_[0] << std::endl;
-        rig.T_rcs_[0] = rig.T_rcs_[0].Exp(xSum/float(T_rcu.size())); 
-        rig.T_rcs_[1] = rig.T_rcs_[0]; 
-        std::cout << "current T_rcu: " << std::endl
-          << rig.T_rcs_[0] << std::endl;
-      }
-      // update lower rig transformations
-      if (T_rcl.size() > 0 && pangolin::Pushed(updateCalib)) {
-        xSum.fill(0.);
-        for (size_t i=0; i<T_rcl.size(); ++i) {
-          xSum += rig.T_rcs_[4].Log(T_rcl[i]);
-        }
-        rig.T_rcs_[4] = rig.T_rcs_[4].Exp(xSum/float(T_rcl.size())); 
-        rig.T_rcs_[5] = rig.T_rcs_[4];
-      }
-    }
+//    TICK("Ray Trace TSDF");
+//    tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
+//    // first one not needed anymore
+//    //RayTraceTSDF(cuTSDF, cuDEst, nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
+//    //RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+//    //    nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
+//    TOCK("Ray Trace TSDF");
+//
+//    TICK("Setup Pyramids");
+//    // TODO might want to use the pyramid construction with smoothing
+////    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
+////        cudaMemcpyDeviceToDevice, 0.03);
+//    pcs_c.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
+//    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_c,cudaMemcpyDeviceToDevice);
+//
+//    ns_c.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
+//    tdp::CompleteNormalPyramid<3>(ns_c,cudaMemcpyDeviceToDevice);
+//    // just complete the surface normals obtained from the TSDF
+//    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
+//    TOCK("Setup Pyramids");
 
     // Draw 3D stuff
     if (d_cam.IsShown()) {
@@ -321,15 +276,6 @@ void VideoViewer(const std::string& input_uri,
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
       pangolin::RenderVboCbo(vbo,cbo,true);
-
-      for (size_t i=0; i<rgbStream2cam.size(); ++i) {
-        for (size_t j=0; j<markersPerCam[i].size(); ++j) {
-          pangolin::glSetFrameOfReference((rig.T_rcs_[rgbStream2cam[i]]
-                +markersPerCam[i][j].T_cm).matrix());
-          pangolin::glDrawAxis(0.1f);
-          pangolin::glUnsetFrameOfReference();
-        }
-      }
       glDisable(GL_DEPTH_TEST);
     }
 
