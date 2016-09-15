@@ -48,9 +48,11 @@ GUInoViews::GUInoViews(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
     const char screenshot_keys[] = {'!','@','#','$','%','^','&','*','('};
 
     // Show/hide streams
-    for(size_t v=0; v < container.NumChildren() && v < 9; v++) {
+    for(size_t v=0; v < 9; v++) {
         pangolin::RegisterKeyPressCallback(show_hide_keys[v], [&,v](){
-            container[v].ToggleShow();
+            if (v < container.NumChildren()) {
+              container[v].ToggleShow();
+            }
         } );
         pangolin::RegisterKeyPressCallback(screenshot_keys[v], [&,v](){
             if(v < images.size() && images[v].ptr) {

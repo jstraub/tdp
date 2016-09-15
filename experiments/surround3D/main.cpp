@@ -310,37 +310,43 @@ void VideoViewer(const std::string& input_uri,
       }
     }
 
-    // convert normals to RGB image
-    tdp::Normals2Image(cuN, cuN2D);
-    // copy to CPU memory for vis
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
-    pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
-
     // Draw 3D stuff
-    glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
-    // draw the axis
-    pangolin::glDrawAxis(0.1);
-    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
-    // render point cloud
-    pangolin::RenderVboCbo(vbo,cbo,true);
+    if (d_cam.IsShown()) {
+      pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+      glEnable(GL_DEPTH_TEST);
+      d_cam.Activate(s_cam);
+      // draw the axis
+      pangolin::glDrawAxis(0.1);
+      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+      // render point cloud
+      pangolin::RenderVboCbo(vbo,cbo,true);
 
-    for (size_t i=0; i<rgbStream2cam.size(); ++i) {
-      for (size_t j=0; j<markersPerCam[i].size(); ++j) {
-        pangolin::glSetFrameOfReference((rig.T_rcs_[rgbStream2cam[i]]
-              +markersPerCam[i][j].T_cm).matrix());
-        pangolin::glDrawAxis(0.1f);
-        pangolin::glUnsetFrameOfReference();
+      for (size_t i=0; i<rgbStream2cam.size(); ++i) {
+        for (size_t j=0; j<markersPerCam[i].size(); ++j) {
+          pangolin::glSetFrameOfReference((rig.T_rcs_[rgbStream2cam[i]]
+                +markersPerCam[i][j].T_cm).matrix());
+          pangolin::glDrawAxis(0.1f);
+          pangolin::glUnsetFrameOfReference();
+        }
       }
+      glDisable(GL_DEPTH_TEST);
     }
 
-    glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
-    viewRgb.SetImage(rgb);
-    viewD.SetImage(d);
-    viewN2D.SetImage(n2D);
+    if (viewRgb.IsShown()) {
+      viewRgb.SetImage(rgb);
+    }
+    if (viewD.IsShown()) {
+      d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      viewD.SetImage(d);
+    }
+    if (viewN2D.IsShown()) {
+      // convert normals to RGB image
+      tdp::Normals2Image(cuN, cuN2D);
+      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+      viewN2D.SetImage(n2D);
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
