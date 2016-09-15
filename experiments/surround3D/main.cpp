@@ -90,6 +90,9 @@ void VideoViewer(const std::string& input_uri,
   gui.container().AddDisplay(viewD);
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
+
+  tdp::QuickView viewRgbJoint(w,h);
+  gui.container().AddDisplay(viewRgbJoint);
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -155,6 +158,13 @@ void VideoViewer(const std::string& input_uri,
 
   // TODO: figure out why removing this will crash my computer...
   tdp::ArucoDetector detector(0.158);
+
+  pangolin::GlRenderBuffer glRenderBuf(w,h);
+  pangolin::GlTexture tex(w,h,GL_RGBA8);
+  pangolin::GlFramebuffer glFrameBuf(tex, glRenderBuf);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgbJoint(w,h);
+  memset(rgbJoint.ptr_, 0, rgbJoint.SizeBytes());
+  tdp::ManagedHostImage<float> dJoint(w,h);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -244,6 +254,7 @@ void VideoViewer(const std::string& input_uri,
     }
     TOCK("pc and normals");
 
+
 //    TICK("Ray Trace TSDF");
 //    tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
 //    // first one not needed anymore
@@ -279,7 +290,19 @@ void VideoViewer(const std::string& input_uri,
       glDisable(GL_DEPTH_TEST);
     }
 
+    std::cout << "binding frame buffer" << std::endl;
+    glFrameBuf.Bind();
+    std::cout << "rendering to frame buffer" << std::endl;
+    pangolin::RenderVboCbo(vbo,cbo,true);
+    std::cout << "unbinding frame buffer" << std::endl;
+    glFrameBuf.Unbind();
+    std::cout << "unbound frame buffer" << std::endl;
+
     // Draw 2D stuff
+    if (viewRgbJoint.IsShown()) {
+      tex.Download(rgbJoint.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
+      viewRgbJoint.SetImage(rgbJoint);
+    }
     if (viewRgb.IsShown()) {
       viewRgb.SetImage(rgb);
     }
