@@ -99,6 +99,7 @@ int main( int argc, char* argv[] )
   std::vector<int32_t> dStream2cam;
   std::vector<int32_t> rgbdStream2cam;
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+
   tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
       dStream2cam, rgbdStream2cam);
 

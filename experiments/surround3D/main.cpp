@@ -227,9 +227,6 @@ void VideoViewer(const std::string& input_uri,
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
-      std::cout << cId << ": " << cam.params_.transpose() << std::endl
-        << T_rc << std::endl;
-
       tdp::Image<tdp::Vector3fda> cuN_i(wSingle, hSingle,
           cuN.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
       tdp::Image<tdp::Vector3fda> cuPc_i(wSingle, hSingle,

@@ -157,10 +157,12 @@ bool CorrespondOpenniStreams2Cams(
   rgbStream2cam.clear();
   dStream2cam.clear();
   rgbdStream2cam.clear();
+  
+  pangolin::json::value devProps = pangolin::GetVideoDeviceProperties(streams[0]);
 
-  pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
-  openni->UpdateProperties();
-  pangolin::json::value devProps = openni->DeviceProperties();
+  //pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
+  //openni->UpdateProperties();
+  //pangolin::json::value devProps = openni->DeviceProperties();
   if (! devProps.contains("openni") ) 
     return false;
   pangolin::json::value jsDevices = devProps["openni"]["devices"];
