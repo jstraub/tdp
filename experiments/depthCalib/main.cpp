@@ -158,7 +158,7 @@ int main( int argc, char* argv[] )
   
   if (rig.depthScales_.size() > rgbdStream2cam[0]) {
     scale.CopyFrom(rig.depthScales_[rgbdStream2cam[0]], cudaMemcpyHostToHost);
-    scaleN.Fill(0.);
+    scaleN.Fill(100.f);
   } else {
     resetScale = true;
   }
@@ -236,27 +236,36 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      if (estimateScale) {
-        tdp::SE3f T_wh = T_hw.Inverse();
-        for (size_t i=0; i<mask.Area(); ++i) {
-          if (mask[i] > 0 && !std::isnan(d[i])) {
-            tdp::Rayfda ray_d(tdp::Vector3fda::Zero(),
-                camD.Unproject(i%w, i/w, 1.f));
-            // ray of depth image d in world coordinates
-            tdp::Rayfda ray_w = ray_d.Transform(T_wh);
-            // float d_true = - ray_w.dot(n)/(ray_w.dir.dot(n));
-            // above is equivalent to belwo because n = (0,0,-1)
-            float d_true = -ray_w.p(2)/ray_w.dir(2);
-            // true depth over observed depth
-            float scale_i = depthSensorScale*d_true/d[i];
+      tdp::SE3f T_wh = T_hw.Inverse();
+      float avgScale = 0.f;
+      float avgDepth = 0.f;
+      float numScale = 0.f;
+      for (size_t i=0; i<mask.Area(); ++i) {
+        if (mask[i] > 0 && !std::isnan(d[i])) {
+          tdp::Rayfda ray_d(tdp::Vector3fda::Zero(),
+              camD.Unproject(i%w, i/w, 1.f));
+          // ray of depth image d in world coordinates
+          tdp::Rayfda ray_w = ray_d.Transform(T_wh);
+          // float d_true = - ray_w.dot(n)/(ray_w.dir.dot(n));
+          // above is equivalent to belwo because n = (0,0,-1)
+          float d_true = -ray_w.p(2)/ray_w.dir(2);
+          // true depth over observed depth
+          float scale_i = depthSensorScale*d_true/d[i];
+          if (estimateScale) {
             // dot product between plane normal and ray direction
             float w_i = ray_w.dir(2)/ray_w.dir.norm();
-            //std::cout << w_i << std::endl;
             scale[i] = (scale[i]*scaleN[i]+scale_i*w_i)/(scaleN[i]+w_i);
             scaleN[i] = std::min(scaleN[i]+w_i,numScaleObs.Get());
           }
+          avgDepth += scale[i]*d[i]/depthSensorScale;
+          avgScale += scale_i;
+          numScale ++;
         }
       }
+      avgScale /= numScale;
+      avgDepth /= numScale;
+      std::cout << " avg scale: " << avgScale << "\tavg depth: " << avgDepth 
+        << std::endl;
     }
 
     if (pangolin::Pushed(saveScaleCalib)) {
