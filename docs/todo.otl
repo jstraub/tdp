@@ -14,6 +14,46 @@ Marching Cubes
 		CPU: find number of triangles and positions
 		GPU: compute triangle locations
 
-
 RGB FUSION
 	See appendix of http://www.thomaswhelan.ie/Whelan14ijrr.pdf
+
+OpenNI2:
+	Use synccolor to get color-depth sync
+	Either:
+		Use register to get depth image-rgb correspondences in the rgb frame; use only RGB camera parameters
+	Or: 
+		Calibrate RGB-IR camera baseline and use own RGB and IR camera calibrations
+			Harder but that way I have control over everything.
+
+Surround3D:
+	Depth sensor calibration:
+		seems to be enough to have a single scale parameter per camera
+			at least try that for now and evaluate later what the effects of better calib are
+	IMU integration (make it flexible so that it doesnt matter if there is none)
+		just pre-apply the IMU rotation estimate before ICP
+	Just run DepthFusion on hat I have now; use openni2:[registered=true]
+		see what kind of models I can get
+	Experiment:
+		use overlapping areas to find and estimate the relative scale on the go
+
+
+Depth calibration:
+	Questions:
+		Why does the current calib routine give me those radial-looking scale estimates which are just completely wrong when I apply them?
+	Experiment:
+		Compute average scale as a function of distance to the plane
+			average depth seems to work fine for calibration
+			but there seems to be a distance dependency
+
+ICP:
+	Experiment:
+		Fix/Debug the rotational alignment based on association of surface normals; something was off there it should have worked
+	Experiment:
+		use not only point-to-plane distance but also point-to-3DImageGradient distance where available!
+			3D image gradient+surface normal span a 2D cosy and movement orthogonal to it should not be penalized (in plane orthogonal to image gradient)
+			point-to-plane: surface normal forms a 1D space along which distance is measured; movement orthogonal to it should not be penalized
+
+Rotational SLAM:
+	Bring the vMF-vMF rotational alignment back up
+
+
