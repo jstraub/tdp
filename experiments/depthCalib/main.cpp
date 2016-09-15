@@ -27,6 +27,7 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_poly.h>
+#include <tdp/camera/ray.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
@@ -154,21 +155,19 @@ int main( int argc, char* argv[] )
   image_processing.Params().at_window_ratio = 30.0;
 
   std::vector<tdp::SE3f> T_hws;
-
-  scale.Fill(1.);
-  scaleN.Fill(0.);
-
-  if (pangolin::FileExists("depthCalib.png")) {
-    pangolin::TypedImage scale8bit = pangolin::LoadImage("depthCalib.png");
-    tdp::Image<float> scaleWrap(w,h,(float*)scale8bit.ptr);
-    scale.CopyFrom(scaleWrap, cudaMemcpyHostToHost);
+  
+  if (rig.depthScales_.size() > rgbdStream2cam[0]) {
+    scale.CopyFrom(rig.depthScales_[rgbdStream2cam[0]], cudaMemcpyHostToHost);
+    scaleN.Fill(0.);
+  } else {
+    resetScale = true;
   }
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
     if (pangolin::Pushed(resetScale)) {
-      scale.Fill(1.);
+      scale.Fill(depthSensorScale);
       scaleN.Fill(0.);
     }
     if (estimateScale) applyScale = false;
@@ -241,11 +240,17 @@ int main( int argc, char* argv[] )
         tdp::SE3f T_wh = T_hw.Inverse();
         for (size_t i=0; i<mask.Area(); ++i) {
           if (mask[i] > 0 && !std::isnan(d[i])) {
+            tdp::Rayfda ray_d(tdp::Vector3fda::Zero(),
+                camD.Unproject(i%w, i/w, 1.f));
+            // ray of depth image d in world coordinates
+            tdp::Rayfda ray_w = ray_d.Transform(T_wh);
+            // float d_true = - ray_w.dot(n)/(ray_w.dir.dot(n));
+            // above is equivalent to belwo because n = (0,0,-1)
+            float d_true = -ray_w.p(2)/ray_w.dir(2);
             // true depth over observed depth
-            float scale_i = (-T_wh.translation()(2))/d[i];
+            float scale_i = depthSensorScale*d_true/d[i];
             // dot product between plane normal and ray direction
-            Eigen::Vector3f ray_w = T_wh.rotation()*camD.Unproject(i%w,i/h,1.f);
-            float w_i = ray_w(2)/ray_w.norm();
+            float w_i = ray_w.dir(2)/ray_w.dir.norm();
             //std::cout << w_i << std::endl;
             scale[i] = (scale[i]*scaleN[i]+scale_i*w_i)/(scaleN[i]+w_i);
             scaleN[i] = std::min(scaleN[i]+w_i,numScaleObs.Get());
@@ -255,10 +260,15 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(saveScaleCalib)) {
+      std::string path = "depthCalib.png";
+      if (rig.depthScalePaths_.size() > rgbdStream2cam[0]) {
+        path = rig.depthScalePaths_[rgbdStream2cam[0]];
+      }
       pangolin::Image<uint8_t> scale8bit(w*sizeof(float),h,
           w*sizeof(float),(uint8_t*)scale.ptr_);
       pangolin::SaveImage(scale8bit,pangolin::VideoFormatFromString("GRAY8"),
-          "depthCalib.png");
+          path);
+      std::cout << "saved depth scale calib to " << path << std::endl;
     }
 
     // Draw 3D stuff

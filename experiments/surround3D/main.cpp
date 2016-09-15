@@ -102,6 +102,7 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
+  tdp::ManagedDeviceImage<float> cuScale(w,h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -115,6 +116,8 @@ void VideoViewer(const std::string& input_uri,
 
   pangolin::Var<bool> doRigPoseCalib("ui.Rig Pose Calib", false, true);
   pangolin::Var<bool> updateCalib("ui.update Calib", false, false);
+
+  pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
   pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
   pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
@@ -199,7 +202,13 @@ void VideoViewer(const std::string& input_uri,
       float depthSensorScale = depthSensor1Scale;
       if (cId==1) depthSensorScale = depthSensor2Scale;
       if (cId==2) depthSensorScale = depthSensor3Scale;
-      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+      if (rig.depthScales_.size() > cId) {
+        // TODO: dont need to load this every time
+        cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
+        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, dMin, dMax);
+      } else {
+        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+      }
     }
     TOCK("depth collection");
     TICK("pc and normals");
@@ -207,7 +216,12 @@ void VideoViewer(const std::string& input_uri,
     //tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     // compute point cloud (on CPU)
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
-      int32_t cId = dStream2cam[sId]; 
+      int32_t cId;
+      if (useRgbCamParasForDepth) {
+        cId = rgbStream2cam[sId]; 
+      } else {
+        cId = dStream2cam[sId]; 
+      }
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 

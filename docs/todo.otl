@@ -31,19 +31,20 @@ Surround3D:
 			at least try that for now and evaluate later what the effects of better calib are
 	IMU integration (make it flexible so that it doesnt matter if there is none)
 		just pre-apply the IMU rotation estimate before ICP
-	Just run DepthFusion on hat I have now; use openni2:[registered=true]
+	Just run DepthFusion on hat I have now; use openni2:[registered=true,colorsync=true]
 		see what kind of models I can get
 	Experiment:
 		use overlapping areas to find and estimate the relative scale on the go
 
 
 Depth calibration:
-	Questions:
-		Why does the current calib routine give me those radial-looking scale estimates which are just completely wrong when I apply them?
 	Experiment:
 		Compute average scale as a function of distance to the plane
 			average depth seems to work fine for calibration
 			but there seems to be a distance dependency
+	Done:
+		Why does the current calib routine give me those radial-looking scale estimates which are just completely wrong when I apply them?
+			was not computing the true depth properly - fixed
 
 ICP:
 	Experiment:

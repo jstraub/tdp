@@ -50,7 +50,7 @@ class SO3 : Manifold<T,3> {
 
   // transform 3D data point
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x);
+  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x) const;
 
   static Eigen::Matrix<T,3,3> invVee(const Eigen::Matrix<T,3,1>& w);
   static Eigen::Matrix<T,3,1> vee(const Eigen::Matrix<T,3,3>& W);

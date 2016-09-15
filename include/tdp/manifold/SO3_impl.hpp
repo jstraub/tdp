@@ -115,7 +115,7 @@ const SO3<T> SO3<T>::operator+(const Eigen::Matrix<T,3,1>& w) {
 }
 
 template<typename T>
-Eigen::Matrix<T,3,1> SO3<T>::operator*(const Eigen::Matrix<T,3,1>& x) {
+Eigen::Matrix<T,3,1> SO3<T>::operator*(const Eigen::Matrix<T,3,1>& x) const {
   return this->R_*x;
 }
 

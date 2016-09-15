@@ -7,13 +7,23 @@
 
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera.h>
+#include <tdp/data/image.h>
+#include <tdp/cuda/cuda.h>
+#include <tdp/data/allocator.h>
 #include <pangolin/utils/picojson.h>
+#include <pangolin/utils/file_utils.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/video/drivers/openni2.h>
 
 namespace tdp {
 template <class Cam>
 struct Rig {
+
+  ~Rig() {
+    for (size_t i=0; i<depthScales_.size(); ++i) {
+      delete[] depthScales_[i].ptr_;
+    }
+  }
 
   bool FromFile(std::string pathToConfig, bool verbose) {
     pangolin::json::value file_json(pangolin::json::object_type,true); 
@@ -40,6 +50,20 @@ struct Rig {
                   std::cout << "found camera model" << std::endl ;
               }
               cams_.push_back(cam);
+              if (file_json[i]["camera"].contains("depthScale")) {
+                std::string path = file_json[i]["camera"]["depthScale"].get<std::string>();
+                depthScalePaths_.push_back(path);
+                if (pangolin::FileExists(path)) {
+                  pangolin::TypedImage scale8bit = pangolin::LoadImage(path);
+                  size_t w = scale8bit.w/4;
+                  size_t h = scale8bit.h;
+                  Image<float> scaleWrap(w,h,(float*)scale8bit.ptr);
+                  depthScales_.push_back(tdp::Image<float>(w,h,
+                        CpuAllocator<float>::construct(w*h)));
+                  depthScales_.back().CopyFrom(scaleWrap, cudaMemcpyHostToHost);
+                  std::cout << "found and loaded depth scale file" << std::endl;
+                }
+              }
               SE3f T_rc;
               if (file_json[i]["camera"].contains("T_rc")) {
                 pangolin::json::value t_json =
@@ -100,6 +124,8 @@ struct Rig {
   std::vector<SE3f> T_rcs_; 
   // cameras
   std::vector<Cam> cams_;
+  std::vector<std::string> depthScalePaths_;
+  std::vector<Image<float>> depthScales_;
   // camera serial IDs
   std::vector<std::string> serials_;
   // raw properties

@@ -62,7 +62,7 @@ class SE3 : Manifold<T,6> {
 
   // transform 3D data point
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x);
+  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x) const;
 
 //  /// Generator matrices of SE3
 //  static Eigen::Matrix<T,3,3> G1();
