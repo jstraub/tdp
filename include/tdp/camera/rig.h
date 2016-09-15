@@ -15,6 +15,8 @@
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/video/drivers/openni2.h>
 
+#include <tdp/eigen/std_vector.h>
+
 namespace tdp {
 template <class Cam>
 struct Rig {
@@ -63,6 +65,11 @@ struct Rig {
                   depthScales_.back().CopyFrom(scaleWrap, cudaMemcpyHostToHost);
                   std::cout << "found and loaded depth scale file" << std::endl;
                 }
+              }
+              if (file_json[i]["camera"].contains("depthScaleVsDepthModel")) {
+                scaleVsDepths_.push_back(Eigen::Vector2f(
+                  file_json[i]["camera"]["depthScaleVsDepthModel"][0].get<double>(),
+                  file_json[i]["camera"]["depthScaleVsDepthModel"][1].get<double>()));
               }
               SE3f T_rc;
               if (file_json[i]["camera"].contains("T_rc")) {
@@ -124,8 +131,12 @@ struct Rig {
   std::vector<SE3f> T_rcs_; 
   // cameras
   std::vector<Cam> cams_;
+  // depth scale calibration images
   std::vector<std::string> depthScalePaths_;
   std::vector<Image<float>> depthScales_;
+  // depth scale scaling model as a function of depth
+  eigen_vector<Eigen::Vector2f> scaleVsDepths_;
+
   // camera serial IDs
   std::vector<std::string> serials_;
   // raw properties

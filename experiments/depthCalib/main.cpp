@@ -7,6 +7,7 @@
  * Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <fstream>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -101,7 +102,6 @@ int main( int argc, char* argv[] )
   tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
       dStream2cam, rgbdStream2cam);
 
-
   // camera model for computing point cloud and normals
   tdp::CameraPoly3<float> camRGB = rig.cams_[rgbStream2cam[0]];
   tdp::CameraPoly3<float> camD = camRGB; //rig.cams_[dStream2cam[0]];
@@ -133,6 +133,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> patchBoundary("ui.patch boundary",7,0,10);
   pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
   pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
+  pangolin::Var<bool> logScaleVsDist("ui.log scale vs dist",false,true);
 
   // Default number of grid rows.
   int grid_rows = 12;
@@ -163,6 +164,7 @@ int main( int argc, char* argv[] )
     resetScale = true;
   }
 
+  std::ofstream log;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -189,8 +191,11 @@ int main( int argc, char* argv[] )
     if (!applyScale) {
       tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     } else {
+      float a = rig.scaleVsDepths_[rgbdStream2cam[0]](0);
+      float b = rig.scaleVsDepths_[rgbdStream2cam[0]](1);
+      std::cout << a << " " << b<< std::endl;
       cuScale.CopyFrom(scale,cudaMemcpyHostToDevice);
-      tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, dMin, dMax);
+      tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, a, b, dMin, dMax);
     }
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     // compute point cloud (on CPU)
@@ -257,8 +262,9 @@ int main( int argc, char* argv[] )
             scale[i] = (scale[i]*scaleN[i]+scale_i*w_i)/(scaleN[i]+w_i);
             scaleN[i] = std::min(scaleN[i]+w_i,numScaleObs.Get());
           }
+          //avgDepth += scale[i]*d[i]/depthSensorScale;
           avgDepth += scale[i]*d[i]/depthSensorScale;
-          avgScale += scale_i;
+          avgScale += scale_i/scale[i];
           numScale ++;
         }
       }
@@ -266,6 +272,17 @@ int main( int argc, char* argv[] )
       avgDepth /= numScale;
       std::cout << " avg scale: " << avgScale << "\tavg depth: " << avgDepth 
         << std::endl;
+      if (logScaleVsDist.GuiChanged() && logScaleVsDist) {
+        std::stringstream ss;
+        ss << "scaleVsDist_" << rig.serials_[rgbdStream2cam[0]] << ".csv";
+        log.open(ss.str());
+      }
+      if (logScaleVsDist) {
+        log << avgScale << " " << avgDepth << std::endl;
+      }
+      if (logScaleVsDist.GuiChanged() && !logScaleVsDist) {
+        log.close();
+      }
     }
 
     if (pangolin::Pushed(saveScaleCalib)) {

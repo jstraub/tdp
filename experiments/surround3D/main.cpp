@@ -203,9 +203,11 @@ void VideoViewer(const std::string& input_uri,
       if (cId==1) depthSensorScale = depthSensor2Scale;
       if (cId==2) depthSensorScale = depthSensor3Scale;
       if (rig.depthScales_.size() > cId) {
+        float a = rig.scaleVsDepths_[cId](0);
+        float b = rig.scaleVsDepths_[cId](1);
         // TODO: dont need to load this every time
         cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
-        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, dMin, dMax);
+        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
       } else {
         tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
       }
