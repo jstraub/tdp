@@ -125,7 +125,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
-  tdp::SE3<float> T_mc(Eigen::Matrix4f::Identity());
+  tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -176,8 +176,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<bool> normalsFromTSDF("ui.TSDF normals",true,true);
-  pangolin::Var<bool> pcFromTSDF("ui.TSDF depth", true, true);
+  pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
+  pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
@@ -246,14 +246,15 @@ int main( int argc, char* argv[] )
     // first one not needed anymore
     if (pcFromTSDF) {
       RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-          ns_m.GetImage(0), T_mc, camD, grid0, dGrid, tsdfMu); 
+          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
+      // get pc in model coordinate system
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
     } else {
-      RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mc, camD, grid0,
+      RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
           dGrid, tsdfMu); 
       tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
           cudaMemcpyDeviceToDevice, 0.03);
-      // compute point cloud from depth images
+      // compute point cloud from depth images in camera cosy
       tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
     }
     TOCK("Ray Trace TSDF");
@@ -287,7 +288,7 @@ int main( int argc, char* argv[] )
     if (runICP && numFused > 30) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
-      //T_mc.matrix() = Eigen::Matrix4f::Identity();
+      //T_mo.matrix() = Eigen::Matrix4f::Identity();
       tdp::SE3f dTRot;
       if (icpRot) {
         //std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
@@ -298,13 +299,13 @@ int main( int argc, char* argv[] )
       dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
-      //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
+      //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
       if (icpRot) 
         dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
       std::cout << dT.matrix3x4() << std::endl;
-      T_mc.matrix() = dT.matrix()*T_mc.matrix();
-      //std::cout << "T_mc" << std::endl << T_mc.matrix3x4() << std::endl;
+      T_mo.matrix() = dT.matrix()*T_mo.matrix();
+      //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
     }
 
@@ -326,7 +327,7 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(resetTSDF)) {
-      T_mc.matrix() = Eigen::Matrix4f::Identity();
+      T_mo.matrix() = Eigen::Matrix4f::Identity();
       W.Fill(0.);
       TSDF.Fill(-1.01);
       dEst.Fill(0.);
@@ -335,13 +336,13 @@ int main( int argc, char* argv[] )
       numFused = 0;
     }
     if (pangolin::Pushed(resetICP)) {
-      T_mc.matrix() = Eigen::Matrix4f::Identity();
+      T_mo.matrix() = Eigen::Matrix4f::Identity();
     }
 
     if (fuseTSDF || numFused <= 30) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuW, cuD, T_mc, camD, grid0, dGrid, tsdfMu); 
+      AddToTSDF(cuTSDF, cuW, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
     }
@@ -366,7 +367,7 @@ int main( int argc, char* argv[] )
     }
     glColor3f(0,0,1);
     pangolin::RenderVbo(cuPcbuf);
-    pangolin::glSetFrameOfReference(T_mc.matrix());
+    pangolin::glSetFrameOfReference(T_mo.matrix());
     // render model and observed point cloud
     {
       pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
