@@ -331,8 +331,8 @@ void VideoViewer(const std::string& input_uri,
       RayTraceTSDF(cuTSDF, cuPcEst_i, 
           cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
       // transform pc and normals into rig cosy for ICP
-      //tdp::TransformPc(T_rc, cuPcEst_i);
-      //tdp::TransformPc(T_rc.rotation(), cuNEst_i);
+      tdp::TransformPc(T_rc, cuPcEst_i);
+      tdp::TransformPc(T_rc.rotation(), cuNEst_i);
     }
     TOCK("Ray Trace TSDF");
     TICK("Setup Pyramids");
