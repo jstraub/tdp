@@ -57,6 +57,9 @@ class SE3 : Manifold<T,6> {
   SE3<T>& operator+=(const SE3<T>& other);
   const SE3<T> operator+(const SE3<T>& other) const;
 
+  SE3<T>& operator*=(const SE3<T>& other);
+  const SE3<T> operator*(const SE3<T>& other) const;
+
   SE3<T>& operator+=(const Eigen::Matrix<T,6,1>& w);
   const SE3<T> operator+(const Eigen::Matrix<T,6,1>& w);
 

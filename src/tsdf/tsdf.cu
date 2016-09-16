@@ -227,6 +227,7 @@ void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+// T_rd is transformation from depth/camera cosy to reference/TSDF cosy
 template<int D, typename Derived>
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, 
@@ -245,7 +246,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
     // ray of depth image d 
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
     // ray of depth image d in reference coordinates (TSDF)
-    Vector3fda r_d_in_r = T_rd.rotation().matrix() * r_d;
+    Vector3fda r_d_in_r = T_rd.rotation()*r_d;
     // iterate over z in TSDF; detect 0 crossing in TSDF
     float tsdfValPrev = -1.01;
     float d_d_in_r_Prev = 0.;
@@ -268,7 +269,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
           float d = d_d_in_r_Prev
             -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           // point at that depth in the reference coordinate frame
-          pc_r(idx,idy) = T_rd.translation() + r_d_in_r*d;
+          pc_r(idx,idy) = T_rd.translation()+r_d_in_r*d;
           // surface normal: TODO might want to do better interpolation
           // of neighbors
           Vector3fda ni ( 

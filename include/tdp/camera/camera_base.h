@@ -54,4 +54,19 @@ class CameraBase {
   Eigen::Matrix<T,D,1,Eigen::DontAlign> params_;
  private:
 };
+
+template<typename T, int D, class Derived>
+CameraBase<T,D,Derived> ScaleCamera(const CameraBase<T,D,Derived>& cam, T scale) {
+  //Camera<T>::Parameters paramsScaled = cam.params_;
+  Eigen::Matrix<T,Derived::NumParams,1> paramsScaled = cam.params_;
+  paramsScaled(0) *= scale;
+  paramsScaled(1) *= scale;
+  paramsScaled(2) = (paramsScaled(2)+0.5)*scale-0.5;
+  paramsScaled(3) = (paramsScaled(3)+0.5)*scale-0.5;
+  for (size_t i=4; i<Derived::NumParams; ++i) {
+    paramsScaled(i) *= scale;
+  }
+  return CameraBase<T,D,Derived>(paramsScaled);
+};
+
 }

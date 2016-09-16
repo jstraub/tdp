@@ -8,13 +8,24 @@
 
 namespace tdp {
 
-
+/// Transform a PC by a rigid transformation T_rc in place. (on GPU)
+void TransformPc(
+    const SE3f& T_rc,
+    Image<Vector3fda>& pc_c
+    );
+/// Rotate a PC by R_rc in place. (on GPU)
+void TransformPc(
+    const SO3f& R_rc,
+    Image<Vector3fda>& pc_c
+    );
+/// Convert from depth image to point cloud in camera coords.
 void Depth2PCGpu(
     const Image<float>& d,
     const Camera<float>& cam,
     Image<Vector3fda>& pc_c
     );
-
+/// Convert from depth image to point cloud and transform into
+/// reference Cosy via T_rc.
 template<int D, typename Derived>
 void Depth2PCGpu(
     const Image<float>& d,
@@ -22,7 +33,7 @@ void Depth2PCGpu(
     const SE3<float>& T_rc,
     Image<Vector3fda>& pc_r
     );
-
+/// Convert from depth image to point cloud in camera coords.
 template<int D, typename Derived>
 void Depth2PC(
     const Image<float>& d,

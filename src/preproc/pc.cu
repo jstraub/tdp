@@ -107,4 +107,47 @@ template void Depth2PCGpu(
     Image<Vector3fda>& pc_r
     );
 
+
+__global__ void KernelTransformPc(
+    SE3f T_rc,
+    Image<Vector3fda> pc_c
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < pc_c.w_ && idy < pc_c.h_) {
+    pc_c(idx,idy) = T_rc*pc_c(idx,idy);
+  }
+}
+
+void TransformPc(
+    const SE3f& T_rc,
+    Image<Vector3fda>& pc_c
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_c,32,32);
+  KernelTransformPc<<<blocks,threads>>>(T_rc,pc_c);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__global__ void KernelTransformPc(
+    SO3f R_rc,
+    Image<Vector3fda> pc_c
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < pc_c.w_ && idy < pc_c.h_) {
+    pc_c(idx,idy) = R_rc*pc_c(idx,idy);
+  }
+}
+
+void TransformPc(
+    const SO3f& R_rc,
+    Image<Vector3fda>& pc_c
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_c,32,32);
+  KernelTransformPc<<<blocks,threads>>>(R_rc,pc_c);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }

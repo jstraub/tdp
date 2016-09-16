@@ -104,6 +104,17 @@ const SO3<T> SO3<T>::operator+(const SO3<T>& other) const {
 }
 
 template<typename T>
+SO3<T>& SO3<T>::operator*=(const SO3<T>& other) {
+  R_ = R_ * other.R_;
+  return *this;
+}
+
+template<typename T>
+const SO3<T> SO3<T>::operator*(const SO3<T>& other) const {
+  return SO3<T>(*this) *= other;
+}
+
+template<typename T>
 SO3<T>& SO3<T>::operator+=(const Eigen::Matrix<T,3,1>& w) {
   *this = Exp(w);
   return *this;
