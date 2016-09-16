@@ -113,6 +113,9 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
 
   if (idx < d.w_ && idy < d.h_) {
     d(idx,idy) = NAN;
+    n(idx,idy)(0) = NAN;
+    n(idx,idy)(1) = NAN;
+    n(idx,idy)(2) = NAN;
     //Eigen::Vector3fda n(0,0,-1);
     // ray of depth image d 
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
@@ -255,6 +258,9 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
     pc_r(idx,idy)(0) = NAN;
     pc_r(idx,idy)(1) = NAN;
     pc_r(idx,idy)(2) = NAN;
+    n_r(idx,idy)(0) = NAN;
+    n_r(idx,idy)(1) = NAN;
+    n_r(idx,idy)(2) = NAN;
     //Eigen::Vector3fda n(0,0,-1);
     // ray of depth image d 
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
