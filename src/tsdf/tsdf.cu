@@ -149,7 +149,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
               (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
           // negate to flip the normals to face the camera
           // and compute the normal in the depth frame of reference
-          n(idx,idy) = - (T_rd.rotation().matrix().transpose() * ni) / ni.norm(); 
+          n(idx,idy) = - (T_rd.rotation().Inverse()*ni) / ni.norm(); 
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -247,20 +247,20 @@ template void RayTraceTSDF(Volume<float> tsdf, Image<float> d,
 template<int D, typename Derived>
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, 
-    Image<Vector3fda> pc_r, 
-    Image<Vector3fda> n_r, 
+    Image<Vector3fda> pc_d, 
+    Image<Vector3fda> n_d, 
     SE3<float> T_rd, CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
-  if (idx < pc_r.w_ && idy < pc_r.h_) {
-    pc_r(idx,idy)(0) = NAN;
-    pc_r(idx,idy)(1) = NAN;
-    pc_r(idx,idy)(2) = NAN;
-    n_r(idx,idy)(0) = NAN;
-    n_r(idx,idy)(1) = NAN;
-    n_r(idx,idy)(2) = NAN;
+  if (idx < pc_d.w_ && idy < pc_d.h_) {
+    pc_d(idx,idy)(0) = NAN;
+    pc_d(idx,idy)(1) = NAN;
+    pc_d(idx,idy)(2) = NAN;
+    n_d(idx,idy)(0) = NAN;
+    n_d(idx,idy)(1) = NAN;
+    n_d(idx,idy)(2) = NAN;
     //Eigen::Vector3fda n(0,0,-1);
     // ray of depth image d 
     Vector3fda r_d = camD.Unproject(idx, idy, 1.);
@@ -288,7 +288,8 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
           float d = d_d_in_r_Prev
             -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           // point at that depth in the reference coordinate frame
-          pc_r(idx,idy) = T_rd.translation()+r_d_in_r*d;
+          //pc_r(idx,idy) = T_rd.translation()+r_d_in_r*d;
+          pc_d(idx,idy) = r_d*d;
           // surface normal: TODO might want to do better interpolation
           // of neighbors
           Vector3fda ni ( 
@@ -296,7 +297,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
               (y+1 < tsdf.h_)? tsdf(x,y+1,idz) - tsdfVal : tsdfVal - tsdf(x,y-1,idz),
               (idz+1 < tsdf.d_)? tsdf(x,y,idz+1) - tsdfVal : tsdfVal - tsdf(x,y,idz-1));
           // negate to flip the normals to face the camera
-          n_r(idx,idy) = - ni / ni.norm(); 
+          n_d(idx,idy) = - (T_rd.rotation().Inverse()*ni) / ni.norm(); 
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -308,29 +309,29 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
 
 template<int D, typename Derived>
 void RayTraceTSDF(Volume<float> tsdf, 
-    Image<Vector3fda> pc_r, 
-    Image<Vector3fda> n_r, 
+    Image<Vector3fda> pc_d, 
+    Image<Vector3fda> n_d, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
-  ComputeKernelParamsForImage(blocks,threads,pc_r,32,32);
-  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, pc_r, n_r, T_rd, camD,
+  ComputeKernelParamsForImage(blocks,threads,pc_d,32,32);
+  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, pc_d, n_d, T_rd, camD,
       grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
 // explicit instantiations
 template void RayTraceTSDF(Volume<float> tsdf, 
-    Image<Vector3fda> pc_r, 
-    Image<Vector3fda> n_r, 
+    Image<Vector3fda> pc_d, 
+    Image<Vector3fda> n_d, 
     SE3<float> T_rd, 
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu);
 template void RayTraceTSDF(Volume<float> tsdf, 
-    Image<Vector3fda> pc_r, 
-    Image<Vector3fda> n_r, 
+    Image<Vector3fda> pc_d, 
+    Image<Vector3fda> n_d, 
     SE3<float> T_rd, 
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
