@@ -46,7 +46,7 @@ void VideoViewer(const std::string& input_uri,
 
   // Read rig file
   tdp::Rig<CameraT> rig;
-  if (!rig.FromFile(configPath, true)) return;
+  if (!rig.FromFile(configPath, false)) return;
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
