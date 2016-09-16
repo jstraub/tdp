@@ -33,6 +33,7 @@
 #include <tdp/utils/Stopwatch.h>
 
 typedef tdp::CameraPoly3f CameraT;
+//typedef tdp::Cameraf CameraT;
 
 int main( int argc, char* argv[] )
 {
@@ -176,6 +177,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<bool> normalsFromTSDF("ui.TSDF normals",true,true);
+  pangolin::Var<bool> pcFromTSDF("ui.TSDF depth", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
@@ -217,6 +219,7 @@ int main( int argc, char* argv[] )
     gridEz = 6.;
     icpDistThr = 1.;
   }
+  gui.verbose = false;
 
   size_t numFused = 0;
   // Stream and display video
@@ -239,11 +242,20 @@ int main( int argc, char* argv[] )
 
     if (gui.verbose) std::cout << "ray trace" << std::endl;
     TICK("Ray Trace TSDF");
-    tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
+    //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
     // first one not needed anymore
-    RayTraceTSDF(cuTSDF, cuDEst, nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
-    //RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-    //    nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
+    if (pcFromTSDF) {
+      RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+          ns_m.GetImage(0), T_mc, camD, grid0, dGrid, tsdfMu); 
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+    } else {
+      RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mc, camD, grid0,
+          dGrid, tsdfMu); 
+      tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
+          cudaMemcpyDeviceToDevice, 0.03);
+      // compute point cloud from depth images
+      tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+    }
     TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
@@ -253,11 +265,6 @@ int main( int argc, char* argv[] )
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
         cudaMemcpyDeviceToDevice, 0.03);
-    tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-        cudaMemcpyDeviceToDevice, 0.03);
-    // compute point cloud from depth images
-    tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
-    //tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     // compute normals
     if (normalsFromDepthPyr) {
@@ -283,15 +290,15 @@ int main( int argc, char* argv[] )
       //T_mc.matrix() = Eigen::Matrix4f::Identity();
       tdp::SE3f dTRot;
       if (icpRot) {
-        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-            camD, maxItRot, icpAngleThr_deg); 
-        std::cout << dTRot.matrix3x4() << std::endl;
+        //std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+        //tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+        //    camD, maxItRot, icpAngleThr_deg); 
+        //std::cout << dTRot.matrix3x4() << std::endl;
       }
       dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
-//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
+      //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
       if (icpRot) 
         dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
@@ -323,7 +330,6 @@ int main( int argc, char* argv[] )
       W.Fill(0.);
       TSDF.Fill(-1.01);
       dEst.Fill(0.);
-      cuDEst.CopyFrom(dEst, cudaMemcpyHostToDevice);
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;

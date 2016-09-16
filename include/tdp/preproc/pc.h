@@ -19,9 +19,10 @@ void TransformPc(
     Image<Vector3fda>& pc_c
     );
 /// Convert from depth image to point cloud in camera coords.
+template<int D, typename Derived>
 void Depth2PCGpu(
     const Image<float>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& pc_c
     );
 /// Convert from depth image to point cloud and transform into
@@ -60,20 +61,20 @@ void Depth2PCs(
   }
 }
 
-template<int LEVELS>
+template<int LEVELS, int D, typename Derived>
 void Depth2PCsGpu(
     Pyramid<float,LEVELS>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Pyramid<Vector3fda,LEVELS>& pc
     ) {
-  Camera<float> camLvl = cam;
+  CameraBase<float,D,Derived> camLvl = cam;
   for (size_t lvl=0; lvl<LEVELS; ++lvl) {
     Image<float> d_i = d.GetImage(lvl);
     Image<Vector3fda> pc_i = pc.GetImage(lvl);
 
 //    std::cout << d_i.Description() << " " 
 //      << camLvl.params_.transpose() << std::endl;
-    Depth2PCGpu(d_i, camLvl, pc_i);
+    Depth2PCGpu<D,Derived>(d_i, camLvl, pc_i);
     camLvl = ScaleCamera<float>(camLvl,0.5);
   }
 }

@@ -102,9 +102,11 @@ void RayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
 }
 
 // ray trace and compute depth image as well as normals from pose T_rd
+template<int D, typename Derived>
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d, 
-    Image<Vector3fda> n, SE3<float> T_rd, Camera<float> camD,
+    Image<Vector3fda> n, SE3<float> T_rd, 
+    CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -216,16 +218,27 @@ template void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
     Vector3fda grid0, Vector3fda dGrid,
     float mu);
 
+template<int D, typename Derived>
 void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n, 
-    SE3<float> T_rd, Camera<float>camD,
+    SE3<float> T_rd, 
+    CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
-  KernelRayTraceTSDF<<<blocks,threads>>>(tsdf, d, n, T_rd, camD,
+  KernelRayTraceTSDF<D,Derived><<<blocks,threads>>>(tsdf, d, n, T_rd, camD,
       grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+template void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
+    Image<Vector3fda> n, SE3<float> T_rd, 
+    CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid, float mu);
+template void RayTraceTSDF(Volume<float> tsdf, Image<float> d, 
+    Image<Vector3fda> n, SE3<float> T_rd, 
+    CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid, float mu);
 
 // T_rd is transformation from depth/camera cosy to reference/TSDF cosy
 template<int D, typename Derived>
