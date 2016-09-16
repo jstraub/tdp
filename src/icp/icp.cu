@@ -163,14 +163,14 @@ template void ICPStep (
     Eigen::Matrix<float,6,1,Eigen::DontAlign>& ATb, float& error, float& count);
 
 // T_mc: R_model_observation
-template<int BLK_SIZE>
+template<int BLK_SIZE, int D, class Derived>
 __global__ void KernelICPVisualizeAssoc(
     Image<Vector3fda> pc_m,
     Image<Vector3fda> n_m,
     Image<Vector3fda> pc_o,
     Image<Vector3fda> n_o,
     SE3f T_mo,
-    const Camera<float> cam,
+    const CameraBase<float,D,Derived> cam,
     float dotThr,
     float distThr,
     int N_PER_T,
@@ -215,13 +215,14 @@ __global__ void KernelICPVisualizeAssoc(
   }
 }
 
+template<int D, typename Derived>
 void ICPVisualizeAssoc (
     Image<Vector3fda> pc_m,
     Image<Vector3fda> n_m,
     Image<Vector3fda> pc_o,
     Image<Vector3fda> n_o,
     const SE3f& T_mo,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     float angleThr,
     float distThr,
     Image<float>& assoc_m,
@@ -230,11 +231,21 @@ void ICPVisualizeAssoc (
   size_t N = pc_m.w_*pc_m.h_;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,N/10,256);
-  KernelICPVisualizeAssoc<256><<<blocks,threads>>>(pc_m,n_m,pc_o,n_o,
-      T_mo,cam,
-      cos(angleThr*M_PI/180.),distThr,10,assoc_m, assoc_o);
+  KernelICPVisualizeAssoc<256,D,Derived><<<blocks,threads>>>(pc_m,n_m,pc_o,n_o,
+      T_mo,cam, cos(angleThr*M_PI/180.),distThr,10,assoc_m, assoc_o);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+template void ICPVisualizeAssoc (
+    Image<Vector3fda> pc_m, Image<Vector3fda> n_m, Image<Vector3fda> pc_o,
+    Image<Vector3fda> n_o, const SE3f& T_mo,
+    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    float angleThr, float distThr, Image<float>& assoc_m, Image<float>& assoc_o);
+template void ICPVisualizeAssoc (
+    Image<Vector3fda> pc_m, Image<Vector3fda> n_m, Image<Vector3fda> pc_o,
+    Image<Vector3fda> n_o, const SE3f& T_mo,
+    const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
+    float angleThr, float distThr, Image<float>& assoc_m, Image<float>& assoc_o);
 
 // T_mc: T_model_current
 template<int BLK_SIZE>

@@ -30,13 +30,14 @@ void ICPStep (
     float& count
     );
 
+template<int D, typename Derived>
 void ICPVisualizeAssoc (
     Image<Vector3fda> pc_m,
     Image<Vector3fda> n_m,
     Image<Vector3fda> pc_o,
     Image<Vector3fda> n_o,
     const SE3f& T_mo,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     float angleThr,
     float distThr,
     Image<float>& assoc_m,

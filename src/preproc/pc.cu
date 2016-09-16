@@ -10,9 +10,10 @@
 
 namespace tdp {
 
+template<int D, typename Derived>
 __global__ void KernelDepth2PC(
     Image<float> d,
-    Camera<float> cam,
+    CameraBase<float,D,Derived> cam,
     Image<Vector3fda> pc_c
     ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -37,17 +38,25 @@ __global__ void KernelDepth2PC(
   }
 }
 
+template<int D, typename Derived>
 void Depth2PCGpu(
     const Image<float>& d,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& pc_c
     ) {
 
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
-  KernelDepth2PC<<<blocks,threads>>>(d,cam,pc_c);
+  KernelDepth2PC<D,Derived><<<blocks,threads>>>(d,cam,pc_c);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+template void Depth2PCGpu( const Image<float>& d,
+    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    Image<Vector3fda>& pc_c);
+template void Depth2PCGpu( const Image<float>& d,
+    const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
+    Image<Vector3fda>& pc_c);
 
 template<int D, typename Derived>
 __global__ void KernelDepth2PC(

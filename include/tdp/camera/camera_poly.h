@@ -19,7 +19,7 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
   // parameters: fu, fv, uc, vc
   CameraPoly3(const Eigen::Matrix<T,4,1>& params) 
   {
-    this->params_.Fill(0.);
+    this->params_.fill(0.);
     this->params_.topRows(4) = params;
   }
   // parameters: fu, fv, uc, vc, p1, p2, p3

@@ -82,10 +82,10 @@ void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr,
   }
 }
 
-template<int LEVELS>
+template<int LEVELS, int D, typename Derived>
 void Depth2Normals(
     Pyramid<float,LEVELS>& cuDPyr,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Pyramid<Vector3fda,LEVELS> cuNPyr) {
   // first compute all derivatives at 0th level and then construct
   // pyramid
@@ -107,10 +107,10 @@ void Depth2Normals(
   CompleteNormalPyramid<3>(cuNPyr, cudaMemcpyDeviceToDevice);
 }
 
-template<int LEVELS>
+template<int LEVELS, int D, typename Derived>
 void Depth2NormalsViaDerivativePyr(
     Pyramid<float,LEVELS>& cuDPyr,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     Pyramid<Vector3fda,LEVELS> cuNPyr) {
   // first compute all derivatives at 0th level and then construct
   // pyramid
@@ -131,7 +131,7 @@ void Depth2NormalsViaDerivativePyr(
 
   // Compute the pyramid by downsamplying the gradients and computing
   // the normals based on the downsampled normals
-  Camera<float> camLvl = cam;
+  CameraBase<float,D,Derived> camLvl = cam;
   for (int lvl=0; lvl<LEVELS; ++lvl) {
     float f = camLvl.params_(0);
     float uc = camLvl.params_(2);
