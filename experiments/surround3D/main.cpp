@@ -140,6 +140,8 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
   pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
 
+  pangolin::Var<bool> useShader("ui.use shader", true, true);
+
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       int cId = rgbdStream2cam[sId];
@@ -165,6 +167,13 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedHostImage<tdp::Vector3bda> rgbJoint(w,h);
   memset(rgbJoint.ptr_, 0, rgbJoint.SizeBytes());
   tdp::ManagedHostImage<float> dJoint(w,h);
+
+  pangolin::GlSlProgram colorPc;
+  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
+      "/home/jstraub/workspace/research/tdp/shaders/surround3D.vert");
+  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      "/home/jstraub/workspace/research/tdp/shaders/surround3D.frag");
+  colorPc.Link();
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -290,13 +299,48 @@ void VideoViewer(const std::string& input_uri,
       glDisable(GL_DEPTH_TEST);
     }
 
-    std::cout << "binding frame buffer" << std::endl;
     glFrameBuf.Bind();
-    std::cout << "rendering to frame buffer" << std::endl;
-    pangolin::RenderVboCbo(vbo,cbo,true);
-    std::cout << "unbinding frame buffer" << std::endl;
+
+    if (useShader) {
+      colorPc.Bind();
+    }
+
+    glViewport(0, 0, w, h);
+    glClearColor(0,0,0,1);
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    colorPc.SetUniform("cam", 420.f, 420.f, 320.f, 240.f); 
+    colorPc.SetUniform("w", static_cast<float>(640)); 
+    colorPc.SetUniform("h", static_cast<float>(480)); 
+    colorPc.SetUniform("near", 0.1f); 
+    colorPc.SetUniform("far",  4.f); 
+
+    Eigen::Matrix4f MV = s_cam.GetModelViewMatrix();
+    Eigen::Matrix4f P = s_cam.GetProjectionMatrix();
+    colorPc.SetUniform("P", P);
+    colorPc.SetUniform("MV", MV);
+
+
+    size_t stride = sizeof(float)*3+sizeof(uint8_t)*3;
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    vbo.Bind();
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    cbo.Bind();
+    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
+    pangolin::RenderVbo(vbo);
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+
+    cbo.Unbind();
+    vbo.Unbind();
+
+    if (useShader) {
+      colorPc.Unbind();
+    }
+
     glFrameBuf.Unbind();
-    std::cout << "unbound frame buffer" << std::endl;
 
     // Draw 2D stuff
     if (viewRgbJoint.IsShown()) {
