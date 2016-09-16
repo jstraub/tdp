@@ -12,6 +12,8 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
  public:
   typedef Eigen::Matrix<T,7,1> Parameters;
 
+  const static int NumParams = 7;
+
   CameraPoly3()
   {}
   // parameters: fu, fv, uc, vc, p1, p2, p3

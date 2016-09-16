@@ -18,6 +18,10 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/data/managed_pyramid.h>
+#include <tdp/data/managed_volume.h>
+
+#include <tdp/tsdf/tsdf.h>
+#include <tdp/icp/icp.h>
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
@@ -73,6 +77,9 @@ void VideoViewer(const std::string& input_uri,
   // algorithm to compute normals.
   w += w%64;
   h += h%64;
+  size_t dTSDF = 128;
+  size_t wTSDF = 512;
+  size_t hTSDF = 512;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -108,14 +115,24 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
   tdp::ManagedDeviceImage<float> cuScale(w,h);
 
-//  tdp::ManagedHostPyramid<float,3> dPyr(w,h);
-//  tdp::ManagedHostPyramid<float,3> dPyrEst(w,h);
-//  tdp::ManagedDevicePyramid<float,3> cuDPyr(w,h);
-//  tdp::ManagedDevicePyramid<float,3> cuDPyrEst(w,h);
-//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
-//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(w,h);
-//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
-//  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(w,h);
+  tdp::ManagedHostPyramid<float,3> dPyr(w,h);
+  tdp::ManagedHostPyramid<float,3> dPyrEst(w,h);
+  tdp::ManagedDevicePyramid<float,3> cuDPyr(w,h);
+  tdp::ManagedDevicePyramid<float,3> cuDPyrEst(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(w,h);
+
+  tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
+  tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
+  W.Fill(0.);
+  TSDF.Fill(-1.01);
+  tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
+  tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
+
+  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -140,7 +157,25 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
   pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
 
-  pangolin::Var<bool> useShader("ui.use shader", true, true);
+  pangolin::Var<bool> renderFisheye("ui.fisheye", true, true);
+
+  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.,0.,1);
+  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,0);
+  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,0);
+  pangolin::Var<float> gridEz("ui.gridE z",3.5,2.,3);
+
+  pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
+  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",7,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
@@ -175,6 +210,8 @@ void VideoViewer(const std::string& input_uri,
       "/home/jstraub/workspace/research/tdp/shaders/surround3D.frag");
   colorPc.Link();
 
+  tdp::SE3f T_mr;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -188,6 +225,13 @@ void VideoViewer(const std::string& input_uri,
     if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
     if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
     if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
+
+    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+    tdp::Vector3fda dGrid = gridE - grid0;
+    dGrid(0) /= (wTSDF-1);
+    dGrid(1) /= (hTSDF-1);
+    dGrid(2) /= (dTSDF-1);
 
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -264,26 +308,42 @@ void VideoViewer(const std::string& input_uri,
     TOCK("pc and normals");
 
 
-//    TICK("Ray Trace TSDF");
-//    tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
-//    // first one not needed anymore
-//    //RayTraceTSDF(cuTSDF, cuDEst, nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
-//    //RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-//    //    nEst, T_mc, camD, grid0, dGrid, tsdfMu); 
-//    TOCK("Ray Trace TSDF");
-//
-//    TICK("Setup Pyramids");
-//    // TODO might want to use the pyramid construction with smoothing
-////    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-////        cudaMemcpyDeviceToDevice, 0.03);
-//    pcs_c.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
-//    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_c,cudaMemcpyDeviceToDevice);
-//
-//    ns_c.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
-//    tdp::CompleteNormalPyramid<3>(ns_c,cudaMemcpyDeviceToDevice);
-//    // just complete the surface normals obtained from the TSDF
-//    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
-//    TOCK("Setup Pyramids");
+    TICK("Ray Trace TSDF");
+    tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
+    tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId;
+      if (useRgbCamParasForDepth) {
+        cId = rgbStream2cam[sId]; 
+      } else {
+        cId = dStream2cam[sId]; 
+      }
+      CameraT cam = rig.cams_[cId];
+      tdp::SE3f T_rc = rig.T_rcs_[cId];
+      tdp::SE3f T_mc = T_mr+T_rc;
+
+      tdp::Image<tdp::Vector3fda> cuNEst_i(wSingle, hSingle,
+          cuNEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+      tdp::Image<tdp::Vector3fda> cuPcEst_i(wSingle, hSingle,
+          cuPcEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+
+      RayTraceTSDF(cuTSDF, cuPcEst_i, 
+          cuNEst_i, T_mc, cam, grid0, dGrid, tsdfMu); 
+    }
+    TOCK("Ray Trace TSDF");
+    TICK("Setup Pyramids");
+    // TODO might want to use the pyramid construction with smoothing
+//    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
+//        cudaMemcpyDeviceToDevice, 0.03);
+    pcs_c.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_c,cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
+
+    ns_c.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(ns_c,cudaMemcpyDeviceToDevice);
+    // just complete the surface normals obtained from the TSDF
+    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
+    TOCK("Setup Pyramids");
 
     // Draw 3D stuff
     if (d_cam.IsShown()) {
@@ -299,54 +359,46 @@ void VideoViewer(const std::string& input_uri,
       glDisable(GL_DEPTH_TEST);
     }
 
-    glFrameBuf.Bind();
+    if (renderFisheye) {
+      glFrameBuf.Bind();
 
-    if (useShader) {
       colorPc.Bind();
-    }
 
-    glViewport(0, 0, w, h);
-    glClearColor(0,0,0,1);
-    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    glColor3f(1.0f, 1.0f, 1.0f);
+      glViewport(0, 0, w, h);
+      glClearColor(0,0,0,1);
+      glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+      glColor3f(1.0f, 1.0f, 1.0f);
 
-    colorPc.SetUniform("cam", 420.f, 420.f, 320.f, 240.f); 
-    colorPc.SetUniform("w", static_cast<float>(640)); 
-    colorPc.SetUniform("h", static_cast<float>(480)); 
-    colorPc.SetUniform("near", 0.1f); 
-    colorPc.SetUniform("far",  4.f); 
+      Eigen::Matrix4f MV = s_cam.GetModelViewMatrix();
+      Eigen::Matrix4f P = pangolin::ProjectionMatrix(640,3*480,420,420,320,3*240,0.1,1000);
+      colorPc.SetUniform("P", P);
+      colorPc.SetUniform("MV", MV);
 
-    Eigen::Matrix4f MV = s_cam.GetModelViewMatrix();
-    Eigen::Matrix4f P = s_cam.GetProjectionMatrix();
-    colorPc.SetUniform("P", P);
-    colorPc.SetUniform("MV", MV);
+      size_t stride = sizeof(float)*3+sizeof(uint8_t)*3;
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      vbo.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+      cbo.Bind();
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
+      pangolin::RenderVbo(vbo);
+      glDisableVertexAttribArray(0);
+      glDisableVertexAttribArray(1);
 
+      cbo.Unbind();
+      vbo.Unbind();
 
-    size_t stride = sizeof(float)*3+sizeof(uint8_t)*3;
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    vbo.Bind();
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-    cbo.Bind();
-    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
-    pangolin::RenderVbo(vbo);
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-
-    cbo.Unbind();
-    vbo.Unbind();
-
-    if (useShader) {
       colorPc.Unbind();
-    }
 
-    glFrameBuf.Unbind();
+      glFrameBuf.Unbind();
+
+      if (viewRgbJoint.IsShown()) {
+        tex.Download(rgbJoint.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
+        viewRgbJoint.SetImage(rgbJoint);
+      }
+    }
 
     // Draw 2D stuff
-    if (viewRgbJoint.IsShown()) {
-      tex.Download(rgbJoint.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
-      viewRgbJoint.SetImage(rgbJoint);
-    }
     if (viewRgb.IsShown()) {
       viewRgb.SetImage(rgb);
     }
