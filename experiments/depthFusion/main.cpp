@@ -46,7 +46,6 @@ int main( int argc, char* argv[] )
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
   }
 
-
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
   const size_t num_streams = video.Streams().size();

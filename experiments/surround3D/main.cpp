@@ -77,7 +77,7 @@ void VideoViewer(const std::string& input_uri,
   // algorithm to compute normals.
   w += w%64;
   h += h%64;
-  size_t dTSDF = 128;
+  size_t dTSDF = 256;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
@@ -100,6 +100,11 @@ void VideoViewer(const std::string& input_uri,
 
   tdp::QuickView viewRgbJoint(w,h);
   gui.container().AddDisplay(viewRgbJoint);
+
+  tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
+  tdp::ManagedDeviceImage<float> cuDView(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> nEstdummy(w,h);
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -163,10 +168,10 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",0.,0.,1);
+  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2,0);
   pangolin::Var<float> gridEx("ui.gridE x",3.0,2,0);
   pangolin::Var<float> gridEy("ui.gridE y",3.0,2,0);
-  pangolin::Var<float> gridEz("ui.gridE z",3.5,2.,3);
+  pangolin::Var<float> gridEz("ui.gridE z",3.0,2,0);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
@@ -470,6 +475,13 @@ void VideoViewer(const std::string& input_uri,
       TOCK("Add To TSDF");
     }
 
+    // Render point cloud from viewpoint of origin
+    tdp::SE3f T_mv;
+    T_mv.matrix()(2,3) = -3.;
+    RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
+        dGrid, tsdfMu); 
+    tdp::Depth2PCGpu(cuDView,camView,cuPcView);
+
     // Draw 3D stuff
     if (d_cam.IsShown()) {
       if (dispEst) {
@@ -485,7 +497,18 @@ void VideoViewer(const std::string& input_uri,
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
+      pangolin::glSetFrameOfReference(T_mr.matrix());
+      pangolin::glDrawAxis(0.1f);
       pangolin::RenderVboCbo(vbo,cbo,true);
+      pangolin::glUnsetFrameOfReference();
+
+      pc.CopyFrom(cuPcView,cudaMemcpyDeviceToHost);
+      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+      pangolin::glDrawAxis(0.1f);
+      glColor4f(1.f,0.f,0.f,0.5f);
+      pangolin::glSetFrameOfReference(T_mv.matrix());
+      pangolin::RenderVbo(vbo);
+      pangolin::glUnsetFrameOfReference();
       glDisable(GL_DEPTH_TEST);
     }
 
