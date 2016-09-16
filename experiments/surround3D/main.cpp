@@ -177,6 +177,8 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
 
+  pangolin::Var<bool> dispEst("ui.disp Est", false,true);
+
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       int cId = rgbdStream2cam[sId];
@@ -212,6 +214,7 @@ void VideoViewer(const std::string& input_uri,
 
   tdp::SE3f T_mr;
 
+  size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -306,8 +309,6 @@ void VideoViewer(const std::string& input_uri,
       tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
     }
     TOCK("pc and normals");
-
-
     TICK("Ray Trace TSDF");
     tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
     tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
@@ -345,13 +346,76 @@ void VideoViewer(const std::string& input_uri,
     tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
+    tdp::SE3f dT;
+    if (runICP && numFused > 30) {
+//      if (gui.verbose) std::cout << "icp" << std::endl;
+//      TICK("ICP");
+//      //T_mc.matrix() = Eigen::Matrix4f::Identity();
+//      tdp::SE3f dTRot;
+//      if (icpRot) {
+//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+//            camD, maxItRot, icpAngleThr_deg); 
+//        std::cout << dTRot.matrix3x4() << std::endl;
+//      }
+//      dT = dTRot;
+//      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
+////      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
+//          camD, maxIt, icpAngleThr_deg, icpDistThr); 
+//      if (icpRot) 
+//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
+//      std::cout << dT.matrix3x4() << std::endl;
+//      T_mc.matrix() = dT.matrix()*T_mc.matrix();
+//      //std::cout << "T_mc" << std::endl << T_mc.matrix3x4() << std::endl;
+//      TOCK("ICP");
+    }
+
+    if (pangolin::Pushed(resetTSDF)) {
+      T_mr.matrix() = Eigen::Matrix4f::Identity();
+      W.Fill(0.);
+      TSDF.Fill(-1.01);
+      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+      tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
+      numFused = 0;
+    }
+    if (pangolin::Pushed(resetICP)) {
+      T_mr.matrix() = Eigen::Matrix4f::Identity();
+    }
+
+    if (fuseTSDF || numFused <= 30) {
+      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
+      TICK("Add To TSDF");
+      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+        int32_t cId;
+        if (useRgbCamParasForDepth) {
+          cId = rgbStream2cam[sId]; 
+        } else {
+          cId = dStream2cam[sId]; 
+        }
+        CameraT cam = rig.cams_[cId];
+        tdp::SE3f T_rc = rig.T_rcs_[cId];
+        tdp::SE3f T_mc = T_mr+T_rc;
+        tdp::Image<float> cuD_i(wSingle, hSingle,
+            cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+        AddToTSDF(cuTSDF, cuW, cuD_i, T_mc, cam, grid0, dGrid, tsdfMu); 
+      }
+      numFused ++;
+      TOCK("Add To TSDF");
+    }
+
     // Draw 3D stuff
     if (d_cam.IsShown()) {
-      pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+      if (dispEst) {
+        pc.CopyFrom(pcs_m.GetImage(0),cudaMemcpyDeviceToHost);
+      } else {
+        pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+      }
       glEnable(GL_DEPTH_TEST);
       d_cam.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
+
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
@@ -403,12 +467,20 @@ void VideoViewer(const std::string& input_uri,
       viewRgb.SetImage(rgb);
     }
     if (viewD.IsShown()) {
-      d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      if (dispEst) {
+        d.CopyFrom(cuDPyrEst.GetImage(0), cudaMemcpyDeviceToHost);
+      }else {
+        d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      }
       viewD.SetImage(d);
     }
     if (viewN2D.IsShown()) {
       // convert normals to RGB image
-      tdp::Normals2Image(cuN, cuN2D);
+      if (dispEst) {
+        tdp::Normals2Image(ns_m.GetImage(0), cuN2D);
+      } else {
+        tdp::Normals2Image(cuN, cuN2D);
+      }
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
     }
