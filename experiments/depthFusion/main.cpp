@@ -13,36 +13,46 @@
 #include <pangolin/gl/gldraw.h>
 
 #include <Eigen/Dense>
+#include <tdp/camera/rig.h>
+#include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
-
+#include <tdp/data/managed_pyramid.h>
+#include <tdp/data/managed_volume.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/data/volume.h>
+#include <tdp/gui/gui.hpp>
+#include <tdp/gui/quickView.h>
+#include <tdp/icp/icp.h>
+#include <tdp/manifold/SE3.h>
+#include <tdp/nvidia/helper_cuda.h>
 #include <tdp/preproc/convolutionSeparable.h>
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/preproc/pc.h>
-#include <tdp/gui/quickView.h>
-#include <tdp/data/volume.h>
-#include <tdp/data/managed_volume.h>
-#include <tdp/data/image.h>
-#include <tdp/manifold/SE3.h>
-#include <tdp/icp/icp.h>
 #include <tdp/tsdf/tsdf.h>
-#include <tdp/data/pyramid.h>
-#include <tdp/data/managed_pyramid.h>
-#include <tdp/nvidia/helper_cuda.h>
-
 #include <tdp/utils/Stopwatch.h>
 
-#include <tdp/gui/gui.hpp>
+typedef tdp::CameraPoly3f CameraT;
 
-void VideoViewer(const std::string& input_uri, const std::string& output_uri)
+int main( int argc, char* argv[] )
 {
+  std::string input_uri = "openni2://";
+  std::string output_uri = "pango://video.pango";
+  std::string calibPath = "";
+
+  if( argc > 1 ) {
+    input_uri = std::string(argv[1]);
+    calibPath = (argc > 2) ? std::string(argv[2]) : "";
+  }
+
+
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
   const size_t num_streams = video.Streams().size();
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 1;
   }
 
   tdp::GUI gui(1200,800,video);
@@ -57,7 +67,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   size_t dTSDF = 128;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
-  
+
+  CameraT camR(Eigen::Vector4f(f,f,uc,vc)); 
+  CameraT camD(Eigen::Vector4f(f,f,uc,vc)); 
+
+  if (calibPath.size() > 0) {
+    tdp::Rig<CameraT> rig;
+    rig.FromFile(calibPath,false);
+    std::vector<int32_t> rgbStream2cam;
+    std::vector<int32_t> dStream2cam;
+    std::vector<int32_t> rgbdStream2cam;
+    std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+    tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
+        dStream2cam, rgbdStream2cam);
+    // camera model for computing point cloud and normals
+    camR = rig.cams_[rgbStream2cam[0]];
+    camD = camR; //rig.cams_[dStream2cam[0]];
+  }
+
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
 
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
@@ -98,8 +125,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
   tdp::SE3<float> T_mc(Eigen::Matrix4f::Identity());
-  tdp::Camera<float> camR(Eigen::Vector4f(f,f,uc,vc)); 
-  tdp::Camera<float> camD(Eigen::Vector4f(f,f,uc,vc)); 
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -265,7 +290,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       }
       dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
+      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
 //      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
       if (icpRot) 
@@ -411,53 +436,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
-}
-
-
-int main( int argc, char* argv[] )
-{
-  const std::string dflt_output_uri = "pango://video.pango";
-
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-    try{
-      VideoViewer(input_uri, output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
-    }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
-
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
-
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
-  }
   return 0;
 }
+

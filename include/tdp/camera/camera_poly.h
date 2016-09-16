@@ -16,6 +16,12 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
 
   CameraPoly3()
   {}
+  // parameters: fu, fv, uc, vc
+  CameraPoly3(const Eigen::Matrix<T,4,1>& params) 
+  {
+    this->params_.Fill(0.);
+    this->params_.topRows(4) = params;
+  }
   // parameters: fu, fv, uc, vc, p1, p2, p3
   CameraPoly3(const Parameters& params) 
     : CameraBase<T,7,CameraPoly3<T>>(params)
@@ -135,4 +141,17 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
 typedef CameraPoly3<float>  CameraPoly3f;
 typedef CameraPoly3<double> CameraPoly3d;
 
+template<typename T>
+CameraPoly3<T> ScaleCamera(const CameraPoly3<T>& cam, T scale) {
+  //Camera<T>::Parameters paramsScaled = cam.params_;
+  Eigen::Matrix<T,7,1> paramsScaled = cam.params_;
+  paramsScaled(0) *= scale;
+  paramsScaled(1) *= scale;
+  paramsScaled(2) = (paramsScaled(2)+0.5)*scale-0.5;
+  paramsScaled(3) = (paramsScaled(3)+0.5)*scale-0.5;
+  paramsScaled(4) *= scale;
+  paramsScaled(5) *= scale;
+  paramsScaled(6) *= scale;
+  return CameraPoly3<T>(paramsScaled);
+};
 }

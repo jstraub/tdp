@@ -73,6 +73,17 @@ const SE3<T> SE3<T>::operator+(const SE3<T>& other) const {
 }
 
 template<typename T>
+SE3<T>& SE3<T>::operator*=(const SE3<T>& other) {
+  T_ = T_ * other.T_;
+  return *this;
+}
+
+template<typename T>
+const SE3<T> SE3<T>::operator*(const SE3<T>& other) const {
+  return SE3<T>(*this) *= other;
+}
+
+template<typename T>
 SE3<T>& SE3<T>::operator+=(const Eigen::Matrix<T,6,1>& w) {
   *this = this->Exp(w);
   return *this;

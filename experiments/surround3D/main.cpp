@@ -41,6 +41,7 @@
 #include <pangolin/video/drivers/openni2.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
+//typedef tdp::Camera<float> CameraT;
 
 void VideoViewer(const std::string& input_uri, 
     const std::string& configPath,
@@ -120,9 +121,9 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDevicePyramid<float,3> cuDPyr(w,h);
   tdp::ManagedDevicePyramid<float,3> cuDPyrEst(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_o(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_o(w,h);
 
   tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
   tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
@@ -138,24 +139,23 @@ void VideoViewer(const std::string& input_uri,
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensor1Scale("ui.depth1 scale",1e-3,8e-4,1e-3);
-  pangolin::Var<float> depthSensor2Scale("ui.depth2 scale",1e-3,8e-4,1e-3);
-  pangolin::Var<float> depthSensor3Scale("ui.depth3 scale",1e-3,8e-4,1e-3);
+  //pangolin::Var<float> depthSensor1Scale("ui.depth1 scale",1e-3,8e-4,1e-3);
+  //pangolin::Var<float> depthSensor2Scale("ui.depth2 scale",1e-3,8e-4,1e-3);
+  //pangolin::Var<float> depthSensor3Scale("ui.depth3 scale",1e-3,8e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
-  pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
-  pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
-  pangolin::Var<float> cam3fu("ui.cam3 fu",rig.cams_[3].params_(0),500,600);
-  pangolin::Var<float> cam3fv("ui.cam3 fv",rig.cams_[3].params_(1),500,600);
-  pangolin::Var<float> cam5fu("ui.cam5 fu",rig.cams_[5].params_(0),500,600);
-  pangolin::Var<float> cam5fv("ui.cam5 fv",rig.cams_[5].params_(1),500,600);
-
-  pangolin::Var<float> cam3tx("ui.cam3 tx",rig.T_rcs_[3].translation()(0),0,0.1);
-  pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
-  pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
+  //pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
+  //pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
+  //pangolin::Var<float> cam3fu("ui.cam3 fu",rig.cams_[3].params_(0),500,600);
+  //pangolin::Var<float> cam3fv("ui.cam3 fv",rig.cams_[3].params_(1),500,600);
+  //pangolin::Var<float> cam5fu("ui.cam5 fu",rig.cams_[5].params_(0),500,600);
+  //pangolin::Var<float> cam5fv("ui.cam5 fv",rig.cams_[5].params_(1),500,600);
+  //pangolin::Var<float> cam3tx("ui.cam3 tx",rig.T_rcs_[3].translation()(0),0,0.1);
+  //pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
+  //pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
 
   pangolin::Var<bool> renderFisheye("ui.fisheye", true, true);
 
@@ -218,16 +218,15 @@ void VideoViewer(const std::string& input_uri,
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    if (cam1fu.GuiChanged()) rig.cams_[1].params_(0) = cam1fu;
-    if (cam1fv.GuiChanged()) rig.cams_[1].params_(1) = cam1fv;
-    if (cam3fu.GuiChanged()) rig.cams_[3].params_(0) = cam3fu;
-    if (cam3fv.GuiChanged()) rig.cams_[3].params_(1) = cam3fv;
-    if (cam5fu.GuiChanged()) rig.cams_[5].params_(0) = cam5fu;
-    if (cam5fv.GuiChanged()) rig.cams_[5].params_(1) = cam5fv;
-
-    if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
-    if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
-    if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
+    //if (cam1fu.GuiChanged()) rig.cams_[1].params_(0) = cam1fu;
+    //if (cam1fv.GuiChanged()) rig.cams_[1].params_(1) = cam1fv;
+    //if (cam3fu.GuiChanged()) rig.cams_[3].params_(0) = cam3fu;
+    //if (cam3fv.GuiChanged()) rig.cams_[3].params_(1) = cam3fv;
+    //if (cam5fu.GuiChanged()) rig.cams_[5].params_(0) = cam5fu;
+    //if (cam5fv.GuiChanged()) rig.cams_[5].params_(1) = cam5fv;
+    //if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
+    //if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
+    //if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -268,17 +267,17 @@ void VideoViewer(const std::string& input_uri,
       // convert depth image from uint16_t to float [m]
       tdp::Image<float> cuD_i(wSingle, hSingle,
           cuD.ptr_+cId*dStream.Area());
-      float depthSensorScale = depthSensor1Scale;
-      if (cId==1) depthSensorScale = depthSensor2Scale;
-      if (cId==2) depthSensorScale = depthSensor3Scale;
+      //float depthSensorScale = depthSensor1Scale;
+      //if (cId==1) depthSensorScale = depthSensor2Scale;
+      //if (cId==2) depthSensorScale = depthSensor3Scale;
       if (rig.depthScales_.size() > cId) {
         float a = rig.scaleVsDepths_[cId](0);
         float b = rig.scaleVsDepths_[cId](1);
         // TODO: dont need to load this every time
         cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
         tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
-      } else {
-        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+      //} else {
+      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
       }
     }
     TOCK("depth collection");
@@ -303,9 +302,9 @@ void VideoViewer(const std::string& input_uri,
       tdp::Image<float> cuD_i(wSingle, hSingle,
           cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
 
-      // compute depth
+      // compute point cloud from depth in rig coordinate system
       tdp::Depth2PCGpu(cuD_i,cam,T_rc,cuPc_i);
-      // compute normals
+      // compute normals from depth in rig coordinate system
       tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
     }
     TOCK("pc and normals");
@@ -321,54 +320,122 @@ void VideoViewer(const std::string& input_uri,
       }
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
-      tdp::SE3f T_mc = T_mr+T_rc;
+      tdp::SE3f T_mo = T_mr*T_rc;
 
       tdp::Image<tdp::Vector3fda> cuNEst_i(wSingle, hSingle,
           cuNEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
       tdp::Image<tdp::Vector3fda> cuPcEst_i(wSingle, hSingle,
           cuPcEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
 
+      // ray trace the TSDF to get pc and normals in camera cosy
       RayTraceTSDF(cuTSDF, cuPcEst_i, 
-          cuNEst_i, T_mc, cam, grid0, dGrid, tsdfMu); 
+          cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+      // transform pc and normals into rig cosy for ICP
+      //tdp::TransformPc(T_rc, cuPcEst_i);
+      //tdp::TransformPc(T_rc.rotation(), cuNEst_i);
     }
     TOCK("Ray Trace TSDF");
     TICK("Setup Pyramids");
     // TODO might want to use the pyramid construction with smoothing
 //    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
 //        cudaMemcpyDeviceToDevice, 0.03);
-    pcs_c.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_c,cudaMemcpyDeviceToDevice);
+    pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
     tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
 
-    ns_c.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(ns_c,cudaMemcpyDeviceToDevice);
+    ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     // just complete the surface normals obtained from the TSDF
     tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
-    tdp::SE3f dT;
+    tdp::SE3f dT_mo;
     if (runICP && numFused > 30) {
-//      if (gui.verbose) std::cout << "icp" << std::endl;
-//      TICK("ICP");
-//      //T_mc.matrix() = Eigen::Matrix4f::Identity();
-//      tdp::SE3f dTRot;
-//      if (icpRot) {
-//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-//            camD, maxItRot, icpAngleThr_deg); 
-//        std::cout << dTRot.matrix3x4() << std::endl;
-//      }
-//      dT = dTRot;
-//      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT,
-////      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mc,
+      if (gui.verbose) std::cout << "icp" << std::endl;
+      TICK("ICP");
+      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+
+      { // ICP
+        size_t lvls = maxIt.size();
+        for (int lvl=lvls-1; lvl >= 0; --lvl) {
+          float errPrev = 0.f; 
+          float error = 0.f; 
+          for (size_t it=0; it<maxIt[lvl]; ++it) {
+            float count = 0.f; 
+            float error = 0.f; 
+            Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
+            Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
+            ATA.fill(0.);
+            ATb.fill(0.);
+            tdp::Image<tdp::Vector3fda> pc_ml = pcs_m.GetImage(lvl);
+            tdp::Image<tdp::Vector3fda> n_ml = ns_m.GetImage(lvl);
+            tdp::Image<tdp::Vector3fda> pc_ol = pcs_o.GetImage(lvl);
+            tdp::Image<tdp::Vector3fda> n_ol = ns_o.GetImage(lvl);
+            size_t w_l = pc_ml.w_;
+            size_t h_l = pc_ml.h_/3;
+            for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+              int32_t cId;
+              if (useRgbCamParasForDepth) {
+                cId = rgbStream2cam[sId]; 
+              } else {
+                cId = dStream2cam[sId]; 
+              }
+              CameraT cam = rig.cams_[cId];
+              tdp::SE3f T_cr = rig.T_rcs_[cId].Inverse();
+
+              // all PC and normals are in rig coordinates
+              tdp::Image<tdp::Vector3fda> pc_mli(w_l, h_l,
+                  pc_ml.ptr_+rgbdStream2cam[sId]*w_l*h_l);
+              tdp::Image<tdp::Vector3fda> pc_oli(w_l, h_l,
+                  pc_ol.ptr_+rgbdStream2cam[sId]*w_l*h_l);
+              tdp::Image<tdp::Vector3fda> n_mli(w_l, h_l,
+                  n_ml.ptr_+rgbdStream2cam[sId]*w_l*h_l);
+              tdp::Image<tdp::Vector3fda> n_oli(w_l, h_l,
+                  n_ol.ptr_+rgbdStream2cam[sId]*w_l*h_l);
+
+              Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
+              Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
+              float error_i = 0;
+              float count_i = 0;
+              // Compute ATA and ATb from A x = b
+              ICPStep(pc_mli, n_mli, pc_oli, n_oli,
+                  dT_mo, T_cr, tdp::ScaleCamera<float>(cam,pow(0.5,lvl)),
+                  cos(icpAngleThr_deg*M_PI/180.),
+                  icpDistThr,ATA_i,ATb_i,error_i,count_i);
+              ATA += ATA_i;
+              ATb += ATb_i;
+              error += error_i;
+              count += count_i;
+            }
+            if (count < 100) {
+              std::cout << "# inliers " << count << " to small " << std::endl;
+              break;
+            }
+            // solve for x using ldlt
+            Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
+              (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
+            // apply x to the transformation
+            dT_mo = tdp::SE3f(tdp::SE3f::Exp_(x))*dT_mo;
+            std::cout << "lvl " << lvl << " it " << it 
+              << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+              << " # inliers: " << count 
+              //<< " |ATA|=" << ATA.determinant()
+              //<< " x=" << x.transpose()
+              << std::endl;
+            //std::cout << dT.matrix() << std::endl;
+            //std::cout << T_mo.matrix() << std::endl;
+            if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
+            errPrev = error;
+          }
+        }
+      }
+
+//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_o, ns_o, dT,
 //          camD, maxIt, icpAngleThr_deg, icpDistThr); 
-//      if (icpRot) 
-//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
 //      std::cout << dT.matrix3x4() << std::endl;
-//      T_mc.matrix() = dT.matrix()*T_mc.matrix();
-//      //std::cout << "T_mc" << std::endl << T_mc.matrix3x4() << std::endl;
-//      TOCK("ICP");
+      T_mr = dT_mo*T_mr;
+//      //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
+      TOCK("ICP");
     }
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -395,10 +462,10 @@ void VideoViewer(const std::string& input_uri,
         }
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_rc = rig.T_rcs_[cId];
-        tdp::SE3f T_mc = T_mr+T_rc;
+        tdp::SE3f T_mo = T_mr+T_rc;
         tdp::Image<float> cuD_i(wSingle, hSingle,
             cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
-        AddToTSDF(cuTSDF, cuW, cuD_i, T_mc, cam, grid0, dGrid, tsdfMu); 
+        AddToTSDF(cuTSDF, cuW, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu); 
       }
       numFused ++;
       TOCK("Add To TSDF");
@@ -409,7 +476,7 @@ void VideoViewer(const std::string& input_uri,
       if (dispEst) {
         pc.CopyFrom(pcs_m.GetImage(0),cudaMemcpyDeviceToHost);
       } else {
-        pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
       }
       glEnable(GL_DEPTH_TEST);
       d_cam.Activate(s_cam);

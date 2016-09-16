@@ -45,6 +45,9 @@ class SO3 : Manifold<T,3> {
   SO3<T>& operator+=(const SO3<T>& other);
   const SO3<T> operator+(const SO3<T>& other) const;
 
+  SO3<T>& operator*=(const SO3<T>& other);
+  const SO3<T> operator*(const SO3<T>& other) const;
+
   SO3<T>& operator+=(const Eigen::Matrix<T,3,1>& w);
   const SO3<T> operator+(const Eigen::Matrix<T,3,1>& w);
 
