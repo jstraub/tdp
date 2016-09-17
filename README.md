@@ -9,8 +9,11 @@ DONT install the driver - ONLY install cuda
 
 To install the code:
 
+```
 sudo apt-get install lib-usb-1.0-0-dev mercurial libgtest-dev cmake-gt-gui
+```
 
+```
 cd /usr/src/gtest/
 sudo su
 mkdir build
@@ -19,14 +22,18 @@ cmake ..
 make 
 ln libgtest* /usr/lib/
 cd -
+```
 
+```
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense/
 ./scripts/install_glfw3.sh
 make
 sudo make install
 cd ../
+```
 
+```
 hg clone https://bitbucket.org/eigen/eigen
 cd eigen
 mkdir build
@@ -36,7 +43,9 @@ make
 sudo make install
 ://developer.nvidia.com/cuda-downloads
 cd -
+```
 
+```
 git clone https://github.com/stevenlovegrove/Pangolin.git
 cd Pangolin
 git checkout -b devel
@@ -46,12 +55,12 @@ cd build
 cmake ..
 make -j
 cd -
+```
 
 This code: git@github.mit.edu:jstraub/tdp.git
-
+```
 mkdir build
 cd build 
 cmake ..
 make -j
-
-
+```
