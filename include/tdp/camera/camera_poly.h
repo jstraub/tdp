@@ -72,7 +72,7 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
     }
     //std::cout << ru << " " << r << std::endl;
     T scale = ru / r;
-    if (isnan(scale)) scale = 1.;
+    if (scale!=scale) scale = 1.;
     //std::cout << ray.transpose() << "; " << scale << " " << z << std::endl;
     return Eigen::Matrix<T,3,1>(ray(0)*scale*z, ray(1)*scale*z, z);
   }
