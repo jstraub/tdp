@@ -11,9 +11,10 @@
 #include <tdp/cuda/cuda.h>
 #include <tdp/data/allocator.h>
 #include <pangolin/utils/picojson.h>
+#include <pangolin/image/image_io.h>
 #include <pangolin/utils/file_utils.h>
 #include <pangolin/video/video_record_repeat.h>
-#include <pangolin/video/drivers/openni2.h>
+#include <tdp/eigen/std_vector.h>
 
 namespace tdp {
 template <class Cam>
@@ -63,6 +64,11 @@ struct Rig {
                   depthScales_.back().CopyFrom(scaleWrap, cudaMemcpyHostToHost);
                   std::cout << "found and loaded depth scale file" << std::endl;
                 }
+              }
+              if (file_json[i]["camera"].contains("depthScaleVsDepthModel")) {
+                scaleVsDepths_.push_back(Eigen::Vector2f(
+                  file_json[i]["camera"]["depthScaleVsDepthModel"][0].get<double>(),
+                  file_json[i]["camera"]["depthScaleVsDepthModel"][1].get<double>()));
               }
               SE3f T_rc;
               if (file_json[i]["camera"].contains("T_rc")) {
@@ -124,8 +130,12 @@ struct Rig {
   std::vector<SE3f> T_rcs_; 
   // cameras
   std::vector<Cam> cams_;
+  // depth scale calibration images
   std::vector<std::string> depthScalePaths_;
   std::vector<Image<float>> depthScales_;
+  // depth scale scaling model as a function of depth
+  eigen_vector<Eigen::Vector2f> scaleVsDepths_;
+
   // camera serial IDs
   std::vector<std::string> serials_;
   // raw properties
@@ -146,10 +156,9 @@ bool CorrespondOpenniStreams2Cams(
   rgbStream2cam.clear();
   dStream2cam.clear();
   rgbdStream2cam.clear();
+  
+  pangolin::json::value devProps = pangolin::GetVideoDeviceProperties(streams[0]);
 
-  pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
-  openni->UpdateProperties();
-  pangolin::json::value devProps = openni->DeviceProperties();
   if (! devProps.contains("openni") ) 
     return false;
   pangolin::json::value jsDevices = devProps["openni"]["devices"];

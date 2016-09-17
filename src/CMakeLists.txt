@@ -1,5 +1,19 @@
 
-file(GLOB SRCS "*.cpp" "./*/*cpp")
+file(GLOB SRCS 
+  "./cuda/*cpp"
+  "./directional/*cpp"
+  "./drivers/*cpp"
+  "./gui/*cpp"
+  "./icp/*cpp"
+  "./manifold/*cpp"
+  "./plane/*cpp"
+  "./preproc/*cpp"
+  "./reductions/*cpp"
+  "./rtmf/*cpp"
+  "./stats/*cpp"
+  "./tsdf/*cpp"
+  "./utils/*cpp"
+  )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 
 if (ASIO_FOUND)
@@ -23,6 +37,7 @@ endif()
 
 if (aruco_FOUND) 
   list(APPEND LIBS ${aruco_LIBS})
+  list(APPEND SRCS "./marker/aruco.cpp")
 endif()
 
 target_link_libraries(tdp pangolin

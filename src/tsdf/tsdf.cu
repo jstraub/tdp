@@ -6,6 +6,8 @@
 #include <tdp/cuda/cuda.h>
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/camera/projective_math.h>
+#include <tdp/camera/camera_poly.h>
+#include <tdp/camera/camera.h>
 
 namespace tdp {
 
@@ -45,9 +47,9 @@ void KernelRayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
 
 
 __global__ 
-void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
-    SE3<float> T_rd, SE3<float> T_dr, Camera<float> camR, Camera<float>camD,
-    float rho0, float drho, float mu) {
+void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W,
+    Image<float> d, SE3<float> T_rd, SE3<float> T_dr, Camera<float>
+    camR, Camera<float>camD, float rho0, float drho, float mu) {
   // kernel over all pixel locations and depth locations in the TSDF
   // volume
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -153,9 +155,10 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
 }
 
 
+template<int D, typename Derived>
 __global__ 
 void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
-    SE3<float> T_rd, SE3<float> T_dr, Camera<float>camD,
+    SE3<float> T_rd, SE3<float> T_dr, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid, float mu) {
   // kernel over all pixel locations and depth locations in the TSDF
   // volume
@@ -190,8 +193,9 @@ void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
   }
 }
 
+template<int D, typename Derived>
 void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
-    SE3<float> T_rd, Camera<float>camD,
+    SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
@@ -200,6 +204,17 @@ void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
       camD, grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+template void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
+    SE3<float> T_rd, 
+    CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
+template void AddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
+    SE3<float> T_rd, 
+    CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
 
 void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n, 
     SE3<float> T_rd, Camera<float>camD,
@@ -212,11 +227,12 @@ void RayTraceTSDF(Volume<float> tsdf, Image<float> d, Image<Vector3fda> n,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+template<int D, typename Derived>
 __global__
 void KernelRayTraceTSDF(Volume<float> tsdf, 
     Image<Vector3fda> pc_r, 
     Image<Vector3fda> n_r, 
-    SE3<float> T_rd, Camera<float> camD,
+    SE3<float> T_rd, CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -270,10 +286,11 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
   }
 }
 
+template<int D, typename Derived>
 void RayTraceTSDF(Volume<float> tsdf, 
     Image<Vector3fda> pc_r, 
     Image<Vector3fda> n_r, 
-    SE3<float> T_rd, Camera<float>camD,
+    SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
@@ -282,6 +299,22 @@ void RayTraceTSDF(Volume<float> tsdf,
       grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+// explicit instantiations
+template void RayTraceTSDF(Volume<float> tsdf, 
+    Image<Vector3fda> pc_r, 
+    Image<Vector3fda> n_r, 
+    SE3<float> T_rd, 
+    CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
+template void RayTraceTSDF(Volume<float> tsdf, 
+    Image<Vector3fda> pc_r, 
+    Image<Vector3fda> n_r, 
+    SE3<float> T_rd, 
+    CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
 
 
 }

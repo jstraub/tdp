@@ -20,7 +20,7 @@ class CameraBase {
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,2,1> Project(const Eigen::Matrix<T,3,1>& p) const {
-    return static_cast<Derived*>(this)->Project(p);
+    return static_cast<const Derived*>(this)->Project(p);
   }
 
   //TDP_HOST_DEVICE

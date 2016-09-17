@@ -17,6 +17,7 @@ void ConvertDepthGpu(const Image<uint16_t>& dRaw,
 void ConvertDepthGpu(const Image<uint16_t>& dRaw,
     Image<float>& d,
     Image<float>& scale,
+    float aScaleVsDist, float bScaleVsDist,
     float dMin, 
     float dMax
     );
