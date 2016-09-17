@@ -1,17 +1,18 @@
-First make sure gpu is running use nvidia-340 driver.
+First make sure GPU is running use `nvidia-370` driver.  
+Make sure by running nvidia-smi. This should give you a nice view of the GPU stats if all went well.
 
-Make sure by running nvidia-smi (if it complains the GPU is not
-running)
-
-Download cuda 6.5 https://developer.nvidia.com/cuda-downloads
-(runfile 14.04)
+On 16.04: Download cuda 8.0 https://developer.nvidia.com/cuda-downloads (runfile 16.04)
 DONT install the driver - ONLY install cuda 
 
 To install the code:
 
 ```
-sudo apt-get install lib-usb-1.0-0-dev mercurial libgtest-dev cmake-gt-gui
+sudo apt-get install libusb-1.0-0-dev mercurial libgtest-dev cmake-qt-gui
 ```
+
+From below you likely only need to compile this code (tdp) in your own
+clone of the repo in your home since the other libraries should all
+just be installed globally already. 
 
 ```
 cd /usr/src/gtest/
