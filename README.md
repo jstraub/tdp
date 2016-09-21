@@ -28,8 +28,7 @@ cd -
 ```
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense/
-./scripts/install_glfw3.sh
-sudo apt-get install libglfw3-dev
+./scripts/install_glfw3.sh  //don't use sudo apt-get install libglfw3-dev though suggested in their README
 //Video4Linux backend
 sudo cp config/99-realsense-libusb.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && udevadm trigger
@@ -58,6 +57,7 @@ git clone https://github.com/stevenlovegrove/Pangolin.git
 cd Pangolin
 git checkout -b devel
 git pull origin devel
+sudo apt-get install libglew-dev
 mkdir build
 cd build
 cmake ..
@@ -66,9 +66,15 @@ cd -
 ```
 
 This code: git@github.mit.edu:jstraub/tdp.git
+git fetch
+git checkout lymp
 ```
 mkdir build
 cd build 
 cmake ..
 make -j
 ```
+
+To test the sensor, connect it to usb3.0 and run
+cd
+./tdp/build/experiements/simpleGui/simpleGui realsense:://
