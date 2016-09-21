@@ -29,6 +29,14 @@ cd -
 git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense/
 ./scripts/install_glfw3.sh
+sudo apt-get install libglfw3-dev
+//Video4Linux backend
+sudo cp config/99-realsense-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && udevadm trigger
+./scripts/install_dependencies-4.4.sh
+sudo reboot
+cd librealsense
+./scripts/patch-uvcvideo-16.04.simple.sh
 make
 sudo make install
 cd ../
@@ -42,7 +50,6 @@ cd build
 cmake ..
 make
 sudo make install
-://developer.nvidia.com/cuda-downloads
 cd -
 ```
 
