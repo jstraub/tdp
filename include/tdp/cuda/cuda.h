@@ -16,7 +16,7 @@ namespace tdp {
 
 TDP_HOST_DEVICE
 inline bool IsValidData(const Vector3fda& x) {
-  return !isnan(x(0)) && !isnan(x(1)) && !isnan(x(2));
+  return x(0)==x(0) && x(1)==x(1) && x(2)==x(2);
 }
 
 TDP_HOST_DEVICE

@@ -11,10 +11,9 @@
 #include <tdp/cuda/cuda.h>
 #include <tdp/data/allocator.h>
 #include <pangolin/utils/picojson.h>
+#include <pangolin/image/image_io.h>
 #include <pangolin/utils/file_utils.h>
 #include <pangolin/video/video_record_repeat.h>
-#include <pangolin/video/drivers/openni2.h>
-
 #include <tdp/eigen/std_vector.h>
 
 namespace tdp {
@@ -160,9 +159,6 @@ bool CorrespondOpenniStreams2Cams(
   
   pangolin::json::value devProps = pangolin::GetVideoDeviceProperties(streams[0]);
 
-  //pangolin::OpenNiVideo2* openni = (pangolin::OpenNiVideo2*)streams[0];
-  //openni->UpdateProperties();
-  //pangolin::json::value devProps = openni->DeviceProperties();
   if (! devProps.contains("openni") ) 
     return false;
   pangolin::json::value jsDevices = devProps["openni"]["devices"];

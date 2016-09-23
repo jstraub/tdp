@@ -38,7 +38,6 @@
 #include <tdp/camera/rig.h>
 #include <tdp/marker/aruco.h>
 #include <tdp/manifold/SE3.h>
-#include <pangolin/video/drivers/openni2.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
