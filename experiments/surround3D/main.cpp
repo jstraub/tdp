@@ -276,9 +276,6 @@ void VideoViewer(const std::string& input_uri,
     }
     TOCK("depth collection");
     TICK("pc and normals");
-    // convert depth image from uint16_t to float [m]
-    //tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    // compute point cloud (on CPU)
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId;
       if (useRgbCamParasForDepth) {
@@ -297,7 +294,7 @@ void VideoViewer(const std::string& input_uri,
           rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
 
       // compute point cloud from depth in rig coordinate system
-      tdp::Depth2PCGpu(cuD_i,cam,T_rc,cuPc_i);
+      tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
       // compute normals from depth in rig coordinate system
       tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
     }
