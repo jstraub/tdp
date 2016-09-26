@@ -8,6 +8,7 @@
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera.h>
 #include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/cuda/cuda.h>
 #include <tdp/data/allocator.h>
 #include <pangolin/utils/picojson.h>
@@ -35,6 +36,7 @@ struct Rig {
         std::cout << file_json.serialize(true) << std::endl;
         if (file_json.size() > 0) {
           std::cout << "found " << file_json.size() << " elements" << std::endl ;
+          depthScales_.reserve(file_json.size());
           for (size_t i=0; i<file_json.size(); ++i) {
             if (file_json[i].contains("camera")) {
               // serial number
@@ -58,11 +60,18 @@ struct Rig {
                   pangolin::TypedImage scale8bit = pangolin::LoadImage(path);
                   size_t w = scale8bit.w/4;
                   size_t h = scale8bit.h;
-                  Image<float> scaleWrap(w,h,(float*)scale8bit.ptr);
-                  depthScales_.push_back(tdp::Image<float>(w,h,
+                  std::cout << "w x h: " << w << "x" << h << std::endl;
+                  Image<float> scaleWrap(w,h,w*sizeof(float),
+                      (float*)scale8bit.ptr);
+                  depthScales_.push_back(tdp::Image<float>(w,h,w*sizeof(float),
                         CpuAllocator<float>::construct(w*h)));
-                  depthScales_.back().CopyFrom(scaleWrap, cudaMemcpyHostToHost);
-                  std::cout << "found and loaded depth scale file" << std::endl;
+                  depthScales_[depthScales_.size()-1].CopyFrom(scaleWrap,
+                      cudaMemcpyHostToHost);
+                  std::cout << "found and loaded depth scale file"
+                    << depthScales_[depthScales_.size()-1].ptr_ << std::endl;
+//                  ManagedDeviceImage<float> cuScale(w,h);
+//                  cuScale.CopyFrom(depthScales_[depthScales_.size()-1],
+//                      cudaMemcpyHostToDevice);
                 }
               }
               if (file_json[i]["camera"].contains("depthScaleVsDepthModel")) {
