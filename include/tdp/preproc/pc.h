@@ -49,6 +49,28 @@ void Depth2PC(
 }
 
 template<int LEVELS>
+void TransformPc(
+    const SE3f& T_rc,
+    Pyramid<Vector3fda,LEVELS>& pc
+    ) {
+  for (size_t lvl=0; lvl<LEVELS; ++lvl) {
+    Image<Vector3fda> pc_i = pc.GetImage(lvl);
+    TransformPc(T_rc, pc_i);
+  }
+}
+
+template<int LEVELS>
+void TransformPc(
+    const SO3f& R_rc,
+    Pyramid<Vector3fda,LEVELS>& pc
+    ) {
+  for (size_t lvl=0; lvl<LEVELS; ++lvl) {
+    Image<Vector3fda> pc_i = pc.GetImage(lvl);
+    TransformPc(R_rc, pc_i);
+  }
+}
+
+template<int LEVELS>
 void Depth2PCs(
     Pyramid<float,LEVELS>& d,
     const Camera<float>& cam,

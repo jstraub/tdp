@@ -11,6 +11,26 @@
 
 namespace tdp {
 
+__device__ 
+inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal, const
+    Volume<TSDFval>& tsdf) {
+  // surface normal: TODO might want to do better interpolation
+  // of neighbors
+  Vector3fda ni ( 
+      (x+1 < tsdf.w_)? tsdf(x+1,y,z).f - tsdfVal 
+      : tsdfVal - tsdf(x-1,y,z).f,
+      (y+1 < tsdf.h_)? tsdf(x,y+1,z).f - tsdfVal 
+      : tsdfVal - tsdf(x,y-1,z).f,
+      (z+1 < tsdf.d_)? tsdf(x,y,z+1).f - tsdfVal 
+      : tsdfVal - tsdf(x,y,z-1).f);
+  // apply weighting according to TSDF volume voxel side length
+  // TODO: this is still not working: only nice results with d_==w_==h_
+  ni(0) *= (float)tsdf.d_/(float)tsdf.w_;
+  ni(1) *= (float)tsdf.d_/(float)tsdf.h_;
+  // negate to flip the normals to face the camera
+  return -ni/ni.norm();
+}
+
 // ray trace and compute depth image as well as normals from pose T_rd
 template<int D, typename Derived>
 __global__
@@ -48,22 +68,15 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
       int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,idz).f;
-        if (-1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
+        float tsdfW = tsdf(x,y,idz).w;
+        if (tsdfW > 30 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
           d(idx,idy) = d_d_in_r_Prev
             -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
-          // surface normal: TODO might want to do better interpolation
-          // of neighbors
-          Vector3fda ni ( 
-              (x+1 < tsdf.w_)? tsdf(x+1,y,idz).f - tsdfVal 
-              : tsdfVal - tsdf(x-1,y,idz).f,
-              (y+1 < tsdf.h_)? tsdf(x,y+1,idz).f - tsdfVal 
-              : tsdfVal - tsdf(x,y-1,idz).f,
-              (idz+1 < tsdf.d_)? tsdf(x,y,idz+1).f - tsdfVal 
-              : tsdfVal - tsdf(x,y,idz-1).f);
-          // negate to flip the normals to face the camera
+          // surface normal: 
+           Vector3fda ni = NormalFromTSDF(x,y,idz,tsdfVal,tsdf);
           // and compute the normal in the depth frame of reference
-          n(idx,idy) = - (T_rd.rotation().Inverse()*ni) / ni.norm(); 
+          n(idx,idy) = T_rd.rotation().Inverse() * ni; 
           break;
         }
         tsdfValPrev = tsdfVal;
@@ -201,24 +214,17 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
       int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
         float tsdfVal = tsdf(x,y,idz).f;
-        if (-1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
+        float tsdfW = tsdf(x,y,idz).w;
+        if (tsdfW > 30 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
           float d = d_d_in_r_Prev
             -((d_d_in_r-d_d_in_r_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
           // point at that depth in the reference coordinate frame
           //pc_r(idx,idy) = T_rd.translation()+r_d_in_r*d;
           pc_d(idx,idy) = r_d*d;
-          // surface normal: TODO might want to do better interpolation
-          // of neighbors
-          Vector3fda ni ( 
-              (x+1 < tsdf.w_)? tsdf(x+1,y,idz).f - tsdfVal 
-              : tsdfVal - tsdf(x-1,y,idz).f,
-              (y+1 < tsdf.h_)? tsdf(x,y+1,idz).f - tsdfVal 
-              : tsdfVal - tsdf(x,y-1,idz).f,
-              (idz+1 < tsdf.d_)? tsdf(x,y,idz+1).f - tsdfVal 
-              : tsdfVal - tsdf(x,y,idz-1).f);
-          // negate to flip the normals to face the camera
-          n_d(idx,idy) = - (T_rd.rotation().Inverse()*ni) / ni.norm(); 
+          // surface normal: 
+          Vector3fda ni = NormalFromTSDF(x,y,idz,tsdfVal,tsdf);
+          n_d(idx,idy) = T_rd.rotation().Inverse() * ni; 
           break;
         }
         tsdfValPrev = tsdfVal;

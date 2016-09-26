@@ -64,7 +64,7 @@ int main( int argc, char* argv[] )
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  size_t dTSDF = 128;
+  size_t dTSDF = 512;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
@@ -94,9 +94,12 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& d_cam = pangolin::CreateDisplay()
+  pangolin::View& viewPc3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(d_cam);
+  gui.container().AddDisplay(viewPc3D);
+  pangolin::View& viewN3D = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewN3D);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
@@ -199,6 +202,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showIcpError("ui.show ICP",false,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
 
+  pangolin::Var<bool> showPcModel("ui.show model",true,true);
+  pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
+  pangolin::Var<bool> showPcView("ui.show overview",true,true);
+
   if (false) {
     // for the SR300 or F200
     //depthSensorScale = 1e-4;
@@ -219,6 +226,7 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (!normalsFromTSDF) pcFromTSDF = false;
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -283,22 +291,22 @@ int main( int argc, char* argv[] )
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_mo.matrix() = Eigen::Matrix4f::Identity();
-      tdp::SE3f dTRot;
-      if (icpRot) {
-        //std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-        //tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-        //    camD, maxItRot, icpAngleThr_deg); 
-        //std::cout << dTRot.matrix3x4() << std::endl;
-      }
-      dT = dTRot;
+//      tdp::SE3f dTRot;
+//      if (icpRot) {
+//        //std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+//        //tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+//        //    camD, maxItRot, icpAngleThr_deg); 
+//        //std::cout << dTRot.matrix3x4() << std::endl;
+//      }
+//      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
       //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
-      if (icpRot) 
-        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
+//      if (icpRot) 
+//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
       std::cout << dT.matrix3x4() << std::endl;
-      T_mo.matrix() = dT.matrix()*T_mo.matrix();
+      T_mo = dT*T_mo;
       //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
     }
@@ -348,40 +356,91 @@ int main( int argc, char* argv[] )
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
+    viewPc3D.Activate(s_cam);
     // render global view of the model first
     pangolin::glDrawAxis(0.1f);
-    {
-      pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-      cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-      cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
-          cudaMemcpyDeviceToDevice);
+    if (showPcView) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(0,0,1);
+      pangolin::RenderVbo(cuPcbuf);
     }
-    glColor3f(0,0,1);
-    pangolin::RenderVbo(cuPcbuf);
     pangolin::glSetFrameOfReference(T_mo.matrix());
     // render model and observed point cloud
-    {
-      pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-      cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-      tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(icpErrorLvl);
-      cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-          cudaMemcpyDeviceToDevice);
+    if (showPcModel) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(icpErrorLvl);
+        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(0,1,0);
+      pangolin::RenderVbo(cuPcbuf);
     }
-    glColor3f(0,1,0);
-    pangolin::RenderVbo(cuPcbuf);
     // render current camera second in the propper frame of
     // reference
     pangolin::glDrawAxis(0.1f);
-    {
-      pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-      cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-      tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(icpErrorLvl);
-      cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-          cudaMemcpyDeviceToDevice);
+    if (showPcCurrent) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(icpErrorLvl);
+        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(1,0,0);
+      pangolin::RenderVbo(cuPcbuf);
     }
-    glColor3f(1,0,0);
-    pangolin::RenderVbo(cuPcbuf);
+    pangolin::glUnsetFrameOfReference();
+
+
+    viewN3D.Activate(s_cam);
+    // render global view of the model first
+    pangolin::glDrawAxis(0.1f);
+    if (showPcView) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        cudaMemcpy(*cuPcbufp, nEstdummy.ptr_, nEstdummy.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(0,0,1);
+      pangolin::RenderVbo(cuPcbuf);
+    }
+    Eigen::Matrix4f R_mo = T_mo.matrix();
+    R_mo.topRightCorner(3,1).fill(0.);
+    pangolin::glSetFrameOfReference(R_mo);
+    // render model and observed point cloud
+    if (showPcModel) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        tdp::Image<tdp::Vector3fda> pc0 = ns_m.GetImage(icpErrorLvl);
+        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(0,1,0);
+      pangolin::RenderVbo(cuPcbuf);
+    }
+    // render current camera second in the propper frame of
+    // reference
+    pangolin::glDrawAxis(0.1f);
+    if (showPcCurrent) {
+      {
+        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+        tdp::Image<tdp::Vector3fda> pc0 = ns_c.GetImage(icpErrorLvl);
+        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+            cudaMemcpyDeviceToDevice);
+      }
+      glColor3f(1,0,0);
+      pangolin::RenderVbo(cuPcbuf);
+    }
     pangolin::glUnsetFrameOfReference();
     TOCK("Draw 3D");
 
