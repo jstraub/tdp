@@ -105,9 +105,15 @@ class Image {
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Image<T>& src, cudaMemcpyKind type) {
     checkCudaErrors(cudaMemcpy2D(ptr_, pitch_, 
-          src.ptr_, src.pitch_, w_*sizeof(T), h_, type));
+          src.ptr_, src.pitch_, 
+          std::min(w_,src.w_)*sizeof(T), 
+          std::min(h_,src.h_), type));
   }
 #endif
+
+  Image<T> GetRoi(size_t u0, size_t v0, size_t w, size_t h) {
+    return Image<T>(w,h,pitch_,&RowPtr(v0)[u0]);
+  }
 
   size_t w_;
   size_t h_;

@@ -36,7 +36,6 @@
 
 #include "gui.hpp"
 #include <tdp/camera/rig.h>
-#include <tdp/marker/aruco.h>
 #include <tdp/manifold/SE3.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
@@ -71,6 +70,8 @@ void VideoViewer(const std::string& input_uri,
 
   size_t wSingle = video.Streams()[0].Width();
   size_t hSingle = video.Streams()[0].Height();
+  wSingle += wSingle%64;
+  hSingle += hSingle%64;
   size_t w = wSingle;
   size_t h = 3*hSingle;
   // width and height need to be multiple of 64 for convolution
@@ -97,7 +98,6 @@ void VideoViewer(const std::string& input_uri,
   gui.container().AddDisplay(viewD);
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
-
   tdp::QuickView viewRgbJoint(w,h);
   gui.container().AddDisplay(viewRgbJoint);
 
@@ -199,9 +199,6 @@ void VideoViewer(const std::string& input_uri,
       }
       });
 
-  // TODO: figure out why removing this will crash my computer...
-  tdp::ArucoDetector detector(0.158);
-
   pangolin::GlRenderBuffer glRenderBuf(w,h);
   pangolin::GlTexture tex(w,h,GL_RGBA8);
   pangolin::GlFramebuffer glFrameBuf(tex, glRenderBuf);
@@ -251,9 +248,8 @@ void VideoViewer(const std::string& input_uri,
       tdp::Image<tdp::Vector3bda> rgbStream;
       if (!gui.ImageRGB(rgbStream, sId)) continue;
       int32_t cId = rgbdStream2cam[sId]; 
-      // Get ROI
-      tdp::Image<tdp::Vector3bda> rgb_i(wSingle, hSingle,
-          rgb.ptr_+cId*rgbStream.Area());
+      tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
+          wSingle, hSingle);
       rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
     }
     TOCK("rgb collection");
@@ -264,13 +260,12 @@ void VideoViewer(const std::string& input_uri,
       if (!gui.ImageD(dStream, sId)) continue;
       int32_t cId = rgbdStream2cam[sId]; 
       //std::cout << sId << " " << cId << std::endl;
-      // Get ROI
-      tdp::Image<uint16_t> cuDraw_i(wSingle, hSingle,
-          cuDraw.ptr_+cId*dStream.Area());
+      tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
+          wSingle, hSingle);
       cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
       // convert depth image from uint16_t to float [m]
-      tdp::Image<float> cuD_i(wSingle, hSingle,
-          cuD.ptr_+cId*dStream.Area());
+      tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
+          wSingle, hSingle);
       //float depthSensorScale = depthSensor1Scale;
       //if (cId==1) depthSensorScale = depthSensor2Scale;
       //if (cId==2) depthSensorScale = depthSensor3Scale;
@@ -299,12 +294,12 @@ void VideoViewer(const std::string& input_uri,
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
-      tdp::Image<tdp::Vector3fda> cuN_i(wSingle, hSingle,
-          cuN.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
-      tdp::Image<tdp::Vector3fda> cuPc_i(wSingle, hSingle,
-          cuPc.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
-      tdp::Image<float> cuD_i(wSingle, hSingle,
-          cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+      tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      tdp::Image<float> cuD_i = cuD.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
 
       // compute point cloud from depth in rig coordinate system
       tdp::Depth2PCGpu(cuD_i,cam,T_rc,cuPc_i);
@@ -326,10 +321,10 @@ void VideoViewer(const std::string& input_uri,
       tdp::SE3f T_rc = rig.T_rcs_[cId];
       tdp::SE3f T_mo = T_mr*T_rc;
 
-      tdp::Image<tdp::Vector3fda> cuNEst_i(wSingle, hSingle,
-          cuNEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
-      tdp::Image<tdp::Vector3fda> cuPcEst_i(wSingle, hSingle,
-          cuPcEst.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+      tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
 
       // ray trace the TSDF to get pc and normals in camera cosy
       RayTraceTSDF(cuTSDF, cuPcEst_i, 
@@ -388,14 +383,14 @@ void VideoViewer(const std::string& input_uri,
               tdp::SE3f T_cr = rig.T_rcs_[cId].Inverse();
 
               // all PC and normals are in rig coordinates
-              tdp::Image<tdp::Vector3fda> pc_mli(w_l, h_l,
-                  pc_ml.ptr_+rgbdStream2cam[sId]*w_l*h_l);
-              tdp::Image<tdp::Vector3fda> pc_oli(w_l, h_l,
-                  pc_ol.ptr_+rgbdStream2cam[sId]*w_l*h_l);
-              tdp::Image<tdp::Vector3fda> n_mli(w_l, h_l,
-                  n_ml.ptr_+rgbdStream2cam[sId]*w_l*h_l);
-              tdp::Image<tdp::Vector3fda> n_oli(w_l, h_l,
-                  n_ol.ptr_+rgbdStream2cam[sId]*w_l*h_l);
+              tdp::Image<tdp::Vector3fda> pc_mli = pc_ml.GetRoi(0,
+                  rgbdStream2cam[sId]*h_l, w_l, h_l);
+              tdp::Image<tdp::Vector3fda> pc_oli = pc_ol.GetRoi(0,
+                  rgbdStream2cam[sId]*h_l, w_l, h_l);
+              tdp::Image<tdp::Vector3fda> n_mli = n_ml.GetRoi(0,
+                  rgbdStream2cam[sId]*h_l, w_l, h_l);
+              tdp::Image<tdp::Vector3fda> n_oli = n_ol.GetRoi(0,
+                  rgbdStream2cam[sId]*h_l, w_l, h_l);
 
               Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
               Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
