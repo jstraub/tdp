@@ -107,15 +107,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
-  tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
-  W.Fill(0.);
-  TSDF.Fill(-1.01);
-  tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
-
+  tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
+  TSDF.Fill(tdp::TSDFval(-1.01,0.));
+  tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
   tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
-  tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
 
   tdp::ManagedHostImage<float> dEst(wc, hc);
   tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
@@ -327,11 +322,9 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mo.matrix() = Eigen::Matrix4f::Identity();
-      W.Fill(0.);
-      TSDF.Fill(-1.01);
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
       dEst.Fill(0.);
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
-      tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
     }
     if (pangolin::Pushed(resetICP)) {
@@ -341,7 +334,7 @@ int main( int argc, char* argv[] )
     if (fuseTSDF || numFused <= 30) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuW, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
+      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
     }
@@ -400,9 +393,13 @@ int main( int argc, char* argv[] )
     tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
     viewTsdfDEst.SetImage(tsdfDEst);
 
-    tdp::Image<float> cuTsdfSlice =
+    tdp::Image<tdp::TSDFval> cuTsdfSlice =
       cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
-    tsdfSlice.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+    tdp::ManagedHostImage<tdp::TSDFval> tsdfSliceRaw(cuTsdfSlice.w_, 
+        cuTsdfSlice.h_);
+    tsdfSliceRaw.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+    for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
+      tsdfSlice[i] = tsdfSliceRaw[i].f;
     viewTsdfSliveView.SetImage(tsdfSlice);
 
     if (dispDepthPyrEst) {

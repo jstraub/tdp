@@ -129,15 +129,10 @@ void VideoViewer(const std::string& input_uri,
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_o(w,h);
 
-  tdp::ManagedHostVolume<float> W(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedHostVolume<float> TSDF(wTSDF, hTSDF, dTSDF);
-  W.Fill(0.);
-  TSDF.Fill(-1.01);
-  tdp::ManagedDeviceVolume<float> cuW(wTSDF, hTSDF, dTSDF);
-  tdp::ManagedDeviceVolume<float> cuTSDF(wTSDF, hTSDF, dTSDF);
-
+  tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
+  TSDF.Fill(tdp::TSDFval(-1.01,0.));
+  tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
   tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
-  tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -439,10 +434,8 @@ void VideoViewer(const std::string& input_uri,
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mr.matrix() = Eigen::Matrix4f::Identity();
-      W.Fill(0.);
-      TSDF.Fill(-1.01);
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
-      tdp::CopyVolume(W, cuW, cudaMemcpyHostToDevice);
       numFused = 0;
     }
     if (pangolin::Pushed(resetICP)) {
@@ -464,7 +457,7 @@ void VideoViewer(const std::string& input_uri,
         tdp::SE3f T_mo = T_mr+T_rc;
         tdp::Image<float> cuD_i(wSingle, hSingle,
             cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
-        AddToTSDF(cuTSDF, cuW, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+        AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu); 
       }
       numFused ++;
       TOCK("Add To TSDF");
