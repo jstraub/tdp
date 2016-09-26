@@ -131,6 +131,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf, Image<float> d,
       //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
       // since n is (0,0,-1):
       float d_d_in_r = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
+      if (d_d_in_r < 0.) continue; // ignore things behind
       // get intersection point in TSDF volume at depth z
       Vector2fda u_r = T_rd.translation().topRows(2) + r_d_in_r*d_d_in_r;
       int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
@@ -177,7 +178,9 @@ void KernelAddToTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
         grid0(1)+idy*dGrid(1),
         grid0(2)+idz*dGrid(2),1);
     // project the point into the depth frame
-    Eigen::Vector2f u_d = camD.Project(T_dr.matrix3x4()*p_r);
+    Eigen::Vector3f p_d = T_dr.matrix3x4()*p_r;
+    if (p_d(2) < 0.) return; // dont add to behind the camera.
+    Eigen::Vector2f u_d = camD.Project(p_d);
     int x = floor(u_d(0)+0.5);
     int y = floor(u_d(1)+0.5);
     if (0<=x&&x<d.w_ && 0<=y&&y<d.h_) {
@@ -276,6 +279,7 @@ void KernelRayTraceTSDF(Volume<float> tsdf,
       //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
       // since n is (0,0,-1):
       float d_d_in_r = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
+      if (d_d_in_r < 0.) continue; // ignore things behind
       // get intersection point in TSDF volume at depth z
       Vector2fda u_r = T_rd.translation().topRows(2) 
         + r_d_in_r.topRows(2)*d_d_in_r;

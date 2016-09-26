@@ -181,12 +181,12 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
-  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",0.,0.,1);
-  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,0);
-  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,0);
-  pangolin::Var<float> gridEz("ui.gridE z",3.5,2.,3);
+  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2.,0);
+  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,3);
+  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,3);
+  pangolin::Var<float> gridEz("ui.gridE z",3.0,2,3);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
