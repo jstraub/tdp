@@ -7,6 +7,8 @@
 #include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 
+#include <tdp/cuda/cuda.cuh>
+
 namespace tdp {
 
 // atomic add for double
@@ -79,7 +81,8 @@ void KernelSumReduction(
     Image<T> Isum,
     int N_PER_T
     ) {
-  __shared__ T sum[BLK_SIZE];
+  SharedMemory<T> smem;
+  T* sum = smem.getPointer();
   //const int tid = threadIdx.x;
   const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -120,23 +123,25 @@ float SumReduction(const Image<float>& I) {
   ComputeKernelParamsForArray(blocks,threads,N/10,256);
   ManagedDeviceImage<float> Isum(1,1);
   cudaMemset(Isum.ptr_, 0, sizeof(float));
-  KernelSumReduction<float,256><<<blocks,threads>>>(I,Isum,10);
+  KernelSumReduction<float,256><<<blocks,threads,
+    256*sizeof(float)>>>(I,Isum,10);
   checkCudaErrors(cudaDeviceSynchronize());
   float sum = 0.;
   cudaMemcpy(&sum,Isum.ptr_,sizeof(float), cudaMemcpyDeviceToHost);
   return sum;
 }
 
-Eigen::Vector3f SumReduction(const Image<Eigen::Vector3f>& I) {
+Vector3fda SumReduction(const Image<Vector3fda>& I) {
   size_t N = I.w_*I.h_;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,N/10,256);
-  ManagedDeviceImage<Eigen::Vector3f> Isum(1,1);
-  cudaMemset(Isum.ptr_, 0, sizeof(Eigen::Vector3f));
-  KernelSumReduction<Eigen::Vector3f,256><<<blocks,threads>>>(I,Isum,N/10);
+  ManagedDeviceImage<Vector3fda> Isum(1,1);
+  cudaMemset(Isum.ptr_, 0, sizeof(Vector3fda));
+  KernelSumReduction<Vector3fda,256><<<blocks,threads,
+    256*sizeof(Vector3fda)>>>(I,Isum,N/10);
   checkCudaErrors(cudaDeviceSynchronize());
-  Eigen::Vector3f sum = Eigen::Vector3f::Zero();
-  cudaMemcpy(&sum,Isum.ptr_,sizeof(Eigen::Vector3f), cudaMemcpyDeviceToHost);
+  Vector3fda sum = Vector3fda::Zero();
+  cudaMemcpy(&sum,Isum.ptr_,sizeof(Vector3fda), cudaMemcpyDeviceToHost);
   return sum;
 }
 

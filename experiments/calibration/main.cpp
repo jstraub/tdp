@@ -15,6 +15,7 @@
 #include <tdp/data/volume.h>
 #include <tdp/data/managed_volume.h>
 #include <tdp/data/image.h>
+#include <tdp/eigen/dense.h>
 #include <tdp/stats/hist.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/calibration/planeEstimation.h>
@@ -89,7 +90,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         CopyImage(dRaw, cuDraw, cudaMemcpyHostToDevice);
         ConvertDepthGpu(cuDraw, cuD, sensorScale, 0.1, 4.0);
 
-        Eigen::Vector3f nd(0,0,-1);
+        tdp::Vector3fda nd(0,0,-1);
         tdp::PlaneEstimation planeEstimator(&cuD,camD,huberAlpha.Get());
         //planeEstimator.Reset(&cuD,huberAlpha.Get());
         planeEstimator.Compute(nd, pow(10,planeEstEps), planeEstNumIter.Get());

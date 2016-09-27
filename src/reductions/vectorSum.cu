@@ -6,6 +6,7 @@
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/reductions/reductions.cuh>
+#include <tdp/cuda/cuda.cuh>
 
 namespace tdp {
 
@@ -16,7 +17,8 @@ __global__ void KernelVectorSum(Image<Vector3fda> x,
 {
   // sufficient statistics for whole blocksize
   // 3 (sum) + 1 (count) 
-  __shared__ Vector4fda xSSs[BLK_SIZE*K];
+  SharedMemory<Vector4fda> smem;
+  Vector4fda* xSSs = smem.getPointer();
 
   //const int tid = threadIdx.x;
   const int tid = threadIdx.x;
@@ -77,17 +79,23 @@ void VectorSum(Image<Vector3fda> cuX,
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,cuX.Area(),256,N_PER_T);
   if(K == 1){
-    KernelVectorSum<1,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<1,256><<<blocks,threads,
+      1*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==2){
-    KernelVectorSum<2,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<2,256><<<blocks,threads,
+      2*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==3){
-    KernelVectorSum<3,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<3,256><<<blocks,threads,
+      3*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==4){
-    KernelVectorSum<4,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<4,256><<<blocks,threads,
+      4*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==5){
-    KernelVectorSum<5,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<5,256><<<blocks,threads,
+      5*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==6){
-    KernelVectorSum<6,256><<<blocks,threads>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<6,256><<<blocks,threads,
+      6*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else{
     assert(false);
   }

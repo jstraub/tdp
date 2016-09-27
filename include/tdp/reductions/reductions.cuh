@@ -27,7 +27,7 @@ __device__ inline Vector3fda zero()
 // TODO: clearly templates should be used here but I cannot seem to
 // figure out how to do that
 float SumReduction(const Image<float>& I);
-Eigen::Vector3f SumReduction(const Image<Eigen::Vector3f>& I);
+Vector3fda SumReduction(const Image<Vector3fda>& I);
 
 template<typename T, int BLK_SIZE>
 __device__ inline void SumPyramidReduce(int tid, T* vals, T* out) {

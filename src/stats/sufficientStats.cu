@@ -4,8 +4,9 @@
 #include <tdp/data/managed_image.h>
 #include <tdp/cuda/cuda.h>
 #include <tdp/reductions/reductions.cuh>
-
 #include <tdp/stats/sufficientStats.h>
+
+#include <tdp/cuda/cuda.cuh>
 
 namespace tdp {
 
@@ -18,7 +19,8 @@ void KernelSufficientStats1stOrder(
     uint16_t k,
     int N_PER_T
     ) {
-  extern __shared__ Eigen::Matrix<T,D+1,1,Eigen::DontAlign> sum[];
+  SharedMemory<Eigen::Matrix<T,D+1,1,Eigen::DontAlign>> smem;
+  Eigen::Matrix<T,D+1,1,Eigen::DontAlign>* sum = smem.getPointer();
   //const int tid = threadIdx.x;
   const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -59,7 +61,8 @@ Vector4fda SufficientStats1stOrder(const Image<Vector3fda>& I) {
   ManagedDeviceImage<Vector4fda> Isum(1,1);
   cudaMemset(Isum.ptr_, 0, sizeof(Vector4fda));
   Image<uint16_t> z;
-  KernelSufficientStats1stOrder<float,3,256><<<blocks,threads>>>(I,Isum,z,0,10);
+  KernelSufficientStats1stOrder<float,3,256><<<blocks,threads,
+    256*sizeof(Eigen::Matrix<float,4,1,Eigen::DontAlign>)>>>(I,Isum,z,0,10);
   checkCudaErrors(cudaDeviceSynchronize());
   Vector4fda sum = Vector4fda::Zero();
   cudaMemcpy(&sum,Isum.ptr_,sizeof(Vector4fda), cudaMemcpyDeviceToHost);

@@ -12,6 +12,7 @@
 #include <tdp/camera/camera_poly.h>
 #include <tdp/reductions/reductions.cuh>
 #include <tdp/manifold/SE3.h>
+#include <tdp/cuda/cuda.cuh>
 
 namespace tdp {
 
@@ -36,8 +37,9 @@ __global__ void KernelICPStep(
   const int idS = id_*N_PER_T;
   const int N = pc_m.w_*pc_m.h_;
   const int idE = min(N,(id_+1)*N_PER_T);
-  __shared__ Eigen::Matrix<float,29,1,Eigen::DontAlign> sum[BLK_SIZE];
-  sum[tid] = Eigen::Matrix<float,29,1,Eigen::DontAlign>::Zero();
+  SharedMemory<Vector29fda> smem;
+  Vector29fda* sum = smem.getPointer();
+  sum[tid] = Vector29fda::Zero();
   for (int id=idS; id<idE; ++id) {
     const int idx = id%pc_o.w_;
     const int idy = id/pc_o.w_;
@@ -114,14 +116,17 @@ void ICPStep (
     float& error,
     float& count
     ) {
+  const size_t BLK_SIZE = 32;
   size_t N = pc_m.w_*pc_m.h_;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,N/10,32);
+  ComputeKernelParamsForArray(blocks,threads,N/10,BLK_SIZE);
   ManagedDeviceImage<float> out(29,1);
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
 
-  KernelICPStep<32,D,Derived><<<blocks,threads>>>(pc_m,n_m,pc_o,n_o,T_mo,T_cm,cam,
-      dotThr,distThr,10,out);
+  KernelICPStep<BLK_SIZE,D,Derived><<<blocks,threads,
+    BLK_SIZE*sizeof(Vector29fda)>>>(
+        pc_m,n_m,pc_o,n_o,T_mo,T_cm,cam,
+        dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(29,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
@@ -264,8 +269,9 @@ __global__ void KernelICPStepRotation(
   const int id_ = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = id_*N_PER_T;
   const int idE = min((int)pc_o.Area(),(id_+1)*N_PER_T);
-  __shared__ Eigen::Matrix<float,7,1,Eigen::DontAlign> sum[BLK_SIZE];
-  sum[tid] = Eigen::Matrix<float,7,1,Eigen::DontAlign>::Zero();
+  SharedMemory<Vector7fda> smem;
+  Vector7fda* sum = smem.getPointer();
+  sum[tid] = Vector7fda::Zero();
   for (int id=idS; id<idE; ++id) {
     const int idx = id%pc_o.w_;
     const int idy = id/pc_o.w_;
@@ -324,13 +330,16 @@ void ICPStepRotation (
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
     float& count
     ) {
+  const size_t BLK_SIZE = 32;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,pc_o.Area()/10,32);
+  ComputeKernelParamsForArray(blocks,threads,pc_o.Area()/10,BLK_SIZE);
   ManagedDeviceImage<float> out(7,1);
   cudaMemset(out.ptr_, 0, 7*sizeof(float));
 
-  KernelICPStepRotation<32><<<blocks,threads>>>(n_m,n_o,pc_o,T_mo,cam,
-      dotThr,10,out);
+  KernelICPStepRotation<BLK_SIZE><<<blocks,threads,
+    BLK_SIZE*sizeof(Vector7fda)>>>(
+        n_m,n_o,pc_o,T_mo,cam,
+        dotThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> nUpperTri(7,1);
   cudaMemcpy(nUpperTri.ptr_,out.ptr_,7*sizeof(float), cudaMemcpyDeviceToHost);

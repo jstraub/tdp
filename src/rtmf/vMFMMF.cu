@@ -10,6 +10,7 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/reductions/reductions.cuh>
 #include <tdp/nvidia/helper_cuda.h>
+#include <tdp/cuda/cuda.cuh>
 
 namespace tdp {
 
@@ -18,11 +19,17 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
     Image<uint32_t> z, Image<Vector3fda> mu, Image<float> pi, float
     *cost, float* W, int N_PER_T)
 {
-  //__shared__ float xi[BLOCK_SIZE*3];
-  __shared__ Vector3fda mui[K*6];
-  __shared__ float pik[K*6];
-  __shared__ float rho[BLOCK_SIZE];
-  __shared__ float Wi[BLOCK_SIZE];
+  SharedMemory<float> smem;
+  float* data = smem.getPointer();
+  float* pik = data;
+  float* rho = &data[K*6];
+  float* Wi = &data[K*6+BLOCK_SIZE]; 
+  Vector3fda* mui = (Vector3fda*)(&data[K*6+2*BLOCK_SIZE]);//[K*6];
+
+  //__shared__ Vector3fda mui[K*6];
+  //__shared__ float pik[K*6];
+  //__shared__ float rho[BLOCK_SIZE];
+  //__shared__ float Wi[BLOCK_SIZE];
   
   const int tid = threadIdx.x ;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -79,10 +86,16 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
     *cost, float* W, int N_PER_T)
 {
   //__shared__ float xi[BLOCK_SIZE*3];
-  __shared__ Vector3fda mui[K*6];
-  __shared__ float pik[K*6];
-  __shared__ float rho[BLOCK_SIZE];
-  __shared__ float Wi[BLOCK_SIZE];
+  SharedMemory<float> smem;
+  float* data = smem.getPointer();
+  float* pik = data;
+  float* rho = &data[K*6];
+  float* Wi = &data[K*6+BLOCK_SIZE]; 
+  Vector3fda* mui = (Vector3fda*)(&data[K*6+2*BLOCK_SIZE]);//[K*6];
+//  __shared__ Vector3fda mui[K*6];
+//  __shared__ float pik[K*6];
+//  __shared__ float rho[BLOCK_SIZE];
+//  __shared__ float Wi[BLOCK_SIZE];
   
   const int tid = threadIdx.x ;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -133,27 +146,28 @@ void MMFvMFCostFctAssignmentGPU( Image<Vector3fda> cuN,
   const int N_PER_T = 16;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256);
+  const size_t memsize_bytes = (256*2 + K*6)*sizeof(float)+K*6*sizeof(Vector3fda);
 
   if (K==1) {
-      MMFvMFCostFctAssignment<1,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<1,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==2) {
-      MMFvMFCostFctAssignment<2,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<2,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==3) {
-      MMFvMFCostFctAssignment<3,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<3,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==4) {
-      MMFvMFCostFctAssignment<4,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<4,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==5) {
-      MMFvMFCostFctAssignment<5,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<5,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==6) {
-      MMFvMFCostFctAssignment<6,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<6,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==7) {
-      MMFvMFCostFctAssignment<7,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<7,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   }
   checkCudaErrors(cudaDeviceSynchronize());
@@ -181,27 +195,28 @@ void MMFvMFCostFctAssignmentGPU(
   const int N_PER_T = 16;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256,N_PER_T);
+  const size_t memsize_bytes = (256*2 + K*6)*sizeof(float)+K*6*sizeof(Vector3fda);
 
   if (K==1) {
-      MMFvMFCostFctAssignment<1,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<1,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==2) {
-      MMFvMFCostFctAssignment<2,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<2,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==3) {
-      MMFvMFCostFctAssignment<3,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<3,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==4) {
-      MMFvMFCostFctAssignment<4,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<4,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==5) {
-      MMFvMFCostFctAssignment<5,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<5,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==6) {
-      MMFvMFCostFctAssignment<6,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<6,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   } else if (K==7) {
-      MMFvMFCostFctAssignment<7,256><<<blocks,threads>>>(
+      MMFvMFCostFctAssignment<7,256><<<blocks,threads,memsize_bytes>>>(
           cuN,cuWeights,cuZ,cuMu,cuPi,cuCost.ptr_,cuW.ptr_,N_PER_T);
   }
   checkCudaErrors(cudaDeviceSynchronize());
