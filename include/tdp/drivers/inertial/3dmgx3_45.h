@@ -11,6 +11,7 @@
 #include <tdp/inertial/imu_interface.h>
 #include <tdp/utils/threadedValue.hpp>
 #include <tdp/data/circular_buffer.h>
+#include <pangolin/utils/picojson.h>
 
 namespace tdp {
 
@@ -35,6 +36,10 @@ class Imu3DMGX3_45 : public ImuInterface {
 
   virtual void Start();
   virtual void Stop();
+
+  virtual pangolin::json::value GetProperties() {
+    return properties_;
+  }
 
   enum cmd_set {
     CMD_SET_BASIC = 0x01,
@@ -109,6 +114,8 @@ class Imu3DMGX3_45 : public ImuInterface {
  
   std::mutex circBufMutex_;
   tdp::ManagedHostCircularBuffer<ImuObs> circBuf_;
+
+  pangolin::json::value properties_;
 
   bool SelfTest();
   bool SetAHRSMsgFormat();

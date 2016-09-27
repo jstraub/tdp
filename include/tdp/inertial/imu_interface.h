@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tdp/inertial/imu_obs.h>
+#include <pangolin/utils/picojson.h>
 
 namespace tdp {
 
@@ -14,6 +15,8 @@ class ImuInterface {
 
   virtual void Start() = 0;
   virtual void Stop() = 0;
+
+  virtual pangolin::json::value GetProperties() = 0;
 
  private:
 

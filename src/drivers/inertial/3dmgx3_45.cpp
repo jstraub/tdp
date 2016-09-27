@@ -45,6 +45,18 @@ void Imu3DMGX3_45::Start() {
   serial_.set_option(FLOW_CTRL);
   serial_.set_option(STOP);
 
+  properties_ = pangolin::json::value::object();
+  properties_["type"] = "3DM-GX3-35";
+  properties_["baud_rate"] = 1000000;
+  properties_["rate"] = rate_;
+  properties_["format"] = pangolin::json::value::array();
+  properties_["format"].push_back(pangolin::json::value::object());
+  properties_["format"][0] = "compensated accelerometer";
+  properties_["format"].push_back(pangolin::json::value::object());
+  properties_["format"][1] = "compensated gyrometer";
+  properties_["format"].push_back(pangolin::json::value::object());
+  properties_["format"][2] = "compensated euler angles";
+
   //while(!Reset()) {}
   //std::cout << "reset device" << std::endl;
 
@@ -190,6 +202,7 @@ bool Imu3DMGX3_45::SetAHRSMsgFormat() {
     return false;
 	if (!CheckACK(recv,CMD_SET_3DM,CMD_3DM_AHRS_MSG_FORMAT)) 
     return false;
+
 	return true;
 }
 
@@ -303,6 +316,7 @@ bool Imu3DMGX3_45::ReceiveAHRS(ImuObs& imuObs) {
 	}
 
 	imuObs.t_host =  (int64_t)(curtime.tv_sec) * 1000000000 + (int64_t)(curtime.tv_nsec);
+  imuObs.t_device = -1;
   
 	imuObs.acc(0) = ExtractFloat(&recv[4]); // 0x04
 	imuObs.acc(1) = ExtractFloat(&recv[4+4]);

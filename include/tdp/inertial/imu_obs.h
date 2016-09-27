@@ -13,6 +13,8 @@ struct ImuObs {
 
   int64_t t_host;
   int64_t t_device;
+
+  static const int VERSION = 1;
 };
 
 }

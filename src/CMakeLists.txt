@@ -13,6 +13,7 @@ file(GLOB SRCS
   "./stats/*cpp"
   "./tsdf/*cpp"
   "./utils/*cpp"
+  "./inertial/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 

@@ -14,19 +14,22 @@
 
 #include <tdp/gui/quickView.h>
 #include <tdp/drivers/inertial/3dmgx3_45.h>
+#include <tdp/inertial/imu_outstream.h>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
 
 int main( int argc, char* argv[] )
 {
   const std::string dflt_output_uri = "pango://video.pango";
+  std::string input_uri = "";
   if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
+    input_uri = std::string(argv[1]);
   }
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GUI", 1000+menue_w, 800);
+  pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
 
   // Assume packed OpenGL data unless otherwise specified
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -61,8 +64,14 @@ int main( int argc, char* argv[] )
   plotters.AddDisplay(plotMag);
   container.AddDisplay(plotters);
 
-  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0", 10);
+  pangolin::Var<bool> logImu("ui.log IMU", true, true);
+  pangolin::Var<bool> verbose("ui.verbose", false, true);
+
+  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0", 100);
   imu.Start();
+
+  tdp::ImuOutStream imu_out("./testImu.pango");
+  imu_out.Open(input_uri, imu.GetProperties());
 
   tdp::SO3f R_wi;
   tdp::ImuObs imuObsPrev;
@@ -76,6 +85,12 @@ int main( int argc, char* argv[] )
     size_t numObs = 0;
     while(imu.GrabNext(imuObs)) {
 
+      if (verbose) {
+        std::cout << "t_device: " << imuObs.t_device 
+          << ", t_host: " << imuObs.t_host 
+          << std::endl;
+      }
+
       logAcc.Log(imuObs.acc(0),imuObs.acc(1),imuObs.acc(2));
       logMag.Log(imuObs.rpy(0), imuObs.rpy(1), imuObs.rpy(2));
       logOmega.Log(imuObs.omega(0), imuObs.omega(1), imuObs.omega(2));
@@ -83,6 +98,9 @@ int main( int argc, char* argv[] )
       R_wi = R_wi.Exp(imuObs.omega*1e-9*(imuObs.t_host-imuObsPrev.t_host));
       imuObsPrev = imuObs;
       numObs ++;
+
+      if (logImu)
+        imu_out.WriteStream(imuObs);
     }
 
     plotAcc.ScrollView(numObs,0);
@@ -105,6 +123,7 @@ int main( int argc, char* argv[] )
     pangolin::FinishFrame();
   }
   imu.Stop();
+  imu_out.Close();
 
   return 0;
 }

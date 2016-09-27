@@ -51,7 +51,6 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
         strides.push_back( (8*si.Pitch()) / si.PixFormat().bpp );
     }
 
-
     // current frame in memory buffer and displaying.
     pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
 
