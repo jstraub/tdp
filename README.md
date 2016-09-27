@@ -21,6 +21,17 @@ Make sure by running nvidia-smi. This should give you a nice view of the GPU sta
 Download cuda 8.0 https://developer.nvidia.com/cuda-downloads (runfile 16.04)
 DONT install the driver - ONLY install cuda 
 
+Make sure the binary and library path are setup correctly:
+```
+export PATH=/usr/local/cuda-8.0/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+```
+
+To check nvcc is working fine:
+```
+nvcc -V
+```
+
 To install the code:
 
 ```
