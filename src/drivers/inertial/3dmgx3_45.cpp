@@ -59,6 +59,11 @@ void Imu3DMGX3_45::Start() {
 
   //while(!Reset()) {}
   //std::cout << "reset device" << std::endl;
+  //
+//  ImuObs imuObs;
+//  if (ReceiveAHRS(imuObs)) {
+//    std::cout << "received AHRS successfully" << std::endl;
+//  }
 
   if (SendNoDataCmd(CMD_SET_BASIC, CMD_BASIC_PING)) {
     std::cout << "ping successfull" << std::endl;
@@ -186,9 +191,13 @@ bool Imu3DMGX3_45::SetAHRSMsgFormat() {
 	data.push_back(0x0);
 	data.push_back(100/rate_); // 20 Hz
 
-	data.push_back(0x0C); // euler angles (integration on sensor)
+//	data.push_back(0x0C); // euler angles (integration on sensor)
+//	data.push_back(0x0);
+//	data.push_back(100/rate_); // rate decimation -> 20 Hz
+
+	data.push_back(0x0E); // device time
 	data.push_back(0x0);
-	data.push_back(100/rate_); // rate decimation -> 20 Hz
+	data.push_back(100/rate_); // 20 Hz
 
 	AppendCRC(data);
 	Write(data);
@@ -297,7 +306,7 @@ bool Imu3DMGX3_45::PollAHRS(ImuObs& imuObs) {
 bool Imu3DMGX3_45::ReceiveAHRS(ImuObs& imuObs) {
 
   std::vector<uint8_t> recv;
-	size_t n = 46; 
+	size_t n = 38; //46; 
 	struct timespec curtime;
 	clock_gettime(CLOCK_REALTIME, &curtime);
 
@@ -331,14 +340,26 @@ bool Imu3DMGX3_45::ReceiveAHRS(ImuObs& imuObs) {
 	imuObs.omega(1) = ExtractFloat(&recv[18+4]);
 	imuObs.omega(2) = ExtractFloat(&recv[18+8]);
 
-	if (recv[30] != 0x0E || recv[31] != 0x0C) {
-    std::cerr << "AHRS: Wrong msg format (0x0C)." << std::endl;
+	if (recv[30] != 0x06 || recv[31] != 0x0E) {
+    std::cerr << "AHRS: Wrong msg format (0x0E)." << std::endl;
 		return false;
 	}
 
-	 imuObs.rpy(0)= ExtractFloat(&recv[32]); // 0x0C
-	 imuObs.rpy(1)= ExtractFloat(&recv[32+4]);
-	 imuObs.rpy(2)= ExtractFloat(&recv[32+8]);
+  // euler angles
+//	if (recv[30] != 0x0E || recv[31] != 0x0C) {
+//    std::cerr << "AHRS: Wrong msg format (0x0C)." << std::endl;
+//		return false;
+//	}
+//	 imuObs.rpy(0)= ExtractFloat(&recv[32]); // 0x0C
+//	 imuObs.rpy(1)= ExtractFloat(&recv[32+4]);
+//	 imuObs.rpy(2)= ExtractFloat(&recv[32+8]);
+
+	if (recv[30] != 0x06 || recv[31] != 0x0E) {
+    std::cerr << "AHRS: Wrong msg format (0x0E)." << std::endl;
+		return false;
+	}
+  // device time in nano seconds (the transmitted number is in 16us)
+	 imuObs.t_device = (int64_t)ExtractUint32(&recv[32])*16000;
 
 	/*quat.q0 = extractFloat(&recv[6]);
 	quat.q1 = extractFloat(&recv[6+4]);

@@ -13,6 +13,7 @@
 #include <pangolin/gl/glvbo.h>
 #include <pangolin/gl/gldraw.h>
 #include <pangolin/image/image_io.h>
+#include <pangolin/utils/timer.h>
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
@@ -30,58 +31,17 @@
 #include <tdp/camera/rig.h>
 
 #include <tdp/manifold/SE3.h>
-#include <thread>
-#include <mutex>
 #include <tdp/utils/threadedValue.hpp>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/inertial/imu_obs.h>
 #include <tdp/inertial/imu_outstream.h>
 #include <tdp/drivers/inertial/3dmgx3_45.h>
 #include <tdp/utils/Stopwatch.h>
+#include <tdp/inertial/pose_interpolator.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
 
-namespace tdp {
-
-class PoseInterpolator {
- public:  
-  PoseInterpolator()
-  {}
-  ~PoseInterpolator()
-  {}
-
-  /// Add a new <t,Pose> observation; 
-  /// IMPORTANT: the assumption is that poses come in in chronological
-  /// order.
-  void Add(int64_t t, const SE3f& T) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    ts_.push_back(t);
-    Ts_.push_back(T);
-  }
-
-  SE3f operator[](int64_t t) {
-    size_t i;
-    // lock while we are looking for index then release
-    mutex_.lock();
-    for(i=0; i<ts_.size(); ++t) if (ts_[i]-t >=0) break;
-    mutex_.unlock();
-
-    if (i>0) {
-      return Ts_[i-1].Exp(Ts_[i-1].Log(Ts_[i]) * (ts_[i-1]-t)*1e-6);
-    } else {
-      return Ts_[i];
-    }
-  }
-
- private:
-  std::vector<int64_t> ts_;
-  std::vector<SE3f> Ts_;
-  std::mutex mutex_;
-};
-
-
-}
 
 int main( int argc, char* argv[] )
 {
@@ -110,27 +70,17 @@ int main( int argc, char* argv[] )
   tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
       dStream2cam, rgbdStream2cam);
 
-  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0", 100);
-  imu.Start();
+  // optionally connect to IMU if it is found.
+  tdp::ImuInterface* imu = nullptr;
+  if (pangolin::FileExists("/dev/ttyACM0")) {
+    imu = new tdp::Imu3DMGX3_45("/dev/ttyACM0", 1);
+    imu->Start();
+  }
 
   tdp::PoseInterpolator imuInterp;
 
-  tdp::ThreadedValue<bool> receiveImu(true);
-  std::thread receiverThread (
-    [&]() {
-      tdp::ImuObs imuObs;
-      while(receiveImu.Get()) {
-        if (imu.GrabNext(imuObs)) {
-          imuInterp.Add(imuObs.t_host,
-              tdp::SE3f(tdp::SO3f::R_rpy(imuObs.rpy).matrix(),
-                Eigen::Vector3f(0,0,0)));
-        }
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
-      }
-    });
-
   tdp::ImuOutStream imu_out("./testImu.pango");
-  imu_out.Open(input_uri, imu.GetProperties());
+  imu_out.Open(input_uri, imu? imu->GetProperties() : pangolin::json::value());
 
   tdp::GUI gui(1200,800,video);
 
@@ -173,6 +123,7 @@ int main( int argc, char* argv[] )
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -183,6 +134,35 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> logData("ui.log data",false,true);
+  pangolin::Var<bool> verbose("ui.verbose ",true,true);
+  pangolin::Var<bool> collectStreams("ui.collect streams",true,true);
+
+  tdp::ThreadedValue<bool> receiveImu(true);
+  tdp::ThreadedValue<size_t> numReceived(0);
+  std::thread receiverThread (
+    [&]() {
+      tdp::ImuObs imuObs;
+      tdp::ImuObs imuObsPrev;
+      while(receiveImu.Get()) {
+        if (imu && imu->GrabNext(imuObs)) {
+
+          Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
+          se3.topRows(3) = imuObs.omega;
+          if (numReceived.Get() == 0) {
+            imuInterp.Add(imuObs.t_host, tdp::SE3f());
+          } else {
+            int64_t dt_ns = imuObs.t_device - imuObsPrev.t_device;
+            imuInterp.Add(imuObs.t_host, se3, dt_ns);
+          }
+          imuObsPrev = imuObs;
+          numReceived.Increment();
+
+          if (imu && logData)
+            imu_out.WriteStream(imuObs);
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+      }
+    });
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -191,72 +171,75 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
+    TICK("next frames");
     gui.NextFrames();
+    int64_t tNow = pangolin::Time_us(pangolin::TimeNow())*1000;
+    TOCK("next frames");
 
-    TICK("rgb collection");
-    // get rgb image
-    tdp::CollectRGB(rgbdStream2cam, gui, wSingle, hSingle, rgb,
-        cudaMemcpyHostToHost);
-//    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-//      tdp::Image<tdp::Vector3bda> rgbStream;
-//      if (!gui.ImageRGB(rgbStream, sId)) continue;
-//      int32_t cId = rgbdStream2cam[sId]; 
-//      tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
-//          wSingle, hSingle);
-//      rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
-//    }
-    TOCK("rgb collection");
-    TICK("depth collection");
-    // get depth image
-    tdp::CollectD<CameraT>(rgbdStream2cam, rig, gui, wSingle, hSingle, dMin, dMax,
-        cuDraw, cuD);
-//    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-//      tdp::Image<uint16_t> dStream;
-//      if (!gui.ImageD(dStream, sId)) continue;
-//      int32_t cId = rgbdStream2cam[sId]; 
-//      tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-//          wSingle, hSingle);
-//      cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
-//      // convert depth image from uint16_t to float [m]
-//      tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
-//          wSingle, hSingle);
-//      //float depthSensorScale = depthSensor1Scale;
-//      //if (cId==1) depthSensorScale = depthSensor2Scale;
-//      //if (cId==2) depthSensorScale = depthSensor3Scale;
-//      if (rig.depthScales_.size() > cId) {
-//        float a = rig.scaleVsDepths_[cId](0);
-//        float b = rig.scaleVsDepths_[cId](1);
-//        // TODO: dont need to load this every time
-//        cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
-//        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
-//      //} else {
-//      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
-//      }
-//    }
-    TOCK("depth collection");
+    if (verbose) std::cout << "collecting rgb frames" << std::endl;
+    if (collectStreams) {
+      TICK("rgb collection");
+      // get rgb image
+      tdp::CollectRGB(rgbdStream2cam, gui, wSingle, hSingle, rgb,
+          cudaMemcpyHostToHost);
+      TOCK("rgb collection");
+      if (verbose) std::cout << "collecting depth frames" << std::endl;
+      TICK("depth collection");
+      // get depth image
+      tdp::CollectD<CameraT>(rgbdStream2cam, rig, gui, wSingle,
+          hSingle, dMin, dMax, cuDraw, cuD);
+      d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      TOCK("depth collection");
+    }
+    TICK("pc and normals");
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId;
+      cId = dStream2cam[sId]; 
+      CameraT cam = rig.cams_[cId];
+      tdp::SE3f T_rc = rig.T_rcs_[cId];
 
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    // compute point cloud (on CPU)
-    tdp::Depth2PC(d,cam,pc);
+      tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      tdp::Image<float> cuD_i = cuD.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      // compute point cloud from depth in rig coordinate system
+      tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
+    }
+    pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+    TOCK("pc and normals");
 
+    Eigen::Matrix3f R_ir;
+    R_ir << 0, 0,-1,
+            0,-1, 0,
+           -1, 0, 0;
+    tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
+    tdp::SE3f T_wi = imuInterp[tNow]*T_ir; 
     // Draw 3D stuff
+    TICK("draw 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // draw the axis
-    pangolin::glDrawAxis(0.1);
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     // render point cloud
+    pangolin::glDrawAxis(1.0f);
+    pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
+    pangolin::glSetFrameOfReference(T_wi.matrix());
+    pangolin::glDrawAxis(1.2f);
     pangolin::RenderVboCbo(vbo,cbo,true);
+    pangolin::glUnsetFrameOfReference();
 
     viewImu.Activate(s_cam);
-    tdp::SE3f T_wi; 
+    pangolin::glDrawAxis(1.2f);
     pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
 
     glDisable(GL_DEPTH_TEST);
+    TOCK("draw 3D");
     // Draw 2D stuff
     // ShowFrames renders the raw input streams (in our case RGB and D)
+    TICK("draw 2D");
     gui.ShowFrames();
+    TOCK("draw 2D");
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -266,11 +249,12 @@ int main( int argc, char* argv[] )
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
     }
     // finish this frame
+    Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
   receiveImu.Set(false);
   receiverThread.join();
-  imu.Stop();
+  if (imu) imu->Stop();
   imu_out.Close();
   return 0;
 }

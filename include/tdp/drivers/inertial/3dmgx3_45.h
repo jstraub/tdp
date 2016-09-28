@@ -176,6 +176,15 @@ class Imu3DMGX3_45 : public ImuInterface {
     return tmp;
   }
 
+  uint32_t ExtractUint32(uint8_t* addr) {
+    uint32_t tmp;
+    *((uint8_t*)(&tmp) + 3) = *(addr);
+    *((uint8_t*)(&tmp) + 2) = *(addr+1);
+    *((uint8_t*)(&tmp) + 1) = *(addr+2);
+    *((uint8_t*)(&tmp)) = *(addr+3);
+    return tmp;
+  }
+
 };
 
 }

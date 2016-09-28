@@ -22,6 +22,11 @@ class ThreadedValue {
     val_ = val;
   }
 
+  void Increment() {
+    std::lock_guard<std::mutex> lock(mut_);
+    val_++;
+  }
+
  private:
   T val_;
   std::mutex mut_;
