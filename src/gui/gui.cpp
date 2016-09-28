@@ -3,8 +3,7 @@
 namespace tdp {
 
 GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
-  : iRGB(-1), iD(-1),
-    w(w), h(h), video(video), video_playback(nullptr),
+  : w(w), h(h), video(video), video_playback(nullptr),
   //frame("ui.frame", -1, 0, total_frames-1 ),
   frame("ui.frame", -1, 0, 0),
   record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 ),
@@ -165,11 +164,11 @@ GUI::GUI(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
         << " (pitch: " << si.Pitch() << " bytes)" << std::endl;
       if (si.PixFormat().format.compare(
             pangolin::VideoFormatFromString("GRAY16LE").format)==0) {
-        iD = s;
+        iD.push_back(s);
       }
       if (si.PixFormat().format.compare(
             pangolin::VideoFormatFromString("RGB24").format)==0) {
-        iRGB = s;
+        iRGB.push_back(s);
       }
     }
 }

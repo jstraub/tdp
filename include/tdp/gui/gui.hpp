@@ -35,17 +35,17 @@ class GUI {
 
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
 
-  bool ImageD(tdp::Image<uint16_t>& d) {
-    if (iD < 0) return false;
-    d = tdp::Image<uint16_t>(images[iD].w, images[iD].h,
-        images[iD].pitch, reinterpret_cast<uint16_t*>(images[iD].ptr));
+  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0) {
+    if (camId >= iD.size()) return false;
+    d = tdp::Image<uint16_t>(images[iD[camId]].w, images[iD[camId]].h,
+        images[iD[camId]].pitch, reinterpret_cast<uint16_t*>(images[iD[camId]].ptr));
     return true; 
   } 
-  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb) {
-    if (iRGB < 0) return false;
-    rgb = tdp::Image<tdp::Vector3bda>(images[iRGB].w, images[iRGB].h,
-        images[iRGB].pitch, 
-        reinterpret_cast<tdp::Vector3bda*>(images[iRGB].ptr));
+  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0) {
+    if (camId >= iRGB.size()) return false;
+    rgb = tdp::Image<tdp::Vector3bda>(images[iRGB[camId]].w, images[iRGB[camId]].h,
+        images[iRGB[camId]].pitch, 
+        reinterpret_cast<tdp::Vector3bda*>(images[iRGB[camId]].ptr));
     return true; 
   } 
 
@@ -63,7 +63,7 @@ class GUI {
     return pangolin::Display("container");
   }
 
-  int iRGB, iD;
+  std::vector<int> iRGB, iD;
 
   pangolin::Var<int> frame;
   pangolin::Var<int>  record_timelapse_frame_skip;
