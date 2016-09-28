@@ -20,6 +20,10 @@ struct Ray {
     return ray;
   }
 
+  Point3 PointAtDepth(T depth) {
+    return p+dir*d;
+  }
+
   Point3 p;
   Dir3 dir;
 };
