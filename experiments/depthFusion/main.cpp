@@ -64,7 +64,7 @@ int main( int argc, char* argv[] )
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  size_t dTSDF = 512;
+  size_t dTSDF = 128;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 

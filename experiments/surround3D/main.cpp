@@ -299,6 +299,7 @@ void VideoViewer(const std::string& input_uri,
       tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
     }
     TOCK("pc and normals");
+    if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
     TICK("Ray Trace TSDF");
     tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
     tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
