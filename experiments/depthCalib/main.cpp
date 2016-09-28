@@ -71,8 +71,8 @@ int main( int argc, char* argv[] )
 
   tdp::GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iD].Width();
-  size_t h = video.Streams()[gui.iD].Height();
+  size_t w = video.Streams()[gui.iD[0]].Width();
+  size_t h = video.Streams()[gui.iD[0]].Height();
 
   tdp::QuickView viewGrey(w,h);
   gui.container().AddDisplay(viewGrey);
