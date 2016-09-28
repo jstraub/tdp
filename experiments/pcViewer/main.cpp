@@ -42,8 +42,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iD].Width();
-  size_t h = video.Streams()[gui.iD].Height();
+  size_t w = video.Streams()[gui.iD[0]].Width();
+  size_t h = video.Streams()[gui.iD[0]].Height();
   size_t wc = w;
   size_t hc = h;
 

@@ -18,54 +18,9 @@
 #include <tdp/eigen/std_vector.h>
 #include <tdp/gui/gui.hpp>
 #include <tdp/manifold/SE3.h>
+#include <tdp/preproc/depth.h>
 
 namespace tdp {
-
-void CollectRGB(const std::vector<int32_t>& rgbdStream2cam, const GUI&
-    gui, size_t wSingle, size_t hSingle,
-    Image<Vector3bda>& rgb, cudaMemcpyType type) {
-
-  for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-    Image<Vector3bda> rgbStream;
-    if (!gui.ImageRGB(rgbStream, sId)) continue;
-    int32_t cId = rgbdStream2cam[sId]; 
-    Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
-        wSingle, hSingle);
-    rgb_i.CopyFrom(rgbStream,type);
-  }
-}
-
-void CollectD(const std::vector<int32_t>& rgbdStream2cam, 
-    const Rig& rig,
-    const GUI& gui, size_t wSingle, size_t hSingle,
-    float dMin, float dMax,
-    Image<float>& cuDraw,
-    Image<float>& cuD) {
-
-  for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-    tdp::Image<uint16_t> dStream;
-    if (!gui.ImageD(dStream, sId)) continue;
-    int32_t cId = rgbdStream2cam[sId]; 
-    tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-        wSingle, hSingle);
-    cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
-    // convert depth image from uint16_t to float [m]
-    tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
-        wSingle, hSingle);
-    //float depthSensorScale = depthSensor1Scale;
-    //if (cId==1) depthSensorScale = depthSensor2Scale;
-    //if (cId==2) depthSensorScale = depthSensor3Scale;
-    if (rig.depthScales_.size() > cId) {
-      float a = rig.scaleVsDepths_[cId](0);
-      float b = rig.scaleVsDepths_[cId](1);
-      // TODO: dont need to load this every time
-      cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
-      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
-      //} else {
-      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
-  }
-  }
-}
 
 
 template <class Cam>
@@ -245,5 +200,54 @@ bool CorrespondOpenniStreams2Cams(
   }
   return true;
 }
+
+void CollectRGB(const std::vector<int32_t>& rgbdStream2cam, const GUI&
+    gui, size_t wSingle, size_t hSingle,
+    Image<Vector3bda>& rgb, cudaMemcpyKind type) {
+
+  for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
+    Image<Vector3bda> rgbStream;
+    if (!gui.ImageRGB(rgbStream, sId)) continue;
+    int32_t cId = rgbdStream2cam[sId]; 
+    Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
+        wSingle, hSingle);
+    rgb_i.CopyFrom(rgbStream,type);
+  }
+}
+
+template<class CamT>
+void CollectD(const std::vector<int32_t>& rgbdStream2cam, 
+    const Rig<CamT>& rig,
+    const GUI& gui, size_t wSingle, size_t hSingle,
+    float dMin, float dMax,
+    Image<uint16_t>& cuDraw,
+    Image<float>& cuD) {
+
+  tdp::ManagedDeviceImage<float> cuScale(wSingle, hSingle);
+  for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
+    tdp::Image<uint16_t> dStream;
+    if (!gui.ImageD(dStream, sId)) continue;
+    int32_t cId = rgbdStream2cam[sId]; 
+    tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
+        wSingle, hSingle);
+    cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+    // convert depth image from uint16_t to float [m]
+    tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
+        wSingle, hSingle);
+    //float depthSensorScale = depthSensor1Scale;
+    //if (cId==1) depthSensorScale = depthSensor2Scale;
+    //if (cId==2) depthSensorScale = depthSensor3Scale;
+    if (rig.depthScales_.size() > cId) {
+      float a = rig.scaleVsDepths_[cId](0);
+      float b = rig.scaleVsDepths_[cId](1);
+      // TODO: dont need to load this every time
+      cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
+      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
+      //} else {
+      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+  }
+  }
+}
+
 
 }

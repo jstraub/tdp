@@ -33,6 +33,14 @@
 #include <thread>
 #include <mutex>
 #include <tdp/utils/threadedValue.hpp>
+#include <tdp/camera/camera_poly.h>
+#include <tdp/inertial/imu_obs.h>
+#include <tdp/inertial/imu_outstream.h>
+#include <tdp/drivers/inertial/3dmgx3_45.h>
+#include <tdp/utils/Stopwatch.h>
+
+typedef tdp::CameraPoly3<float> CameraT;
+//typedef tdp::Camera<float> CameraT;
 
 namespace tdp {
 
@@ -84,7 +92,7 @@ int main( int argc, char* argv[] )
 
   // Read rig file
   tdp::Rig<CameraT> rig;
-  if (!rig.FromFile(configPath, false)) return;
+  if (!rig.FromFile(configPath, false)) return 1;
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -92,7 +100,7 @@ int main( int argc, char* argv[] )
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 2;
   }
 
   std::vector<int32_t> rgbStream2cam;
@@ -111,7 +119,7 @@ int main( int argc, char* argv[] )
   std::thread receiverThread (
     [&]() {
       tdp::ImuObs imuObs;
-      while(receiveImu) {
+      while(receiveImu.Get()) {
         if (imu.GrabNext(imuObs)) {
           imuInterp.Add(imuObs.t_host,
               tdp::SE3f(tdp::SO3f::R_rpy(imuObs.rpy).matrix(),
@@ -126,8 +134,12 @@ int main( int argc, char* argv[] )
 
   tdp::GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iD].Width();
-  size_t h = video.Streams()[gui.iD].Height();
+  size_t wSingle = video.Streams()[0].Width();
+  size_t hSingle = video.Streams()[0].Height();
+  wSingle += wSingle%64;
+  hSingle += hSingle%64;
+  size_t w = wSingle;
+  size_t h = 3*hSingle;
   // width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
   w += w%64;
@@ -155,14 +167,12 @@ int main( int argc, char* argv[] )
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
-  tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -198,7 +208,7 @@ int main( int argc, char* argv[] )
     TOCK("rgb collection");
     TICK("depth collection");
     // get depth image
-    tdp::CollectD(rgbdStream2cam, rig, gui, wSingle, hSingle, dMin, dMax,
+    tdp::CollectD<CameraT>(rgbdStream2cam, rig, gui, wSingle, hSingle, dMin, dMax,
         cuDraw, cuD);
 //    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
 //      tdp::Image<uint16_t> dStream;
@@ -240,8 +250,7 @@ int main( int argc, char* argv[] )
     pangolin::RenderVboCbo(vbo,cbo,true);
 
     viewImu.Activate(s_cam);
-    tdp::SE3f T_wi = tdp::SE3f(tdp::SO3f::R_rpy(imuObs.rpy).matrix(), 
-        Eigen::Vector3f(1,0,0));
+    tdp::SE3f T_wi; 
     pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
 
     glDisable(GL_DEPTH_TEST);

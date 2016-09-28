@@ -38,8 +38,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iRGB].Width();
-  size_t h = video.Streams()[gui.iRGB].Height();
+  size_t w = video.Streams()[gui.iRGB[0]].Width();
+  size_t h = video.Streams()[gui.iRGB[0]].Height();
   size_t wc = w+w%64; // for convolution
   size_t hc = h+h%64;
 

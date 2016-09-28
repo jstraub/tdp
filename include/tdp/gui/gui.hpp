@@ -35,13 +35,13 @@ class GUI {
 
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
 
-  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0) {
+  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0) const {
     if (camId >= iD.size()) return false;
     d = tdp::Image<uint16_t>(images[iD[camId]].w, images[iD[camId]].h,
         images[iD[camId]].pitch, reinterpret_cast<uint16_t*>(images[iD[camId]].ptr));
     return true; 
   } 
-  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0) {
+  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0) const {
     if (camId >= iRGB.size()) return false;
     rgb = tdp::Image<tdp::Vector3bda>(images[iRGB[camId]].w, images[iRGB[camId]].h,
         images[iRGB[camId]].pitch, 

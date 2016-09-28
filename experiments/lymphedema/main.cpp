@@ -42,8 +42,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::GUI gui(1200,800,video);
 
-  size_t w = video.Streams()[gui.iD].Width();
-  size_t h = video.Streams()[gui.iD].Height();
+  size_t w = video.Streams()[0].Width();
+  size_t h = video.Streams()[0].Height();
   // width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
   w += w%64;

@@ -8,6 +8,7 @@
 #include <tdp/camera/projective_math.h>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/ray.h>
 
 namespace tdp {
 
@@ -50,10 +51,10 @@ inline bool RayTraceTSDFinZonly(
     // to get depth along r_d_in_r
     //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
     // since n is (0,0,-1):
-    float di = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
+    float di = (-z+r_d_in_r.p(2))/(-r_d_in_r.dir(2));
     if (di < 0.) continue; // ignore things behind
     // get intersection point in TSDF volume at depth z
-    Vector2fda u_r = T_rd.translation().topRows(2) + r_d_in_r*di;
+    Vector3fda u_r = r_d_in_r.PointAtDepth(di);
     int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
     int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
     if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
@@ -89,10 +90,10 @@ inline bool RayTraceTSDF(
   // find the dimension of TSDF Volume that is best aligned with the
   // ray direction
   int dimIt = 0;
-  r_d_in_r.dir.array().abs().maxCoeff(dimIt);
+  r_d_in_r.dir.array().abs().maxCoeff(&dimIt);
   int idItMax = dimIt == 0 ? tsdf.w_ : (dimIt == 1 ? tsdf.h_ : tsdf.d_);
   int idItMin = 0;
-  int dimInc = r_d_in_r(dimIt) < 0 ? -1 : 1;
+  int dimInc = r_d_in_r.dir(dimIt) < 0 ? -1 : 1;
   if (dimInc < 0) {
     idItMin = idItMax - 1;
     idItMax = -1;
@@ -102,7 +103,7 @@ inline bool RayTraceTSDF(
     Vector3fda nOverD = Vector3fda::Zero();
     nOverD(dimIt) = -dimInc/(grid0(dimIt)+idIt*dGrid(dimIt));
     // to get depth along r_d_in_r
-    float di = (-1 - r_d_in_r.p.dot(nOverD))/(r_d_in_r.dot(nOverD));
+    float di = (-1 - r_d_in_r.p.dot(nOverD))/(r_d_in_r.dir.dot(nOverD));
     if (di < 0.) continue; // ignore things behind
     // get intersection point in TSDF volume at depth z
     Vector3fda u_r = r_d_in_r.PointAtDepth(di);
@@ -143,7 +144,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
     n(idx,idy)(1) = NAN;
     n(idx,idy)(2) = NAN;
     // ray of depth image d 
-    Rayfda r_d(Vector3fda::Zero, camD.Unproject(idx, idy, 1.));
+    Rayfda r_d(Vector3fda::Zero(), camD.Unproject(idx, idy, 1.));
     // ray of depth image d in reference coordinates (TSDF)
     Rayfda r_d_in_r = r_d.Transform(T_rd);
 
@@ -154,7 +155,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
       d(idx,idy) = di;
       // surface normal: 
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
-          tsdf(idTSDF(0),idTSDF(1),idTSDF(2)), tsdf);
+          tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
       n(idx,idy) = T_rd.rotation().Inverse() * ni; 
     }
@@ -301,7 +302,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
     n_d(idx,idy)(2) = NAN;
     
     // ray of depth image d 
-    Rayfda r_d(Vector3fda::Zero, camD.Unproject(idx, idy, 1.));
+    Rayfda r_d(Vector3fda::Zero(), camD.Unproject(idx, idy, 1.));
     // ray of depth image d in reference coordinates (TSDF)
     Rayfda r_d_in_r = r_d.Transform(T_rd);
 
@@ -311,9 +312,9 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
       pc_d(idx,idy) = r_d.dir*di;
       // surface normal: 
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
-          tsdf(idTSDF(0),idTSDF(1),idTSDF(2)), tsdf);
+          tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
-      n(idx,idy) = T_rd.rotation().Inverse() * ni; 
+      n_d(idx,idy) = T_rd.rotation().Inverse() * ni; 
     }
 
 //    //Eigen::Vector3fda n(0,0,-1);
@@ -356,7 +357,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
 //      }
 //      di_Prev = di;
 //    }
-//  }
+  }
 }
 
 template<int D, typename Derived>
