@@ -105,13 +105,6 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
 
-  pangolin::View& viewImu = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(viewImu);
-  // add a simple image viewer
-  tdp::QuickView viewN2D(w,h);
-  gui.container().AddDisplay(viewN2D);
-
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   
@@ -217,21 +210,20 @@ int main( int argc, char* argv[] )
     // Draw 3D stuff
     TICK("draw 3D");
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
-    // draw the axis
-    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
-    // render point cloud
-    pangolin::glDrawAxis(1.0f);
-    pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
-    pangolin::glSetFrameOfReference(T_wi.matrix());
-    pangolin::glDrawAxis(1.2f);
-    pangolin::RenderVboCbo(vbo,cbo,true);
-    pangolin::glUnsetFrameOfReference();
 
-    viewImu.Activate(s_cam);
-    pangolin::glDrawAxis(1.2f);
-    pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
+    if (d_cam.IsShown()) {
+      d_cam.Activate(s_cam);
+      // draw the axis
+      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+      // render point cloud
+      pangolin::glDrawAxis(1.0f);
+      pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
+      pangolin::glSetFrameOfReference(T_wi.matrix());
+      pangolin::glDrawAxis(1.2f);
+      pangolin::RenderVboCbo(vbo,cbo,true);
+      pangolin::glUnsetFrameOfReference();
+    }
 
     glDisable(GL_DEPTH_TEST);
     TOCK("draw 3D");
