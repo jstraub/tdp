@@ -73,13 +73,13 @@ int main( int argc, char* argv[] )
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = nullptr;
   if (pangolin::FileExists("/dev/ttyACM0")) {
-    imu = new tdp::Imu3DMGX3_45("/dev/ttyACM0", 1);
+    imu = new tdp::Imu3DMGX3_45("/dev/ttyACM0", 100);
     imu->Start();
   }
 
   tdp::PoseInterpolator imuInterp;
 
-  tdp::ImuOutStream imu_out("./testImu.pango");
+  tdp::ImuOutStream imu_out("./imu.pango");
   imu_out.Open(input_uri, imu? imu->GetProperties() : pangolin::json::value());
 
   tdp::GUI gui(1200,800,video);
@@ -127,7 +127,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> logData("ui.log data",false,true);
-  pangolin::Var<bool> verbose("ui.verbose ",true,true);
+  pangolin::Var<bool> verbose("ui.verbose ",false,true);
   pangolin::Var<bool> collectStreams("ui.collect streams",true,true);
 
   tdp::ThreadedValue<bool> receiveImu(true);
@@ -150,8 +150,9 @@ int main( int argc, char* argv[] )
           imuObsPrev = imuObs;
           numReceived.Increment();
 
-          if (imu && logData)
+          if (imu && video.IsRecording()) {
             imu_out.WriteStream(imuObs);
+          }
         }
         std::this_thread::sleep_for(std::chrono::microseconds(100));
       }
