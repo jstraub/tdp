@@ -12,8 +12,8 @@
 namespace tdp {
 
 __device__ 
-inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal, const
-    Volume<TSDFval>& tsdf) {
+inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal,
+    const Volume<TSDFval>& tsdf, const Vector3fda& dGrid) {
   // surface normal: TODO might want to do better interpolation
   // of neighbors
   Vector3fda ni ( 
@@ -25,8 +25,9 @@ inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal, const
       : tsdfVal - tsdf(x,y,z-1).f);
   // apply weighting according to TSDF volume voxel side length
   // TODO: this is still not working: only nice results with d_==w_==h_
-  ni(0) *= (float)tsdf.d_/(float)tsdf.w_;
-  ni(1) *= (float)tsdf.d_/(float)tsdf.h_;
+  ni(0) /= dGrid(0);
+  ni(1) /= dGrid(1);
+  ni(2) /= dGrid(2);
   // negate to flip the normals to face the camera
   return -ni/ni.norm();
 }
