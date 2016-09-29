@@ -179,6 +179,12 @@ int main( int argc, char* argv[] )
     TICK("next frames");
     gui.NextFrames();
     int64_t tNow = pangolin::Time_us(pangolin::TimeNow())*1000;
+    Eigen::Matrix3f R_ir;
+    R_ir << 0, 0,-1,
+            0,-1, 0,
+           -1, 0, 0;
+    tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
+    tdp::SE3f T_wr = imuInterp[tNow]*T_ir; 
     TOCK("next frames");
 
     if (verbose) std::cout << "collecting rgb frames" << std::endl;
@@ -223,17 +229,11 @@ int main( int argc, char* argv[] )
           rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
       // compute point cloud from depth in rig coordinate system
       tdp::ComputeCameraRays(cam, cuRays_i);
-      tdp::TransformPc(T_rc, cuRays_i);
+      tdp::TransformPc(T_wr*T_rc, cuRays_i);
     }
     dirHist.ComputeGpu(cuRays);
     TOCK("rays");
 
-    Eigen::Matrix3f R_ir;
-    R_ir << 0, 0,-1,
-            0,-1, 0,
-           -1, 0, 0;
-    tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
-    tdp::SE3f T_wi = imuInterp[tNow]*T_ir; 
     // Draw 3D stuff
     TICK("draw 3D");
     glEnable(GL_DEPTH_TEST);
@@ -245,8 +245,8 @@ int main( int argc, char* argv[] )
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
       pangolin::glDrawAxis(1.0f);
-      pangolin::glDrawAxis<float>(T_wi.matrix(),0.8f);
-      pangolin::glSetFrameOfReference(T_wi.matrix());
+      pangolin::glDrawAxis<float>(T_wr.matrix(),0.8f);
+      pangolin::glSetFrameOfReference(T_wr.matrix());
       pangolin::glDrawAxis(1.2f);
       pangolin::RenderVboCbo(vbo,cbo,true);
       pangolin::glUnsetFrameOfReference();
