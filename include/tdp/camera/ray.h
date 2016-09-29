@@ -1,8 +1,15 @@
 #pragma once
 #include <Eigen/Dense>
 #include <tdp/manifold/SE3.h>
+#include <tdp/camera/camera_base.h>
 
 namespace tdp {
+
+template<int D, typename Derived>
+void ComputeCameraRays(
+    const CameraBase<float,D,Derived>& cam,
+    Image<Vector3fda>& ray 
+    );
 
 template <typename T, int Option = Eigen::ColMajor>
 struct Ray {

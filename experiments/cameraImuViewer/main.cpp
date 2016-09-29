@@ -39,6 +39,8 @@
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/inertial/pose_interpolator.h>
 #include <tdp/inertial/imu_factory.h>
+#include <tdp/directional/hist.h>
+#include <tdp/camera/ray.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -116,6 +118,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuRays(w, h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -128,6 +131,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> logData("ui.log data",false,true);
   pangolin::Var<bool> verbose("ui.verbose ",false,true);
   pangolin::Var<bool> collectStreams("ui.collect streams",true,true);
+
+  pangolin::Var<float> histScale("ui.hist scale",1.,0.1,1.);
+  pangolin::Var<bool> reset("ui.reset",true,false);
 
   tdp::ThreadedValue<bool> receiveImu(true);
   tdp::ThreadedValue<size_t> numReceived(0);
@@ -157,9 +163,15 @@ int main( int argc, char* argv[] )
       }
     });
 
+  tdp::GeodesicHist<3> dirHist;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (pangolin::Pushed(reset)) {
+      dirHist.Reset();
+    }
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -200,6 +212,21 @@ int main( int argc, char* argv[] )
     }
     pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
     TOCK("pc and normals");
+    TICK("rays");
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId;
+      cId = dStream2cam[sId]; 
+      CameraT cam = rig.cams_[cId];
+      tdp::SE3f T_rc = rig.T_rcs_[cId];
+
+      tdp::Image<tdp::Vector3fda> cuRays_i = cuRays.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      // compute point cloud from depth in rig coordinate system
+      tdp::ComputeCameraRays(cam, cuRays_i);
+      tdp::TransformPc(T_rc, cuRays_i);
+    }
+    dirHist.ComputeGpu(cuRays);
+    TOCK("rays");
 
     Eigen::Matrix3f R_ir;
     R_ir << 0, 0,-1,
@@ -223,6 +250,10 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAxis(1.2f);
       pangolin::RenderVboCbo(vbo,cbo,true);
       pangolin::glUnsetFrameOfReference();
+    }
+
+    if (viewDirHist3D.IsShown()) {
+      dirHist.Render3D(histScale, false);
     }
 
     glDisable(GL_DEPTH_TEST);
