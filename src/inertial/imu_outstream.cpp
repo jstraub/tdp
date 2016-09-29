@@ -2,6 +2,7 @@
 #include <tdp/inertial/imu_outstream.h>
 #include <pangolin/log/packetstream.h>
 #include <pangolin/utils/file_utils.h>
+#include <pangolin/utils/uri.h>
 #include <pangolin/utils/sigstate.h>
 #include <set>
 
@@ -17,12 +18,12 @@ void SigPipeHandler(int sig)
   pangolin::SigState::I().sig_callbacks.at(sig).value = true;
 }
 
-ImuOutStream::ImuOutStream(const std::string& path, size_t buffer_size_bytes) 
-  : filename(path), 
+ImuOutStream::ImuOutStream(const pangolin::Uri& uri, size_t buffer_size_bytes) 
+  : filename(pangolin::PathExpand(uri.url)), 
   packetstream_buffer_size_bytes(buffer_size_bytes),
   packetstreamsrcid(-1),
   first_frame(true),
-  is_pipe(pangolin::IsPipe(path))
+  is_pipe(pangolin::IsPipe(filename))
 {
   if(!is_pipe)
   {

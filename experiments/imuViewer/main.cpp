@@ -23,10 +23,12 @@
 
 int main( int argc, char* argv[] )
 {
-  const std::string dflt_output_uri = "pango://video.pango";
+  const std::string dflt_output_uri = "pango://imu.pango";
   std::string input_uri = "";
+  std::string output_uri = dflt_output_uri;
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
+    output_uri = argc > 2 ? std::string(argv[2]) : dflt_output_uri;
   }
 
   // Create OpenGL window - guess sensible dimensions
@@ -72,11 +74,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> applyCalib("ui.apply R_ir", false, true);
   pangolin::Var<bool> useTHost("ui.use t_host", false, true);
 
-  tdp::Imu3DMGX3_45 imu("/dev/ttyACM0", 100);
-  imu.Start();
+  tdp::ImuInterface* imu = tdp::OpenImu(input_uri);
+  if (!imu) return 1;
+  imu->Start();
 
-  tdp::ImuOutStream imu_out("./testImu.pango");
-  imu_out.Open(input_uri, imu.GetProperties());
+  tdp::ImuOutStream imu_out(pangolin::ParseUri(output_uri));
+  imu_out.Open(input_uri, imu->GetProperties());
 
   tdp::PoseInterpolator imuInterp;
   tdp::ThreadedValue<bool> receiveImu(true);
@@ -85,8 +88,8 @@ int main( int argc, char* argv[] )
     [&]() {
       tdp::ImuObs imuObs;
       tdp::ImuObs imuObsPrev;
-      while(receiveImu.Get()) {
-        if (imu.GrabNext(imuObs)) {
+      while(receiveimu->Get()) {
+        if (imu->GrabNext(imuObs)) {
 
           Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
           se3.topRows(3) = imuObs.omega;
@@ -150,7 +153,7 @@ int main( int argc, char* argv[] )
   }
   receiveImu.Set(false);
   receiverThread.join();
-  imu.Stop();
+  imu->Stop();
   imu_out.Close();
 
   return 0;

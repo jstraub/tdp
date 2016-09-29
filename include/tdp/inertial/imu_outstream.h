@@ -3,13 +3,14 @@
 #include <string>
 #include <tdp/inertial/imu_obs.h>
 #include <pangolin/utils/picojson.h>
+#include <pangolin/utils/uri.h>
 #include <pangolin/log/packetstream.h>
 
 namespace tdp {
 
 class ImuOutStream {
  public:
-  ImuOutStream(const std::string& path, size_t buffer_size_bytes = 1000);
+  ImuOutStream(const pangolin::Uri& uri, size_t buffer_size_bytes = 1000);
   ~ImuOutStream();
 
   bool IsOpen() const;

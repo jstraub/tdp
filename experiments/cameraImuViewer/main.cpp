@@ -38,6 +38,7 @@
 #include <tdp/drivers/inertial/3dmgx3_45.h>
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/inertial/pose_interpolator.h>
+#include <tdp/inertial/imu_factory.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -48,7 +49,8 @@ int main( int argc, char* argv[] )
   const std::string dflt_output_uri = "pango://video.pango";
   std::string input_uri = std::string(argv[1]);
   std::string configPath = std::string(argv[2]);
-  std::string output_uri = (argc > 3) ? std::string(argv[3]) : dflt_output_uri;
+  std::string imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+  std::string output_uri = (argc > 4) ? std::string(argv[4]) : dflt_output_uri;
 
   // Read rig file
   tdp::Rig<CameraT> rig;
@@ -71,16 +73,13 @@ int main( int argc, char* argv[] )
       dStream2cam, rgbdStream2cam);
 
   // optionally connect to IMU if it is found.
-  tdp::ImuInterface* imu = nullptr;
-  if (pangolin::FileExists("/dev/ttyACM0")) {
-    imu = new tdp::Imu3DMGX3_45("/dev/ttyACM0", 100);
-    imu->Start();
-  }
+  tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
+  if (imu) imu->Start();
 
   tdp::PoseInterpolator imuInterp;
 
   tdp::ImuOutStream imu_out("./imu.pango");
-  imu_out.Open(input_uri, imu? imu->GetProperties() : pangolin::json::value());
+  imu_out.Open(imu_input_uri, imu? imu->GetProperties() : pangolin::json::value());
 
   tdp::GUI gui(1200,800,video);
 
