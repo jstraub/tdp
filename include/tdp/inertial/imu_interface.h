@@ -16,7 +16,7 @@ class ImuInterface {
   virtual void Start() = 0;
   virtual void Stop() = 0;
 
-  virtual pangolin::json::value GetProperties() = 0;
+  virtual pangolin::json::value GetProperties() const = 0;
 
  private:
 

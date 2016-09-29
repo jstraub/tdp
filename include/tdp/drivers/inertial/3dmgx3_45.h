@@ -37,7 +37,7 @@ class Imu3DMGX3_45 : public ImuInterface {
   virtual void Start();
   virtual void Stop();
 
-  virtual pangolin::json::value GetProperties() {
+  virtual pangolin::json::value GetProperties() const {
     return properties_;
   }
 
