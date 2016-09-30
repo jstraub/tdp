@@ -27,7 +27,6 @@
 #include <tdp/preproc/normals.h>
 #endif
 
-#include <tdp/gui/gui.hpp>
 #include <tdp/camera/rig.h>
 
 #include <tdp/manifold/SE3.h>
@@ -46,6 +45,7 @@
 #include <tdp/directional/spherical_coordinates.h>
 
 #include <tdp/gl/gl_draw.h>
+#include <tdp/gui/gui_base.hpp>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -88,7 +88,7 @@ int main( int argc, char* argv[] )
   tdp::ImuOutStream imu_out("./imu.pango");
   imu_out.Open(imu_input_uri, imu? imu->GetProperties() : pangolin::json::value());
 
-  tdp::GUI gui(1200,800,video);
+  tdp::GuiBase gui(1200,800,video);
 
   size_t wSingle = video.Streams()[0].Width();
   size_t hSingle = video.Streams()[0].Height();
@@ -114,6 +114,11 @@ int main( int argc, char* argv[] )
   pangolin::View& viewDirHist3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewDirHist3D);
+
+  tdp::QuickView viewRGB(w,h);
+  gui.container().AddDisplay(viewRGB);
+  tdp::QuickView viewD(w,h);
+  gui.container().AddDisplay(viewD);
 
   tdp::QuickView viewDirHist2D(400,400);
   gui.container().AddDisplay(viewDirHist2D);
@@ -276,7 +281,8 @@ int main( int argc, char* argv[] )
     // Draw 2D stuff
     // ShowFrames renders the raw input streams (in our case RGB and D)
     TICK("draw 2D");
-    gui.ShowFrames();
+    viewRGB.SetImage(rgb);
+    viewD.SetImage(d);
 
     viewDirHist2D.ActivatePixelOrthographic();
     dirHist.Render2D(histScale, histLog, histShowEmpty);

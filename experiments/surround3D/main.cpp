@@ -34,7 +34,7 @@
 #include <tdp/preproc/normals.h>
 #endif
 
-#include "gui.hpp"
+#include <tdp/gui/gui_base.hpp>
 #include <tdp/camera/rig.h>
 #include <tdp/manifold/SE3.h>
 
@@ -66,7 +66,7 @@ void VideoViewer(const std::string& input_uri,
   tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
       dStream2cam, rgbdStream2cam);
 
-  tdp::GUInoViews gui(1200,800,video);
+  tdp::GuiBase gui(1200,800,video);
 
   size_t wSingle = video.Streams()[0].Width();
   size_t hSingle = video.Streams()[0].Height();

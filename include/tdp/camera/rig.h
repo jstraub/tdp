@@ -16,7 +16,7 @@
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/eigen/std_vector.h>
-#include <tdp/gui/gui.hpp>
+#include <tdp/gui/gui_base.hpp>
 #include <tdp/manifold/SE3.h>
 #include <tdp/preproc/depth.h>
 
@@ -201,7 +201,7 @@ bool CorrespondOpenniStreams2Cams(
   return true;
 }
 
-void CollectRGB(const std::vector<int32_t>& rgbdStream2cam, const GUI&
+void CollectRGB(const std::vector<int32_t>& rgbdStream2cam, const GuiBase&
     gui, size_t wSingle, size_t hSingle,
     Image<Vector3bda>& rgb, cudaMemcpyKind type) {
 
@@ -218,7 +218,7 @@ void CollectRGB(const std::vector<int32_t>& rgbdStream2cam, const GUI&
 template<class CamT>
 void CollectD(const std::vector<int32_t>& rgbdStream2cam, 
     const Rig<CamT>& rig,
-    const GUI& gui, size_t wSingle, size_t hSingle,
+    const GuiBase& gui, size_t wSingle, size_t hSingle,
     float dMin, float dMax,
     Image<uint16_t>& cuDraw,
     Image<float>& cuD) {

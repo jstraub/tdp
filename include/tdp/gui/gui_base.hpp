@@ -13,10 +13,10 @@
 
 namespace tdp {
 
-class GUInoViews {
+class GuiBase {
  public:
-  GUInoViews(size_t w, size_t h, pangolin::VideoRecordRepeat& video);
-  ~GUInoViews();
+  GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video);
+  ~GuiBase();
 
   void NextFrames() {
 
@@ -35,13 +35,13 @@ class GUInoViews {
 
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
 
-  bool ImageD(tdp::Image<uint16_t>& d, size_t camId) {
+  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0) const {
     if (camId >= iD.size()) return false;
     d = tdp::Image<uint16_t>(images[iD[camId]].w, images[iD[camId]].h,
         images[iD[camId]].pitch, reinterpret_cast<uint16_t*>(images[iD[camId]].ptr));
     return true; 
   } 
-  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId) {
+  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0) const {
     if (camId >= iRGB.size()) return false;
     rgb = tdp::Image<tdp::Vector3bda>(images[iRGB[camId]].w, images[iRGB[camId]].h,
         images[iRGB[camId]].pitch, 
@@ -65,13 +65,12 @@ class GUInoViews {
   pangolin::VideoRecordRepeat& video;
   std::vector<pangolin::Image<unsigned char> > images;
 
- private:
+ protected:
   size_t w;
   size_t h;
   pangolin::VideoPlaybackInterface* video_playback;
 
   std::vector<unsigned char> buffer;
-
 };
 
 }

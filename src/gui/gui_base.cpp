@@ -1,9 +1,10 @@
-#include "gui.hpp"
+#include <tdp/gui/gui_base.hpp>
 
 namespace tdp {
 
-GUInoViews::GUInoViews(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
+GuiBase::GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   : w(w), h(h), video(video), video_playback(nullptr),
+  //frame("ui.frame", -1, 0, total_frames-1 ),
   frame("ui.frame", -1, 0, 0),
   record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 ),
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
@@ -13,7 +14,7 @@ GUInoViews::GUInoViews(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
 {
     // Create OpenGL window - guess sensible dimensions
     int menue_w = 180;
-    pangolin::CreateWindowAndBind( "GUInoViews", w+menue_w, h);
+    pangolin::CreateWindowAndBind( "GuiBase", w+menue_w, h);
 
     // Assume packed OpenGL data unless otherwise specified
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -162,7 +163,7 @@ GUInoViews::GUInoViews(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
     }
 }
 
-GUInoViews::~GUInoViews()
+GuiBase::~GuiBase()
 {
 }
 
