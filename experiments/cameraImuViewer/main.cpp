@@ -45,6 +45,8 @@
 #include <tdp/inertial/imu_factory.h>
 #include <tdp/directional/spherical_coordinates.h>
 
+#include <tdp/gl/gl_draw.h>
+
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
 
@@ -143,6 +145,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> collectStreams("ui.collect streams",true,true);
 
   pangolin::Var<float> histScale("ui.hist scale",1.,0.1,1.);
+  pangolin::Var<bool> histLog("ui.hist log",true,true);
+  pangolin::Var<bool> histShowEmpty("ui.show empty",true,true);
   pangolin::Var<bool> reset("ui.reset",true,false);
 
   tdp::ThreadedValue<bool> receiveImu(true);
@@ -264,7 +268,7 @@ int main( int argc, char* argv[] )
 
     if (viewDirHist3D.IsShown()) {
       viewDirHist3D.Activate(s_cam);
-      dirHist.Render3D(histScale, false);
+      dirHist.Render3D(histScale, histLog);
     }
 
     glDisable(GL_DEPTH_TEST);
@@ -273,9 +277,11 @@ int main( int argc, char* argv[] )
     // ShowFrames renders the raw input streams (in our case RGB and D)
     TICK("draw 2D");
     gui.ShowFrames();
-    tdp::Image<tdp::Vector3bda> Ihist = dirHist.Render2D(histScale, false);
-    viewDirHist2D.SetImage(Ihist);
+
     viewDirHist2D.Activate();
+    tdp::Image<tdp::Vector3bda> Ihist = dirHist.Render2D(histScale,
+        histLog, histShowEmpty);
+    //viewDirHist2D.SetImage(Ihist);
     glColor4f(0,0,1,1);
     // plot some directions into the histogram to show where we are
     // currently collecting
@@ -290,7 +296,8 @@ int main( int argc, char* argv[] )
           Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
           int x1 = (phiTheta1(0)+M_PI)*399/(2.*M_PI);
           int y1 = phiTheta1(1)*199/(M_PI);
-          pangolin::glDrawCircle(x1,y1,1.);
+          //pangolin::glDrawCircle(x1,y1,0.1);
+          tdp::glDrawPoint(x1,y1);
         }
       }
     }

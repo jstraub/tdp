@@ -10,6 +10,7 @@
 #include <tdp/data/image.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/directional/spherical_coordinates.h>
+#include <tdp/gl/gl_draw.h>
 
 namespace tdp {
 
@@ -25,7 +26,9 @@ class GeodesicHist {
   ~GeodesicHist() {}
   
   void Render3D(float scale, bool logScale);
-  const tdp::Image<Vector3bda>& Render2D(float scale, bool logScale);
+  const tdp::Image<Vector3bda>& Render2D(float scale, bool logScale,
+      bool showEmpty);
+
   void Reset() { cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes()); }
   void ComputeGpu(Image<tdp::Vector3fda>& cuN);
 
@@ -90,7 +93,8 @@ void GeodesicHist<D>::RefreshLines(float scale, bool logScale) {
 }
 
 template<uint32_t D>
-const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale, bool logScale) {
+const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale,
+    bool logScale, bool showEmpty) {
   std::pair<double,double> minMax = hist_.MinMax();
   if (logScale) {
     minMax.first = log(minMax.first==0?1:minMax.first);
@@ -112,7 +116,16 @@ const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale, bool logSca
     float cVal = (hVal-minMax.first)/minMax.second;
 //    std::cout << theta << " " << phi << " " << iTheta << " " << iPhi << 
 //      " " << hVal << " " << cVal << std::endl;
-    Ihist_(iPhi, iTheta) = ColorMapHot(cVal);
+    if (showEmpty && hist_[i] == 0.) {
+      Ihist_(iPhi, iTheta) = Vector3bda(0,255,255);
+      glColor3f(0,1,1);
+    } else {
+      Vector3bda hot = ColorMapHot(cVal);
+      Ihist_(iPhi, iTheta) = hot;
+      glColor3f(hot(0)/255.f,hot(1)/255.f,hot(2)/255.f);
+    }
+    glDrawPoint(iPhi,iTheta); //display a point
+    //pangolin::glDrawCircle(iPhi,iTheta,1.);
     //Ihist_[iPhi, iTheta] = Vector3bda::Ones() * 255;
 //    std::cout << Ihist_[iPhi, iTheta].cast<int>().transpose() << std::endl;
   }
