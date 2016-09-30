@@ -1,4 +1,4 @@
-On 16.04: First make sure GPU is running use `nvidia-367` driver.  
+On 16.04: First make sure GPU is running use `nvidia-367` driver.
 
 ```
 sudo apt-get purge nvidia-*
@@ -19,7 +19,7 @@ sudo reboot
 Make sure by running nvidia-smi. This should give you a nice view of the GPU stats if all went well.
 
 Download cuda 8.0 https://developer.nvidia.com/cuda-downloads (runfile 16.04)
-DONT install the driver - ONLY install cuda 
+DONT install the driver - ONLY install cuda
 
 Make sure the binary and library path are setup correctly:
 ```
@@ -54,7 +54,7 @@ Now verify that the camera works with the librealsense samples by running `./bin
 
 From below you likely only need to compile this code (tdp) in your own
 clone of the repo in your home since the other libraries should all
-just be installed globally already. 
+just be installed globally already.
 
 ```
 cd /usr/src/gtest/
@@ -62,7 +62,7 @@ sudo su
 mkdir build
 cd build
 cmake ..
-make 
+make
 ln libgtest* /usr/lib/
 cd -
 ```
@@ -97,10 +97,14 @@ git fetch
 git checkout lymp
 ```
 mkdir build
-cd build 
+cd build
 cmake ..
 make -j
 ```
+
+Calibu
+------
+Calibu needs to be built using [this branch](https://github.com/jstraub/Calibu/tree/fixesJstraub).
 
 To test the sensor, connect it to usb3.0 and run
 cd
