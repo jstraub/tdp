@@ -63,7 +63,7 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotAcc(&logAcc, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
   plotters.AddDisplay(plotAcc);
   pangolin::DataLog logOmega;
-  pangolin::Plotter plotOmega(&logOmega, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
+  pangolin::Plotter plotOmega(&logOmega, -1000.f,1.f, -1.f,1.f, 10.f, 0.1f);
   plotters.AddDisplay(plotOmega);
   pangolin::DataLog logMag;
   pangolin::Plotter plotMag(&logMag, -1000.f,1.f, -10.f,10.f, 10.f, 0.1f);
@@ -89,8 +89,28 @@ int main( int argc, char* argv[] )
     [&]() {
       tdp::ImuObs imuObs;
       tdp::ImuObs imuObsPrev;
+      bool calibrated = false;
+      Eigen::Vector3f gyro_bias = Eigen::Vector3f::Zero();
+      int numCalib = 0;
       while(receiveImu.Get()) {
         if (imu->GrabNext(imuObs)) {
+
+          if (logImu)
+            imu_out.WriteStream(imuObs);
+
+          if (!calibrated && numReceived.Get() > 10 
+            && imuObs.omega.norm() < 2./180.*M_PI) {
+            gyro_bias += imuObs.omega;
+            numCalib ++;
+            std::cout << imuObs.omega.norm()*180./M_PI << std::endl;
+          } else if (!calibrated && numReceived.Get() > 10) {
+            calibrated = true;
+            gyro_bias /= numCalib;
+            std::cout << "IMU gyro calibrated: " << gyro_bias.transpose() 
+              << std::endl;
+          } else {
+            imuObs.omega -= gyro_bias;
+          }
 
           Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
           se3.topRows(3) = imuObs.omega;
@@ -107,8 +127,6 @@ int main( int argc, char* argv[] )
           logMag.Log(imuObs.rpy(0), imuObs.rpy(1), imuObs.rpy(2));
           logOmega.Log(imuObs.omega(0), imuObs.omega(1), imuObs.omega(2));
 
-          if (logImu)
-            imu_out.WriteStream(imuObs);
         }
         std::this_thread::sleep_for(std::chrono::microseconds(100));
       }
