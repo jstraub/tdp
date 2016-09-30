@@ -115,7 +115,7 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewDirHist3D);
 
-  tdp::QuickView viewDirHist2D(400,200);
+  tdp::QuickView viewDirHist2D(400,400);
   gui.container().AddDisplay(viewDirHist2D);
 
   // camera model for computing point cloud and normals
@@ -278,13 +278,12 @@ int main( int argc, char* argv[] )
     TICK("draw 2D");
     gui.ShowFrames();
 
-    viewDirHist2D.Activate();
-    tdp::Image<tdp::Vector3bda> Ihist = dirHist.Render2D(histScale,
-        histLog, histShowEmpty);
-    //viewDirHist2D.SetImage(Ihist);
+    viewDirHist2D.ActivatePixelOrthographic();
+    dirHist.Render2D(histScale, histLog, histShowEmpty);
     glColor4f(0,0,1,1);
     // plot some directions into the histogram to show where we are
     // currently collecting
+    glPointSize(1);
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId;
       cId = dStream2cam[sId]; 
@@ -294,8 +293,8 @@ int main( int argc, char* argv[] )
         for (size_t v=0; v<hSingle; v += 20) {
           Eigen::Vector3f p1 = T_wc.rotation() * cam.Unproject(u,v,1.);
           Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
-          int x1 = (phiTheta1(0)+M_PI)*399/(2.*M_PI);
-          int y1 = phiTheta1(1)*199/(M_PI);
+          int y1 = (phiTheta1(0)+M_PI)*399/(2.*M_PI);
+          int x1 = phiTheta1(1)*199/(M_PI);
           //pangolin::glDrawCircle(x1,y1,0.1);
           tdp::glDrawPoint(x1,y1);
         }

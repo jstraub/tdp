@@ -26,7 +26,7 @@ class GeodesicHist {
   ~GeodesicHist() {}
   
   void Render3D(float scale, bool logScale);
-  const tdp::Image<Vector3bda>& Render2D(float scale, bool logScale,
+  void Render2D(float scale, bool logScale,
       bool showEmpty);
 
   void Reset() { cudaMemset(cuHist_.ptr_,0,cuHist_.SizeBytes()); }
@@ -43,16 +43,13 @@ class GeodesicHist {
   pangolin::GlBuffer vbo_;
   pangolin::GlBuffer cbo_;
 
-  ManagedHostImage<Vector3bda> Ihist_;
-
   void RefreshLines(float scale, bool logScale);
 };
 
 template<uint32_t D>
 GeodesicHist<D>::GeodesicHist() : cuTriCenters_(geoGrid_.NTri(),1), 
   cuHist_(geoGrid_.NTri(),1),
-  hist_(geoGrid_.NTri(),1),
-  Ihist_(400,200)
+  hist_(geoGrid_.NTri(),1)
 {
   cudaMemcpy(cuTriCenters_.ptr_, &(geoGrid_.tri_centers_[0]), 
       geoGrid_.NTri()*sizeof(tdp::Vector3fda), cudaMemcpyHostToDevice);
@@ -93,7 +90,7 @@ void GeodesicHist<D>::RefreshLines(float scale, bool logScale) {
 }
 
 template<uint32_t D>
-const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale,
+void GeodesicHist<D>::Render2D(float scale,
     bool logScale, bool showEmpty) {
   std::pair<double,double> minMax = hist_.MinMax();
   if (logScale) {
@@ -101,11 +98,11 @@ const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale,
     minMax.second = log(minMax.second);
   }
   std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
-  Ihist_.Fill(Vector3bda::Zero());
 
-  float dTheta = (Ihist_.h_-1)/M_PI;
-  float dPhi = (Ihist_.w_-1)/(2.*M_PI);
+  float dTheta = (200-1)/M_PI;
+  float dPhi = (400-1)/(2.*M_PI);
 
+  glPointSize(4);
   for (size_t i=0; i<cs.size(); ++i) {
     Eigen::Vector3f phiTheta = ToSpherical(cs[i]);
     float theta = phiTheta(1);
@@ -117,19 +114,13 @@ const tdp::Image<Vector3bda>& GeodesicHist<D>::Render2D(float scale,
 //    std::cout << theta << " " << phi << " " << iTheta << " " << iPhi << 
 //      " " << hVal << " " << cVal << std::endl;
     if (showEmpty && hist_[i] == 0.) {
-      Ihist_(iPhi, iTheta) = Vector3bda(0,255,255);
       glColor3f(0,1,1);
     } else {
       Vector3bda hot = ColorMapHot(cVal);
-      Ihist_(iPhi, iTheta) = hot;
       glColor3f(hot(0)/255.f,hot(1)/255.f,hot(2)/255.f);
     }
-    glDrawPoint(iPhi,iTheta); //display a point
-    //pangolin::glDrawCircle(iPhi,iTheta,1.);
-    //Ihist_[iPhi, iTheta] = Vector3bda::Ones() * 255;
-//    std::cout << Ihist_[iPhi, iTheta].cast<int>().transpose() << std::endl;
+    glDrawPoint(iTheta,iPhi); //display a point
   }
-  return Ihist_;
 }
 
 template<uint32_t D>
