@@ -299,7 +299,7 @@ int main( int argc, char* argv[] )
         for (size_t v=0; v<hSingle; v += 20) {
           Eigen::Vector3f p1 = T_wc.rotation() * cam.Unproject(u,v,1.);
           Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
-          int y1 = (phiTheta1(0)+M_PI)*399/(2.*M_PI);
+          int y1 = (-phiTheta1(0)+M_PI)*199/(2.*M_PI);
           int x1 = phiTheta1(1)*199/(M_PI);
           //pangolin::glDrawCircle(x1,y1,0.1);
           tdp::glDrawPoint(x1,y1);

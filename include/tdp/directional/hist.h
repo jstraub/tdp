@@ -100,13 +100,13 @@ void GeodesicHist<D>::Render2D(float scale,
   std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
 
   float dTheta = (200-1)/M_PI;
-  float dPhi = (400-1)/(2.*M_PI);
+  float dPhi = (200-1)/(2.*M_PI);
 
   glPointSize(4);
   for (size_t i=0; i<cs.size(); ++i) {
     Eigen::Vector3f phiTheta = ToSpherical(cs[i]);
     float theta = phiTheta(1);
-    float phi = phiTheta(0) + M_PI;
+    float phi = -(phiTheta(0) - M_PI);
     int iTheta = floor(theta*dTheta);
     int iPhi = floor(phi*dPhi);
     float hVal = logScale? log(hist_[i]==0?1:hist_[i]) : hist_[i];
