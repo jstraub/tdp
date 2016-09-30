@@ -18,8 +18,8 @@ void SigPipeHandler(int sig)
   pangolin::SigState::I().sig_callbacks.at(sig).value = true;
 }
 
-ImuOutStream::ImuOutStream(const pangolin::Uri& uri, size_t buffer_size_bytes) 
-  : filename(pangolin::PathExpand(uri.url)), 
+ImuOutStream::ImuOutStream(const std::string& path, size_t buffer_size_bytes) 
+  : filename(path), 
   packetstream_buffer_size_bytes(buffer_size_bytes),
   packetstreamsrcid(-1),
   first_frame(true),

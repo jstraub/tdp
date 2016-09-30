@@ -42,6 +42,8 @@
 #include <tdp/directional/hist.h>
 #include <tdp/camera/ray.h>
 
+#include <tdp/inertial/imu_factory.h>
+
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
 
@@ -105,6 +107,10 @@ int main( int argc, char* argv[] )
   pangolin::View& d_cam = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
+
+  pangolin::View& viewDirHist3D = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewDirHist3D);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 

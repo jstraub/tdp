@@ -14,13 +14,14 @@
 
 namespace tdp {
 
-ImuInterface* OpenImu(const pangolin::Uri& uri) {
+ImuInterface* OpenImu(const std::string& uri_str) {
   ImuInterface* imu = nullptr;
+  const pangolin::Uri uri = pangolin::ParseUri(uri_str);
   
   if (!uri.scheme.compare("file")) {
     const bool realtime = uri.Contains("realtime");
     const std::string path = pangolin::PathExpand(uri.url);
-    imu = new ImuPango(path.c_str(), realtime);
+    imu = new ImuPango(path, realtime);
   }
 #ifdef ASIO_FOUND
   else if (!uri.scheme.compare("3dmgx3")) {

@@ -95,6 +95,7 @@ class Camera : public CameraBase<T,4,Camera<T>> {
 
 typedef Camera<float> Cameraf;
 typedef Camera<double> Camerad;
+typedef CameraBase<float,Camera<float>::NumParams,Camera<float>> BaseCameraf;
 
 template<typename T>
 Camera<T> ScaleCamera(const Camera<T>& cam, T scale) {

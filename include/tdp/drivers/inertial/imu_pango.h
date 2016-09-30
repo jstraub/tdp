@@ -16,8 +16,8 @@ class ImuPango : public ImuInterface {
   virtual void Start();
   virtual void Stop();
 
-  virtual pangolin::json::value GetProperties();
-  virtual pangolin::json::value GetFrameProperties();
+  virtual pangolin::json::value GetProperties() const;
+  virtual pangolin::json::value GetFrameProperties() const;
  private:
 
   void HandlePipeClosed();
@@ -32,6 +32,6 @@ class ImuPango : public ImuInterface {
   bool is_pipe;
   bool is_pipe_open;
   int pipe_fd;
-}
+};
 
 }

@@ -1,5 +1,13 @@
 #include <tdp/inertial/imu_obs.h>
 #include <tdp/drivers/inertial/imu_pango.h>
+#include <pangolin/utils/file_utils.h>
+
+#include <pangolin/utils/file_utils.h>
+#include <pangolin/compat/bind.h>
+
+#ifndef _WIN_
+#  include <unistd.h>
+#endif
 
 namespace tdp {
 
@@ -15,16 +23,13 @@ ImuPango::ImuPango(const std::string& filename, bool realtime)
   src_id = 0; //FindSource();
   size_bytes = sizeof(ImuObs);
 
-  if(src_id == -1) {
-    throw pangolin::VideoException("No appropriate video streams found in log.");
-  }
 }
 
 ImuPango::~ImuPango()
 {
 #ifndef _WIN_
     if (pipe_fd != -1) {
-        close(pipe_fd);
+      close(pipe_fd);
     }
 #endif
 }

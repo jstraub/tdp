@@ -2,8 +2,6 @@
 #include <Eigen/Dense>
 #include <tdp/config.h>
 #include <pangolin/utils/picojson.h>
-#include <tdp/camera/camera.h>
-#include <tdp/camera/camera_poly.h>
 
 namespace tdp {
 
@@ -71,7 +69,5 @@ CameraBase<T,D,Derived> ScaleCamera(const CameraBase<T,D,Derived>& cam, T scale)
   return CameraBase<T,D,Derived>(paramsScaled);
 };
 
-typedef CameraBase<float,Camera<float>::NumParams,Camera<float>> CameraBaseCameraf;
-typedef CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> CameraBaseCameraPoly3f;
 
 }

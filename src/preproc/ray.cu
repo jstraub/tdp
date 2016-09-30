@@ -4,7 +4,10 @@
 #include <Eigen/Dense>
 #include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/cuda/cuda.h>
 #include <tdp/camera/camera_base.h>
+#include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
 
 namespace tdp {
 
@@ -29,20 +32,16 @@ void ComputeCameraRays(
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,ray,32,32);
-  KernelDepth2PC<D,Derived><<<blocks,threads>>>(cam,ray);
+  KernelRay<D,Derived><<<blocks,threads>>>(cam,ray);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
 template void ComputeCameraRays(
-    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    const BaseCameraf& cam,
     Image<Vector3fda>& ray 
     );
 template void ComputeCameraRays(
-    const CameraBaseCameraf& cam,
-    Image<Vector3fda>& ray 
-    );
-template void ComputeCameraRays(
-    const CameraBaseCameraPoly3f& cam,
+    const BaseCameraPoly3f& cam,
     Image<Vector3fda>& ray 
     );
 

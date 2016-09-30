@@ -140,6 +140,7 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
 
 typedef CameraPoly3<float>  CameraPoly3f;
 typedef CameraPoly3<double> CameraPoly3d;
+typedef CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> BaseCameraPoly3f;
 
 template<typename T>
 CameraPoly3<T> ScaleCamera(const CameraPoly3<T>& cam, T scale) {

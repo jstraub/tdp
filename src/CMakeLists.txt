@@ -14,6 +14,7 @@ file(GLOB SRCS
   "./tsdf/*cpp"
   "./utils/*cpp"
   "./inertial/*cpp"
+  "./drivers/inertial/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 

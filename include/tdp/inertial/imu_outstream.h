@@ -10,7 +10,7 @@ namespace tdp {
 
 class ImuOutStream {
  public:
-  ImuOutStream(const pangolin::Uri& uri, size_t buffer_size_bytes = 1000);
+  ImuOutStream(const std::string& path, size_t buffer_size_bytes = 1000);
   ~ImuOutStream();
 
   bool IsOpen() const;

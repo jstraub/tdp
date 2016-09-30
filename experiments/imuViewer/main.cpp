@@ -20,10 +20,11 @@
 #include <tdp/manifold/SE3.h>
 
 #include <tdp/inertial/pose_interpolator.h>
+#include <tdp/inertial/imu_factory.h>
 
 int main( int argc, char* argv[] )
 {
-  const std::string dflt_output_uri = "pango://imu.pango";
+  const std::string dflt_output_uri = "./imu.pango";
   std::string input_uri = "";
   std::string output_uri = dflt_output_uri;
   if( argc > 1 ) {
@@ -78,7 +79,7 @@ int main( int argc, char* argv[] )
   if (!imu) return 1;
   imu->Start();
 
-  tdp::ImuOutStream imu_out(pangolin::ParseUri(output_uri));
+  tdp::ImuOutStream imu_out(output_uri);
   imu_out.Open(input_uri, imu->GetProperties());
 
   tdp::PoseInterpolator imuInterp;
@@ -88,7 +89,7 @@ int main( int argc, char* argv[] )
     [&]() {
       tdp::ImuObs imuObs;
       tdp::ImuObs imuObsPrev;
-      while(receiveimu->Get()) {
+      while(receiveImu.Get()) {
         if (imu->GrabNext(imuObs)) {
 
           Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
