@@ -3,6 +3,7 @@
  */
 #pragma once
 #include <assert.h>
+#include <tdp/config.h>
 #include <tdp/data/allocator.h>
 #ifdef CUDA_FOUND
 #  include <tdp/data/allocator_gpu.h>

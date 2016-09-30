@@ -27,7 +27,7 @@ find_package (CUDA QUIET)
 if (CUDA_FOUND)
   list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__")
   include_directories(${CUDA_TOOLKIT_INCLUDE})
-  add_definitions(-DCUDA_FOUND)
+  #add_definitions(-DCUDA_FOUND)
   if (${CUDA_VERSION} LESS 8.0)
     message("CUDA below 8.0")
     list(APPEND CUDA_NVCC_FLAGS ";-std=c++11")
@@ -72,6 +72,7 @@ find_package (ASIO QUIET)
 if (ASIO_FOUND) 
   message("found ASIO")
   include_directories(${ASIO_INCLUDE_DIRS})
+  #add_definitions(-DASIO_FOUND)
 endif()
 
 include_directories(
@@ -79,6 +80,7 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_DIR}/include
   ${Pangolin_DIR}/../../include
+  ${CMAKE_BINARY_DIR}/include
 )
 
 link_directories(
@@ -89,3 +91,6 @@ link_directories(
 add_subdirectory(./test)
 add_subdirectory(./experiments)
 add_subdirectory(./src)
+
+configure_file(./include/tdp/config.h.in ./include/tdp/config.h)
+

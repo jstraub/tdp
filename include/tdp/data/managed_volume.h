@@ -1,5 +1,8 @@
-
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once
+#include <tdp/config.h>
 #include <assert.h>
 #include <tdp/data/allocator.h>
 #ifdef CUDA_FOUND

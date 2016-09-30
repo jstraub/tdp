@@ -13,3 +13,10 @@
 #else
 #  define TDP_HOST_DEVICE
 #endif
+
+#cmakedefine CUDA_FOUND
+#cmakedefine ASIO_FOUND
+#cmakedefine OPENNI2_FOUND
+#cmakedefine Calibu_FOUND
+
+
