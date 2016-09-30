@@ -51,7 +51,7 @@ class PoseInterpolator {
       float factor = (float)(ts_[i]-t)/(float)(ts_[i]-ts_[i-1]);
 //      std::cout <<  "PoseInterpolator: interpolating " << i << ", " << (ts_[i]-t)*1e-9 << " " << factor << std::endl;
       return Ts_[i-1].Exp(Ts_[i-1].Log(Ts_[i]) * factor);
-    } else if (i==ts_.size()) {
+    } else if (i==ts_.size() && i > 1) {
       float factor = (float)(t-ts_[i-1])/(float)(ts_[i-1]-ts_[i-2]);
 //      std::cout <<  "PoseInterpolator: extrapolating " << i << ", " << (t-ts_[i-1])*1e-9  << " " <<  factor << std::endl;
       return Ts_[i-1].Exp(Ts_[i-2].Log(Ts_[i-1])*factor);

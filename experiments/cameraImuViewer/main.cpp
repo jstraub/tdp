@@ -43,6 +43,7 @@
 #include <tdp/camera/ray.h>
 
 #include <tdp/inertial/imu_factory.h>
+#include <tdp/directional/spherical_coordinates.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -111,6 +112,9 @@ int main( int argc, char* argv[] )
   pangolin::View& viewDirHist3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewDirHist3D);
+
+  tdp::QuickView viewDirHist2D(400,200);
+  gui.container().AddDisplay(viewDirHist2D);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -259,6 +263,7 @@ int main( int argc, char* argv[] )
     }
 
     if (viewDirHist3D.IsShown()) {
+      viewDirHist3D.Activate(s_cam);
       dirHist.Render3D(histScale, false);
     }
 
@@ -268,6 +273,27 @@ int main( int argc, char* argv[] )
     // ShowFrames renders the raw input streams (in our case RGB and D)
     TICK("draw 2D");
     gui.ShowFrames();
+    tdp::Image<tdp::Vector3bda> Ihist = dirHist.Render2D(histScale, false);
+    viewDirHist2D.SetImage(Ihist);
+    viewDirHist2D.Activate();
+    glColor4f(0,0,1,1);
+    // plot some directions into the histogram to show where we are
+    // currently collecting
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId;
+      cId = dStream2cam[sId]; 
+      CameraT cam = rig.cams_[cId];
+      tdp::SE3f T_wc = T_wr*rig.T_rcs_[cId];
+      for (size_t u=0; u<wSingle; u += 20) {
+        for (size_t v=0; v<hSingle; v += 20) {
+          Eigen::Vector3f p1 = T_wc.rotation() * cam.Unproject(u,v,1.);
+          Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
+          int x1 = (phiTheta1(0)+M_PI)*399/(2.*M_PI);
+          int y1 = phiTheta1(1)*199/(M_PI);
+          pangolin::glDrawCircle(x1,y1,1.);
+        }
+      }
+    }
     TOCK("draw 2D");
 
     // leave in pixel orthographic for slider to render.
