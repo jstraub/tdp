@@ -47,10 +47,10 @@ class Volume {
   }
 
   TDP_HOST_DEVICE
-  size_t SizeBytes() { return pitchImg_*d_; }
+  size_t SizeBytes() const { return pitchImg_*d_; }
 
   TDP_HOST_DEVICE
-  size_t Vol() { return w_*h_*d_; }
+  size_t Vol() const { return w_*h_*d_; }
 
   void Fill(T value) { for (size_t i=0; i<w_*d_*h_; ++i) ptr_[i] = value; }
 
