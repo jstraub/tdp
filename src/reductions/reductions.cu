@@ -1,78 +1,15 @@
 
 #include <iostream>
 #include <Eigen/Dense>
-#include <tdp/reductions/reductions.cuh>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 
 #include <tdp/cuda/cuda.cuh>
+#include <tdp/reductions/reductions.cuh>
 
 namespace tdp {
-
-// atomic add for double
-template<>
-__device__ inline void atomicAdd_<double>(double* address, const double& val)
-{
-  unsigned long long int* address_as_ull =
-    (unsigned long long int*)address;
-  unsigned long long int old = *address_as_ull, assumed;
-  do {
-    assumed = old;
-    old = atomicCAS(address_as_ull, assumed,__double_as_longlong(val +
-          __longlong_as_double(assumed)));
-  } while (assumed != old);
-  //return __longlong_as_double(old);
-};
-
-template<>
-__device__ inline void atomicAdd_<float>(float* address, const float& val)
-{
-  atomicAdd(address,val);
-};
-
-template<>
-__device__ inline void atomicAdd_<Eigen::Vector2f>(Eigen::Vector2f* address, 
-    const Eigen::Vector2f& val)
-{
-  atomicAdd_<float>(&((*address)(0)),val(0));
-  atomicAdd_<float>(&((*address)(1)),val(1));
-};
-
-template<>
-__device__ inline void atomicAdd_<Eigen::Vector3f>(Eigen::Vector3f* address, 
-    const Eigen::Vector3f& val)
-{
-  atomicAdd_<float>(&((*address)(0)),val(0));
-  atomicAdd_<float>(&((*address)(1)),val(1));
-  atomicAdd_<float>(&((*address)(2)),val(2));
-};
-
-
-template<>
-__device__ inline bool isNan(const Eigen::Vector2f& val)
-{return !isfinite(val(0)) || !isfinite(val(1));};
-
-template<>
-__device__ inline bool isNan(const Eigen::Vector3f& val)
-{return !isfinite(val(0)) || !isfinite(val(1)) || !isfinite(val(2));};
-
-//template<>
-//__device__ inline bool isNan(const Vector3fda& val)
-//{return !isfinite(val(0)) || !isfinite(val(1)) || !isfinite(val(2));};
-
-template<>
-__device__ inline Eigen::Vector2f zero()
-{return Eigen::Vector2f::Zero();};
-
-template<>
-__device__ inline Eigen::Vector3f zero()
-{return Eigen::Vector3f::Zero();};
-
-//template<>
-//__device__ inline Vector3fda zero()
-//{return Vector3fda::Zero();};
 
 template<typename T, int BLK_SIZE>
 __global__
@@ -103,18 +40,19 @@ void KernelSumReduction(
     }
   }
   // old reduction.....
-  __syncthreads(); //sync the threads
-#pragma unroll
-  for(int s=(BLK_SIZE)/2; s>1; s>>=1) {
-    if(tid < s) {
-      sum[tid] += sum[tid+s];
-    }
-    __syncthreads();
-  }
-  if(tid == 0) {
-    // sum the last two remaining matrixes directly into global memory
-    atomicAdd_<T>(Isum.ptr_, sum[0]+sum[1]);
-  }
+//  __syncthreads(); //sync the threads
+//#pragma unroll
+//  for(int s=(BLK_SIZE)/2; s>1; s>>=1) {
+//    if(tid < s) {
+//      sum[tid] += sum[tid+s];
+//    }
+//    __syncthreads();
+//  }
+//  if(tid == 0) {
+//    // sum the last two remaining matrixes directly into global memory
+//    atomicAdd_<T>(Isum.ptr_, sum[0]+sum[1]);
+//  }
+  SumPyramidReduce<T,BLK_SIZE>(tid,sum,Isum.ptr_);
 }
 
 float SumReduction(const Image<float>& I) {
