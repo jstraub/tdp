@@ -107,9 +107,14 @@ inline bool RayTraceTSDF(
 
   for (int idIt = idItMin; idIt != idItMax; idIt += dimInc) {
     Vector3fda nOverD = Vector3fda::Zero();
-    nOverD(dimIt) = -dimInc/(grid0(dimIt)+idIt*dGrid(dimIt));
+    //nOverD(dimIt) = -dimInc/(grid0(dimIt)+idIt*dGrid(dimIt));
+    nOverD(dimIt) = -1./(grid0(dimIt)+idIt*dGrid(dimIt));
     // to get depth along r_d_in_r
     float di = (-1 - r_d_in_r.p.dot(nOverD))/(r_d_in_r.dir.dot(nOverD));
+
+//    if (verbose && r_d_in_r.dir(dimIt) < 0) {
+//      printf("%d: di=%f \n", idIt, di);
+//    }
     if (di < 0.) continue; // ignore things behind
     // get intersection point in TSDF volume at depth z
     Vector3fda u_r = r_d_in_r.PointAtDepth(di);
@@ -119,7 +124,7 @@ inline bool RayTraceTSDF(
     if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_ && 0<=z&&z<tsdf.d_) {
       float tsdfVal = tsdf(x,y,z).f;
       float tsdfW = tsdf(x,y,z).w;
-      if (dimInc > 0 && tsdfW > 5 && -1 < tsdfVal 
+      if (tsdfW > 2 && -1 < tsdfVal 
           && tsdfVal <= 0. && tsdfValPrev >= 0.) {
         // detected 0 crossing -> interpolate
         d = di_Prev-((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
@@ -128,15 +133,15 @@ inline bool RayTraceTSDF(
         idTSDF(2) = z;
         return true;
       }
-      if (dimInc < 0 && tsdfW > 5 && -1 < tsdfVal 
-          && tsdfVal >= 0. && tsdfValPrev <= 0.) {
-        // detected 0 crossing -> interpolate
-        d = di-((di_Prev-di)*tsdfVal)/(tsdfValPrev-tsdfVal);
-        idTSDF(0) = x;
-        idTSDF(1) = y;
-        idTSDF(2) = z;
-        return true;
-      }
+//      if (dimInc < 0 && tsdfW > 5 && -1 < tsdfVal 
+//          && tsdfVal >= 0. && tsdfValPrev <= 0.) {
+//        // detected 0 crossing -> interpolate
+//        d = di-((di_Prev-di)*tsdfVal)/(tsdfValPrev-tsdfVal);
+//        idTSDF(0) = x;
+//        idTSDF(1) = y;
+//        idTSDF(2) = z;
+//        return true;
+//      }
       tsdfValPrev = tsdfVal;
     }
     di_Prev = di;

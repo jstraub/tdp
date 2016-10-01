@@ -367,6 +367,11 @@ int main( int argc, char* argv[] )
 
     glEnable(GL_DEPTH_TEST);
     viewPc3D.Activate(s_cam);
+
+    Eigen::AlignedBox3f box(grid0,gridE);
+    glColor4f(1,0,0,0.5f);
+    pangolin::glDrawAlignedBox(box);
+
     // render global view of the model first
     pangolin::glDrawAxis(0.1f);
     if (showPcView) {
