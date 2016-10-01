@@ -150,4 +150,27 @@ void RenormalizeSurfaceNormals(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ 
+void KernelAngularDeviation(Image<Vector3fda> nA, Image<Vector3fda> nB,
+    Image<float> ang) {
+  //const int tid = threadIdx.x;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < nA.w_ && idy < nA.h_) {
+    ang(idx,idy) = acos(min(1.f,max(-1.f,nA(idx,idy).dot(nB(idx,idy)))));
+  }
+}
+
+void AngularDeviation(
+    const Image<Vector3fda>& nA,
+    const Image<Vector3fda>& nB,
+    Image<float>& ang
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,nA,32,32);
+  KernelAngularDeviation<<<blocks,threads>>>(nA,nB,ang);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }

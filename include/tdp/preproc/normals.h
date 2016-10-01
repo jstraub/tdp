@@ -39,6 +39,12 @@ void Normals2Image(
     Image<Vector3bda>& n2d
     );
 
+void AngularDeviation(
+    const Image<Vector3fda>& nA,
+    const Image<Vector3fda>& nB,
+    Image<float>& ang
+    );
+
 void RenormalizeSurfaceNormals(
     Image<Vector3fda>& n
     );

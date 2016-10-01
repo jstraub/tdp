@@ -18,6 +18,12 @@ void TransformPc(
     const SO3f& R_rc,
     Image<Vector3fda>& pc_c
     );
+
+void L2Distance(
+    Image<Vector3fda>& pcA,
+    Image<Vector3fda>& pcB,
+    Image<float>& dist
+    );
 /// Convert from depth image to point cloud in camera coords.
 template<int D, typename Derived>
 void Depth2PCGpu(

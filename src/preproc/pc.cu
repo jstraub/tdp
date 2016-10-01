@@ -159,4 +159,27 @@ void TransformPc(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ 
+void KernelL2Distance(Image<Vector3fda> pcA, Image<Vector3fda> pcB,
+    Image<float> dist) {
+  //const int tid = threadIdx.x;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < pcA.w_ && idy < pcA.h_) {
+    dist(idx,idy) = (pcA(idx,idy)-pcB(idx,idy)).norm();
+  }
+}
+
+void L2Distance(
+    const Image<Vector3fda>& pcA,
+    const Image<Vector3fda>& pcB,
+    Image<float>& dist
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pcA,32,32);
+  KernelL2Distance<<<blocks,threads>>>(pcA,pcB,dist);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }
