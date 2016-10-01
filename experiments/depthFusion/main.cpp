@@ -138,6 +138,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> ICPassoc_m(wc, hc);
   tdp::ManagedHostImage<float> ICPassoc_c(wc, hc);
 
+  tdp::ManagedDeviceImage<float> cuPcErr(wc, hc);
+  tdp::ManagedDeviceImage<float> cuAngErr(wc, hc);
+  tdp::ManagedHostImage<float> pcErr(wc, hc);
+  tdp::ManagedHostImage<float> angErr(wc, hc);
+
   tdp::ManagedDeviceImage<tdp::Vector3fda> nEstdummy(wc,hc);
 
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
@@ -165,6 +170,11 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewICPassocM);
   tdp::QuickView viewICPassocC(wc,hc);
   gui.container().AddDisplay(viewICPassocC);
+
+  tdp::QuickView viewAngErr(wc,hc);
+  gui.container().AddDisplay(viewAngErr);
+  tdp::QuickView viewPcErr(wc,hc);
+  gui.container().AddDisplay(viewPcErr);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<bool>  dispDepthPyrEst("ui.disp d pyr est", false,true);
@@ -487,6 +497,18 @@ int main( int argc, char* argv[] )
       viewICPassocM.SetImage(ICPassoc_m);
       viewICPassocC.SetImage(ICPassoc_c);
     }
+
+    if (viewPcErr.IsShown()) {
+      tdp::L2Distance(pcs_m.GetImage(0), pcs_c.GetImage(0), cuPcErr);
+      pcErr.CopyFrom(cuPcErr, cudaMemcpyDeviceToHost);
+      viewPcErr.SetImage(pcErr);
+    }
+    if (viewAngErr.IsShown()) {
+      tdp::AngularDeviation(ns_m.GetImage(0), ns_c.GetImage(0), cuAngErr);
+      angErr.CopyFrom(cuAngErr, cudaMemcpyDeviceToHost);
+      viewAngErr.SetImage(angErr);
+    }
+
     TOCK("Draw 2D");
 
     // leave in pixel orthographic for slider to render.
