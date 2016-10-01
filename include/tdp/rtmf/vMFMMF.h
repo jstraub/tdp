@@ -25,7 +25,7 @@ class vMFMMF {
    {Reset();};
    ~vMFMMF() {};
 
-   float Compute(const Image<Vector3fda>& cuN, size_t maxIt);
+   float Compute(const Image<Vector3fda>& cuN, size_t maxIt, bool verbose);
    void Reset();
 
    std::vector<Eigen::Matrix3f> Rs_; // rotations of MFs
@@ -54,11 +54,19 @@ void vMFMMF<K>::Reset() {
 
 template<int K>
 float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN, 
-    size_t maxIt) {
+    size_t maxIt, bool verbose) {
 
   for (size_t it=0; it<maxIt; ++it) {
-    UpdateAssociation(cuN);
+    float assocCost = UpdateAssociation(cuN);
     UpdateMF(cuN);
+    if (verbose) {
+      std::cout << "rtmf @" << it << ":\t" << assocCost
+        << " costs: ";
+      for (size_t k=0; k<K; ++k) {
+        std::cout << "\t" << cs_[k];
+      }
+      std::cout << std::endl;
+    }
   }
 }
 
@@ -89,6 +97,7 @@ template<int K>
 Eigen::Matrix<float,3,6> vMFMMF<K>::ComputeSums(const
     Image<Vector3fda>& cuN, uint32_t k) {
   ManagedDeviceImage<Vector4fda> cuSSs(6,1);
+  cudaMemset(cuSSs.ptr_,0,cuSSs.SizeBytes());
   VectorSum(cuN, cuZ_, k*6, 6, cuSSs);
   ManagedHostImage<Vector4fda> SSs(6,1);
   SSs.CopyFrom(cuSSs,cudaMemcpyDeviceToHost);
@@ -102,6 +111,18 @@ template<int K>
 float vMFMMF<K>::UpdateAssociation(const Image<Vector3fda>& cuN) {
   float cost = 0.;
   float W = 0.;
+
+  ManagedHostImage<Vector3fda> mu(K*6,1);
+  ManagedHostImage<float> pi(K*6,1);
+  for (size_t k=0; k<K; ++k) {
+    for (uint32_t j=0; j<6; ++j) { 
+      mu[k*6+j] = Rs_[k].col(j/2) * (j%2==0?1.:-1.);
+      pi[k*6+j] = 1./(6.*K);
+    }
+  }
+  cuMu_.CopyFrom(mu,cudaMemcpyHostToDevice);
+  cuPi_.CopyFrom(pi,cudaMemcpyHostToDevice);
+
   MMFvMFCostFctAssignmentGPU(cuN,cuZ_,cuMu_,cuPi_,K,cost,W);
   return cost/W;
 }

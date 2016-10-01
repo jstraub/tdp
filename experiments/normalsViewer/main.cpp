@@ -22,6 +22,8 @@
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/preproc/blur.h>
+#include <tdp/manifold/SE3.h>
+#include <tdp/preproc/pc.h>
 
 #include <tdp/gui/gui.hpp>
 
@@ -82,6 +84,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   tdp::GeodesicHist<4> normalHist;
 
+  pangolin::Var<bool> verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  show2DNormals("ui.show 2D Normals",true,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
@@ -89,7 +92,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
   pangolin::Var<bool> histLogScale("ui.hist log scale",false,true);
   pangolin::Var<bool>  dispGrid("ui.Show Grid",false,true);
-  pangolin::Var<bool>  dispNormals("ui.Show Normals",false,true);
+  pangolin::Var<bool>  dispNormals("ui.Show Normals",true,true);
 
   pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", false,true);
   pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
@@ -97,7 +100,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
   pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
-  pangolin::Var<float> tauR("ui.tau R", 0.005, 0.001, 0.1);
+  pangolin::Var<float> tauR("ui.tau R", 10., 1., 100);
 
   tdp::vMFMMF<1> rtmf(w,h,tauR);
 
@@ -133,13 +136,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
         TOCK("Compute 2D normals image");
       }
-      if (computeHist) {
-        TICK("Compute Hist");
-        if (histFrameByFrame)
-          normalHist.Reset();
-        normalHist.ComputeGpu(cuN);
-        TOCK("Compute Hist");
-      }
+
       if (dpvmfmeans) {
         TICK("Compute DPvMFClustering");
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
@@ -148,19 +145,35 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       }
       if (runRtmf) {
         TICK("Compute RTMF");
-        rtmf.Compute(cuN, maxIt);
-        std::cout << rtmf.Rs_[0] << std::endl;
+        rtmf.Compute(cuN, maxIt, verbose);
+        tdp::SO3f R_wc(rtmf.Rs_[0]);
+        tdp::TransformPc(R_wc,cuN);
         TOCK("Compute RTMF");
+      }
+
+      if (computeHist) {
+        TICK("Compute Hist");
+        if (histFrameByFrame)
+          normalHist.Reset();
+        normalHist.ComputeGpu(cuN);
+        TOCK("Compute Hist");
       }
     }
     cudaDeviceSynchronize();
+
+    tdp::SE3f T_wc;
+    if (runRtmf) {
+      T_wc.matrix().topLeftCorner(3,3) = rtmf.Rs_[0];
+    }
 
     TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     pangolin::glDrawAxis(1);
     if (dispNormals) {
+//      pangolin::glSetFrameOfReference(T_wc.matrix());
       pangolin::RenderVbo(cuNbuf);
+//      pangolin::glUnsetFrameOfReference();
     }
     if (computeHist) {
       if (dispGrid) {
