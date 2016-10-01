@@ -18,6 +18,19 @@ class ManagedVolume : public Volume<T> {
    ManagedVolume(size_t w, size_t h, size_t d) 
      : Volume<T>(w,h,d,Alloc::construct(w*h*d))
    {}
+
+  void Reinitialise(size_t w, size_t h, size_t d) {
+    if (this->ptr_)  {
+      Alloc::destroy(this->ptr_);
+    }
+    this->ptr_ = Alloc::construct(w*h*d);
+    this->w_ = w;
+    this->h_ = h;
+    this->d_ = d;
+    this->pitch_ = w*sizeof(T);
+    this->pitchImg_ = h*w*sizeof(T);
+  }
+
    ~ManagedVolume() {
      Alloc::destroy(this->ptr_);
    }
