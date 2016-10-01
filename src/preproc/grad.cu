@@ -41,15 +41,21 @@ void KernelGradient3D(Image<float> Iu, Image<float> Iv,
     const float Iui = Iu(idx,idy);
     const float Ivi = Iv(idx,idy);
     const Vector3fda n = cuN(idx, idy);
-//    const Vector3fda gradI(Iui, Ivi, 0.f);
-//    const Vector3fda grad3D = gradI - ((gradI.dot(n))/n.norm()) * n;
-//    cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
-    Vector3fda r0 = cam.Unproject(idx,idy,1.f);
-    Vector3fda r1 = cam.Unproject(idx+Iui,idy+Ivi,1.f);
     float d0 = cuD(idx,idy); 
-    float d1 = (r0.dot(n))/(r1.dot(n))*d0;
-    const Vector3fda grad3D = r1*d1 - r0*d0;
-    cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
+    if (!isNan(d0) && IsValidNormal(n)) {
+      //    const Vector3fda gradI(Iui, Ivi, 0.f);
+      //    const Vector3fda grad3D = gradI - ((gradI.dot(n))/n.norm()) * n;
+      //    cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
+      Vector3fda r0 = cam.Unproject(idx,idy,1.f);
+      Vector3fda r1 = cam.Unproject(idx+Iui,idy+Ivi,1.f);
+      float d1 = (r0.dot(n))/(r1.dot(n))*d0;
+      const Vector3fda grad3D = r1*d1 - r0*d0;
+      cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
+    } else {
+      cuGrad3D(idx, idy)(0) = NAN;
+      cuGrad3D(idx, idy)(1) = NAN;
+      cuGrad3D(idx, idy)(2) = NAN;
+    }
   }
 }
 

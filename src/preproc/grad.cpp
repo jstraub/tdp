@@ -26,6 +26,9 @@ void Gradient(const Image<float>& I,
   convolutionRowsGPU((float*)tmp.ptr_,(float*)I.ptr_,w,h);
   setConvolutionKernel(kernelA);
   convolutionColumnsGPU((float*)Iv.ptr_,(float*)tmp.ptr_,w,h);
+
+  // TODO: workaround: set first row gradients in v direction to 0;
+  cudaMemset(Iv.ptr_,0,Iv.w_*sizeof(float));
 }
 
 }

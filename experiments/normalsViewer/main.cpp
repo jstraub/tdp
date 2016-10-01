@@ -81,11 +81,6 @@ int main( int argc, char* argv[] )
     cam = rig.cams_[rgbStream2cam[0]];
   }
 
-
-  tdp::QuickView viewDebugA(wc,hc);
-  gui.container().AddDisplay(viewDebugA);
-  tdp::QuickView viewDebugB(wc,hc);
-  gui.container().AddDisplay(viewDebugB);
   tdp::QuickView viewN2D(wc,hc);
   gui.container().AddDisplay(viewN2D);
 
@@ -99,7 +94,13 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
 
-  tdp::QuickView viewGrad3Dimg(w,h);
+  tdp::QuickView viewGrey(wc,hc);
+  gui.container().AddDisplay(viewGrey);
+  tdp::QuickView viewGreyDu(wc,hc);
+  gui.container().AddDisplay(viewGreyDu);
+  tdp::QuickView viewGreyDv(wc,hc);
+  gui.container().AddDisplay(viewGreyDv);
+  tdp::QuickView viewGrad3Dimg(wc,hc);
   gui.container().AddDisplay(viewGrad3Dimg);
 
   pangolin::View& viewGrad3D = pangolin::CreateDisplay()
@@ -107,8 +108,9 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewGrad3D);
 
   tdp::ManagedHostImage<float> d(wc, hc);
-  tdp::ManagedHostImage<float> debugA(wc, hc);
-  tdp::ManagedHostImage<float> debugB(wc, hc);
+  tdp::ManagedHostImage<float> grey(wc, hc);
+  tdp::ManagedHostImage<float> greydu(wc, hc);
+  tdp::ManagedHostImage<float> greydv(wc, hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuZ(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(wc,hc);
@@ -125,6 +127,7 @@ int main( int argc, char* argv[] )
   //tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3Ddir(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuGrad3DdirImg(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> grad3DdirImg(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> grad3Ddir(wc,hc);
 
 
   pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
@@ -141,11 +144,15 @@ int main( int argc, char* argv[] )
   tdp::GeodesicHist<4> normalHist;
   tdp::GeodesicHist<4> grad3dHist;
 
+  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
+  pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
+
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  show2DNormals("ui.show 2D Normals",true,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
-  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame",false,true);
+  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame",true,true);
   pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
   pangolin::Var<bool> histLogScale("ui.hist log scale",false,true);
   pangolin::Var<bool>  dispGrid("ui.Show Grid",false,true);
@@ -156,7 +163,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
-  pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
+  pangolin::Var<bool> runRtmf("ui.rtmf", true,true);
   pangolin::Var<float> tauR("ui.tau R", 10., 1., 100);
 
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 2, 0, 10);
@@ -179,7 +186,7 @@ int main( int argc, char* argv[] )
 
     TICK("Convert Depth");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    tdp::ConvertDepthGpu(cuDraw, cuDrawf, 1e-4, 0.1, 4.);
+    ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
     tdp::Blur5(cuDrawf, cuD, 0.03);
     TOCK("Convert Depth");
     {
@@ -208,7 +215,7 @@ int main( int argc, char* argv[] )
         TICK("Compute RTMF");
         rtmf.Compute(cuN, maxIt, verbose);
         tdp::SO3f R_wc(rtmf.Rs_[0]);
-        tdp::TransformPc(R_wc,cuN);
+        tdp::TransformPc(R_wc.Inverse(),cuN);
         TOCK("Compute RTMF");
       }
 
@@ -220,24 +227,28 @@ int main( int argc, char* argv[] )
         TOCK("Compute Hist");
       }
 
-      pangolin::CudaScopedMappedPtr cuGrad3Dbufp(cuNbuf);
+      grad3Ddir.Fill(tdp::Vector3fda(0,0,1));
+      pangolin::CudaScopedMappedPtr cuGrad3Dbufp(cuGrad3Dbuf);
       tdp::Image<tdp::Vector3fda> cuGrad3Ddir(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuGrad3Dbufp);
+      cuGrad3Ddir.CopyFrom(grad3Ddir,cudaMemcpyHostToDevice);
 
       cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
       tdp::Rgb2Grey(cuRgb,cuGrey);
-
       tdp::Gradient3D(cuGrey, cuD, cuN, cam, cuGreydu, cuGreydv, cuGrad3D);
       cuGrad3Ddir.CopyFrom(cuGrad3D, cudaMemcpyDeviceToDevice);
       tdp::RenormalizeSurfaceNormals(cuGrad3Ddir, gradNormThr);
       tdp::Normals2Image(cuGrad3Ddir, cuGrad3DdirImg);
+
       grad3DdirImg.CopyFrom(cuGrad3DdirImg,cudaMemcpyDeviceToHost);
+      grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
+      greydu.CopyFrom(cuGreydu, cudaMemcpyDeviceToHost);
+      greydv.CopyFrom(cuGreydv, cudaMemcpyDeviceToHost);
 
       if (histFrameByFrame)
         grad3dHist.Reset();
       grad3dHist.ComputeGpu(cuGrad3Ddir);
     }
-    cudaDeviceSynchronize();
 
     tdp::SE3f T_wc;
     if (runRtmf) {
@@ -279,12 +290,13 @@ int main( int argc, char* argv[] )
 
     gui.ShowFrames();
 
-    viewDebugA.SetImage(debugA);
-    viewDebugB.SetImage(debugB);
     if (show2DNormals) {
       viewN2D.SetImage(n2D);
     }
     viewGrad3Dimg.SetImage(grad3DdirImg);
+    viewGrey.SetImage(grey);
+    viewGreyDu.SetImage(greydu);
+    viewGreyDv.SetImage(greydv);
     TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.

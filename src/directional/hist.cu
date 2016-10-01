@@ -17,8 +17,7 @@ void KernelComputeCentroidBasedGeodesicHist(
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
   if (idx < n.w_ && idy < n.h_) {
     tdp::Vector3fda ni = n(idx,idy);
-    if (isnan(ni(0)) || isnan(ni(1)) || isnan(ni(2)) 
-        || ni.norm() < 0.9) return;
+    if (!IsValidNormal(ni)) return;
     int id = 0;
     int N = tri_centers.w_;
     float maxDot = -1;
