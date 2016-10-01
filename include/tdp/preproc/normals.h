@@ -46,7 +46,8 @@ void AngularDeviation(
     );
 
 void RenormalizeSurfaceNormals(
-    Image<Vector3fda>& n
+    Image<Vector3fda>& n,
+    float normThr
     );
 
 void Depth2Normals(
@@ -84,7 +85,7 @@ void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr,
   // pyramid
   for (int lvl=1; lvl<LEVELS; ++lvl) {
     Image<Vector3fda> cuN = cuNPyr.GetImage(lvl);
-    RenormalizeSurfaceNormals(cuN);
+    RenormalizeSurfaceNormals(cuN, 0.f);
   }
 }
 

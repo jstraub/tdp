@@ -128,7 +128,7 @@ void Normals2Image(
 }
 
 __global__ 
-void KernelRenormalizeSurfaceNormals(Image<Vector3fda> n) {
+void KernelRenormalizeSurfaceNormals(Image<Vector3fda> n, float normThr) {
   //const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -136,17 +136,22 @@ void KernelRenormalizeSurfaceNormals(Image<Vector3fda> n) {
   if (idx < n.w_ && idy < n.h_) {
     Vector3fda ni = n(idx,idy);
     if (IsValidData(ni)) {
-      n(idx,idy) = ni / ni.norm();
+      float norm = ni.norm();
+      if (norm < normThr) {
+        norm = 0.f;
+      }
+      n(idx,idy) = ni / norm;
     }
   }
 }
 
 void RenormalizeSurfaceNormals(
-    Image<Vector3fda>& n
+    Image<Vector3fda>& n,
+    float normThr
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,n,32,32);
-  KernelRenormalizeSurfaceNormals<<<blocks,threads>>>(n);
+  KernelRenormalizeSurfaceNormals<<<blocks,threads>>>(n, normThr);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 

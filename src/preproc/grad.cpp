@@ -7,7 +7,8 @@
 namespace tdp {
 
 void Gradient(const Image<float>& I, 
-    Image<float>& Iu, Image<float>& Iv) {
+    Image<float>& Iu, Image<float>& Iv
+    ) {
   size_t w = I.w_;
   size_t h = I.h_;
   assert(w%64 == 0);

@@ -15,6 +15,7 @@
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
@@ -24,11 +25,26 @@
 #include <tdp/preproc/blur.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/preproc/pc.h>
+#include <tdp/preproc/grad.h>
+#include <tdp/preproc/grey.h>
 
 #include <tdp/gui/gui.hpp>
+#include <tdp/camera/rig.h>
+#include <tdp/manifold/SO3.h>
 
-void VideoViewer(const std::string& input_uri, const std::string& output_uri)
+typedef tdp::CameraPoly3f CameraT;
+//typedef tdp::Cameraf CameraT;
+
+int main( int argc, char* argv[] )
 {
+  std::string input_uri = "openni2://";
+  std::string output_uri = "pango://video.pango";
+  std::string calibPath = "";
+
+  if( argc > 1 ) {
+    input_uri = std::string(argv[1]);
+    calibPath = (argc > 2) ? std::string(argv[2]) : "";
+  }
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -36,7 +52,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 1;
   }
 
   tdp::GUI gui(1200,800,video);
@@ -45,6 +61,26 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   size_t h = video.Streams()[gui.iRGB[0]].Height();
   size_t wc = w+w%64; // for convolution
   size_t hc = h+h%64;
+
+  float f = 550;
+  float uc = (w-1.)/2.;
+  float vc = (h-1.)/2.;
+
+  CameraT cam(Eigen::Vector4f(f,f,uc,vc)); 
+
+  if (calibPath.size() > 0) {
+    tdp::Rig<CameraT> rig;
+    rig.FromFile(calibPath,false);
+    std::vector<int32_t> rgbStream2cam;
+    std::vector<int32_t> dStream2cam;
+    std::vector<int32_t> rgbdStream2cam;
+    std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+    tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
+        dStream2cam, rgbdStream2cam);
+    // camera model for computing point cloud and normals
+    cam = rig.cams_[rgbStream2cam[0]];
+  }
+
 
   tdp::QuickView viewDebugA(wc,hc);
   gui.container().AddDisplay(viewDebugA);
@@ -63,6 +99,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
 
+  tdp::QuickView viewGrad3Dimg(w,h);
+  gui.container().AddDisplay(viewGrad3Dimg);
+
+  pangolin::View& viewGrad3D = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewGrad3D);
+
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<float> debugA(wc, hc);
   tdp::ManagedHostImage<float> debugB(wc, hc);
@@ -74,15 +117,29 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
 
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(w, h);
+  tdp::ManagedDeviceImage<float> cuGrey(wc, hc);
+  tdp::ManagedDeviceImage<float> cuGreydu(wc, hc);
+  tdp::ManagedDeviceImage<float> cuGreydv(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc, hc);
+  //tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3Ddir(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuGrad3DdirImg(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> grad3DdirImg(wc,hc);
+
+
   pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
+
+  pangolin::GlBufferCudaPtr cuGrad3Dbuf(pangolin::GlArrayBuffer, wc*hc,
+      GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
+
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuDrawf(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
-  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   tdp::GeodesicHist<4> normalHist;
+  tdp::GeodesicHist<4> grad3dHist;
 
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
@@ -102,6 +159,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
   pangolin::Var<float> tauR("ui.tau R", 10., 1., 100);
 
+  pangolin::Var<float> gradNormThr("ui.grad norm thr", 2, 0, 10);
+
   tdp::vMFMMF<1> rtmf(w,h,tauR);
 
   // Stream and display video
@@ -114,6 +173,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     gui.NextFrames();
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
+    tdp::Image<tdp::Vector3bda> rgb;
+    if (!gui.ImageRGB(rgb)) continue;
     TOCK("Read frame");
 
     TICK("Convert Depth");
@@ -127,7 +188,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
-      Depth2Normals(cuD, cam, cuN);
+      Depth2Normals(cuD, cam, tdp::SO3f(), cuN);
       n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
       TOCK("Compute Normals");
       if (show2DNormals) {
@@ -158,6 +219,23 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         normalHist.ComputeGpu(cuN);
         TOCK("Compute Hist");
       }
+
+      pangolin::CudaScopedMappedPtr cuGrad3Dbufp(cuNbuf);
+      tdp::Image<tdp::Vector3fda> cuGrad3Ddir(wc, hc,
+          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuGrad3Dbufp);
+
+      cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+      tdp::Rgb2Grey(cuRgb,cuGrey);
+
+      tdp::Gradient3D(cuGrey, cuD, cuN, cam, cuGreydu, cuGreydv, cuGrad3D);
+      cuGrad3Ddir.CopyFrom(cuGrad3D, cudaMemcpyDeviceToDevice);
+      tdp::RenormalizeSurfaceNormals(cuGrad3Ddir, gradNormThr);
+      tdp::Normals2Image(cuGrad3Ddir, cuGrad3DdirImg);
+      grad3DdirImg.CopyFrom(cuGrad3DdirImg,cudaMemcpyDeviceToHost);
+
+      if (histFrameByFrame)
+        grad3dHist.Reset();
+      grad3dHist.ComputeGpu(cuGrad3Ddir);
     }
     cudaDeviceSynchronize();
 
@@ -169,7 +247,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
+    glLineWidth(1.5f);
     pangolin::glDrawAxis(1);
+    glColor4f(0,1,0,0.5);
     if (dispNormals) {
 //      pangolin::glSetFrameOfReference(T_wc.matrix());
       pangolin::RenderVbo(cuNbuf);
@@ -181,6 +261,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       }
       normalHist.Render3D(histScale, histLogScale);
     }
+
+    viewGrad3D.Activate(s_cam);
+    glLineWidth(1.5f);
+    pangolin::glDrawAxis(1);
+    glColor4f(0,1,0,0.5);
+    pangolin::RenderVbo(cuGrad3Dbuf);
+    if (dispGrid) {
+      grad3dHist.geoGrid_.Render3D();
+    }
+    grad3dHist.Render3D(histScale, histLogScale);
     TOCK("Render 3D");
 
     TICK("Render 2D");
@@ -194,6 +284,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (show2DNormals) {
       viewN2D.SetImage(n2D);
     }
+    viewGrad3Dimg.SetImage(grad3DdirImg);
     TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.
@@ -205,54 +296,5 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
-}
-
-
-int main( int argc, char* argv[] )
-{
-  const std::string dflt_output_uri = "pango://video.pango";
-
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-    try{
-      VideoViewer(input_uri, output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
-    }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
-
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
-
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
-  }
-
   return 0;
 }
