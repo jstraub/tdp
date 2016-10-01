@@ -18,6 +18,7 @@
 #include <tdp/gui/quickView.h>
 #include <tdp/directional/hist.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
+#include <tdp/rtmf/vMFMF.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/preproc/blur.h>
@@ -95,6 +96,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
+  pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
+  pangolin::Var<float> tauR("ui.tau R", 0.005, 0.001, 0.1);
+
+  vMFMMF<1> rtmf(w,h,tauR);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -119,6 +125,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
       Depth2Normals(cuD, cam, cuN);
+      n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
       TOCK("Compute Normals");
       if (show2DNormals) {
         TICK("Compute 2D normals image");
@@ -135,10 +142,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       }
       if (dpvmfmeans) {
         TICK("Compute DPvMFClustering");
-        n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
         dpm.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
         TOCK("Compute DPvMFClustering");
+      }
+      if (runRtmf) {
+        TICK("Compute RTMF");
+        rtmf.Compute(cuN, maxIt);
+        std::cout << rtmf.Rs_[0] << std::endl;
+        TOCK("Compute RTMF");
       }
     }
     cudaDeviceSynchronize();

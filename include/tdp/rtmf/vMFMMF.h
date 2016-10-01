@@ -19,10 +19,10 @@ void MMFvMFCostFctAssignmentGPU(
 template<int K>
 class vMFMMF {
  public:
-   vMFMF(size_t w, size_t h, float tauR) 
+   vMFMMF(size_t w, size_t h, float tauR) 
     : t_(0), tauR_(tauR), cuZ_(w,h), cuMu_(6*K,1), cuPi_(6*K,1) 
    {Reset();};
-   ~vMFMF() {};
+   ~vMFMMF() {};
 
    float Compute(Image<Vector3fda>& cuN, size_t maxIt);
    void Reset();
