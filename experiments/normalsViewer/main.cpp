@@ -99,7 +99,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
   pangolin::Var<float> tauR("ui.tau R", 0.005, 0.001, 0.1);
 
-  vMFMMF<1> rtmf(w,h,tauR);
+  tdp::vMFMMF<1> rtmf(w,h,tauR);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())

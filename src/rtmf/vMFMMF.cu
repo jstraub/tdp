@@ -126,6 +126,7 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
     }
     z[id] = k_max;
   }
+
   SumPyramidReduce<float,float,BLOCK_SIZE>(tid,rho,cost,Wi,W);
 }
 
