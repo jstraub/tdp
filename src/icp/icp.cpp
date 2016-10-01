@@ -47,7 +47,7 @@ void ICP::ComputeProjective(
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
         //<< " |ATA|=" << ATA.determinant()
-        //<< " x=" << x.transpose()
+        << " |x|: " << x.norm()
         << std::endl;
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;
