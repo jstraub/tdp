@@ -480,6 +480,10 @@ void VideoViewer(const std::string& input_uri,
       // draw the axis
       pangolin::glDrawAxis(0.1);
 
+      Eigen::AlignedBox3f box(grid0,gridE);
+      glColor4f(1,0,0,0.5f);
+      pangolin::glDrawAlignedBox(box);
+
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
