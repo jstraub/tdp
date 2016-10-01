@@ -48,8 +48,8 @@ void Blur5(
     float sigma_in
     ) {
   //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
-  assert(Iin.w_ == Iout.w_*2);
-  assert(Iin.h_ == Iout.h_*2);
+  assert(Iin.w_ == Iout.w_);
+  assert(Iin.h_ == Iout.h_);
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
   KernelBlur5<float><<<blocks,threads>>>(Iin,Iout,sigma_in);
