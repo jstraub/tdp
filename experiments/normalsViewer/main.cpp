@@ -129,13 +129,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> grad3DdirImg(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> grad3Ddir(wc,hc);
 
-
   pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
   pangolin::GlBufferCudaPtr cuGrad3Dbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
-
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuDrawf(wc, hc);
@@ -146,13 +144,13 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
+  pangolin::Var<float> tsdfDmax("ui.d max",12.,0.1,16.);
 
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  show2DNormals("ui.show 2D Normals",true,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
-  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame",true,true);
+  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame", false, true);
   pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
   pangolin::Var<bool> histLogScale("ui.hist log scale",false,true);
   pangolin::Var<bool>  dispGrid("ui.Show Grid",false,true);
@@ -166,7 +164,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runRtmf("ui.rtmf", true,true);
   pangolin::Var<float> tauR("ui.tau R", 10., 1., 100);
 
-  pangolin::Var<float> gradNormThr("ui.grad norm thr", 2, 0, 10);
+  pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
   tdp::vMFMMF<1> rtmf(w,h,tauR);
 
@@ -244,6 +242,11 @@ int main( int argc, char* argv[] )
       grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
       greydu.CopyFrom(cuGreydu, cudaMemcpyDeviceToHost);
       greydv.CopyFrom(cuGreydv, cudaMemcpyDeviceToHost);
+
+      if (runRtmf) {
+        tdp::SO3f R_wc(rtmf.Rs_[0]);
+        tdp::TransformPc(R_wc.Inverse(),cuGrad3Ddir);
+      }
 
       if (histFrameByFrame)
         grad3dHist.Reset();
