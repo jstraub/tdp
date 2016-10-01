@@ -50,7 +50,7 @@ class Volume {
   size_t SizeBytes() { return pitchImg_*d_; }
 
   TDP_HOST_DEVICE
-  size_t Volume() { return w_*h_*d_; }
+  size_t Vol() { return w_*h_*d_; }
 
   void Fill(T value) { for (size_t i=0; i<w_*d_*h_; ++i) ptr_[i] = value; }
 
@@ -70,35 +70,13 @@ void SaveVolume(const Volume<T>& V, const std::string& path) {
   std::ofstream out;
   out.open(path, std::ios::out | std::ios::binary);
 
-  out.write((uint8_t*)&(V.w_),sizeof(size_t));
-  out.write((uint8_t*)&(V.h_),sizeof(size_t));
-  out.write((uint8_t*)&(V.d_),sizeof(size_t));
-  for (size_t i=0; i < V.Volume(); ++i) {
-    out.write((uint8_t*)&V[i],sizeof(T));
+  out.write((const char*)&(V.w_),sizeof(size_t));
+  out.write((const char*)&(V.h_),sizeof(size_t));
+  out.write((const char*)&(V.d_),sizeof(size_t));
+  for (size_t i=0; i < V.Vol(); ++i) {
+    out.write((const char*)&V[i],sizeof(T));
   }
   out.close();
-}
-
-template<typename T>
-bool LoadVolume(ManagedHostVolume<T>& V, const std::string& path) {
-
-  std::ifstream in;
-  in.open(path, std::ios::in | std::ios::binary);
-  if (!in.is_open())
-    return false;
-
-  size_t w,h,d;
-  in.read((uint8_t*)&(w),sizeof(size_t));
-  in.read((uint8_t*)&(h),sizeof(size_t));
-  in.read((uint8_t*)&(d),sizeof(size_t));
-
-  V.Reinitialize(w,h,d);
-
-  for (size_t i=0; i < V.Volume(); ++i) {
-    in.read((uint8_t*)&V[i],sizeof(T));
-  }
-  in.close();
-  return true;
 }
 
 
