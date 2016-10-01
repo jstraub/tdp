@@ -85,8 +85,6 @@ int main( int argc, char* argv[] )
     camD = camR; //rig.cams_[dStream2cam[0]];
   }
 
-  pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
-
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -176,10 +174,13 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewPcErr(wc,hc);
   gui.container().AddDisplay(viewPcErr);
 
+
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
-  pangolin::Var<bool>  dispDepthPyrEst("ui.disp d pyr est", false,true);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
+
+  pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
+  pangolin::Var<bool> dispDepthPyrEst("ui.disp d pyr est", false,true);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
@@ -189,12 +190,12 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
-  pangolin::Var<float> grid0x("ui.grid0 x",-6.0,-2.,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-6.0,-2.,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-6.0,-2.,0);
-  pangolin::Var<float> gridEx("ui.gridE x",6.0,2,3);
-  pangolin::Var<float> gridEy("ui.gridE y",6.0,2,3);
-  pangolin::Var<float> gridEz("ui.gridE z",6.0,2,3);
+  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2.,0);
+  pangolin::Var<float> gridEx("ui.gridE x", 3.0,2,3);
+  pangolin::Var<float> gridEy("ui.gridE y", 3.0,2,3);
+  pangolin::Var<float> gridEz("ui.gridE z", 3.0,2,3);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
@@ -209,7 +210,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",0,0,10);
   pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",0,0,10);
 
-  pangolin::Var<bool> showIcpError("ui.show ICP",false,true);
+  pangolin::Var<bool> showIcpError("ui.show ICP",true,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
@@ -256,7 +257,7 @@ int main( int argc, char* argv[] )
     TICK("Ray Trace TSDF");
     //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
     // first one not needed anymore
-    if (pcFromTSDF) {
+    if (pcFromTSDF && !dispDepthPyrEst) {
       RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
           ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
       // get pc in model coordinate system
@@ -303,10 +304,10 @@ int main( int argc, char* argv[] )
       //T_mo.matrix() = Eigen::Matrix4f::Identity();
 //      tdp::SE3f dTRot;
 //      if (icpRot) {
-//        //std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-//        //tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-//        //    camD, maxItRot, icpAngleThr_deg); 
-//        //std::cout << dTRot.matrix3x4() << std::endl;
+//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+//            camD, maxItRot, icpAngleThr_deg); 
+//        std::cout << dTRot.matrix3x4() << std::endl;
 //      }
 //      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};

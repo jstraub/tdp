@@ -124,7 +124,7 @@ inline bool RayTraceTSDF(
     if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_ && 0<=z&&z<tsdf.d_) {
       float tsdfVal = tsdf(x,y,z).f;
       float tsdfW = tsdf(x,y,z).w;
-      if (tsdfW > 2 && -1 < tsdfVal 
+      if (tsdfW > 10 && -1 < tsdfVal 
           && tsdfVal <= 0. && tsdfValPrev >= 0.) {
         // detected 0 crossing -> interpolate
         d = di_Prev-((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
