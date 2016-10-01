@@ -172,9 +172,9 @@ void VideoViewer(const std::string& input_uri,
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
-  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",7,0,10);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
 

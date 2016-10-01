@@ -60,7 +60,7 @@ inline bool RayTraceTSDFinZonly(
     if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
       float tsdfVal = tsdf(x,y,idz).f;
       float tsdfW = tsdf(x,y,idz).w;
-      if (tsdfW > 30 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
+      if (tsdfW > 5 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
         // detected 0 crossing -> interpolate
         d = di_Prev -((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
         idTSDF(0) = x;
@@ -119,9 +119,19 @@ inline bool RayTraceTSDF(
     if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_ && 0<=z&&z<tsdf.d_) {
       float tsdfVal = tsdf(x,y,z).f;
       float tsdfW = tsdf(x,y,z).w;
-      if (tsdfW > 30 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
+      if (dimInc > 0 && tsdfW > 5 && -1 < tsdfVal 
+          && tsdfVal <= 0. && tsdfValPrev >= 0.) {
         // detected 0 crossing -> interpolate
         d = di_Prev-((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
+        idTSDF(0) = x;
+        idTSDF(1) = y;
+        idTSDF(2) = z;
+        return true;
+      }
+      if (dimInc < 0 && tsdfW > 5 && -1 < tsdfVal 
+          && tsdfVal >= 0. && tsdfValPrev <= 0.) {
+        // detected 0 crossing -> interpolate
+        d = di-((di_Prev-di)*tsdfVal)/(tsdfValPrev-tsdfVal);
         idTSDF(0) = x;
         idTSDF(1) = y;
         idTSDF(2) = z;
@@ -316,7 +326,11 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
     float di = 0;
     Vector3ida idTSDF;
     if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF,
-          idx==pc_d.w_/2 && idy==pc_d.h_/2)) {
+          (idx==pc_d.w_-1 && idy==pc_d.h_-1) || 
+          (idx==0 && idy==pc_d.h_-1) || 
+          (idx==pc_d.w_-1 && idy==0) || 
+          (idx==0 && idy==0)
+          )) {
       pc_d(idx,idy) = r_d.dir*di;
       // surface normal: 
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),

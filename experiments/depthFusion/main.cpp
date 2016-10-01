@@ -64,7 +64,7 @@ int main( int argc, char* argv[] )
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  size_t dTSDF = 128;
+  size_t dTSDF = 512;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
@@ -179,20 +179,20 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
-  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2.,0);
-  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,3);
-  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,3);
-  pangolin::Var<float> gridEz("ui.gridE z",3.0,2,3);
+  pangolin::Var<float> grid0x("ui.grid0 x",-6.0,-2.,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-6.0,-2.,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-6.0,-2.,0);
+  pangolin::Var<float> gridEx("ui.gridE x",6.0,2,3);
+  pangolin::Var<float> gridEy("ui.gridE y",6.0,2,3);
+  pangolin::Var<float> gridEz("ui.gridE z",6.0,2,3);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
-  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",7,0,10);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",0,0,10);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",0,0,10);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",3,0,10);
