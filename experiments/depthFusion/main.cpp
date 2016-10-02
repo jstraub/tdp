@@ -31,6 +31,8 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/utils/Stopwatch.h>
+#include <tdp/inertial/imu_factory.h>
+#include <tdp/inertial/imu_interpolator.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -40,10 +42,12 @@ int main( int argc, char* argv[] )
   std::string input_uri = "openni2://";
   std::string output_uri = "pango://video.pango";
   std::string calibPath = "";
+  std::string imu_input_uri = "";
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
+    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
 
   // Open Video by URI
@@ -54,6 +58,18 @@ int main( int argc, char* argv[] )
     pango_print_error("No video streams from device.\n");
     return 1;
   }
+
+  // optionally connect to IMU if it is found.
+  tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
+  if (imu) imu->Start();
+  tdp::ImuInterpolator imuInterp(imu,nullptr);
+  imuInterp.Start();
+
+  Eigen::Matrix3f R_ir;
+  R_ir << 0, 0,-1,
+       0,-1, 0,
+       -1, 0, 0;
+  tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
 
   tdp::GUI gui(1200,800,video);
   size_t w = video.Streams()[gui.iRGB[0]].Width();
@@ -207,7 +223,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpRot("ui.run ICP Rot", true, true);
+  pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
+  pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", true, true);
   pangolin::Var<bool>  icpRotOverwrites("ui.ICP Rot Overwrites", false, true);
   pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",10,0,10);
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
@@ -236,6 +253,7 @@ int main( int argc, char* argv[] )
   }
   gui.verbose = false;
 
+  tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -247,7 +265,10 @@ int main( int argc, char* argv[] )
 
     gui.NextFrames();
     tdp::Image<uint16_t> dRaw;
-    if (!gui.ImageD(dRaw)) continue;
+    int64_t t_host_us_d = 0;
+    if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
+    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
+    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -303,6 +324,8 @@ int main( int argc, char* argv[] )
     TOCK("Setup Pyramids");
 
     tdp::SE3f dT;
+    if (icpImu) 
+      dT = T_wr_imu * T_wr_imu_prev.Inverse();
     if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -365,7 +388,6 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
-
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
 
     TICK("Draw 3D");
@@ -380,6 +402,11 @@ int main( int argc, char* argv[] )
     Eigen::AlignedBox3f box(grid0,gridE);
     glColor4f(1,0,0,0.5f);
     pangolin::glDrawAlignedBox(box);
+
+    // imu
+    pangolin::glSetFrameOfReference(T_wr_imu.matrix());
+    pangolin::glDrawAxis(0.2f);
+    pangolin::glUnsetFrameOfReference();
 
     // render global view of the model first
     pangolin::glDrawAxis(0.1f);
@@ -529,6 +556,7 @@ int main( int argc, char* argv[] )
       pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
       ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
     }
+    T_wr_imu_prev = T_wr_imu;
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -539,6 +567,9 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+  imuInterp.Stop();
+  if (imu) imu->Stop();
+  delete imu;
   return 0;
 }
 
