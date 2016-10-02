@@ -70,6 +70,8 @@ class SO3 : Manifold<T,3> {
 
   static SO3<T> Random();
 
+  /// Elementary rotation matrices about the x,y,z axis by angle alpha
+  /// [rad]
   static SO3<T> Rx(T alpha);
   static SO3<T> Ry(T alpha);
   static SO3<T> Rz(T alpha);

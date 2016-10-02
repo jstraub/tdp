@@ -33,6 +33,7 @@
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/inertial/imu_factory.h>
 #include <tdp/inertial/imu_interpolator.h>
+#include <tdp/manifold/SO3.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -136,7 +137,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
-  tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -198,10 +198,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<bool> dispDepthPyrEst("ui.disp d pyr est", false,true);
 
-  pangolin::Var<bool> runFusion("ui.run Fusion",false,true);
+  pangolin::Var<bool> runFusion("ui.run Fusion",true,true);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
-  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
   pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
   pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
@@ -224,7 +224,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
-  pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", true, true);
+  pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
   pangolin::Var<bool>  icpRotOverwrites("ui.ICP Rot Overwrites", false, true);
   pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",10,0,10);
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
@@ -253,6 +253,10 @@ int main( int argc, char* argv[] )
   }
   gui.verbose = false;
 
+  tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
+  T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
+  tdp::SE3f T_mo_0 = T_mo;
+  tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video
@@ -350,7 +354,14 @@ int main( int argc, char* argv[] )
       T_mo = dT*T_mo;
       //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
+
+      std::cout << "T_mo update: " << std::endl 
+        << T_mo * T_mo_prev.Inverse() << std::endl;
+      std::cout << "IMU : " << std::endl 
+        << T_wr_imu * T_wr_imu_prev.Inverse() << std::endl;
     }
+      std::cout << "T_mo after ICP: " << std::endl 
+        << T_mo  << std::endl;
 
     if (showIcpError) {
       tdp::Image<tdp::Vector3fda> pc_m = pcs_m.GetImage(icpErrorLvl);
@@ -369,23 +380,27 @@ int main( int argc, char* argv[] )
         cuICPassoc_c);
     }
 
-    if (pangolin::Pushed(resetTSDF)) {
-      T_mo.matrix() = Eigen::Matrix4f::Identity();
-      TSDF.Fill(tdp::TSDFval(-1.01,0.));
-      dEst.Fill(0.);
-      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
-      numFused = 0;
-    }
-    if (pangolin::Pushed(resetICP)) {
-      T_mo.matrix() = Eigen::Matrix4f::Identity();
-    }
-
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
       AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
+    }
+
+    if (pangolin::Pushed(resetTSDF)) {
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
+      dEst.Fill(0.);
+      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+      numFused = 0;
+      T_mo = T_mo_0;
+      T_mo_prev = T_mo;
+      std::cout << "resetting ICP and TSDF" << std::endl;
+    }
+    if (pangolin::Pushed(resetICP)) {
+      T_mo = T_mo_0;
+      T_mo_prev = T_mo;
+      std::cout << "resetting ICP" << std::endl;
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
@@ -556,7 +571,10 @@ int main( int argc, char* argv[] )
       pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
       ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
     }
-    T_wr_imu_prev = T_wr_imu;
+    if (!gui.paused()) {
+      T_wr_imu_prev = T_wr_imu;
+      T_mo_prev = T_mo;
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

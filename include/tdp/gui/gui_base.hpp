@@ -68,6 +68,8 @@ class GuiBase {
     return pangolin::Display("container");
   }
 
+  bool paused() { return frame == end_frame; }
+
   std::vector<int> iRGB, iD;
   std::vector<int64_t> t_host_us_;
 
