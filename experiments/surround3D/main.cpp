@@ -37,19 +37,28 @@
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/camera/rig.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/inertial/imu_factory.h>
+#include <tdp/inertial/imu_interpolator.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
-
-void VideoViewer(const std::string& input_uri, 
-    const std::string& configPath,
-    const std::string& output_uri)
+//
+int main( int argc, char* argv[] )
 {
+  const std::string dflt_output_uri = "pango://video.pango";
+  std::string input_uri = std::string(argv[1]);
+  std::string configPath = std::string(argv[2]);
+  std::string imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+  std::string output_uri = (argc > 4) ? std::string(argv[4]) : dflt_output_uri;
+
   std::cout << " -!!- this application works only with openni2 devices (tested with Xtion PROs) -!!- " << std::endl;
 
   // Read rig file
   tdp::Rig<CameraT> rig;
-  if (!rig.FromFile(configPath, false)) return;
+  if (!rig.FromFile(configPath, false)) {
+    pango_print_error("No config file specified.\n");
+    return 1;
+  }
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -57,7 +66,7 @@ void VideoViewer(const std::string& input_uri,
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 2;
   }
   std::vector<int32_t> rgbStream2cam;
   std::vector<int32_t> dStream2cam;
@@ -65,6 +74,11 @@ void VideoViewer(const std::string& input_uri,
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
   tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
       dStream2cam, rgbdStream2cam);
+
+  // optionally connect to IMU if it is found.
+  tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
+  if (imu) imu->Start();
+  tdp::PoseInterpolator imuInterp;
 
   tdp::GuiBase gui(1200,800,video);
 
@@ -575,44 +589,6 @@ void VideoViewer(const std::string& input_uri,
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
-}
-
-
-int main( int argc, char* argv[] )
-{
-  const std::string dflt_output_uri = "pango://video.pango";
-
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string configPath = (argc > 2) ? std::string(argv[2]) : "../config/surround3D_2016_09_11.json";
-    try{
-      VideoViewer(input_uri, configPath, dflt_output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
-    }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
-
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
-  }
-
   return 0;
 }
+

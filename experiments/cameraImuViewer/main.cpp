@@ -36,8 +36,8 @@
 #include <tdp/inertial/imu_outstream.h>
 #include <tdp/drivers/inertial/3dmgx3_45.h>
 #include <tdp/utils/Stopwatch.h>
-#include <tdp/inertial/pose_interpolator.h>
 #include <tdp/inertial/imu_factory.h>
+#include <tdp/inertial/imu_interpolator.h>
 #include <tdp/directional/hist.h>
 #include <tdp/camera/ray.h>
 
@@ -82,11 +82,10 @@ int main( int argc, char* argv[] )
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
   if (imu) imu->Start();
-
-  tdp::PoseInterpolator imuInterp;
-
   tdp::ImuOutStream imu_out("./imu.pango");
   imu_out.Open(imu_input_uri, imu? imu->GetProperties() : pangolin::json::value());
+  tdp::ImuInterpolator imuInterp(imu, &imu_out);
+  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
 
@@ -145,7 +144,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
-  pangolin::Var<bool> logData("ui.log data",false,true);
   pangolin::Var<bool> verbose("ui.verbose ",false,true);
   pangolin::Var<bool> collectStreams("ui.collect streams",true,true);
 
@@ -153,52 +151,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> histLog("ui.hist log",false,true);
   pangolin::Var<bool> histShowEmpty("ui.show empty",true,true);
   pangolin::Var<bool> reset("ui.reset",true,false);
-
-  tdp::ThreadedValue<bool> receiveImu(true);
-  tdp::ThreadedValue<size_t> numReceived(0);
-  std::thread receiverThread (
-    [&]() {
-      tdp::ImuObs imuObs;
-      tdp::ImuObs imuObsPrev;
-      bool calibrated = false;
-      Eigen::Vector3f gyro_bias = Eigen::Vector3f::Zero();
-      int numCalib = 0;
-      while(receiveImu.Get()) {
-        if (imu && imu->GrabNext(imuObs)) {
-
-          if (imu && video.IsRecording()) {
-            imu_out.WriteStream(imuObs);
-          }
-
-          if (!calibrated && numReceived.Get() > 10 
-            && imuObs.omega.norm() < 2./180.*M_PI) {
-            gyro_bias += imuObs.omega;
-            numCalib ++;
-            std::cout << imuObs.omega.norm()*180./M_PI << std::endl;
-          } else if (!calibrated && numReceived.Get() > 10) {
-            calibrated = true;
-            gyro_bias /= numCalib;
-            std::cout << "IMU gyro calibrated: " << gyro_bias.transpose() 
-              << std::endl;
-          } else {
-            imuObs.omega -= gyro_bias;
-          }
-
-          Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-          se3.topRows(3) = imuObs.omega;
-          if (numReceived.Get() == 0) {
-            imuInterp.Add(imuObs.t_host, tdp::SE3f());
-          } else {
-            int64_t dt_ns = imuObs.t_device - imuObsPrev.t_device;
-            imuInterp.Add(imuObs.t_host, se3, dt_ns);
-          }
-          imuObsPrev = imuObs;
-          numReceived.Increment();
-
-        }
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
-      }
-    });
 
   tdp::GeodesicHist<3> dirHist;
 
@@ -221,7 +173,7 @@ int main( int argc, char* argv[] )
             0,-1, 0,
            -1, 0, 0;
     tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
-    tdp::SE3f T_wr = imuInterp[tNow]*T_ir; 
+    tdp::SE3f T_wr = imuInterp.Ts_wi_[tNow]*T_ir; 
     TOCK("next frames");
 
     if (verbose) std::cout << "collecting rgb frames" << std::endl;
@@ -332,14 +284,17 @@ int main( int argc, char* argv[] )
     if(video.IsRecording()) {
       pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
+      imuInterp.StartRecording();
+    } else {
+      imuInterp.StopRecording();
     }
     // finish this frame
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
-  receiveImu.Set(false);
-  receiverThread.join();
+  imuInterp.Stop();
   if (imu) imu->Stop();
+  delete imu;
   imu_out.Close();
   return 0;
 }

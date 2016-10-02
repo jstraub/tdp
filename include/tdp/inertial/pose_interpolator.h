@@ -62,6 +62,11 @@ class PoseInterpolator {
     }
   }
 
+  SE3f operator()(int64_t t0, int64_t t1) {
+    SE3f dT = this->operator[](t1) * this->operator[](t0).Inverse();
+    return dT;
+  }
+
  private:
   std::vector<int64_t> ts_; // time stamp in nano seconds
   std::vector<SE3f> Ts_;
