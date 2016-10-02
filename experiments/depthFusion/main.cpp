@@ -207,10 +207,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
-  pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",3,0,10);
-  pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",0,0,10);
-  pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",0,0,10);
+  pangolin::Var<bool>  icpRot("ui.run ICP Rot", true, true);
+  pangolin::Var<bool>  icpRotOverwrites("ui.ICP Rot Overwrites", false, true);
+  pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
+  pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",5,0,10);
 
   pangolin::Var<bool> showIcpError("ui.show ICP",true,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
@@ -306,20 +307,22 @@ int main( int argc, char* argv[] )
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_mo.matrix() = Eigen::Matrix4f::Identity();
-//      tdp::SE3f dTRot;
-//      if (icpRot) {
-//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-//            camD, maxItRot, icpAngleThr_deg); 
-//        std::cout << dTRot.matrix3x4() << std::endl;
-//      }
-//      dT = dTRot;
+      tdp::SE3f dTRot;
+      if (icpRot) {
+        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+            camD, maxItRot, icpAngleThr_deg); 
+        std::cout << dTRot.matrix3x4() << std::endl;
+      }
+      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
       //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
-//      if (icpRot) 
-//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
+
+      std::cout << dT.matrix3x4() << std::endl;
+      if (icpRot && icpRotOverwrites) 
+        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
       std::cout << dT.matrix3x4() << std::endl;
       T_mo = dT*T_mo;
       //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;

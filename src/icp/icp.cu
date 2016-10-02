@@ -253,25 +253,25 @@ template void ICPVisualizeAssoc (
     float angleThr, float distThr, Image<float>& assoc_m, Image<float>& assoc_o);
 
 // T_mc: T_model_current
-template<int BLK_SIZE>
+template<int BLK_SIZE, int D, typename Derived>
 __global__ void KernelICPStepRotation(
     Image<Vector3fda> n_m,
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     SE3f T_mo, 
-    const Camera<float> cam,
+    const CameraBase<float,D,Derived> cam,
     float dotThr,
     int N_PER_T,
     Image<float> out
     ) {
-  assert(BLK_SIZE >=7);
+  assert(BLK_SIZE >=10);
   const int tid = threadIdx.x;
   const int id_ = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = id_*N_PER_T;
   const int idE = min((int)pc_o.Area(),(id_+1)*N_PER_T);
-  SharedMemory<Vector7fda> smem;
-  Vector7fda* sum = smem.getPointer();
-  sum[tid] = Vector7fda::Zero();
+  SharedMemory<Vector10fda> smem;
+  Vector10fda* sum = smem.getPointer();
+  sum[tid] = Vector10fda::Zero();
   for (int id=idS; id<idE; ++id) {
     const int idx = id%pc_o.w_;
     const int idy = id/pc_o.w_;
@@ -290,19 +290,21 @@ __global__ void KernelICPStepRotation(
         && IsValidData(pc_o_in_m)) {
       // found association -> check thresholds;
       Vector3fda n_o_in_m = T_mo.rotation() * n_o(idx,idy);
+//      Vector3fda n_o_in_m = n_o(idx,idy);
       Vector3fda n_mi = n_m(u,v);
       const float dot  = n_mi.dot(n_o_in_m);
       if (dot > dotThr && IsValidData(n_mi)) {
         // association is good -> accumulate
-        Eigen::Matrix<float,7,1,Eigen::DontAlign> upperTriangle;
-        upperTriangle(0) = n_mi(0)*n_o_in_m(0);
-        upperTriangle(1) = n_mi(1)*n_o_in_m(0);
-        upperTriangle(2) = n_mi(2)*n_o_in_m(0);
-        upperTriangle(3) = n_mi(1)*n_o_in_m(1);
-        upperTriangle(4) = n_mi(1)*n_o_in_m(2);
-        upperTriangle(5) = n_mi(2)*n_o_in_m(2);
-        upperTriangle(6) = 1.; // to get number of data points
-        sum[tid] += upperTriangle;
+        sum[tid](0) += n_mi(0)*n_o_in_m(0);
+        sum[tid](1) += n_mi(0)*n_o_in_m(1);
+        sum[tid](2) += n_mi(0)*n_o_in_m(2);
+        sum[tid](3) += n_mi(1)*n_o_in_m(0);
+        sum[tid](4) += n_mi(1)*n_o_in_m(1);
+        sum[tid](5) += n_mi(1)*n_o_in_m(2);
+        sum[tid](6) += n_mi(2)*n_o_in_m(0);
+        sum[tid](7) += n_mi(2)*n_o_in_m(1);
+        sum[tid](8) += n_mi(2)*n_o_in_m(2);
+        sum[tid](9) += 1.; // to get number of data points
       }
     }
   }
@@ -314,18 +316,19 @@ __global__ void KernelICPStepRotation(
     }
     __syncthreads();
   }
-  if(tid < 7) {
+  if(tid < 10) {
     // sum the last two remaining matrixes directly into global memory
     atomicAdd(&out[tid], sum[0](tid)+sum[1](tid));
   }
 }
 
+template<int D, typename Derived>
 void ICPStepRotation (
     Image<Vector3fda> n_m,
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
     float& count
@@ -333,31 +336,48 @@ void ICPStepRotation (
   const size_t BLK_SIZE = 32;
   dim3 threads, blocks;
   ComputeKernelParamsForArray(blocks,threads,pc_o.Area()/10,BLK_SIZE);
-  ManagedDeviceImage<float> out(7,1);
-  cudaMemset(out.ptr_, 0, 7*sizeof(float));
+  ManagedDeviceImage<float> out(10,1);
+  cudaMemset(out.ptr_, 0, 10*sizeof(float));
 
-  KernelICPStepRotation<BLK_SIZE><<<blocks,threads,
-    BLK_SIZE*sizeof(Vector7fda)>>>(
+  KernelICPStepRotation<BLK_SIZE,D,Derived><<<blocks,threads,
+    BLK_SIZE*sizeof(Vector10fda)>>>(
         n_m,n_o,pc_o,T_mo,cam,
         dotThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
-  ManagedHostImage<float> nUpperTri(7,1);
-  cudaMemcpy(nUpperTri.ptr_,out.ptr_,7*sizeof(float), cudaMemcpyDeviceToHost);
+  ManagedHostImage<float> nUpperTri(10,1);
+  cudaMemcpy(nUpperTri.ptr_,out.ptr_,10*sizeof(float), cudaMemcpyDeviceToHost);
 
   //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
   //std::cout << std::endl;
   N.fill(0.);
   int k = 0;
   for (int i=0; i<3; ++i) {
-    for (int j=i; j<3; ++j) {
-      float val = nUpperTri[k++];
-      N(i,j) = val;
-      N(j,i) = val;
+    for (int j=0; j<3; ++j) {
+      N(i,j) = nUpperTri[k++];
     }
   }
-  count = nUpperTri[6];
+  count = nUpperTri[9];
   //std::cout << ATA << std::endl << ATb.transpose() << std::endl;
   //std::cout << "\terror&count " << error << " " << count << std::endl;
 }
+
+template void ICPStepRotation (
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> n_o,
+    Image<Vector3fda> pc_o,
+    const SE3f& T_mo, 
+    const BaseCameraf& cam,
+    float dotThr,
+    Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
+    float& count);
+template void ICPStepRotation (
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> n_o,
+    Image<Vector3fda> pc_o,
+    const SE3f& T_mo, 
+    const BaseCameraPoly3f& cam,
+    float dotThr,
+    Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
+    float& count);
 
 }

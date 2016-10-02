@@ -74,7 +74,7 @@ template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& ns_o,
     SE3f& T_mo,
     const SE3f& T_cm,
-    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    const BaseCameraf& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
     );
 template void ICP::ComputeProjective(
@@ -84,17 +84,18 @@ template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& ns_o,
     SE3f& T_mo,
     const SE3f& T_cm,
-    const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
+    const BaseCameraPoly3f& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
     );
 
 
+template<int D, typename Derived>
 void ICP::ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg) {
 
   Eigen::Matrix<float,3,3,Eigen::DontAlign> Nda;
@@ -106,23 +107,23 @@ void ICP::ComputeProjectiveRotation(
     for (size_t it=0; it<maxIt[lvl]; ++it) {
       // Compute ATA and ATb from A x = b
 #ifdef CUDA_FOUND
-      ICPStepRotation(ns_m.GetImage(lvl), 
+      ICPStepRotation<D,Derived>(ns_m.GetImage(lvl), 
           ns_o.GetImage(lvl),
           pcs_o.GetImage(lvl), 
           T_mo, ScaleCamera<float>(cam,pow(0.5,lvl)),
           cos(angleThr_deg*M_PI/180.),
           Nda,count);
 #endif
-      if (count < 100) {
+      if (count < 1000) {
         std::cout << "# inliers " << count << " to small " << std::endl;
-        return;
+        break;
       }
       // solve for R using SVD
-      Eigen::Matrix3f N(Nda);
+      Eigen::Matrix3d N(Nda.cast<double>());
       error = N.trace()/count;
-      Eigen::JacobiSVD<Eigen::Matrix3f> svd(N,
+      Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
           Eigen::ComputeFullU | Eigen::ComputeFullV);
-      Eigen::Matrix3f dR = svd.matrixU()*svd.matrixV().transpose();
+      Eigen::Matrix3f dR = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
       std::cout << N <<  std::endl;
       std::cout << dR <<  std::endl;
       // apply x to the transformation
@@ -130,13 +131,30 @@ void ICP::ComputeProjectiveRotation(
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
+        << " rank(N): " << svd.rank() 
         << std::endl;
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;
-      if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
+      if (false && it>0 && fabs(error-errPrev)/error < 1e-7) break;
       errPrev = error;
     }
   }
 }
+
+template void ICP::ComputeProjectiveRotation(
+    Pyramid<Vector3fda,3>& ns_m,
+    Pyramid<Vector3fda,3>& ns_o,
+    Pyramid<Vector3fda,3>& pcs_o,
+    SE3f& T_mo,
+    const BaseCameraf& cam,
+    const std::vector<size_t>& maxIt, float angleThr_deg);
+template void ICP::ComputeProjectiveRotation(
+    Pyramid<Vector3fda,3>& ns_m,
+    Pyramid<Vector3fda,3>& ns_o,
+    Pyramid<Vector3fda,3>& pcs_o,
+    SE3f& T_mo,
+    const BaseCameraPoly3f& cam,
+    const std::vector<size_t>& maxIt, float angleThr_deg);
+
 
 }

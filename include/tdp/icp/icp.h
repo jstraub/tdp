@@ -44,12 +44,13 @@ void ICPVisualizeAssoc (
     Image<float>& assoc_o
     );
 
+template<int D, typename Derived>
 void ICPStepRotation (
     Image<Vector3fda> n_m,
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
     float& count
@@ -62,7 +63,7 @@ class ICP {
   /// Compute realtive pose between the given depth and normals and the
   /// model; uses pyramids, projective data association and
   /// point-to-plane distance
-   template<int D, typename Derived>
+  template<int D, typename Derived>
   static void ComputeProjective(
     Pyramid<Vector3fda,3>& pcs_m,
     Pyramid<Vector3fda,3>& ns_m,
@@ -76,12 +77,13 @@ class ICP {
 
   /// Compute relative rotation between two surface normal "images";
   /// uese projective data association
+  template<int D, typename Derived>
   static void ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
-    const Camera<float>& cam,
+    const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
 
  private:
