@@ -362,10 +362,6 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
-    if (!runFusion) {
-      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
-    }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
 
@@ -525,6 +521,11 @@ int main( int argc, char* argv[] )
     }
 
     TOCK("Draw 2D");
+
+    if (!runFusion) {
+      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
+      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
