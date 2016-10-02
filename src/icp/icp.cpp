@@ -57,7 +57,8 @@ void ICP::ComputeProjective(
         << " # inliers: " << count 
         << " rank(ATA): " << rank
         << " det(R): " << T_mo.rotation().matrix().determinant()
-        << " |x|: " << x.norm()
+        << " |x|: " << x.topRows(3).norm()*180./M_PI 
+        << " " <<  x.bottomRows(3).norm()
         << std::endl;
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;

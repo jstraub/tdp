@@ -344,7 +344,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
 //      pc_d(idx,idy) = r_d.dir*di;
       // compute pc and normals in reference coordinates
       n_d(idx,idy) = ni; 
-      pc_d(idx,idy) = r_d_in_r.dir*di;
+      pc_d(idx,idy) = r_d_in_r.PointAtDepth(di);
     }
 
 //    //Eigen::Vector3fda n(0,0,-1);

@@ -254,7 +254,7 @@ int main( int argc, char* argv[] )
   gui.verbose = false;
 
   tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
-  //T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
+  T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
   tdp::SE3f T_mo_0 = T_mo;
   tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;
@@ -575,6 +575,13 @@ int main( int argc, char* argv[] )
     TOCK("Draw 2D");
 
     if (!runFusion) {
+      tdp::SO3f R_mo = T_mo.rotation();
+      for (size_t lvl=0; lvl<3; ++lvl) {
+        tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
+        tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);
+        tdp::TransformPc(T_mo, pc);
+        tdp::TransformPc(R_mo, n);
+      }
       pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
       ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
     }
