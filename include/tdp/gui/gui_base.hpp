@@ -19,7 +19,6 @@ class GuiBase {
   ~GuiBase();
 
   void NextFrames() {
-
     if(frame.GuiChanged()) {
       if(video_playback) {
         frame = video_playback->Seek(frame) -1;
@@ -29,23 +28,32 @@ class GuiBase {
     if ( frame < end_frame ) {
       if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
         frame = frame +1;
+
+        pangolin::json::value props = pangolin::GetVideoFrameProperties(&video);
+//        std::cout << props.serialize(true) << std::endl;
+        t_host_us_.clear();
+        for (size_t i=0; i<images.size(); ++i) {
+          t_host_us_.push_back(props[i]["hosttime_us"].get<int64_t>());
+        }
       }
     }
   }
 
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
 
-  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0) const {
+  bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0, int64_t* t_host_us=nullptr) const {
     if (camId >= iD.size()) return false;
     d = tdp::Image<uint16_t>(images[iD[camId]].w, images[iD[camId]].h,
         images[iD[camId]].pitch, reinterpret_cast<uint16_t*>(images[iD[camId]].ptr));
+    if (t_host_us) *t_host_us = t_host_us_[iD[camId]];
     return true; 
   } 
-  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0) const {
+  bool ImageRGB(tdp::Image<tdp::Vector3bda>& rgb, size_t camId=0, int64_t* t_host_us=nullptr) const {
     if (camId >= iRGB.size()) return false;
     rgb = tdp::Image<tdp::Vector3bda>(images[iRGB[camId]].w, images[iRGB[camId]].h,
         images[iRGB[camId]].pitch, 
         reinterpret_cast<tdp::Vector3bda*>(images[iRGB[camId]].ptr));
+    if (t_host_us) *t_host_us = t_host_us_[iRGB[camId]];
     return true; 
   } 
 
@@ -54,6 +62,7 @@ class GuiBase {
   }
 
   std::vector<int> iRGB, iD;
+  std::vector<int64_t> t_host_us_;
 
   pangolin::Var<int> frame;
   pangolin::Var<int>  record_timelapse_frame_skip;

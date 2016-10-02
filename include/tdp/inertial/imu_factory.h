@@ -22,7 +22,7 @@ ImuInterface* OpenImu(const std::string& uri_str) {
   const pangolin::Uri uri = pangolin::ParseUri(uri_str);
   
   if (!uri.scheme.compare("file")) {
-    const bool realtime = uri.Contains("realtime");
+    const bool realtime = uri.Get<bool>("realtime",true);
     const std::string path = pangolin::PathExpand(uri.url);
     imu = new ImuPango(path, realtime);
   }

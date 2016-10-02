@@ -60,6 +60,11 @@ int main( int argc, char* argv[] )
     return 1;
   }
 
+
+
+  pangolin::OpenVideo(input_uri);
+    
+
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
   const size_t num_streams = video.Streams().size();
@@ -78,7 +83,8 @@ int main( int argc, char* argv[] )
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
   if (imu) imu->Start();
-  tdp::PoseInterpolator imuInterp;
+  tdp::ImuInterpolator imuInterp(imu,nullptr);
+  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
 
@@ -589,6 +595,9 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+  imuInterp.Stop();
+  if (imu) imu->Stop();
+  delete imu;
   return 0;
 }
 
