@@ -32,8 +32,15 @@ class GuiBase {
         pangolin::json::value props = pangolin::GetVideoFrameProperties(&video);
 //        std::cout << props.serialize(true) << std::endl;
         t_host_us_.clear();
-        for (size_t i=0; i<images.size(); ++i) {
-          t_host_us_.push_back(props[i]["hosttime_us"].get<int64_t>());
+        if (props.contains("streams")) {
+          for (size_t i=0; i<images.size(); ++i) {
+            if (props["streams"][i].contains("hosttime_us")) {
+              t_host_us_.push_back(props["streams"][i]["hosttime_us"].get<int64_t>());
+            }
+          }
+        } else {
+          std::cout << "could not find strem properties in: " << std::endl
+            << props.serialize(true) << std::endl;
         }
       }
     }
