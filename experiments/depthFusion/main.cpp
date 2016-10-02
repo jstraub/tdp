@@ -182,6 +182,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<bool> dispDepthPyrEst("ui.disp d pyr est", false,true);
 
+  pangolin::Var<bool> runFusion("ui.run Fusion",false,true);
+
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
@@ -253,24 +255,26 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
-    if (gui.verbose) std::cout << "ray trace" << std::endl;
-    TICK("Ray Trace TSDF");
-    //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
-    // first one not needed anymore
-    if (pcFromTSDF && !dispDepthPyrEst) {
-      RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
-      // get pc in model coordinate system
-      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
-    } else {
-      RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
-          dGrid, tsdfMu); 
-      tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-          cudaMemcpyDeviceToDevice, 0.03);
-      // compute point cloud from depth images in camera cosy
-      tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+    if (runFusion) {
+      if (gui.verbose) std::cout << "ray trace" << std::endl;
+      TICK("Ray Trace TSDF");
+      //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
+      // first one not needed anymore
+      if (pcFromTSDF && !dispDepthPyrEst) {
+        RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+            ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
+        // get pc in model coordinate system
+        tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+      } else {
+        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
+            dGrid, tsdfMu); 
+        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
+            cudaMemcpyDeviceToDevice, 0.03);
+        // compute point cloud from depth images in camera cosy
+        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+      }
+      TOCK("Ray Trace TSDF");
     }
-    TOCK("Ray Trace TSDF");
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
@@ -298,7 +302,7 @@ int main( int argc, char* argv[] )
     TOCK("Setup Pyramids");
 
     tdp::SE3f dT;
-    if (runICP && numFused > 30) {
+    if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_mo.matrix() = Eigen::Matrix4f::Identity();
@@ -350,12 +354,17 @@ int main( int argc, char* argv[] )
       T_mo.matrix() = Eigen::Matrix4f::Identity();
     }
 
-    if (fuseTSDF || numFused <= 30) {
+    if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
       AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
+    }
+
+    if (!runFusion) {
+      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
+      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;

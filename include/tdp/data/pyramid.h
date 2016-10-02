@@ -59,6 +59,14 @@ class Pyramid {
     return w*h*((1<<lvl)-1)/(1<<(std::max(0,lvl-1))); 
   }
 
+#ifdef CUDA_FOUND
+  /// Perform copy from the given src pyramid to this pyramid.
+  /// Use type to specify from which memory to which memory to copy.
+  void CopyFrom(const Pyramid<T,LEVELS>& src, cudaMemcpyKind type) {
+    checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+  }
+#endif
+
   size_t w_;
   size_t h_;
   T* ptr_;
