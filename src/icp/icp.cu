@@ -24,7 +24,7 @@ __global__ void KernelICPStep(
     Image<Vector3fda> pc_o,
     Image<Vector3fda> n_o,
     SE3f T_mo, 
-    SE3f T_cm, 
+    SE3f T_co, 
     const CameraBase<float,D,Derived> cam,
     float dotThr,
     float distThr,
@@ -33,55 +33,60 @@ __global__ void KernelICPStep(
     ) {
   assert(BLK_SIZE >=29);
   const int tid = threadIdx.x;
-  const int id_ = threadIdx.x + blockDim.x * blockIdx.x;
-  const int idS = id_*N_PER_T;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idS = idx*N_PER_T;
   const int N = pc_m.w_*pc_m.h_;
-  const int idE = min(N,(id_+1)*N_PER_T);
+  const int idE = min(N,(idx+1)*N_PER_T);
+
   SharedMemory<Vector29fda> smem;
   Vector29fda* sum = smem.getPointer();
+
   sum[tid] = Vector29fda::Zero();
   for (int id=idS; id<idE; ++id) {
-    const int idx = id%pc_o.w_;
-    const int idy = id/pc_o.w_;
+    const int x = id%pc_o.w_;
+    const int y = id/pc_o.w_;
     // project current point into model frame to get association
-    if (idx < pc_o.w_ && idy < pc_o.h_ ) {
-      Vector3fda pc_oi = pc_o(idx,idy);
-      if (!IsValidData(pc_oi)) continue;
-      Vector3fda pc_o_in_m = T_mo*pc_oi;
-      // project into model camera
-      Vector2fda x_o_in_mc = cam.Project(T_cm*pc_o_in_m);
-      const int u = floor(x_o_in_mc(0)+0.5f);
-      const int v = floor(x_o_in_mc(1)+0.5f);
-      if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
-          && pc_oi(2) > 0. && pc_o_in_m(2) > 0.
-          && IsValidData(pc_o_in_m)) {
-        // found association -> check thresholds;
-        Vector3fda n_o_in_m = T_mo.rotation()*n_o(idx,idy);
-        Vector3fda n_mi = n_m(u,v);
-        Vector3fda pc_mi = pc_m(u,v);
-        const float dot  = n_mi.dot(n_o_in_m);
-        const float dist = (pc_mi-pc_o_in_m).norm();
-        if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
-          // association is good -> accumulate
-          // if we found a valid association accumulate the A and b for A x = b
-          // where x \in se{3} as well as the residual error
-          float ab[7];      
-          Eigen::Map<Vector3fda> top(&(ab[0]));
-          Eigen::Map<Vector3fda> bottom(&(ab[3]));
-          // as in mp3guy: 
-          top = (pc_o_in_m).cross(n_mi);
-          bottom = n_mi;
-          ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
-          Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
-          int k=0;
+    if (x < pc_m.w_ && y < pc_m.h_ ) {
+      Vector3fda pc_mi = pc_m(x,y);
+      if (IsValidData(pc_mi) && pc_mi(2) > 0.) {
+        Vector3fda pc_m_in_o = T_mo.Inverse()*pc_mi;
+        // project into model camera
+        // TODO: T_co
+        Vector2fda x_m_in_c = cam.Project(T_co*pc_m_in_o);
+        const int u = floor(x_m_in_c(0)+0.5f);
+        const int v = floor(x_m_in_c(1)+0.5f);
+        if (0 <= u && u < pc_o.w_ && 0 <= v && v < pc_o.h_
+            && pc_m_in_o(2) > 0.
+            && IsValidData(pc_m_in_o)) {
+          // found association -> check thresholds;
+          Vector3fda n_o_in_m = T_mo.rotation()*n_o(u,v);
+          Vector3fda n_mi = n_m(x,y);
+          Vector3fda pc_oi = pc_o(u,v);
+          Vector3fda pc_o_in_m = T_mo * pc_oi;
+          const float dot  = n_mi.dot(n_o_in_m);
+          const float dist = (pc_mi-pc_o_in_m).norm();
+          if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
+            // association is good -> accumulate
+            // if we found a valid association accumulate the A and b for A x = b
+            // where x \in se{3} as well as the residual error
+            float ab[7];      
+            Eigen::Map<Vector3fda> top(&(ab[0]));
+            Eigen::Map<Vector3fda> bottom(&(ab[3]));
+            // as in mp3guy: 
+            top = (pc_o_in_m).cross(n_mi);
+            bottom = n_mi;
+            ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
+            Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
+            int k=0;
 #pragma unroll
-          for (int i=0; i<7; ++i) {
-            for (int j=i; j<7; ++j) {
-              upperTriangle(k++) = ab[i]*ab[j];
+            for (int i=0; i<7; ++i) {
+              for (int j=i; j<7; ++j) {
+                upperTriangle(k++) = ab[i]*ab[j];
+              }
             }
+            upperTriangle(28) = 1.; // to get number of data points
+            sum[tid] += upperTriangle;
           }
-          upperTriangle(28) = 1.; // to get number of data points
-          sum[tid] += upperTriangle;
         }
       }
     }
@@ -188,32 +193,35 @@ __global__ void KernelICPVisualizeAssoc(
   const int idE = min(N,(idx+1)*N_PER_T);
 
   for (int id=idS; id<idE; ++id) {
-    const int idx = id%pc_o.w_;
-    const int idy = id/pc_o.w_;
-    Vector3fda pc_oi = pc_o(idx,idy);
+    const int x = id%pc_m.w_;
+    const int y = id/pc_m.w_;
     // project current point into model frame to get association
-    if (idx < pc_o.w_ && idy < pc_o.h_ && IsValidData(pc_oi)) {
-      Vector3fda pc_o_in_m = T_mo * pc_oi;
-      // project into model camera
-      Vector2fda x_o_in_m = cam.Project(pc_o_in_m);
-      int u = floor(x_o_in_m(0)+0.5f);
-      int v = floor(x_o_in_m(1)+0.5f);
-      if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
-          && pc_oi(2) > 0. && pc_o_in_m(2) > 0.
-          && IsValidData(pc_o_in_m)) {
-        // found association -> check thresholds;
-        Vector3fda n_o_in_m = T_mo.rotation() * n_o(idx,idy);
-        Vector3fda n_mi = n_m(u,v);
-        Vector3fda pc_mi = pc_m(u,v);
-        float dot  = n_mi.dot(n_o_in_m);
-        float dist = (pc_mi-pc_o_in_m).norm();
-        if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
-          // association is good -> accumulate
-          //assoc_m(u,v) = n_mi.dot(-pc_mi+pc_o_in_m);
-          //assoc_o(idx,idy) = n_mi.dot(-pc_mi+pc_o_in_m);
-          assoc_m(u,v) = (-pc_mi+pc_o_in_m).norm();
-          assoc_o(idx,idy) = (-pc_mi+pc_o_in_m).norm();
-//          if (threadIdx.x < 3) printf("%d,%d and %d,%d\n", idx,idy,u,v);
+    if (x < pc_m.w_ && y < pc_m.h_ ) {
+      Vector3fda pc_mi = pc_m(x,y);
+      if (IsValidData(pc_mi) && pc_mi(2) > 0) {
+        Vector3fda pc_m_in_o = T_mo.Inverse() * pc_mi;
+        // project into current camera
+        Vector2fda x_m_in_o = cam.Project(pc_m_in_o);
+        int u = floor(x_m_in_o(0)+0.5f);
+        int v = floor(x_m_in_o(1)+0.5f);
+        if (0 <= u && u < pc_o.w_ && 0 <= v && v < pc_o.h_
+            && pc_m_in_o(2) > 0.
+            && IsValidData(pc_m_in_o)) {
+          // found association -> check thresholds;
+          Vector3fda n_o_in_m = T_mo.rotation() * n_o(u,v);
+          Vector3fda n_mi = n_m(x,y);
+          Vector3fda pc_oi = pc_o(u,v);
+          Vector3fda pc_o_in_m = T_mo * pc_oi;
+          float dot  = n_mi.dot(n_o_in_m);
+          float dist = (pc_mi-pc_o_in_m).norm();
+          if (dot > dotThr && dist < distThr && IsValidData(pc_mi)) {
+            // association is good -> accumulate
+            //assoc_m(u,v) = n_mi.dot(-pc_mi+pc_o_in_m);
+            //assoc_o(x,y) = n_mi.dot(-pc_mi+pc_o_in_m);
+            assoc_m(x,y) = n_mi.dot(-pc_mi+pc_o_in_m);
+            assoc_o(u,v) = n_mi.dot(-pc_mi+pc_o_in_m);
+            //          if (threadIdx.x < 3) printf("%d,%d and %d,%d\n", x,y,u,v);
+          }
         }
       }
     }

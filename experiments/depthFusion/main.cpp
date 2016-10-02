@@ -254,7 +254,7 @@ int main( int argc, char* argv[] )
   gui.verbose = false;
 
   tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
-  T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
+  //T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
   tdp::SE3f T_mo_0 = T_mo;
   tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;
@@ -263,6 +263,11 @@ int main( int argc, char* argv[] )
   while(!pangolin::ShouldQuit())
   {
     if (!normalsFromTSDF) pcFromTSDF = false;
+    if (runFusion.GuiChanged() && !runFusion) {
+      T_mo_0 = tdp::SE3f();
+      T_mo = T_mo_0;
+      T_mo_prev = T_mo_0;
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -281,27 +286,6 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
-    if (runFusion) {
-      if (gui.verbose) std::cout << "ray trace" << std::endl;
-      TICK("Ray Trace TSDF");
-      //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
-      // first one not needed anymore
-      if (pcFromTSDF && !dispDepthPyrEst) {
-        RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-            ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
-        // get pc in model coordinate system
-        tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
-      } else {
-        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
-            dGrid, tsdfMu); 
-        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-            cudaMemcpyDeviceToDevice, 0.03);
-        // compute point cloud from depth images in camera cosy
-        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
-      }
-      TOCK("Ray Trace TSDF");
-    }
-
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
@@ -316,42 +300,33 @@ int main( int argc, char* argv[] )
     } else { 
       tdp::Depth2Normals(cuDPyr,camD,ns_c);
     }
-    if (normalsFromTSDF) {
-      tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
-    } else {
-      if (normalsFromDepthPyr) {
-        tdp::Depth2NormalsViaDerivativePyr(cuDPyrEst,camD,ns_m);
-      } else {
-        tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
-      }
-    }
     TOCK("Setup Pyramids");
 
-    tdp::SE3f dT;
-    if (icpImu) 
-      dT = T_wr_imu * T_wr_imu_prev.Inverse();
+//    tdp::SE3f dT;
+//    if (icpImu) 
+//      dT = T_wr_imu * T_wr_imu_prev.Inverse();
     if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       //T_mo.matrix() = Eigen::Matrix4f::Identity();
-      tdp::SE3f dTRot;
-      if (icpRot) {
-        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-            camD, maxItRot, icpAngleThr_deg); 
-        std::cout << dTRot.matrix3x4() << std::endl;
-      }
-      dT = dTRot;
+//      tdp::SE3f dTRot;
+//      if (icpRot) {
+//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
+//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
+//            camD, maxItRot, icpAngleThr_deg); 
+//        std::cout << dTRot.matrix3x4() << std::endl;
+//      }
+//      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
-      //tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
+//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
+      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
 
-      std::cout << dT.matrix3x4() << std::endl;
-      if (icpRot && icpRotOverwrites) 
-        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
-      std::cout << dT.matrix3x4() << std::endl;
-      T_mo = dT*T_mo;
+//      std::cout << dT.matrix3x4() << std::endl;
+//      if (icpRot && icpRotOverwrites) 
+//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
+//      std::cout << dT.matrix3x4() << std::endl;
+//      T_mo = dT*T_mo;
       //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
 
@@ -374,7 +349,8 @@ int main( int argc, char* argv[] )
       cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
       cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
       tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
-        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), dT,
+        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), T_mo,
+//        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), dT,
         tdp::ScaleCamera<float>(camD,pow(0.5,icpErrorLvl)), 
         icpAngleThr_deg, icpDistThr, cuICPassoc_m,
         cuICPassoc_c);
@@ -386,6 +362,36 @@ int main( int argc, char* argv[] )
       AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
       numFused ++;
       TOCK("Add To TSDF");
+    }
+
+    if (runFusion) {
+      if (gui.verbose) std::cout << "ray trace" << std::endl;
+      TICK("Ray Trace TSDF");
+      //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
+      // first one not needed anymore
+      if (pcFromTSDF && !dispDepthPyrEst) {
+        RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+            ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
+        // get pc in model coordinate system
+        tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+      } else {
+        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
+            dGrid, tsdfMu); 
+        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
+            cudaMemcpyDeviceToDevice, 0.03);
+        // compute point cloud from depth images in camera cosy
+        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+      }
+      TOCK("Ray Trace TSDF");
+      if (normalsFromTSDF) {
+        tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
+      } else {
+        if (normalsFromDepthPyr) {
+          tdp::Depth2NormalsViaDerivativePyr(cuDPyrEst,camD,ns_m);
+        } else {
+          tdp::Depth2Normals(cuDPyrEst,camD,ns_m);
+        }
+      }
     }
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -435,7 +441,6 @@ int main( int argc, char* argv[] )
       glColor3f(0,0,1);
       pangolin::RenderVbo(cuPcbuf);
     }
-    pangolin::glSetFrameOfReference(T_mo.matrix());
     // render model and observed point cloud
     if (showPcModel) {
       {
@@ -448,6 +453,7 @@ int main( int argc, char* argv[] )
       glColor3f(0,1,0);
       pangolin::RenderVbo(cuPcbuf);
     }
+    pangolin::glSetFrameOfReference(T_mo.matrix());
     // render current camera second in the propper frame of
     // reference
     pangolin::glDrawAxis(0.1f);
@@ -478,9 +484,6 @@ int main( int argc, char* argv[] )
       glColor3f(0,0,1);
       pangolin::RenderVbo(cuPcbuf);
     }
-    Eigen::Matrix4f R_mo = T_mo.matrix();
-    R_mo.topRightCorner(3,1).fill(0.);
-    pangolin::glSetFrameOfReference(R_mo);
     // render model and observed point cloud
     if (showPcModel) {
       {
@@ -493,6 +496,9 @@ int main( int argc, char* argv[] )
       glColor3f(0,1,0);
       pangolin::RenderVbo(cuPcbuf);
     }
+    Eigen::Matrix4f R_mo = T_mo.matrix();
+    R_mo.topRightCorner(3,1).fill(0.);
+    pangolin::glSetFrameOfReference(R_mo);
     // render current camera second in the propper frame of
     // reference
     pangolin::glDrawAxis(0.1f);
@@ -555,12 +561,13 @@ int main( int argc, char* argv[] )
     }
 
     if (viewPcErr.IsShown()) {
-      tdp::L2Distance(pcs_m.GetImage(0), pcs_c.GetImage(0), cuPcErr);
+      tdp::L2Distance(pcs_m.GetImage(0), pcs_c.GetImage(0), T_mo, cuPcErr);
       pcErr.CopyFrom(cuPcErr, cudaMemcpyDeviceToHost);
       viewPcErr.SetImage(pcErr);
     }
     if (viewAngErr.IsShown()) {
-      tdp::AngularDeviation(ns_m.GetImage(0), ns_c.GetImage(0), cuAngErr);
+      tdp::AngularDeviation(ns_m.GetImage(0), ns_c.GetImage(0),
+          T_mo.rotation(), cuAngErr);
       angErr.CopyFrom(cuAngErr, cudaMemcpyDeviceToHost);
       viewAngErr.SetImage(angErr);
     }

@@ -42,6 +42,7 @@ void Normals2Image(
 void AngularDeviation(
     const Image<Vector3fda>& nA,
     const Image<Vector3fda>& nB,
+    const SO3f& T_ab,
     Image<float>& ang
     );
 

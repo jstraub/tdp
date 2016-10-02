@@ -22,6 +22,7 @@ void TransformPc(
 void L2Distance(
     const Image<Vector3fda>& pcA,
     const Image<Vector3fda>& pcB,
+    const SE3f& T_ab,
     Image<float>& dist
     );
 /// Convert from depth image to point cloud in camera coords.

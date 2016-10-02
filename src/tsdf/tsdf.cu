@@ -336,12 +336,15 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
           (idx==pc_d.w_-1 && idy==0) || 
           (idx==0 && idy==0)
           )) {
-      pc_d(idx,idy) = r_d.dir*di;
       // surface normal: 
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
           tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
-      n_d(idx,idy) = T_rd.rotation().Inverse() * ni; 
+//      n_d(idx,idy) = T_rd.rotation().Inverse() * ni; 
+//      pc_d(idx,idy) = r_d.dir*di;
+      // compute pc and normals in reference coordinates
+      n_d(idx,idy) = ni; 
+      pc_d(idx,idy) = r_d_in_r.dir*di;
     }
 
 //    //Eigen::Vector3fda n(0,0,-1);
