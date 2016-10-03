@@ -7,6 +7,7 @@
 #include <pangolin/display/display.h>
 #include <pangolin/video/video.h>
 #include <pangolin/video/video_record_repeat.h>
+#include <pangolin/utils/timer.h>
 
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
@@ -19,6 +20,7 @@ class GuiBase {
   ~GuiBase();
 
   void NextFrames() {
+
     if(frame.GuiChanged()) {
       if(video_playback) {
         frame = video_playback->Seek(frame) -1;
@@ -44,6 +46,9 @@ class GuiBase {
         }
       }
     }
+    t_prev_ = t_;
+    t_ = pangolin::Time_us(pangolin::TimeNow());
+    fps_ = 1./((t_-t_prev_)*1e-6);
   }
 
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
@@ -74,6 +79,7 @@ class GuiBase {
   std::vector<int64_t> t_host_us_;
 
   pangolin::Var<int> frame;
+  pangolin::Var<float> fps_;
   pangolin::Var<int>  record_timelapse_frame_skip;
   pangolin::Var<int>  end_frame;
   pangolin::Var<bool> video_wait;
@@ -89,6 +95,9 @@ class GuiBase {
   pangolin::VideoPlaybackInterface* video_playback;
 
   std::vector<unsigned char> buffer;
+
+  int64_t t_prev_;
+  int64_t t_;
 };
 
 }

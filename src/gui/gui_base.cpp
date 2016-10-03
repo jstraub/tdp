@@ -6,6 +6,7 @@ GuiBase::GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   : w(w), h(h), video(video), video_playback(nullptr),
   //frame("ui.frame", -1, 0, total_frames-1 ),
   frame("ui.frame", -1, 0, 0),
+  fps_("ui.fps", 0.,0.,0.),
   record_timelapse_frame_skip("viewer.record_timelapse_frame_skip", 1 ),
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
   video_wait("ui.wait", true),
