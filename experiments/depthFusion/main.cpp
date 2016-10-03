@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <thread>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -44,6 +45,7 @@ int main( int argc, char* argv[] )
   std::string output_uri = "pango://video.pango";
   std::string calibPath = "";
   std::string imu_input_uri = "";
+  std::string tsdfOutputPath = "tsdf.raw";
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
@@ -137,7 +139,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
-
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
   tdp::ManagedHostPyramid<float,3> dPyrEst(wc,hc);
@@ -201,7 +202,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runFusion("ui.run Fusion",true,true);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
-  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",false,true);
+  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
   pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
@@ -237,6 +239,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
   pangolin::Var<bool> showPcView("ui.show overview",true,true);
 
+  Stopwatch::getInstance().setCustomSignature(1243984912);
+
   if (false) {
     // for the SR300 or F200
     //depthSensorScale = 1e-4;
@@ -259,6 +263,21 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
+
+  tdp::ThreadedValue<bool> runWorker(true);
+  std::thread workThread([&]() {
+        while(runWorker.Get()) {
+          if (pangolin::Pushed(saveTSDF)) {
+            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
+            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+          }
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+      });
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -268,6 +287,7 @@ int main( int argc, char* argv[] )
       T_mo = T_mo_0;
       T_mo_prev = T_mo_0;
     }
+
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -302,9 +322,8 @@ int main( int argc, char* argv[] )
     }
     TOCK("Setup Pyramids");
 
-//    tdp::SE3f dT;
-//    if (icpImu) 
-//      dT = T_wr_imu * T_wr_imu_prev.Inverse();
+    if (icpImu && imu) 
+      T_mo = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mo;
     if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -316,18 +335,11 @@ int main( int argc, char* argv[] )
 //            camD, maxItRot, icpAngleThr_deg); 
 //        std::cout << dTRot.matrix3x4() << std::endl;
 //      }
-//      dT = dTRot;
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, dT, tdp::SE3f(),
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
           camD, maxIt, icpAngleThr_deg, icpDistThr); 
-
-//      std::cout << dT.matrix3x4() << std::endl;
 //      if (icpRot && icpRotOverwrites) 
 //        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
-//      std::cout << dT.matrix3x4() << std::endl;
-//      T_mo = dT*T_mo;
-      //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
 
       std::cout << "T_mo update: " << std::endl 
@@ -397,7 +409,7 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(resetTSDF)) {
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       dEst.Fill(0.);
-      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
       numFused = 0;
       T_mo = T_mo_0;
       T_mo_prev = T_mo;
@@ -599,6 +611,8 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+  runWorker.Set(false);
+  workThread.join();
   imuInterp.Stop();
   if (imu) imu->Stop();
   delete imu;

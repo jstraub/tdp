@@ -54,6 +54,14 @@ class Volume {
 
   void Fill(T value) { for (size_t i=0; i<w_*d_*h_; ++i) ptr_[i] = value; }
 
+#ifdef CUDA_FOUND
+  /// Perform pitched copy from the given src volume to this volume.
+  /// Use type to specify from which memory to which memory to copy.
+  void CopyFrom(const Volume<T>& src, cudaMemcpyKind type) {
+    checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+  }
+#endif
+
   size_t w_;
   size_t h_;
   size_t d_; // depth
@@ -74,7 +82,7 @@ void SaveVolume(const Volume<T>& V, const std::string& path) {
   out.write((const char*)&(V.h_),sizeof(size_t));
   out.write((const char*)&(V.d_),sizeof(size_t));
   for (size_t i=0; i < V.Vol(); ++i) {
-    out.write((const char*)&V[i],sizeof(T));
+    out.write((const char*)&(V.ptr_[i]),sizeof(T));
   }
   out.close();
 }
