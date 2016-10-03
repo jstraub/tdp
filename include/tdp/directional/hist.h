@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tdp/eigen/dense.h>
+#include <tdp/eigen/std_vector.h>
 #include <pangolin/gl/gl.h>
 #include <pangolin/gl/glvbo.h>
 #include <tdp/directional/geodesic_grid.h>
@@ -37,8 +38,8 @@ class GeodesicHist {
   ManagedDeviceImage<tdp::Vector3fda> cuTriCenters_;
   ManagedDeviceImage<uint32_t> cuHist_;
 
-  std::vector<tdp::Vector3fda> lines_;
-  std::vector<tdp::Vector3bda> lineColors_;
+  eigen_vector<Vector3fda> lines_;
+  eigen_vector<Vector3bda> lineColors_;
   ManagedHostImage<uint32_t> hist_;
   pangolin::GlBuffer vbo_;
   pangolin::GlBuffer cbo_;
@@ -58,8 +59,16 @@ GeodesicHist<D>::GeodesicHist() : cuTriCenters_(geoGrid_.NTri(),1),
 
 template<uint32_t D>
 void GeodesicHist<D>::ComputeGpu(Image<tdp::Vector3fda>& cuN) {
+  std::cout << "dirHist compute" << std::endl;
   ComputeCentroidBasedGeoidesicHist(cuN,cuTriCenters_,cuHist_);
-  CopyImage(cuHist_, hist_, cudaMemcpyDeviceToHost);
+  hist_.CopyFrom(cuHist_, cudaMemcpyDeviceToHost);
+  for (size_t i=0; i<hist_.Area(); ++i) 
+    if (hist_[i] == 0) {
+      std::cout << i << ": " << hist_[i] 
+        << " " << geoGrid_.tri_centers_[i].transpose() 
+        << " " << geoGrid_.tri_areas_[i]
+        << std::endl;
+    }
 }
 
 template<uint32_t D>
@@ -73,7 +82,7 @@ void GeodesicHist<D>::RefreshLines(float scale, bool logScale) {
     minMax.second = log(minMax.second);
   }
   //std::cout << "# data in hist: " << sum << std::endl;
-  std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
+  std::vector<Vector3fda>& cs = geoGrid_.tri_centers_;
   lines_.clear();
   lines_.reserve(cs.size()*2);
   lineColors_.clear();
@@ -97,14 +106,14 @@ void GeodesicHist<D>::Render2D(float scale,
     minMax.first = log(minMax.first==0?1:minMax.first);
     minMax.second = log(minMax.second);
   }
-  std::vector<Eigen::Vector3f>& cs = geoGrid_.tri_centers_;
+  std::vector<Vector3fda>& cs = geoGrid_.tri_centers_;
 
   float dTheta = (200-1)/M_PI;
   float dPhi = (200-1)/(2.*M_PI);
 
   glPointSize(4);
   for (size_t i=0; i<cs.size(); ++i) {
-    Eigen::Vector3f phiTheta = ToSpherical(cs[i]);
+    Vector3fda phiTheta = ToSpherical(cs[i]);
     float theta = phiTheta(1);
     float phi = -(phiTheta(0) - M_PI);
     int iTheta = floor(theta*dTheta);

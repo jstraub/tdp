@@ -129,6 +129,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> rays(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -152,7 +153,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> histShowEmpty("ui.show empty",true,true);
   pangolin::Var<bool> reset("ui.reset",true,false);
 
-  tdp::GeodesicHist<3> dirHist;
+  tdp::GeodesicHist<1> dirHist;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -243,7 +244,12 @@ int main( int argc, char* argv[] )
 
     if (viewDirHist3D.IsShown()) {
       viewDirHist3D.Activate(s_cam);
+      dirHist.geoGrid_.Render3D();
       dirHist.Render3D(histScale, histLog);
+      rays.CopyFrom(cuRays,cudaMemcpyDeviceToHost);
+      vbo.Upload(rays.ptr_,rays.SizeBytes(), 0);
+      glColor4f(0,1,0,0.5f);
+      pangolin::RenderVbo(vbo,true);
     }
 
     glDisable(GL_DEPTH_TEST);

@@ -23,4 +23,6 @@ typedef Eigen::Matrix<float,2,2,Eigen::DontAlign> Matrix2fda;
 typedef Eigen::Matrix<int32_t,3,1,Eigen::DontAlign> Vector3ida;
 typedef Eigen::Matrix<int32_t,2,1,Eigen::DontAlign> Vector2ida;
 
+typedef Eigen::Matrix<uint32_t,3,1,Eigen::DontAlign> Vector3uda;
+
 }
