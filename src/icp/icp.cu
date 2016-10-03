@@ -22,6 +22,7 @@ inline int AssociateModelIntoCurrent(
     int x, int y, 
     const Image<Vector3fda>& pc_m,
     const SE3f& T_mo,
+    const SE3f& T_co,
     const CameraBase<float,D,Derived>& cam,
     int& u, int& v
     ) {
@@ -31,7 +32,7 @@ inline int AssociateModelIntoCurrent(
     if (IsValidData(pc_mi)) {
       Vector3fda pc_m_in_o = T_mo.Inverse() * pc_mi;
       // project into current camera
-      Vector2fda x_m_in_o = cam.Project(pc_m_in_o);
+      Vector2fda x_m_in_o = cam.Project(T_co*pc_m_in_o);
       u = floor(x_m_in_o(0)+0.5f);
       v = floor(x_m_in_o(1)+0.5f);
       if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
@@ -80,7 +81,8 @@ __global__ void KernelICPStep(
     const int x = id%pc_o.w_;
     const int y = id/pc_o.w_;
     int u, v;
-    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo, cam, u, v);
+    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+        T_co, cam, u, v);
     if (res == 0) {
       // found association -> check thresholds;
       Vector3fda n_o_in_m = T_mo.rotation()*n_o(u,v);
@@ -219,7 +221,8 @@ __global__ void KernelICPVisualizeAssoc(
     const int x = id%pc_m.w_;
     const int y = id/pc_m.w_;
     int u, v;
-    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo, cam, u, v);
+    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+        tdp::SE3f(), cam, u, v);
     if (res == 0) {
       // found association -> check thresholds;
       Vector3fda pc_mi = pc_m(x,y);

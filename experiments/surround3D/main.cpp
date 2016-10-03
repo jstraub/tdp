@@ -76,7 +76,9 @@ int main( int argc, char* argv[] )
       dStream2cam, rgbdStream2cam);
 
   // optionally connect to IMU if it is found.
-  tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
+  tdp::ImuInterface* imu = nullptr; 
+  if (imu_input_uri.size() > 0) 
+    imu = tdp::OpenImu(imu_input_uri);
   if (imu) imu->Start();
   tdp::ImuInterpolator imuInterp(imu,nullptr);
   imuInterp.Start();
@@ -315,48 +317,17 @@ int main( int argc, char* argv[] )
     }
     TOCK("pc and normals");
     if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
-    TICK("Ray Trace TSDF");
-    tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
-    tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
-      int32_t cId;
-      if (useRgbCamParasForDepth) {
-        cId = rgbStream2cam[sId]; 
-      } else {
-        cId = dStream2cam[sId]; 
-      }
-      CameraT cam = rig.cams_[cId];
-      tdp::SE3f T_rc = rig.T_rcs_[cId];
-      tdp::SE3f T_mo = T_mr*T_rc;
-
-      tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
-      tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
-
-      // ray trace the TSDF to get pc and normals in camera cosy
-      RayTraceTSDF(cuTSDF, cuPcEst_i, 
-          cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
-      // transform pc and normals into rig cosy for ICP
-      tdp::TransformPc(T_rc, cuPcEst_i);
-      tdp::TransformPc(T_rc.rotation(), cuNEst_i);
-    }
-    TOCK("Ray Trace TSDF");
     TICK("Setup Pyramids");
     // TODO might want to use the pyramid construction with smoothing
 //    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
 //        cudaMemcpyDeviceToDevice, 0.03);
     pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
     tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
 
     ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
-    // just complete the surface normals obtained from the TSDF
-    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
-    tdp::SE3f dT_mo;
     if (runICP && numFused > 30) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -406,15 +377,17 @@ int main( int argc, char* argv[] )
               float count_i = 0;
               // Compute ATA and ATb from A x = b
               ICPStep(pc_mli, n_mli, pc_oli, n_oli,
-                  dT_mo, T_cr, tdp::ScaleCamera<float>(cam,pow(0.5,lvl)),
+                  T_mr, T_cr, tdp::ScaleCamera<float>(cam,pow(0.5,lvl)),
                   cos(icpAngleThr_deg*M_PI/180.),
                   icpDistThr,ATA_i,ATb_i,error_i,count_i);
               ATA += ATA_i;
               ATb += ATb_i;
               error += error_i;
               count += count_i;
+              std::cout << "err " << sId << ": " << error_i
+                << "\t# " << sId << ": " << count_i << std::endl;
             }
-            if (count < 100) {
+            if (count < 1000) {
               std::cout << "# inliers " << count << " to small " << std::endl;
               break;
             }
@@ -422,9 +395,10 @@ int main( int argc, char* argv[] )
             Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
               (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
             // apply x to the transformation
-            dT_mo = tdp::SE3f(tdp::SE3f::Exp_(x))*dT_mo;
+            T_mr = tdp::SE3f(tdp::SE3f::Exp_(x))*T_mr;
             std::cout << "lvl " << lvl << " it " << it 
-              << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+              << ": err=" << error 
+              << "\tdErr/err=" << fabs(error-errPrev)/error
               << " # inliers: " << count 
               //<< " |ATA|=" << ATA.determinant()
               //<< " x=" << x.transpose()
@@ -436,12 +410,6 @@ int main( int argc, char* argv[] )
           }
         }
       }
-
-//      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_o, ns_o, dT,
-//          camD, maxIt, icpAngleThr_deg, icpDistThr); 
-//      std::cout << dT.matrix3x4() << std::endl;
-      T_mr = dT_mo*T_mr;
-//      //std::cout << "T_mo" << std::endl << T_mo.matrix3x4() << std::endl;
       TOCK("ICP");
     }
 
@@ -476,6 +444,34 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
+    TICK("Ray Trace TSDF");
+    tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
+    tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
+    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      int32_t cId;
+      if (useRgbCamParasForDepth) {
+        cId = rgbStream2cam[sId]; 
+      } else {
+        cId = dStream2cam[sId]; 
+      }
+      CameraT cam = rig.cams_[cId];
+      tdp::SE3f T_rc = rig.T_rcs_[cId];
+      tdp::SE3f T_mo = T_mr*T_rc;
+
+      tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+      tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
+          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+
+      // ray trace the TSDF to get pc and normals in model cosy
+      RayTraceTSDF(cuTSDF, cuPcEst_i, 
+          cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+    }
+    // just complete the surface normals obtained from the TSDF
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
+    TOCK("Ray Trace TSDF");
+
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
     T_mv.matrix()(2,3) = -3.;
@@ -502,9 +498,14 @@ int main( int argc, char* argv[] )
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
+      if (dispEst) {
+        pangolin::RenderVboCbo(vbo,cbo,true);
+      }
       pangolin::glSetFrameOfReference(T_mr.matrix());
       pangolin::glDrawAxis(0.1f);
-      pangolin::RenderVboCbo(vbo,cbo,true);
+      if (!dispEst) {
+        pangolin::RenderVboCbo(vbo,cbo,true);
+      }
       pangolin::glUnsetFrameOfReference();
 
       pc.CopyFrom(cuPcView,cudaMemcpyDeviceToHost);
