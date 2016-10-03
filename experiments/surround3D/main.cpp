@@ -384,8 +384,6 @@ int main( int argc, char* argv[] )
               ATb += ATb_i;
               error += error_i;
               count += count_i;
-              std::cout << "err " << sId << ": " << error_i
-                << "\t# " << sId << ": " << count_i << std::endl;
             }
             if (count < 1000) {
               std::cout << "# inliers " << count << " to small " << std::endl;
@@ -403,8 +401,6 @@ int main( int argc, char* argv[] )
               //<< " |ATA|=" << ATA.determinant()
               //<< " x=" << x.transpose()
               << std::endl;
-            //std::cout << dT.matrix() << std::endl;
-            //std::cout << T_mo.matrix() << std::endl;
             if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
             errPrev = error;
           }
