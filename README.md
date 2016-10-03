@@ -102,10 +102,64 @@ cmake ..
 make -j
 ```
 
-Calibu
-------
-Calibu needs to be built using [this branch](https://github.com/jstraub/Calibu/tree/fixesJstraub).
-
 To test the sensor, connect it to usb3.0 and run
 cd
 ./tdp/build/experiements/simpleGui/simpleGui realsense:://
+
+Calibu
+------
+Need to install libglog, libgflags(?), libCVars and libceres from scratch.
+
+libglog
+```
+git clone https://github.com/google/glog.git
+git checkout tags/v0.3.4
+autoreconf -f -i
+./configure
+make
+sudo make install
+```
+
+libCVars
+```
+git clone https://github.com/arpg/CVars.git
+sudo apt-get install libtinyxml-dev libtinyxml2-dev
+sudo ln -s /usr/lib/x86_64-linux-gnu/libtinyxml* /usr/lib/
+mkdir build
+cd build
+cmake ..
+make -j
+sudo make install
+```
+
+libceres
+```
+git clone https://github.com/ceres-solver/ceres-solver.git
+cd ceres-solver
+cmake-gui ..
+// select: BUILD_SHARED_LIBS
+// select: CXX11
+// select: MINILOG
+make -j
+sudo make install
+```
+
+Calibu needs to be built using [this branch](https://github.com/jstraub/Calibu/tree/fixesJstraub).
+
+```
+git clone https://github.com/jstraub/Calibu.git
+git fetch
+git checkout fixesJstraub
+sudo apt-get install ffmpeg libopencv-dev libgtk-3-dev python-numpy python3-numpy libdc1394-22 libdc1394-22-dev libjpeg-dev libpng12-dev libtiff5-dev libjasper-dev libavcodec-dev libavformat-dev libswscale-dev libxine2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libv4l-dev libtbb-dev qtbase5-dev libfaac-dev libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev libvorbis-dev libxvidcore-dev x264 v4l-utils unzip
+mkdir build
+cd build
+cmake-gui ..
+// select: BUILD_CALIBGRID
+make -j
+sudo make install
+```
+
+
+
+
+
