@@ -100,6 +100,8 @@ inline bool RayTraceTSDF(
     idItMax = -1;
   }
 
+  idItMin = (r_d_in_r.p(dimIt)-grid0(dimIt))/dGrid(dimIt);
+
   if (verbose) {
     printf("%f %f %f: %d %d, (%d %d)\n",  r_d_in_r.dir(0),  r_d_in_r.dir(1),
       r_d_in_r.dir(2), dimIt, dimInc, idItMin, idItMax);
@@ -112,9 +114,6 @@ inline bool RayTraceTSDF(
     // to get depth along r_d_in_r
     float di = (-1 - r_d_in_r.p.dot(nOverD))/(r_d_in_r.dir.dot(nOverD));
 
-//    if (verbose && r_d_in_r.dir(dimIt) < 0) {
-//      printf("%d: di=%f \n", idIt, di);
-//    }
     if (di < 0.) continue; // ignore things behind
     // get intersection point in TSDF volume at depth z
     Vector3fda u_r = r_d_in_r.PointAtDepth(di);
@@ -133,15 +132,6 @@ inline bool RayTraceTSDF(
         idTSDF(2) = z;
         return true;
       }
-//      if (dimInc < 0 && tsdfW > 5 && -1 < tsdfVal 
-//          && tsdfVal >= 0. && tsdfValPrev <= 0.) {
-//        // detected 0 crossing -> interpolate
-//        d = di-((di_Prev-di)*tsdfVal)/(tsdfValPrev-tsdfVal);
-//        idTSDF(0) = x;
-//        idTSDF(1) = y;
-//        idTSDF(2) = z;
-//        return true;
-//      }
       tsdfValPrev = tsdfVal;
     }
     di_Prev = di;
@@ -181,39 +171,6 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
       // and compute the normal in the depth frame of reference
       n(idx,idy) = T_rd.rotation().Inverse() * ni; 
     }
-
-//    // iterate over z in TSDF; detect 0 crossing in TSDF
-//    float tsdfValPrev = -1.01;
-//    float di_Prev = 0.;
-//    for (size_t idz=0; idz<tsdf.d_; ++idz) {
-//      float z = grid0(2)+idz*dGrid(2);  // depth
-//      // intersect r_d_in_r with plane at depth z in TSDF coordinates
-//      // to get depth along r_d_in_r
-//      //float d = (-z - T_rd.translation().dot(n))/(r_r.dot(n));
-//      // since n is (0,0,-1):
-//      float di = (-z+T_rd.translation()(2))/(-r_d_in_r(2));
-//      if (di < 0.) continue; // ignore things behind
-//      // get intersection point in TSDF volume at depth z
-//      Vector2fda u_r = T_rd.translation().topRows(2) + r_d_in_r*di;
-//      int x = floor((u_r(0)-grid0(0))/dGrid(0)+0.5);
-//      int y = floor((u_r(1)-grid0(1))/dGrid(1)+0.5);
-//      if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_) {
-//        float tsdfVal = tsdf(x,y,idz).f;
-//        float tsdfW = tsdf(x,y,idz).w;
-//        if (tsdfW > 30 && -1 < tsdfVal && tsdfVal <= 0. && tsdfValPrev >= 0.) {
-//          // detected 0 crossing -> interpolate
-//          d(idx,idy) = di_Prev
-//            -((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
-//          // surface normal: 
-//           Vector3fda ni = NormalFromTSDF(x,y,idz,tsdfVal,tsdf);
-//          // and compute the normal in the depth frame of reference
-//          n(idx,idy) = T_rd.rotation().Inverse() * ni; 
-//          break;
-//        }
-//        tsdfValPrev = tsdfVal;
-//      }
-//      di_Prev = di;
-//    }
   }
 }
 
@@ -265,7 +222,7 @@ void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     Vector3fda grid0, Vector3fda dGrid,
     float mu) {
   dim3 threads, blocks;
-  ComputeKernelParamsForVolume(blocks,threads,tsdf,16,16,4);
+  ComputeKernelParamsForVolume(blocks,threads,tsdf,8,8,8);
   KernelAddToTSDF<<<blocks,threads>>>(tsdf, d, T_rd, T_rd.Inverse(),
       camD, grid0, dGrid, mu);
   checkCudaErrors(cudaDeviceSynchronize());
