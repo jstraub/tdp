@@ -132,14 +132,15 @@ int main( int argc, char* argv[] )
   // Add some variables to GUI
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
 
-
+  // load and compile shader
+  std::string shaderRoot = SHADER_DIR;
   pangolin::GlSlProgram colorPc;
-  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
-      "/home/jstraub/workspace/tdp/shaders/normalShading.vert");
+  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("normalShading.vert"));
   colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
-      "/home/jstraub/workspace/tdp/shaders/normalShading.geom");
+      shaderRoot+std::string("normalShading.geom"));
   colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
-      "/home/jstraub/workspace/tdp/shaders/normalShading.frag");
+      shaderRoot+std::string("normalShading.frag"));
   colorPc.Link();
 
   // Stream and display video

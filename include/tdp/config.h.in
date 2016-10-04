@@ -19,4 +19,4 @@
 #cmakedefine OPENNI2_FOUND
 #cmakedefine Calibu_FOUND
 
-
+#define SHADER_DIR "${SHADER_DIR}"

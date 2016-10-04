@@ -92,5 +92,7 @@ add_subdirectory(./test)
 add_subdirectory(./experiments)
 add_subdirectory(./src)
 
+set(SHADER_DIR "${PROJECT_SOURCE_DIR}/shaders/")
+
 configure_file(./include/tdp/config.h.in ./include/tdp/config.h)
 
