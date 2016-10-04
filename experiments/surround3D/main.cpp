@@ -161,8 +161,6 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
-  pangolin::Var<bool> renderFisheye("ui.fisheye", false, true);
-
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
@@ -206,13 +204,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgbJoint(w,h);
   memset(rgbJoint.ptr_, 0, rgbJoint.SizeBytes());
   tdp::ManagedHostImage<float> dJoint(w,h);
-
-  pangolin::GlSlProgram colorPc;
-  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
-      "/home/jstraub/workspace/research/tdp/shaders/surround3D.vert");
-  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
-      "/home/jstraub/workspace/research/tdp/shaders/surround3D.frag");
-  colorPc.Link();
 
   tdp::ThreadedValue<bool> runWorker(true);
   std::thread workThread([&]() {
@@ -505,45 +496,6 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
       glDisable(GL_DEPTH_TEST);
-    }
-
-    if (renderFisheye) {
-      glFrameBuf.Bind();
-
-      colorPc.Bind();
-
-      glViewport(0, 0, w, h);
-      glClearColor(0,0,0,1);
-      glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-      glColor3f(1.0f, 1.0f, 1.0f);
-
-      Eigen::Matrix4f MV = s_cam.GetModelViewMatrix();
-      Eigen::Matrix4f P = pangolin::ProjectionMatrix(640,3*480,420,420,320,3*240,0.1,1000);
-      colorPc.SetUniform("P", P);
-      colorPc.SetUniform("MV", MV);
-
-      size_t stride = sizeof(float)*3+sizeof(uint8_t)*3;
-      glEnableVertexAttribArray(0);
-      glEnableVertexAttribArray(1);
-      vbo.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-      cbo.Bind();
-      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
-      pangolin::RenderVbo(vbo);
-      glDisableVertexAttribArray(0);
-      glDisableVertexAttribArray(1);
-
-      cbo.Unbind();
-      vbo.Unbind();
-
-      colorPc.Unbind();
-
-      glFrameBuf.Unbind();
-
-      if (viewRgbJoint.IsShown()) {
-        tex.Download(rgbJoint.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
-        viewRgbJoint.SetImage(rgbJoint);
-      }
     }
 
     // Draw 2D stuff
