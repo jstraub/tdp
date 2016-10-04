@@ -32,7 +32,6 @@
 
 int main( int argc, char* argv[] )
 {
-  std::cout << "Start" << std::endl;
   const std::string dflt_output_uri = "pango://video.pango";
   const std::string input_uri = std::string(argv[1]);
   const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
@@ -48,35 +47,28 @@ int main( int argc, char* argv[] )
         -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
         -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
         -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f};
-  std::cout << "Built test array" << std::endl;
+
   // procesing of TSDF
   CIsoSurface<float> surface;
-  surface.GenerateSurface(test, 0.0f, 4, 4, 4, .02, .02, .02);
-  std::cout << "Generated Surface" << std::endl;
+  surface.GenerateSurface(test, 0.0f, 2, 2, 2, 0.5, 0.5, 0.5);
   if (!surface.IsSurfaceValid()) {
     pango_print_error("Unable to generate surface");
     return 1;
   }
 
-  float* vertexStore = new float[surface.numVertices()];
-  unsigned int* indexStore = new unsigned int[surface.numTriangles() * 3];
+  size_t nVertices = surface.numVertices();
+  size_t nTriangles = surface.numTriangles();
+
+  float* vertexStore = new float[nVertices * 3];
+  unsigned char* colorStore = new unsigned char[nVertices * 3];
+  unsigned int* indexStore = new unsigned int[nTriangles * 3];
+
   surface.getVertices(vertexStore);
   surface.getIndices(indexStore);
-
-  std::cout << "Number of Vertices: " << surface.numVertices() << std::endl;
-  for (size_t i = 0; i < surface.numVertices(); i++) {
-    std::cout << vertexStore[i] << " ";
+  for (size_t i = 0; i < nVertices * 3; i++) {
+    colorStore[i] = 128;
   }
 
-  std::cout << "\nNumber of Triangles: " << surface.numTriangles() << std::endl;
-  for (size_t i = 0; i < surface.numTriangles(); i++) {
-    std::cout << indexStore[3*i] << " ";
-    std::cout << indexStore[3*i + 1] << " ";
-    std::cout << indexStore[3*i + 2] << std::endl;
-  }
-
-  // have mesh
-  //
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -104,6 +96,7 @@ int main( int argc, char* argv[] )
   // use those OpenGL buffers
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer cbo;
+  pangolin::GlBuffer ibo;
 
   // Add some variables to GUI
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
@@ -120,13 +113,31 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
-    size_t N = 100;// TODO
-    vbo.Reinitialise(pangolin::GlArrayBuffer,N,GL_FLOAT,3,GL_DYNAMIC_DRAW);
-    cbo.Reinitialise(pangolin::GlArrayBuffer,N,GL_UNSIGNED_BYTE,3,GL_DYNAMIC_DRAW);
-    //vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    //cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+    vbo.Reinitialise(pangolin::GlArrayBuffer, nVertices,  GL_FLOAT,         3, GL_DYNAMIC_DRAW);
+    cbo.Reinitialise(pangolin::GlArrayBuffer, nVertices,  GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
+    ibo.Reinitialise(pangolin::GlElementArrayBuffer, nTriangles, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
+    vbo.Upload(vertexStore, sizeof(float) * nVertices * 3, 0);
+    cbo.Upload(colorStore,  sizeof(unsigned char) * nVertices * 3, 0);
+    ibo.Upload(indexStore,  sizeof(unsigned int) * nTriangles * 3, 0);
+
     // render point cloud
-    pangolin::RenderVboCbo(vbo,cbo,true);
+    cbo.Bind();
+    glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
+    glEnableClientState(GL_COLOR_ARRAY);
+
+    vbo.Bind();
+    glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+    ibo.Bind();
+    glDrawElements(GL_TRIANGLES,ibo.num_elements, ibo.datatype, 0);
+    ibo.Unbind();
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+    vbo.Unbind();
+
+    glDisableClientState(GL_COLOR_ARRAY);
+    cbo.Unbind();
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
