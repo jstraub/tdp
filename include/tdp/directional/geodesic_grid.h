@@ -156,6 +156,7 @@ void GeodesicGrid<D>::Render3D(void) {
     vboc_.Upload(&(tri_centers_[0]),tri_centers_.size()*sizeof(Vector3fda));
   }
 
+  glDisable(GL_CULL_FACE);
   glPointSize(5);
   glColor4f(1,0,0,0.9);
   pangolin::RenderVbo(vboc_);
@@ -175,6 +176,7 @@ void GeodesicGrid<D>::Render3D(void) {
   glDisableClientState(GL_VERTEX_ARRAY);
   vbo_.Unbind();
   glPointSize(1);
+  glEnable(GL_CULL_FACE);
 }
 
 }
