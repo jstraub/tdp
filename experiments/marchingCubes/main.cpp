@@ -26,8 +26,6 @@
 #include <tdp/preproc/normals.h>
 #endif
 
-#include <tdp/gui/gui.hpp>
-
 #include <tdp/data/managed_volume.h>
 #include "CIsoSurface.h"
 #include <iostream>
@@ -38,17 +36,6 @@ int main( int argc, char* argv[] )
   const std::string dflt_output_uri = "pango://video.pango";
   const std::string input_uri = std::string(argv[1]);
   const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-
-  std::cout << "begin videorecord" << std::endl;
-  // Open Video by URI
-  pangolin::VideoRecordRepeat video(input_uri, output_uri);
-  const size_t num_streams = video.Streams().size();
-
-  std::cout << "end videorecord init" << std::endl;
-  if(num_streams == 0) {
-    pango_print_error("No video streams from device.\n");
-    return 1;
-  }
 
   // LOAD TSDF
   // tdp::ManagedHostVolume<TSDFval> tsdf;
@@ -89,16 +76,21 @@ int main( int argc, char* argv[] )
   }
 
   // have mesh
-
-  tdp::GUI gui(1200,800,video);
-
-  size_t w = video.Streams()[0].Width();
-  size_t h = video.Streams()[0].Height();
-  // width and height need to be multiple of 64 for convolution
-  // algorithm to compute normals.
-  w += w%64;
-  h += h%64;
-
+  //
+  // Create OpenGL window - guess sensible dimensions
+  int menue_w = 180;
+  pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
+  // current frame in memory buffer and displaying.
+  pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
+  // Assume packed OpenGL data unless otherwise specified
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glEnable (GL_BLEND);
+  glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  // setup container
+  pangolin::View& container = pangolin::Display("container");
+  container.SetLayout(pangolin::LayoutEqual)
+    .SetBounds(0., 1.0, pangolin::Attach::Pix(menue_w), 1.0);
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
@@ -107,15 +99,14 @@ int main( int argc, char* argv[] )
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& d_cam = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(d_cam);
+  container.AddDisplay(d_cam);
 
-  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
-  pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
+  // use those OpenGL buffers
+  pangolin::GlBuffer vbo;
+  pangolin::GlBuffer cbo;
 
   // Add some variables to GUI
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
-  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -123,13 +114,15 @@ int main( int argc, char* argv[] )
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
-    // get next frames from the video source
-    gui.NextFrames();
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
     // draw the axis
     pangolin::glDrawAxis(0.1);
+
+    size_t N = 100;// TODO
+    vbo.Reinitialise(pangolin::GlArrayBuffer,N,GL_FLOAT,3,GL_DYNAMIC_DRAW);
+    cbo.Reinitialise(pangolin::GlArrayBuffer,N,GL_UNSIGNED_BYTE,3,GL_DYNAMIC_DRAW);
     //vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     //cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     // render point cloud
@@ -137,16 +130,9 @@ int main( int argc, char* argv[] )
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
-    // SHowFrames renders the raw input streams (in our case RGB and D)
-    gui.ShowFrames();
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
-    // if we are recording
-    if(video.IsRecording()) {
-      pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
-          pangolin::DisplayBase().v.h-14.0f, 7.0f);
-    }
     // finish this frame
     pangolin::FinishFrame();
   }
