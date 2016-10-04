@@ -19,7 +19,7 @@ class ManagedVolume : public Volume<T> {
      : Volume<T>(w,h,d,Alloc::construct(w*h*d))
    {}
 
-  void Reinitialise(size_t w, size_t h, size_t d) {
+  void Reinitialize(size_t w, size_t h, size_t d) {
     if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
     }
@@ -67,7 +67,7 @@ bool LoadVolume(ManagedHostVolume<T>& V, const std::string& path) {
   V.Reinitialize(w,h,d);
 
   for (size_t i=0; i < V.Vol(); ++i) {
-    in.read((char *)&V[i],sizeof(T));
+    in.read((char *)&V.ptr_[i],sizeof(T));
   }
   in.close();
   return true;

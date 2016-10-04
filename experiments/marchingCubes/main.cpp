@@ -26,9 +26,11 @@
 #include <tdp/preproc/normals.h>
 #endif
 
+#include <tdp/tsdf/tsdf.h>
 #include <tdp/data/managed_volume.h>
 #include "CIsoSurface.h"
 #include <iostream>
+#include <pangolin/utils/timer.h>
 
 int main( int argc, char* argv[] )
 {
@@ -36,26 +38,38 @@ int main( int argc, char* argv[] )
   const std::string input_uri = std::string(argv[1]);
   const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
 
-  // LOAD TSDF
-  // tdp::ManagedHostVolume<TSDFval> tsdf;
-  // if (!tdp::LoadVolume(tsdf, "desk0_tsdf.raw")) {
-  //  pango_print_error("Unable to load volume");
-  //  return 1;
-  // }
+  tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
+  if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
+    pango_print_error("Unable to load volume");
+    return 1;
+  }
 
-  float test[27] = {
-        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
-        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
-        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f};
+//  float test[27] = {
+//        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
+//        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
+//        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f};
+
+  float xScale = 0.002f;
+  float yScale = 0.002f;
+  float zScale = 0.002f;
+  size_t xDim = tsdf.w_;
+  size_t yDim = tsdf.h_;
+  size_t zDim = tsdf.d_;
+  float *points = new float[xDim * yDim * zDim];
+  for (size_t i = 0; i < xDim * yDim * zDim; i++) {
+      points[i] = tsdf.ptr_[i].f;
+  }
 
   // procesing of TSDF
+  int64_t start = pangolin::Time_us(pangolin::TimeNow());
   CIsoSurface<float> surface;
-  surface.GenerateSurface(test, 0.0f, 2, 2, 2, 0.5, 0.5, 0.5);
+  surface.GenerateSurface(points, 0.0f, xDim - 1, yDim - 1, zDim - 1, xScale, yScale, zScale);
   if (!surface.IsSurfaceValid()) {
     pango_print_error("Unable to generate surface");
     return 1;
   }
 
+  int64_t mid = pangolin::Time_us(pangolin::TimeNow());
   size_t nVertices = surface.numVertices();
   size_t nTriangles = surface.numTriangles();
 
@@ -68,6 +82,23 @@ int main( int argc, char* argv[] )
   for (size_t i = 0; i < nVertices * 3; i++) {
     colorStore[i] = 128;
   }
+  int64_t end = pangolin::Time_us(pangolin::TimeNow());
+
+  std::cout << "GenerateSurface time: " << (mid - start) / 1e6 << std::endl;
+  std::cout << "copy time: " << (end - mid) / 1e6 << std::endl;
+
+  std::cout << "Number of Vertices: " << nVertices << std::endl;
+  std::cout << "Number of Triangles: " << nTriangles << std::endl;
+//  for (size_t i = 0; i < 4; i++) {
+//      std::cout << vertexStore[3 * i] << " ";
+//      std::cout << vertexStore[3 * i + 1] << " ";
+//      std::cout << vertexStore[3 * i + 2] << std::endl;
+//  }
+//  for (size_t i = 0; i < 4; i++) {
+//      std::cout << indexStore[3 * i] << " ";
+//      std::cout << indexStore[3 * i + 1] << " ";
+//      std::cout << indexStore[3 * i + 2] << std::endl;
+//  }
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
