@@ -21,6 +21,12 @@ TEST(areas, GeoGrid1) {
     ASSERT_LT(grid.tri_[i](0), grid.pts_.size());
     ASSERT_LT(grid.tri_[i](1), grid.pts_.size());
     ASSERT_LT(grid.tri_[i](2), grid.pts_.size());
+
+    Eigen::Vector3f n = (grid.pts_[grid.tri_[i](1)] -grid.pts_[grid.tri_[i](0)]
+        ).cross(grid.pts_[grid.tri_[i](2)]- grid.pts_[grid.tri_[i](0)]);
+    n /= n.norm();
+//    std::cout << n.dot(grid.pts_[grid.tri_[i](0)]) << std::endl;
+    ASSERT_GE(n.dot(grid.pts_[grid.tri_[i](0)]), 0.);
   }
 }
 
@@ -41,6 +47,11 @@ TEST(areas, GeoGrid2) {
       ASSERT_LT(grid.tri_[j](0), grid.pts_.size());
       ASSERT_LT(grid.tri_[j](1), grid.pts_.size());
       ASSERT_LT(grid.tri_[j](2), grid.pts_.size());
+
+      Eigen::Vector3f n = (grid.pts_[grid.tri_[j](1)] -grid.pts_[grid.tri_[j](0)]
+          ).cross(grid.pts_[grid.tri_[j](2)]- grid.pts_[grid.tri_[j](0)]);
+      n /= n.norm();
+      ASSERT_GE(n.dot(grid.pts_[grid.tri_[j](0)]), 0.);
     }
   }
 }
@@ -62,6 +73,11 @@ TEST(areas, GeoGrid3) {
       ASSERT_LT(grid.tri_[j](0), grid.pts_.size());
       ASSERT_LT(grid.tri_[j](1), grid.pts_.size());
       ASSERT_LT(grid.tri_[j](2), grid.pts_.size());
+
+      Eigen::Vector3f n = (grid.pts_[grid.tri_[j](1)] -grid.pts_[grid.tri_[j](0)]
+          ).cross(grid.pts_[grid.tri_[j](2)]- grid.pts_[grid.tri_[j](0)]);
+      n /= n.norm();
+      ASSERT_GE(n.dot(grid.pts_[grid.tri_[j](0)]), 0.);
     }
   }
 }
