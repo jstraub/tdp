@@ -132,6 +132,16 @@ int main( int argc, char* argv[] )
   // Add some variables to GUI
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
 
+
+  pangolin::GlSlProgram colorPc;
+  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
+      "/home/jstraub/workspace/tdp/shaders/normalShading.vert");
+  colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
+      "/home/jstraub/workspace/tdp/shaders/normalShading.geom");
+  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      "/home/jstraub/workspace/tdp/shaders/normalShading.frag");
+  colorPc.Link();
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -141,6 +151,9 @@ int main( int argc, char* argv[] )
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
+
+    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
@@ -151,24 +164,46 @@ int main( int argc, char* argv[] )
     cbo.Upload(colorStore,  sizeof(unsigned char) * nVertices * 3, 0);
     ibo.Upload(indexStore,  sizeof(unsigned int) * nTriangles * 3, 0);
 
-    // render point cloud
-    cbo.Bind();
-    glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
-    glEnableClientState(GL_COLOR_ARRAY);
-
     vbo.Bind();
-    glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+    cbo.Bind();
+    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+
+    glEnableVertexAttribArray(0);                                               
+    glEnableVertexAttribArray(1);                                               
+
+    colorPc.Bind();
+    colorPc.SetUniform("P",P);
+    colorPc.SetUniform("MV",MV);
 
     ibo.Bind();
     glDrawElements(GL_TRIANGLES,ibo.num_elements, ibo.datatype, 0);
     ibo.Unbind();
 
-    glDisableClientState(GL_VERTEX_ARRAY);
+    colorPc.Unbind();
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(0);
+    cbo.Unbind();
     vbo.Unbind();
 
-    glDisableClientState(GL_COLOR_ARRAY);
-    cbo.Unbind();
+    // render point cloud
+    //cbo.Bind();
+    //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
+    //glEnableClientState(GL_COLOR_ARRAY);
+
+    //vbo.Bind();
+    //glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
+    //glEnableClientState(GL_VERTEX_ARRAY);
+
+    //ibo.Bind();
+    //glDrawElements(GL_TRIANGLES,ibo.num_elements, ibo.datatype, 0);
+    //ibo.Unbind();
+
+    //glDisableClientState(GL_VERTEX_ARRAY);
+    //vbo.Unbind();
+
+    //glDisableClientState(GL_COLOR_ARRAY);
+    //cbo.Unbind();
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
