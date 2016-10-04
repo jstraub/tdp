@@ -63,13 +63,13 @@ void GeodesicHist<D>::ComputeGpu(Image<tdp::Vector3fda>& cuN) {
   std::cout << "dirHist compute" << std::endl;
   ComputeCentroidBasedGeoidesicHist(cuN,cuTriCenters_,cuHist_);
   hist_.CopyFrom(cuHist_, cudaMemcpyDeviceToHost);
-  for (size_t i=0; i<hist_.Area(); ++i) 
-    if (hist_[i] == 0) {
-      std::cout << i << ": " << hist_[i] 
-        << " " << geoGrid_.tri_centers_[i].transpose() 
-        << " " << geoGrid_.tri_areas_[i]
-        << std::endl;
-    }
+//  for (size_t i=0; i<hist_.Area(); ++i) 
+//    if (hist_[i] == 0) {
+//      std::cout << i << ": " << hist_[i] 
+//        << " " << geoGrid_.tri_centers_[i].transpose() 
+//        << " " << geoGrid_.tri_areas_[i]
+//        << std::endl;
+//    }
 }
 
 template<uint32_t D>

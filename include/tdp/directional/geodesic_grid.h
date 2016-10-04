@@ -144,10 +144,10 @@ void GeodesicGrid<D>::Render3D(void) {
         GL_FLOAT,3,GL_DYNAMIC_DRAW);
     vbo_.Upload(&(pts_[0]),pts_.size()*sizeof(Vector3fda));
   }
-  if (true || ibo_.num_elements == 0) {
+  if (ibo_.num_elements == 0) {
     ibo_.Reinitialise(pangolin::GlBufferType::GlElementArrayBuffer,N,
         GL_UNSIGNED_INT,3,GL_DYNAMIC_DRAW);
-    std::cout << tri_lvls_[tri_lvls_.size()-2] << std::endl;
+//    std::cout << tri_lvls_[tri_lvls_.size()-2] << std::endl;
     ibo_.Upload(&(tri_[tri_lvls_[tri_lvls_.size()-2]]),N*sizeof(Vector3uda));
   }
   if (vboc_.num_elements == 0) {

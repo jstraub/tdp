@@ -153,7 +153,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> histShowEmpty("ui.show empty",true,true);
   pangolin::Var<bool> reset("ui.reset",true,false);
 
-  tdp::GeodesicHist<1> dirHist;
+  tdp::GeodesicHist<3> dirHist;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
