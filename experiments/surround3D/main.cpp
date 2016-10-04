@@ -50,6 +50,7 @@ int main( int argc, char* argv[] )
   std::string configPath = std::string(argv[2]);
   std::string imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   std::string output_uri = (argc > 4) ? std::string(argv[4]) : dflt_output_uri;
+  std::string tsdfOutputPath = "tsdf.raw";
 
   std::cout << " -!!- this application works only with openni2 devices (tested with Xtion PROs) -!!- " << std::endl;
 
@@ -95,7 +96,7 @@ int main( int argc, char* argv[] )
   // algorithm to compute normals.
   w += w%64;
   h += h%64;
-  size_t dTSDF = 256;
+  size_t dTSDF = 512;
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
@@ -155,35 +156,23 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  //pangolin::Var<float> depthSensor1Scale("ui.depth1 scale",1e-3,8e-4,1e-3);
-  //pangolin::Var<float> depthSensor2Scale("ui.depth2 scale",1e-3,8e-4,1e-3);
-  //pangolin::Var<float> depthSensor3Scale("ui.depth3 scale",1e-3,8e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
-  //pangolin::Var<float> cam1fu("ui.cam1 fu",rig.cams_[1].params_(0),500,600);
-  //pangolin::Var<float> cam1fv("ui.cam1 fv",rig.cams_[1].params_(1),500,600);
-  //pangolin::Var<float> cam3fu("ui.cam3 fu",rig.cams_[3].params_(0),500,600);
-  //pangolin::Var<float> cam3fv("ui.cam3 fv",rig.cams_[3].params_(1),500,600);
-  //pangolin::Var<float> cam5fu("ui.cam5 fu",rig.cams_[5].params_(0),500,600);
-  //pangolin::Var<float> cam5fv("ui.cam5 fv",rig.cams_[5].params_(1),500,600);
-  //pangolin::Var<float> cam3tx("ui.cam3 tx",rig.T_rcs_[3].translation()(0),0,0.1);
-  //pangolin::Var<float> cam3ty("ui.cam3 ty",rig.T_rcs_[3].translation()(1),0,0.1);
-  //pangolin::Var<float> cam3tz("ui.cam3 tz",rig.T_rcs_[3].translation()(2),0,0.1);
-
-  pangolin::Var<bool> renderFisheye("ui.fisheye", true, true);
+  pangolin::Var<bool> renderFisheye("ui.fisheye", false, true);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2,0);
-  pangolin::Var<float> gridEx("ui.gridE x",3.0,2,0);
-  pangolin::Var<float> gridEy("ui.gridE y",3.0,2,0);
-  pangolin::Var<float> gridEz("ui.gridE z",3.0,2,0);
+  pangolin::Var<float> grid0x("ui.grid0 x",-5.0,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-5.0,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-5.0,-2,0);
+  pangolin::Var<float> gridEx("ui.gridE x",5.0,2,0);
+  pangolin::Var<float> gridEy("ui.gridE y",5.0,2,0);
+  pangolin::Var<float> gridEz("ui.gridE z",5.0,2,0);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
@@ -225,21 +214,25 @@ int main( int argc, char* argv[] )
       "/home/jstraub/workspace/research/tdp/shaders/surround3D.frag");
   colorPc.Link();
 
-  tdp::SE3f T_mr;
+  tdp::ThreadedValue<bool> runWorker(true);
+  std::thread workThread([&]() {
+        while(runWorker.Get()) {
+          if (pangolin::Pushed(saveTSDF)) {
+            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
+            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+          }
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+      });
 
+  tdp::SE3f T_mr;
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    //if (cam1fu.GuiChanged()) rig.cams_[1].params_(0) = cam1fu;
-    //if (cam1fv.GuiChanged()) rig.cams_[1].params_(1) = cam1fv;
-    //if (cam3fu.GuiChanged()) rig.cams_[3].params_(0) = cam3fu;
-    //if (cam3fv.GuiChanged()) rig.cams_[3].params_(1) = cam3fv;
-    //if (cam5fu.GuiChanged()) rig.cams_[5].params_(0) = cam5fu;
-    //if (cam5fv.GuiChanged()) rig.cams_[5].params_(1) = cam5fv;
-    //if (cam3tx.GuiChanged()) rig.T_rcs_[3].matrix()(0,3) = cam3tx;
-    //if (cam3ty.GuiChanged()) rig.T_rcs_[3].matrix()(1,3) = cam3ty;
-    //if (cam3tz.GuiChanged()) rig.T_rcs_[3].matrix()(2,3) = cam3tz;
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -587,9 +580,15 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+  saveTSDF = true;
+
   imuInterp.Stop();
   if (imu) imu->Stop();
   delete imu;
+
+  std::this_thread::sleep_for(std::chrono::microseconds(500));
+  runWorker.Set(false);
+  workThread.join();
   return 0;
 }
 
