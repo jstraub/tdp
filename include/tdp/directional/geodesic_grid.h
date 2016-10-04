@@ -80,17 +80,18 @@ GeodesicGrid<D>::GeodesicGrid() {
   }
   std::cout << "depth of geodesic grid: " << D << " (";
   for (size_t d=0; d<tri_lvls_.size(); ++d) std::cout << tri_lvls_[d] << " ";
-  std::cout << ")" << std::endl;
+  std::cout << ")"
+    << " # pts: " << pts_.size() << std::endl;
   RefreshCenters();
 }
 
 template<uint32_t D>
 void GeodesicGrid<D>::SubdivideOnce() {
   size_t n_vertices = pts_.size();
-  size_t n_tri = tri_.size();
+  size_t n_tri = NTri();
   pts_.reserve(n_vertices + n_tri * 3);
-  tri_.reserve(n_tri * 5);
-  for (size_t i=0; i<n_tri; ++i) {
+  tri_.reserve(tri_.size() + n_tri * 4);
+  for (size_t i=tri_lvls_[tri_lvls_.size()-2]; i<tri_lvls_[tri_lvls_.size()-1]; ++i) {
     int i0 = tri_[i](0);
     int i1 = tri_[i](1);
     int i2 = tri_[i](2);

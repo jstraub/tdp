@@ -9,6 +9,7 @@
 #include <pangolin/gl/glvbo.h>
 #include <tdp/directional/geodesic_grid.h>
 #include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/directional/spherical_coordinates.h>
 #include <tdp/gl/gl_draw.h>
@@ -82,7 +83,7 @@ void GeodesicHist<D>::RefreshLines(float scale, bool logScale) {
     minMax.second = log(minMax.second);
   }
   //std::cout << "# data in hist: " << sum << std::endl;
-  std::vector<Vector3fda>& cs = geoGrid_.tri_centers_;
+  eigen_vector<Vector3fda>& cs = geoGrid_.tri_centers_;
   lines_.clear();
   lines_.reserve(cs.size()*2);
   lineColors_.clear();
@@ -106,7 +107,7 @@ void GeodesicHist<D>::Render2D(float scale,
     minMax.first = log(minMax.first==0?1:minMax.first);
     minMax.second = log(minMax.second);
   }
-  std::vector<Vector3fda>& cs = geoGrid_.tri_centers_;
+  eigen_vector<Vector3fda>& cs = geoGrid_.tri_centers_;
 
   float dTheta = (200-1)/M_PI;
   float dPhi = (200-1)/(2.*M_PI);
