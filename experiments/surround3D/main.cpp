@@ -60,7 +60,7 @@ int main( int argc, char* argv[] )
     if (pangolin::FileExists(uri.url+std::string("imu.pango"))
      && pangolin::FileExists(uri.url+std::string("video.pango"))) {
       imu_input_uri = input_uri + std::string("imu.pango");
-      tsdfOutputPath = input_uri + tsdfOutputPath;
+      tsdfOutputPath = uri.url + tsdfOutputPath;
       input_uri = input_uri + std::string("video.pango");
     } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
       input_uri = input_uri + std::string("video.pango");
@@ -240,7 +240,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_mr;
   size_t numFused = 0;
   // Stream and display video
-  while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.paused()))
+  while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.finished()))
   {
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);

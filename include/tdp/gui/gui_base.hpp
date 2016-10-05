@@ -47,6 +47,8 @@ class GuiBase {
             t_host_us_.push_back(0);
           }
         }
+      } else {
+        finished_ = true;
       }
     }
     t_prev_ = t_;
@@ -77,10 +79,12 @@ class GuiBase {
   }
 
   bool paused() { return frame == end_frame; }
+  bool finished() { return finished_; }
 
   std::vector<int> iRGB, iD;
   std::vector<int64_t> t_host_us_;
 
+  bool finished_;
   pangolin::Var<int> frame;
   pangolin::Var<float> fps_;
   pangolin::Var<int>  record_timelapse_frame_skip;
