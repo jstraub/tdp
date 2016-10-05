@@ -52,6 +52,24 @@ int main( int argc, char* argv[] )
   std::string output_uri = (argc > 4) ? std::string(argv[4]) : dflt_output_uri;
   std::string tsdfOutputPath = "tsdf.raw";
 
+  bool keepRunningWhilePaused = false;
+
+  pangolin::Uri uri = pangolin::ParseUri(input_uri);
+  if (!uri.scheme.compare("file")) {
+    std::cout << uri.scheme << std::endl; 
+    if (pangolin::FileExists(uri.url+std::string("imu.pango"))
+     && pangolin::FileExists(uri.url+std::string("video.pango"))) {
+      imu_input_uri = input_uri + std::string("imu.pango");
+      tsdfOutputPath = input_uri + tsdfOutputPath;
+      input_uri = input_uri + std::string("video.pango");
+    } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
+      input_uri = input_uri + std::string("video.pango");
+    } 
+  }
+
+  std::cout << input_uri << std::endl;
+  std::cout << imu_input_uri << std::endl;
+
   std::cout << " -!!- this application works only with openni2 devices (tested with Xtion PROs) -!!- " << std::endl;
 
   // Read rig file
@@ -222,7 +240,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_mr;
   size_t numFused = 0;
   // Stream and display video
-  while(!pangolin::ShouldQuit())
+  while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.paused()))
   {
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
