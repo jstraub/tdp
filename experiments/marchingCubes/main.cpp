@@ -32,6 +32,8 @@
 #include <iostream>
 #include <pangolin/utils/timer.h>
 
+#include <tdp/io/tinyply.h>
+
 int main( int argc, char* argv[] )
 {
   const std::string dflt_output_uri = "pango://video.pango";
@@ -95,8 +97,8 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer ibo;
 
   // Add some variables to GUI
-  pangolin::Var<float> wThr("ui.weight thr",30,1,100);
-  pangolin::Var<float> fThr("ui.tsdf value thr",0.1,0.01,0.5);
+  pangolin::Var<float> wThr("ui.weight thr",10,1,100);
+  pangolin::Var<float> fThr("ui.tsdf value thr",0.2,0.01,0.5);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
@@ -136,6 +138,7 @@ int main( int argc, char* argv[] )
       size_t nVertices = surface.numVertices();
       size_t nTriangles = surface.numTriangles();
 
+      // TODO: make those tdp::Image<T>
       float* vertexStore = new float[nVertices * 3];
       unsigned char* colorStore = new unsigned char[nVertices * 3];
       unsigned int* indexStore = new unsigned int[nTriangles * 3];
@@ -167,6 +170,25 @@ int main( int argc, char* argv[] )
       vbo.Upload(vertexStore, sizeof(float) * nVertices * 3, 0);
       cbo.Upload(colorStore,  sizeof(unsigned char) * nVertices * 3, 0);
       ibo.Upload(indexStore,  sizeof(unsigned int) * nTriangles * 3, 0);
+
+      // TODO: dumm to do another copy
+      std::vector<float> verts(nVertices * 3);
+      verts.assign(vertexStore, vertexStore+nVertices*3);
+      std::vector<uint32_t> faces(nTriangles*3);
+      faces.assign(indexStore, indexStore+nTriangles*3);
+
+      tinyply::PlyFile plyFile;
+      plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+      plyFile.add_properties_to_element("face", {"vertex_indices"},
+          faces, 3, tinyply::PlyProperty::Type::INT8);
+      plyFile.comments.push_back("generated from TSDF");
+
+      std::ostringstream outStream;
+      plyFile.write(outStream, false);
+
+      std::ofstream out("./mesh.ply");
+      out << outStream.str();
+      out.close();
 
       delete [] vertexStore;
       delete [] colorStore;
