@@ -167,7 +167,7 @@ void GeodesicGrid<D>::Render3D(void) {
   glEnableClientState(GL_VERTEX_ARRAY);
 
   ibo_.Bind();
-  glDrawElements(GL_TRIANGLES,ibo_.num_elements, ibo_.datatype, 0);
+  glDrawElements(GL_TRIANGLES,ibo_.num_elements*3, ibo_.datatype, 0);
   std::cout <<  ibo_.num_elements << std::endl;
   ibo_.Unbind();
   glColor3f(1.,0.,1.);

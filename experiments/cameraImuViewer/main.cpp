@@ -257,28 +257,30 @@ int main( int argc, char* argv[] )
     // Draw 2D stuff
     // ShowFrames renders the raw input streams (in our case RGB and D)
     TICK("draw 2D");
-    viewRGB.SetImage(rgb);
-    viewD.SetImage(d);
+    if (viewRGB.IsShown()) viewRGB.SetImage(rgb);
+    if (viewD.IsShown()) viewD.SetImage(d);
 
-    viewDirHist2D.ActivatePixelOrthographic();
-    dirHist.Render2D(histScale, histLog, histShowEmpty);
-    glColor4f(0,0,1,1);
-    // plot some directions into the histogram to show where we are
-    // currently collecting
-    glPointSize(1);
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
-      int32_t cId;
-      cId = dStream2cam[sId]; 
-      CameraT cam = rig.cams_[cId];
-      tdp::SE3f T_wc = T_wr*rig.T_rcs_[cId];
-      for (size_t u=0; u<wSingle; u += 20) {
-        for (size_t v=0; v<hSingle; v += 20) {
-          Eigen::Vector3f p1 = T_wc.rotation() * cam.Unproject(u,v,1.);
-          Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
-          int y1 = (-phiTheta1(0)+M_PI)*199/(2.*M_PI);
-          int x1 = phiTheta1(1)*199/(M_PI);
-          //pangolin::glDrawCircle(x1,y1,0.1);
-          tdp::glDrawPoint(x1,y1);
+    if (viewDirHist2D.IsShown()) {
+      viewDirHist2D.ActivatePixelOrthographic();
+      dirHist.Render2D(histScale, histLog, histShowEmpty);
+      glColor4f(0,0,1,1);
+      // plot some directions into the histogram to show where we are
+      // currently collecting
+      glPointSize(1);
+      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+        int32_t cId;
+        cId = dStream2cam[sId]; 
+        CameraT cam = rig.cams_[cId];
+        tdp::SE3f T_wc = T_wr*rig.T_rcs_[cId];
+        for (size_t u=0; u<wSingle; u += 20) {
+          for (size_t v=0; v<hSingle; v += 20) {
+            Eigen::Vector3f p1 = T_wc.rotation() * cam.Unproject(u,v,1.);
+            Eigen::Vector3f phiTheta1 = tdp::ToSpherical(p1);
+            int y1 = (-phiTheta1(0)+M_PI)*199/(2.*M_PI);
+            int x1 = phiTheta1(1)*199/(M_PI);
+            //pangolin::glDrawCircle(x1,y1,0.1);
+            tdp::glDrawPoint(x1,y1);
+          }
         }
       }
     }
