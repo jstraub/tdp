@@ -8,8 +8,10 @@
 
 #include <math.h>
 #include "CIsoSurface.h"
+#include <tdp/tsdf/tsdf.h>
+#include <tdp/data/volume.h>
 
-template <class T> const unsigned int CIsoSurface<T>::m_edgeTable[256] = {
+template <class T> const int CIsoSurface<T>::m_edgeTable[256] = {
 	0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
 	0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
 	0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -44,7 +46,7 @@ template <class T> const unsigned int CIsoSurface<T>::m_edgeTable[256] = {
 	0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
 };
 
-template <class T> const unsigned int CIsoSurface<T>::m_triTable[256][16] = {
+template <class T> const int CIsoSurface<T>::m_triTable[256][16] = {
 	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 	{0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 	{0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -329,13 +331,16 @@ template <class T> CIsoSurface<T>::~CIsoSurface()
 
 template <class T> void CIsoSurface<T>::GenerateSurface(
             const T* ptScalarField,
+            const tdp::Volume<tdp::TSDFval>& tsdf,
             T tIsoLevel,
             unsigned int nCellsX,
             unsigned int nCellsY,
             unsigned int nCellsZ,
             float fCellLengthX,
             float fCellLengthY,
-            float fCellLengthZ)
+            float fCellLengthZ,
+            float wThr,
+            float fThr)
 {
 	if (m_bValidSurface)
 		DeleteSurface();
@@ -349,8 +354,8 @@ template <class T> void CIsoSurface<T>::GenerateSurface(
 	m_fCellLengthZ = fCellLengthZ;
 	m_ptScalarField = ptScalarField;
 
-	unsigned int nPointsInXDirection = (m_nCellsX + 1);
-	unsigned int nPointsInSlice = nPointsInXDirection*(m_nCellsY + 1);
+	unsigned int nPointsInXDirection = (m_nCellsX +1);
+	unsigned int nPointsInSlice = nPointsInXDirection*(m_nCellsY +1);
 
 	// Generate isosurface.
 	for (unsigned int z = 0; z < m_nCellsZ; z++)
@@ -375,6 +380,7 @@ template <class T> void CIsoSurface<T>::GenerateSurface(
 					tableIndex |= 64;
 				if (m_ptScalarField[(z+1)*nPointsInSlice + y*nPointsInXDirection + (x+1)] < m_tIsoLevel)
 					tableIndex |= 128;
+
 
 				// Now create a triangulation of the isosurface in this
 				// cell.
@@ -449,6 +455,28 @@ template <class T> void CIsoSurface<T>::GenerateSurface(
 							unsigned int id = GetEdgeID(x, y, z, 5);
 							m_i2pt3idVertices.insert(ID2POINT3DID::value_type(id, pt));
 						}
+
+          // do not insert any triangles if we are not sure about the
+          // TSDF
+          if (   (tsdf(x  ,y+1,z).w   < wThr)
+              || (tsdf(x+1,y+1,z).w   < wThr)
+              || (tsdf(x  ,y  ,z).w   < wThr)
+              || (tsdf(x+1,y  ,z).w   < wThr)
+              || (tsdf(x  ,y+1,z+1).w < wThr)
+              || (tsdf(x+1,y+1,z+1).w < wThr)
+              || (tsdf(x  ,y  ,z+1).w < wThr)
+              || (tsdf(x+1,y  ,z+1).w < wThr)
+              || (tsdf(x  ,y+1,z  ).f > fThr)
+              || (tsdf(x+1,y+1,z  ).f > fThr)
+              || (tsdf(x  ,y  ,z  ).f > fThr)
+              || (tsdf(x+1,y  ,z  ).f > fThr)
+              || (tsdf(x  ,y+1,z+1).f > fThr)
+              || (tsdf(x+1,y+1,z+1).f > fThr)
+              || (tsdf(x  ,y  ,z+1).f > fThr)
+              || (tsdf(x+1,y  ,z+1).f > fThr)
+             ) {
+            continue;
+          }
 
 					for (unsigned int i = 0; m_triTable[tableIndex][i] != -1; i += 3) {
 						TRIANGLE triangle;

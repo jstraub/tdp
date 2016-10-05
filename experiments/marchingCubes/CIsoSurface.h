@@ -13,6 +13,8 @@
 #include <map>
 #include <vector>
 #include "Vectors.h"
+#include <tdp/tsdf/tsdf.h>
+#include <tdp/data/volume.h>
 
 struct POINT3DID {
 	unsigned int newID;
@@ -35,7 +37,13 @@ public:
 
 	// Generates the isosurface from the scalar field contained in the
 	// buffer ptScalarField[].
-	void GenerateSurface(const T* ptScalarField, T tIsoLevel, unsigned int nCellsX, unsigned int nCellsY,  unsigned int nCellsZ, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
+	void GenerateSurface(const T* ptScalarField, 
+            const tdp::Volume<tdp::TSDFval>& tsdf,
+      T tIsoLevel, unsigned int nCellsX, unsigned int nCellsY,
+      unsigned int nCellsZ, float fCellLengthX, float fCellLengthY,
+      float fCellLengthZ,
+            float wThr,
+            float fThr);
 
 	// Returns true if a valid surface has been generated.
 	bool IsSurfaceValid();
@@ -115,8 +123,8 @@ protected:
 	bool m_bValidSurface;
 
 	// Lookup tables used in the construction of the isosurface.
-	static const unsigned int m_edgeTable[256];
-	static const unsigned int m_triTable[256][16];
+	static const int m_edgeTable[256];
+	static const int m_triTable[256][16];
 };
 #endif // CISOSURFACE_H
 
