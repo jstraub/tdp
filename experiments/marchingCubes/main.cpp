@@ -43,6 +43,8 @@ int main( int argc, char* argv[] )
     pango_print_error("Unable to load volume");
     return 1;
   }
+  std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x" 
+    << tsdf.h_ << "x" << tsdf.d_ << std::endl;
 
 //  float test[27] = {
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
