@@ -63,7 +63,9 @@ int main( int argc, char* argv[] )
   }
 
   // optionally connect to IMU if it is found.
-  tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
+  tdp::ImuInterface* imu = nullptr; 
+  if (imu_input_uri.size() > 0) 
+    imu = tdp::OpenImu(imu_input_uri);
   if (imu) imu->Start();
   tdp::ImuInterpolator imuInterp(imu,nullptr);
   imuInterp.Start();

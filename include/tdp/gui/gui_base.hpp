@@ -43,6 +43,9 @@ class GuiBase {
         } else {
           std::cout << "could not find strem properties in: " << std::endl
             << props.serialize(true) << std::endl;
+          for (size_t i=0; i<images.size(); ++i) {
+            t_host_us_.push_back(0);
+          }
         }
       }
     }
