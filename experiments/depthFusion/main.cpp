@@ -243,6 +243,8 @@ int main( int argc, char* argv[] )
 
   Stopwatch::getInstance().setCustomSignature(1243984912);
 
+  gui.verbose = true;
+
   if (false) {
     // for the SR300 or F200
     //depthSensorScale = 1e-4;
@@ -257,7 +259,6 @@ int main( int argc, char* argv[] )
     gridEz = 6.;
     icpDistThr = 1.;
   }
-  gui.verbose = false;
 
   tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
   T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();

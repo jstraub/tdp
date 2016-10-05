@@ -26,6 +26,11 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -Wno-deprecated -std=c++11")
 find_package (CUDA QUIET)
 if (CUDA_FOUND)
   list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__")
+
+  if (CUDA_DEBUG)
+    list(APPEND CUDA_NVCC_FLAGS " -g -G ")
+  endif()
+
   include_directories(${CUDA_TOOLKIT_INCLUDE})
   #add_definitions(-DCUDA_FOUND)
   if (${CUDA_VERSION} LESS 8.0)
