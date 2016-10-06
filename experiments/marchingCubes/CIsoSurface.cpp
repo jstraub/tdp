@@ -466,6 +466,7 @@ template <class T> void CIsoSurface<T>::GenerateSurface(
               || (tsdf(x+1,y+1,z+1).w < wThr)
               || (tsdf(x  ,y  ,z+1).w < wThr)
               || (tsdf(x+1,y  ,z+1).w < wThr)
+
               || (tsdf(x  ,y+1,z  ).f > fThr)
               || (tsdf(x+1,y+1,z  ).f > fThr)
               || (tsdf(x  ,y  ,z  ).f > fThr)
@@ -474,6 +475,15 @@ template <class T> void CIsoSurface<T>::GenerateSurface(
               || (tsdf(x+1,y+1,z+1).f > fThr)
               || (tsdf(x  ,y  ,z+1).f > fThr)
               || (tsdf(x+1,y  ,z+1).f > fThr)
+
+              || (tsdf(x  ,y+1,z  ).f < -1.)
+              || (tsdf(x+1,y+1,z  ).f < -1.)
+              || (tsdf(x  ,y  ,z  ).f < -1.)
+              || (tsdf(x+1,y  ,z  ).f < -1.)
+              || (tsdf(x  ,y+1,z+1).f < -1.)
+              || (tsdf(x+1,y+1,z+1).f < -1.)
+              || (tsdf(x  ,y  ,z+1).f < -1.)
+              || (tsdf(x+1,y  ,z+1).f < -1.)
              ) {
             continue;
           }

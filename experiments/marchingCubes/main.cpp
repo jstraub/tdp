@@ -36,9 +36,15 @@
 
 int main( int argc, char* argv[] )
 {
-  const std::string dflt_output_uri = "pango://video.pango";
   const std::string input_uri = std::string(argv[1]);
-  const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
+  const std::string option = (argc > 2) ? std::string(argv[2]) : "";
+
+  bool runOnce = false;
+  if (!option.compare("-1")) {
+    runOnce = true; 
+  }
+  std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("/mesh.ply");
+  std::cout << meshOutputPath << std::endl;
 
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
   if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
@@ -186,13 +192,15 @@ int main( int argc, char* argv[] )
       std::ostringstream outStream;
       plyFile.write(outStream, false);
 
-      std::ofstream out("./mesh.ply");
+      std::ofstream out(meshOutputPath);
       out << outStream.str();
       out.close();
 
       delete [] vertexStore;
       delete [] colorStore;
       delete [] indexStore;
+
+      if (runOnce) break;
     }
 
     // Draw 3D stuff
