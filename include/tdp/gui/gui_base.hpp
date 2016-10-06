@@ -78,6 +78,7 @@ class GuiBase {
     return pangolin::Display("container");
   }
 
+  bool pause() { end_frame = (frame < end_frame) ? frame : std::numeric_limits<int>::max(); }
   bool paused() { return frame == end_frame; }
   bool finished() { return finished_; }
 

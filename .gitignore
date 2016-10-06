@@ -9,3 +9,4 @@ tags
 *.aux
 *.log
 writeup.pdf
+log*.txt

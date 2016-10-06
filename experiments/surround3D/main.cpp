@@ -143,8 +143,21 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewD);
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
-  tdp::QuickView viewRgbJoint(w,h);
-  gui.container().AddDisplay(viewRgbJoint);
+
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+  pangolin::DataLog logInliers;
+  pangolin::Plotter plotInliers(&logInliers, -100.f,1.f, 0, 130000.f, 
+      10.f, 0.1f);
+  plotters.AddDisplay(plotInliers);
+  pangolin::DataLog logCost;
+  pangolin::Plotter plotCost(&logCost, -100.f,1.f, -10.f,1.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotCost);
+  gui.container().AddDisplay(plotters);
+
+  viewRgb.Show(false);
+  viewD.Show(false);
+  viewN2D.Show(false);
 
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   tdp::ManagedDeviceImage<float> cuDView(w, h);
@@ -207,6 +220,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
+
+  pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 20000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
 
@@ -359,12 +374,15 @@ int main( int argc, char* argv[] )
 
       { // ICP
         size_t lvls = maxIt.size();
+        std::vector<float> errPerLvl(lvls, 0);
+        std::vector<float> countPerLvl(lvls, 0);
         for (int lvl=lvls-1; lvl >= 0; --lvl) {
           float errPrev = 0.f; 
           float error = 0.f; 
+          float count = 0.f; 
           for (size_t it=0; it<maxIt[lvl]; ++it) {
-            float count = 0.f; 
-            float error = 0.f; 
+            count = 0.f; 
+            error = 0.f; 
             Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
             Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
             ATA.fill(0.);
@@ -428,7 +446,20 @@ int main( int argc, char* argv[] )
             if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
             errPrev = error;
           }
+          errPerLvl[lvl] = log(error);
+          countPerLvl[lvl] = count;
         }
+        if (countPerLvl[0] < inlierThrLvl0) {
+          std::cout << "# inliers " << countPerLvl[0] << " to small "
+            << "probably have tracking failure"
+            << std::endl;
+          gui.pause();
+          runICP = false;
+          fuseTSDF = false;
+          break;
+        }
+        logInliers.Log(countPerLvl);
+        logCost.Log(errPerLvl);
       }
       TOCK("ICP");
     }
@@ -560,6 +591,9 @@ int main( int argc, char* argv[] )
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
     }
+
+    plotInliers.ScrollView(1,0);
+    plotCost.ScrollView(1,0);
 
     if (!gui.paused()) {
       T_wr_imu_prev = T_wr_imu;
