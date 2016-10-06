@@ -32,6 +32,35 @@ struct Rig {
     }
   }
 
+  bool ParseTransformation(const pangolin::json::value& jsT, SE3f& T) {
+    pangolin::json::value t_json = jsT["t_xyz"];
+    Eigen::Vector3f t(
+        t_json[0].get<double>(),
+        t_json[1].get<double>(),
+        t_json[2].get<double>());
+    Eigen::Matrix3f R;
+    if (jsT.contains("q_wxyz")) {
+      pangolin::json::value q_json = jsT["q_wxyz"];
+      Eigen::Quaternionf q(q_json[0].get<double>(),
+          q_json[1].get<double>(),
+          q_json[2].get<double>(),
+          q_json[3].get<double>());
+      R = q.toRotationMatrix();
+    } else if (jsT.contains("R_3x3")) {
+      pangolin::json::value R_json = jsT["R_3x3"];
+      R << R_json[0].get<double>(), R_json[1].get<double>(), 
+           R_json[2].get<double>(), 
+           R_json[3].get<double>(), R_json[4].get<double>(), 
+           R_json[5].get<double>(), 
+           R_json[6].get<double>(), R_json[7].get<double>(), 
+           R_json[8].get<double>();
+    } else {
+      return false;
+    }
+    T = SE3f(R, t);
+    return true;
+  }
+
   bool FromFile(std::string pathToConfig, bool verbose) {
     pangolin::json::value file_json(pangolin::json::object_type,true); 
     std::ifstream f(pathToConfig);
@@ -84,39 +113,24 @@ struct Rig {
                   file_json[i]["camera"]["depthScaleVsDepthModel"][0].get<double>(),
                   file_json[i]["camera"]["depthScaleVsDepthModel"][1].get<double>()));
               }
-              SE3f T_rc;
               if (file_json[i]["camera"].contains("T_rc")) {
-                pangolin::json::value t_json =
-                  file_json[i]["camera"]["T_rc"]["t_xyz"];
-                Eigen::Vector3f t(
-                    t_json[0].get<double>(),
-                    t_json[1].get<double>(),
-                    t_json[2].get<double>());
-
-                Eigen::Matrix3f R_rc;
-                if (file_json[i]["camera"]["T_rc"].contains("q_wxyz")) {
-                  pangolin::json::value q_json =
-                    file_json[i]["camera"]["T_rc"]["q_wxyz"];
-                  Eigen::Quaternionf q(q_json[0].get<double>(),
-                      q_json[1].get<double>(),
-                      q_json[2].get<double>(),
-                      q_json[3].get<double>());
-                  R_rc = q.toRotationMatrix();
-                } else if (file_json[i]["camera"]["T_rc"].contains("R_3x3")) {
-                  pangolin::json::value R_json =
-                    file_json[i]["camera"]["T_rc"]["R_3x3"];
-                  R_rc << R_json[0].get<double>(), R_json[1].get<double>(), 
-                       R_json[2].get<double>(), 
-                  R_json[3].get<double>(), R_json[4].get<double>(), 
-                       R_json[5].get<double>(), 
-                  R_json[6].get<double>(), R_json[7].get<double>(), 
-                       R_json[8].get<double>();
+                SE3f T_rc;
+                if (ParseTransformation(file_json[i]["camera"]["T_rc"],T_rc)) {
+                  if (verbose) 
+                    std::cout << "found T_rc" << std::endl << T_rc << std::endl;
+                  T_rcs_.push_back(T_rc);
                 }
-                T_rc = SE3f(R_rc, t);
-                if (verbose) 
-                  std::cout << "found T_rc" << std::endl << T_rc << std::endl;
               }
-              T_rcs_.push_back(T_rc);
+            } else if (file_json[i].contains("imu")) {
+              std::cout << "found IMU: " << file_json[i]["imu"]["type"].get<std::string>() << std::endl;
+              if (file_json[i]["imu"].contains("T_ri")) {
+                SE3f T_ri;
+                if (ParseTransformation(file_json[i]["imu"]["T_ri"],T_ri)) {
+                  if (verbose) 
+                    std::cout << "found T_ri" << std::endl << T_ri << std::endl;
+                  T_ris_.push_back(T_ri);
+                }
+              }
             }
           }
         } else {
@@ -140,6 +154,8 @@ struct Rig {
     return false;
   }
 
+  // imu to rig transformations
+  std::vector<SE3f> T_ris_; 
   // camera to rig transformations
   std::vector<SE3f> T_rcs_; 
   // cameras

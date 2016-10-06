@@ -104,6 +104,7 @@ int main( int argc, char* argv[] )
     // camera model for computing point cloud and normals
     camR = rig.cams_[rgbStream2cam[0]];
     camD = camR; //rig.cams_[dStream2cam[0]];
+    if (rig.T_ris_.size() > 0) T_ir = rig.T_ris_[0];
   }
 
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 

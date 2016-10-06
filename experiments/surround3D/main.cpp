@@ -101,6 +101,15 @@ int main( int argc, char* argv[] )
   if (imu) imu->Start();
   tdp::ImuInterpolator imuInterp(imu,nullptr);
   imuInterp.Start();
+  
+  tdp::SE3f T_ir;
+  if (imu) {
+    if (rig.T_ris_.size() > 0) 
+      T_ir = rig.T_ris_[0];
+    else {
+      std::cout << "Warning no IMU calibration specified" << std::endl;
+    }
+  }
 
   tdp::GuiBase gui(1200,800,video);
 
@@ -192,6 +201,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
@@ -238,10 +248,12 @@ int main( int argc, char* argv[] )
       });
 
   tdp::SE3f T_mr;
+  tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.finished()))
   {
+
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -256,6 +268,7 @@ int main( int argc, char* argv[] )
     // get next frames from the video source
     gui.NextFrames();
 
+
     TICK("rgb collection");
     // get rgb image
     for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
@@ -269,9 +282,14 @@ int main( int argc, char* argv[] )
     TOCK("rgb collection");
     TICK("depth collection");
     // get depth image
+    int64_t t_host_us_d = 0;
+    int32_t numStreams = 0;
     for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
       tdp::Image<uint16_t> dStream;
-      if (!gui.ImageD(dStream, sId)) continue;
+      int64_t t_host_us_di = 0;
+      if (!gui.ImageD(dStream, sId, &t_host_us_di)) continue;
+      t_host_us_d += t_host_us_di;
+      numStreams ++;
       int32_t cId = rgbdStream2cam[sId]; 
       //std::cout << sId << " " << cId << std::endl;
       tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
@@ -294,6 +312,8 @@ int main( int argc, char* argv[] )
       }
     }
     TOCK("depth collection");
+    t_host_us_d /= numStreams;  
+    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId;
@@ -332,6 +352,8 @@ int main( int argc, char* argv[] )
 
     if (runICP && numFused > 30) {
       if (gui.verbose) std::cout << "icp" << std::endl;
+      if (icpImu && imu) 
+        T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
       TICK("ICP");
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
 
@@ -537,6 +559,10 @@ int main( int argc, char* argv[] )
       }
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
+    }
+
+    if (!gui.paused()) {
+      T_wr_imu_prev = T_wr_imu;
     }
 
     // leave in pixel orthographic for slider to render.
