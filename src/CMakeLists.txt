@@ -2,7 +2,6 @@
 file(GLOB SRCS 
   "./cuda/*cpp"
   "./directional/*cpp"
-  "./drivers/*cpp"
   "./gui/*cpp"
   "./icp/*cpp"
   "./manifold/*cpp"
@@ -14,7 +13,7 @@ file(GLOB SRCS
   "./tsdf/*cpp"
   "./utils/*cpp"
   "./inertial/*cpp"
-  "./drivers/inertial/*cpp"
+  "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
@@ -32,7 +31,6 @@ else()
     ${SRCS}
     )
 endif()
-message ("${SRCS}")
 
 if (Calibu_FOUND) 
   list(APPEND LIBS ${Calibu_LIBRARIES})

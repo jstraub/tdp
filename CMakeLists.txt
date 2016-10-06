@@ -77,7 +77,20 @@ find_package (ASIO QUIET)
 if (ASIO_FOUND) 
   message("found ASIO")
   include_directories(${ASIO_INCLUDE_DIRS})
-  #add_definitions(-DASIO_FOUND)
+endif()
+
+# Help GTSAM be found
+set(GTSAM_DIR "/home/jstraub/workspace/research/3rdparty/gtsam/")
+find_package (GTSAM QUIET)
+if (GTSAM_FOUND) 
+  message("found GTSAM")
+  message(${GTSAM_LIBS})
+  find_package(Boost REQUIRED system)
+
+  include_directories(
+    ${GTSAM_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIRS}
+    )
 endif()
 
 include_directories(

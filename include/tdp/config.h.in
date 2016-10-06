@@ -18,5 +18,6 @@
 #cmakedefine ASIO_FOUND
 #cmakedefine OPENNI2_FOUND
 #cmakedefine Calibu_FOUND
+#cmakedefine GTSAM_FOUND
 
 #define SHADER_DIR "${SHADER_DIR}"

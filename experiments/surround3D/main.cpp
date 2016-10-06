@@ -221,7 +221,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 20000, 1000, 100000);
+  pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 10000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
 
@@ -268,8 +268,6 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.finished()))
   {
-
-
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
     tdp::Vector3fda dGrid = gridE - grid0;
@@ -449,7 +447,10 @@ int main( int argc, char* argv[] )
           errPerLvl[lvl] = log(error);
           countPerLvl[lvl] = count;
         }
-        if (countPerLvl[0] < inlierThrLvl0) {
+        if (countPerLvl[0] < inlierThrLvl0 
+            || errPerLvl[0] != errPerLvl[0]
+            || errPerLvl[1] != errPerLvl[1]
+            || errPerLvl[2] != errPerLvl[2]) {
           std::cout << "# inliers " << countPerLvl[0] << " to small "
             << "probably have tracking failure"
             << std::endl;

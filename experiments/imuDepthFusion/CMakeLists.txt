@@ -9,6 +9,10 @@ add_executable(${ProjName}
   ${SRCS}
   )
 
+message(${ProjName})
+message(${Boost_LIBRARIES})
 
 target_link_libraries(${ProjName}
+  ${GTSAM_LIBS}
+  ${Boost_LIBRARIES}
   tdp)
