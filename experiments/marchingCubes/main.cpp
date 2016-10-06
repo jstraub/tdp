@@ -235,25 +235,6 @@ int main( int argc, char* argv[] )
     cbo.Unbind();
     vbo.Unbind();
 
-    // render point cloud
-    //cbo.Bind();
-    //glColorPointer(cbo.count_per_element, cbo.datatype, 0, 0);
-    //glEnableClientState(GL_COLOR_ARRAY);
-
-    //vbo.Bind();
-    //glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
-    //glEnableClientState(GL_VERTEX_ARRAY);
-
-    //ibo.Bind();
-    //glDrawElements(GL_TRIANGLES,ibo.num_elements, ibo.datatype, 0);
-    //ibo.Unbind();
-
-    //glDisableClientState(GL_VERTEX_ARRAY);
-    //vbo.Unbind();
-
-    //glDisableClientState(GL_COLOR_ARRAY);
-    //cbo.Unbind();
-
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
     viewTsdfSliveView.Show(showTSDFslice);
