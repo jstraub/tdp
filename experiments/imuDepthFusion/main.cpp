@@ -219,8 +219,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
-
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
+
+  pangolin::Var<bool> runSAM("ui.run SAM",true,true);
+  pangolin::Var<bool> samIMU("ui.add IMU SAM",true,true);
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
@@ -267,7 +269,7 @@ int main( int argc, char* argv[] )
   // Assemble prior noise model and add it the graph.
   noiseModel::Diagonal::shared_ptr pose_noise_model = 
     noiseModel::Diagonal::Sigmas((Vector(6) 
-          << 0.01, 0.01, 0.01, 0.5, 0.5, 0.5).finished()); // rad,rad,rad,m, m, m
+          << 0.01, 0.01, 0.01, 0.01, 0.01, 0.01).finished()); // rad,rad,rad,m, m, m
   noiseModel::Diagonal::shared_ptr velocity_noise_model = 
     noiseModel::Isotropic::Sigma(3,0.1); // m/s
   noiseModel::Diagonal::shared_ptr bias_noise_model = 
@@ -338,15 +340,16 @@ int main( int argc, char* argv[] )
       while(receiveImu.Get()) {
         if (imu->GrabNext(imuObs)) {
           while(t_host_video.Get() < imuObs.t_host) {
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
           }
-          if (numReceived.Get() > 0)  {
+          double dt = (t_host_video.Get() - imuObs.t_host)*1e-9;
+          if (numReceived.Get() > 0 && dt < 0.1)  {
             double dt = (imuObs.t_device- imuObsPrev.t_device)*1e-9;
             std::cout << "imu observation " <<  imuObs.t_host
               << " dt: " << dt << std::endl;
             imu_preintegrated_->integrateMeasurement(
-              imuObs.acc.cast<double>(),
-              imuObs.omega.cast<double>(), 
+              (T_ir.rotation().Inverse()*imuObs.acc).cast<double>(),
+              (T_ir.rotation().Inverse()*imuObs.omega).cast<double>(), 
               dt);
           }
           imuObsPrev = imuObs;
@@ -355,6 +358,8 @@ int main( int argc, char* argv[] )
         //std::this_thread::sleep_for(std::chrono::microseconds(100));
       }
     });
+
+  tdp::SE3f T_mo_isam; 
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -415,27 +420,34 @@ int main( int argc, char* argv[] )
       << T_mo  << std::endl;
 
 
+
+    if (runSAM && numFused > 30) {
+
       correction_count++;
-      // Adding IMU factor and GPS factor and optimizing.
+      if (samIMU) {
+        // Adding IMU factor and GPS factor and optimizing.
 #ifdef USE_COMBINED
-      PreintegratedCombinedMeasurements *preint_imu_combined = dynamic_cast<PreintegratedCombinedMeasurements*>(imu_preintegrated_);
-      CombinedImuFactor imu_factor(X(correction_count-1), V(correction_count-1),
-                                   X(correction_count  ), V(correction_count  ),
-                                   B(correction_count-1), B(correction_count  ),
-                                   *preint_imu_combined);
-      graph->add(imu_factor);
+        PreintegratedCombinedMeasurements *preint_imu_combined = dynamic_cast<PreintegratedCombinedMeasurements*>(imu_preintegrated_);
+        CombinedImuFactor imu_factor(X(correction_count-1), V(correction_count-1),
+            X(correction_count  ), V(correction_count  ),
+            B(correction_count-1), B(correction_count  ),
+            *preint_imu_combined);
+        graph->add(imu_factor);
 #else
-      PreintegratedImuMeasurements *preint_imu = dynamic_cast<PreintegratedImuMeasurements*>(imu_preintegrated_);
-      ImuFactor imu_factor(X(correction_count-1), V(correction_count-1),
-                           X(correction_count  ), V(correction_count  ),
-                           B(correction_count-1),
-                           *preint_imu);
-      graph->add(imu_factor);
-      imuBias::ConstantBias zero_bias(Vector3(0, 0, 0), Vector3(0, 0, 0));
-      graph->add(BetweenFactor<imuBias::ConstantBias>(B(correction_count-1), 
-                                                      B(correction_count  ), 
-                                                      zero_bias, bias_noise_model));
+        PreintegratedImuMeasurements *preint_imu = dynamic_cast<PreintegratedImuMeasurements*>(imu_preintegrated_);
+        ImuFactor imu_factor(X(correction_count-1), V(correction_count-1),
+            X(correction_count  ), V(correction_count  ),
+            B(correction_count-1),
+            *preint_imu);
+        graph->add(imu_factor);
+        imuBias::ConstantBias zero_bias(Vector3(0, 0, 0), Vector3(0, 0, 0));
+        graph->add(BetweenFactor<imuBias::ConstantBias>(B(correction_count-1), 
+              B(correction_count  ), 
+              zero_bias, bias_noise_model));
+
+        preint_imu->print();
 #endif
+      }
 
       noiseModel::Diagonal::shared_ptr correction_noise = noiseModel::Isotropic::Sigma(6,0.01);
 
@@ -456,30 +468,42 @@ int main( int argc, char* argv[] )
 //      graph->add(gps_factor);
       graph->add(icp_factor);      
 
-      // Now optimize and compare results.
-      prop_state = imu_preintegrated_->predict(prev_state, prev_bias);
-      initial_values.insert(X(correction_count), prop_state.pose());
-      initial_values.insert(V(correction_count), prop_state.v());
-      initial_values.insert(B(correction_count), prev_bias);
+      if (samIMU) {
+        // Now optimize and compare results.
+        prop_state = imu_preintegrated_->predict(prev_state, prev_bias);
+        initial_values.insert(X(correction_count), prop_state.pose());
+        initial_values.insert(V(correction_count), prop_state.v());
+        initial_values.insert(B(correction_count), prev_bias);
+      } else {
+        initial_values.insert(X(correction_count), Pose3(T_mo.matrix().cast<double>()));
+        initial_values.insert(V(correction_count), Vector3(0.,0.,0.));
+        initial_values.insert(B(correction_count), prev_bias);
+      }
 
       std::cout << "now optimizing" << std::endl;
       LevenbergMarquardtOptimizer optimizer(*graph, initial_values);
       Values result = optimizer.optimize();
 
-      // Overwrite the beginning of the preintegration for the next step.
-      prev_state = NavState(result.at<Pose3>(X(correction_count)),
-                            result.at<Vector3>(V(correction_count)));
-      prev_bias = result.at<imuBias::ConstantBias>(B(correction_count));
-
-      // Reset the preintegration object.
-      imu_preintegrated_->resetIntegrationAndSetBias(prev_bias);
+      if (samIMU) {
+        // Overwrite the beginning of the preintegration for the next step.
+        prev_state = NavState(result.at<Pose3>(X(correction_count)),
+            result.at<Vector3>(V(correction_count)));
+        prev_bias = result.at<imuBias::ConstantBias>(B(correction_count));
+        // Reset the preintegration object.
+        imu_preintegrated_->resetIntegrationAndSetBias(prev_bias);
+      }
 
       // Print out the position and orientation error for comparison.
-      tdp::SE3f T_mo_isam(prev_state.pose().matrix().cast<float>());
+      T_mo_isam = tdp::SE3f(prev_state.pose().matrix().cast<float>());
 
       std::cout << "ISAM " 
         << std::endl 
         << T_mo_isam.matrix3x4() << std::endl;
+
+      std::ofstream out("./graph.viz");
+      graph->saveGraph(out);
+      out.close();
+    }
 
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
@@ -560,6 +584,9 @@ int main( int argc, char* argv[] )
       glColor3f(0,1,0);
       pangolin::RenderVbo(cuPcbuf);
     }
+
+    pangolin::glDrawAxis(T_mo_isam.matrix(), 0.15f);
+
     pangolin::glSetFrameOfReference(T_mo.matrix());
     // render current camera second in the propper frame of
     // reference
