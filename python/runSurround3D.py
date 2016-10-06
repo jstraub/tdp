@@ -22,7 +22,8 @@ def runSurround3D(path,logFile):
 
 def runMarchingCubes(path,logFile):
   args = [os.path.abspath("../build/experiments/marchingCubes/marchingCubes"),
-    "file://"+os.path.abspath(path)+"/tsdf.raw"]
+    os.path.abspath(path)+"/tsdf.raw",
+    "-1"]
   print ' '.join(args)
   print ' --------------------- '
   err = subp.call(' '.join(args),shell=True)
