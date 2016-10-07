@@ -15,6 +15,7 @@ file(GLOB SRCS
   "./inertial/*cpp"
   "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
+  "./bb/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 
