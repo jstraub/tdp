@@ -82,6 +82,7 @@ void ComputeCurvature(
     Image<float>& gausCurv
     ) {
   meanCurv.Fill(Vector3fda(NAN,NAN,NAN));
+#pragma omp parallel for
   for (const auto& it : neigh) {
     const uint32_t i = it.first;
     const std::vector<uint32_t>& ids = it.second;  
@@ -89,7 +90,6 @@ void ComputeCurvature(
     Vector3fda mc(0,0,0);
     float gc = 0.;
     float A = 0;
-#pragma omp parallel for
     for (size_t k=0; k<ids.size(); ++k) {
       Vector3fda& xj = vert[ids[k]];
       Vector3fda& xl = vert[(ids[k]-1+ids.size())%ids.size()];
@@ -113,6 +113,19 @@ void ComputeCurvature(
     }
     meanCurv[i] = mc/(2.*A[i]);
     gausCurv[i] = (2*M_PI-gc)/A[i];
+  }
+}
+
+void ComputePrincipalCurvature(
+    const Image<Vector3fda>& meanCurv,
+    const Image<float>& gausCurv,
+    const Image<Vector2fda>& principalCurv,
+    ) {
+  for (size_t i=0; i<meanCurv.w_; ++i) {
+    float kappaH = 0.5*meanCurv[i].norm();
+    float sqrtDelta = sqrt(std::max(0.,kappaH*kappaH-gausCurv[i]));
+    principalCurv[i](0) = kappaH + sqrtDelta;
+    principalCurv[i](1) = kappaH - sqrtDelta;
   }
 }
 
