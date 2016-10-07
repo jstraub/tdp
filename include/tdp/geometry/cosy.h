@@ -21,12 +21,11 @@ Eigen::Matrix3f OrthonormalizeFromYZ(
     const Eigen::MatrixBase<DerivedA>& y,
     const Eigen::MatrixBase<DerivedB>& z) {
   Eigen::Matrix3f R;
-  R.col(2) = Normalize<DerivedB,Eigen::Vector3f>(z.template cast<float>());
+  R.col(2) = z.template cast<float>().normalized();
   Eigen::Vector3f yOrtho;
-  RejectAfromB(y.template cast<float>(), z.template cast<float>(), 
-      yOrtho);
-  R.col(1) = Normalize<DerivedA,Eigen::Vector3f>(yOrtho);
-  R.col(0) = Normalize<Eigen::Vector3f,Eigen::Vector3f>(R.col(1).cross(R.col(2)));
+  RejectAfromB(y.template cast<float>(), z.template cast<float>(), yOrtho);
+  R.col(1) = yOrtho.normalized();
+  R.col(0) = (R.col(1).cross(R.col(2))).normalized();
   return R;
 }
 

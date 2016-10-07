@@ -57,9 +57,4 @@ float LengthOfAonB(const Eigen::MatrixBase<DerivedA>& a,
 //  return c.norm();
 //}
 
-template<typename DerivedIn, typename DerivedOut>
-Eigen::MatrixBase<DerivedOut> Normalize(const Eigen::MatrixBase<DerivedIn>& a) {
-  return a/a.norm();
-}
-
 }
