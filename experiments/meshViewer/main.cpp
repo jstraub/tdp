@@ -70,7 +70,7 @@ int main( int argc, char* argv[] )
   // use those OpenGL buffers
   
   std::vector<float> verts;
-  std::vector<uint32_t> tri;
+  std::vector<uint32_t> tris;
   std::ifstream in(input_uri);
   tinyply::PlyFile ply(in);
 
@@ -84,24 +84,29 @@ int main( int argc, char* argv[] )
   }
   std::cout << std::endl;
   ply.request_properties_from_element("vertex", {"x", "y", "z"}, verts);
-  ply.request_properties_from_element("face", {"vertex_indices"}, tri);
+  ply.request_properties_from_element("face", {"vertex_indices"}, tris);
   ply.read(in);
   std::cout << "loaded ply file: "
-    << verts.size() << " " << tri.size() << std::endl;
+    << verts.size() << " " << tris.size() << std::endl;
+
+  std::vector<uint8_t> cols(verts.size(), 128);
+  tdp::Image<tdp::Vector3fda> vertices(verts.size()/3,1,&verts[0]);
+  tdp::Image<tdp::Vector3uda> tri(tris.size()/3,1,&tris[0]);
+  tdp::Image<tdp::Vector3bda> color(cols.size()/3,1,&cols[0]);
 
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer cbo;
   pangolin::GlBuffer ibo;
-  vbo.Reinitialise(pangolin::GlArrayBuffer, verts.size()/3,  GL_FLOAT,
+  vbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
-  cbo.Reinitialise(pangolin::GlArrayBuffer, verts.size()/3,
+  cbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,
       GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
-  ibo.Reinitialise(pangolin::GlElementArrayBuffer, tri.size()/3,
+  ibo.Reinitialise(pangolin::GlElementArrayBuffer, tris.w_,
       GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
-  vbo.Upload(&verts[0], sizeof(float)*verts.size(), 0);
-  std::vector<uint8_t> color(verts.size(), 128);
-  cbo.Upload(&color[0],  sizeof(uint8_t)*color.size(), 0);
-  ibo.Upload(&tri[0],  sizeof(uint32_t)*tri.size(), 0);
+
+  vbo.Upload(vertices.ptr_, vertices.SizeBytes(), 0);
+  cbo.Upload(color.ptr_,  color.SizeBytes(), 0);
+  ibo.Upload(tri.ptr_,  tri.SizeBytes(), 0);
 
   // load and compile shader
   std::string shaderRoot = SHADER_DIR;
