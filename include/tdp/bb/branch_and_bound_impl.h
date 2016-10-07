@@ -74,7 +74,7 @@ Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, double eps,
     ssNodes << "./bb_nodes_per_iteration_" << nodes.begin()->GetSpace() << ".csv";
     outNodes.open(ssNodes.str());
   }
-  jsc::Timer t0;
+  Timer t0;
   // Get initial upper and lower bounds
   double lb = -1.e6;
   double ub = -1.e6;
