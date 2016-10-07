@@ -5,6 +5,8 @@ file(GLOB SRCS
   "*.cpp"
   )
 
+link_directories(${aruco_LIB_DIR})
+
 add_executable(${ProjName}
   ${SRCS}
   )

@@ -10,7 +10,6 @@ if (CUDA_FOUND)
   add_subdirectory(./normalsViewer)
   add_subdirectory(./planeEstimation)
   add_subdirectory(./surround3D)
-
   if (GTSAM_FOUND)
     add_subdirectory(./imuDepthFusion)
   endif()

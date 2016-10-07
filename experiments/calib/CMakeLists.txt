@@ -16,6 +16,7 @@ set(NO_OPENCV_GPU TRUE)
 find_package( OpenCV QUIET )
 
 find_package(Calibu QUIET)
+link_directories(${Calibu_LIBRARY_DIRS})
 
 if(Pangolin_FOUND AND CeresSolver_FOUND AND OpenCV_FOUND)
   message(${CeresSolver_LIBRARIES})

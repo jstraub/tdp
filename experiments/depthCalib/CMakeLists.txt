@@ -5,6 +5,8 @@ file(GLOB SRCS
   "*.cpp"
   )
 
+link_directories(${Calibu_LIBRARY_DIRS})
+
 add_executable(${ProjName}
   ${SRCS}
   )
