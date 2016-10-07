@@ -18,12 +18,16 @@ void ImuInterpolator::Start() {
           if (!calibrated_ && numReceived_.Get() > 10 
             && imuObs.omega.norm() < 2./180.*M_PI) {
             gyro_bias_ += imuObs.omega;
+            gravity0_ += imuObs.acc;
             numCalib ++;
-            std::cout << imuObs.omega.norm()*180./M_PI << std::endl;
+            std::cout << "rotVel: " << imuObs.omega.norm()*180./M_PI 
+              << " acc: " << imuObs.acc.norm() << std::endl;
           } else if (!calibrated_ && numReceived_.Get() > 10) {
             calibrated_ = true;
             gyro_bias_ /= numCalib;
-            std::cout << "IMU gyro calibrated: " << gyro_bias_.transpose() 
+            gravity0_ /= numCalib;
+            std::cout << "IMU calibrated. gyro " << gyro_bias_.transpose() 
+              << " gravity: " << gravity0_.transpose()
               << std::endl;
           } else {
             imuObs.omega -= gyro_bias_;

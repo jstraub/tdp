@@ -38,5 +38,9 @@ Eigen::MatrixBase<Derived> RejectAfromB(const Eigen::MatrixBase<Derived>& a,
   return a - ProjectAontoB(a,b);
 }
 
+template<typename Derived>
+Eigen::MatrixBase<Derived> Normalize(const Eigen::MatrixBase<Derived>& a) {
+  return a/a.norm();
+}
 
 }

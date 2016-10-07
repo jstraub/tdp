@@ -263,6 +263,13 @@ int main( int argc, char* argv[] )
       });
 
   tdp::SE3f T_mr;
+  if (imu) {
+    T_mr.matrix().topLeftCorner(3,3) =
+      tdp::OrthonormalizeFromYZ(Eigen::Vector3f(0,1,0), -imuInterp.gravity0_);
+    std::cout << "found IMU and used gravity estimate " 
+      << imuInterp.gravity0_.transpose() << std::endl
+      << T_mr << std::endl;
+  }
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video

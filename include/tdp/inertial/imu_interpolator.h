@@ -38,6 +38,7 @@ class ImuInterpolator {
 
   bool calibrated_;
   Eigen::Vector3f gyro_bias_;
+  Eigen::Vector3f gravity0_;
 };
 
 }
