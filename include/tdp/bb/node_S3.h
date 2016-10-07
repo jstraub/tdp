@@ -8,11 +8,11 @@
 #include <list>
 #include <sstream>
 #include <string>
-#include "bbTrans/node.h"
-#include "bbTrans/tetrahedron.h"
-#include "bbTrans/s3_tessellation.h"
+#include <tdp/bb/node.h>
+#include <tdp/bb/tetrahedron.h>
+#include <tdp/bb/s3_tessellation.h>
 
-namespace bb {
+namespace tdp {
 
 class NodeS3 : public BaseNode {
  public:

@@ -7,11 +7,11 @@
 #include <vector>
 #include <list>
 #include <fstream>
-#include "bbTrans/node.h"
-#include "bbTrans/bound.h"
-#include "jsCore/timer.hpp"
+#include <tdp/bb/node.h>
+#include <tdp/bb/bound.h>
+#include <jsCore/timer.hpp>
 
-namespace bb {
+namespace tdp {
 
 template <class Node>
 class BranchAndBound {
@@ -35,4 +35,4 @@ class BranchAndBound {
       lb, double ub);
 };
 }
-#include "bbTrans/branch_and_bound_impl.h"
+#include <tdp/bb/branch_and_bound_impl.h>

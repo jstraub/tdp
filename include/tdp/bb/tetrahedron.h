@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 #include <Eigen/LU>
 
-namespace bb {
+namespace tdp {
 Eigen::Vector4d normed(const Eigen::Vector4d& x);
 
 class Tetrahedron4D {

@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-namespace bb {
+namespace tdp {
 
 template<class NodeLin>
 LowerBoundLin<NodeLin>::LowerBoundLin(LowerBoundS3& boundS3) 

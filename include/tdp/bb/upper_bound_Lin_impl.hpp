@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-namespace bb {
+namespace tdp {
 
 template<class UpperBound, class NodeLin>
 UpperBoundLin<UpperBound,NodeLin>::UpperBoundLin(UpperBound& boundS3) 

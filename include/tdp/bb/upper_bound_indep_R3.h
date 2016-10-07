@@ -6,13 +6,13 @@
 #include <vector>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include "bbTrans/node_R3.h"
-#include "bbTrans/numeric_helpers.h"
-#include "bbTrans/normal.h"
-#include "bbTrans/bound.h"
-#include "bbTrans/lower_bound_R3.h"
+#include <tdp/bb/node_R3.h>
+#include <tdp/bb/numeric_helpers.h>
+#include <tdp/bb/normal.h>
+#include <tdp/bb/bound.h>
+#include <tdp/bb/lower_bound_R3.h>
 
-namespace bb {
+namespace tdp {
 
 class UpperBoundIndepR3 : public Bound<NodeR3> {
  public:

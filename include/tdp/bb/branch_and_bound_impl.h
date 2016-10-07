@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-namespace bb {
+namespace tdp {
 
 template <class Node>
 BranchAndBound<Node>::BranchAndBound(Bound<Node>& lower_bound,

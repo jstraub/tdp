@@ -7,7 +7,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
-namespace bb {
+namespace tdp {
 
 class Box {
  public:

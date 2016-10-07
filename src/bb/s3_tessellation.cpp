@@ -1,9 +1,9 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/s3_tessellation.h" 
+#include <tdp/bb/s3_tessellation.h> 
 
-namespace bb {
+namespace tdp {
 
 std::vector<Tetrahedron4D> TessellateS3() {
   // Search for a north pole to split the sphere into two halfs of

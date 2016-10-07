@@ -5,9 +5,9 @@
 
 #include <vector>
 #include <Eigen/Dense>
-#include "bbTrans/vmf.h"
+#include <tdp/bb/vmf.h>
 
-namespace bb {
+namespace tdp {
 
 /// vMF Mixture Model
 template <uint32_t D>
@@ -22,4 +22,4 @@ class vMFMM {
   std::vector<vMF<D>> vmfs_;
 };
 }
-#include "bbTrans/vmf_mm_impl.h"
+#include <tdp/bb/vmf_mm_impl.h>

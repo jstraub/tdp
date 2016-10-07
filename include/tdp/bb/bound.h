@@ -3,9 +3,9 @@
  */
 #pragma once
 
-#include "bbTrans/node.h"
+#include <tdp/bb/node.h>
 
-namespace bb {
+namespace tdp {
 
 template <class Node>
 class Bound {

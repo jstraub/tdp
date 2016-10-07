@@ -9,14 +9,14 @@
 #include <sstream>
 #include <string>
 
-#include "manifold/S.h"
-#include "bbTrans/node_Lin.h"
-#include "bbTrans/node_R3.h"
-#include "bbTrans/node_S3.h"
-#include "bbTrans/box.h"
-#include "bbTrans/tetrahedron.h"
+#include <manifold/S.h>
+#include <tdp/bb/node_Lin.h>
+#include <tdp/bb/node_R3.h>
+#include <tdp/bb/node_S3.h>
+#include <tdp/bb/box.h>
+#include <tdp/bb/tetrahedron.h>
 
-namespace bb {
+namespace tdp {
 
 class NodeAA : public NodeLin {
  public:

@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/lower_bound_R3.h"
+#include <tdp/bb/lower_bound_R3.h>
 
-namespace bb {
+namespace tdp {
 
 LowerBoundR3::LowerBoundR3(const
     std::vector<Normal<3>>& gmmA, const std::vector<Normal<3>>& gmmB, 

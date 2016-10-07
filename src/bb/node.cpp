@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node.h"
+#include <tdp/bb/node.h>
 
-namespace bb {
+namespace tdp {
 
 BaseNode::BaseNode(std::vector<uint32_t> ids) :
   ids_(ids), lb_(-1e12), ub_(1e12), V_(-1.)

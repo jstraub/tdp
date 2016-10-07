@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node_S3.h"
+#include <tdp/bb/node_S3.h>
 
-namespace bb {
+namespace tdp {
 
 NodeS3::NodeS3(const Tetrahedron4D& tetrahedron,
     std::vector<uint32_t> ids) : BaseNode(ids),

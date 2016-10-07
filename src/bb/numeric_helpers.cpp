@@ -2,9 +2,9 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-#include "bbTrans/numeric_helpers.h"
+#include <tdp/bb/numeric_helpers.h>
 
-namespace bb {
+namespace tdp {
 
 double LogSumExp(const Eigen::VectorXd& x) {
   const double x_max = x.maxCoeff();

@@ -6,11 +6,11 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include "manifold/S.h"
-#include "bbTrans/combinations.h"
-#include "bbTrans/tetrahedron.h"
+#include <manifold/S.h>
+#include <tdp/bb/combinations.h>
+#include <tdp/bb/tetrahedron.h>
 
-namespace bb {
+namespace tdp {
 
 std::vector<Tetrahedron4D> TessellateS3();
 std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north);

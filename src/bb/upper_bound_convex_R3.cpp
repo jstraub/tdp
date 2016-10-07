@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/upper_bound_convex_R3.h"
+#include <tdp/bb/upper_bound_convex_R3.h>
 
-namespace bb {
+namespace tdp {
 
 UpperBoundConvexR3::UpperBoundConvexR3(const
     std::vector<Normal<3>>& gmmA, const std::vector<Normal<3>>& gmmB, 

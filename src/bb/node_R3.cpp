@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node_R3.h"
+#include <tdp/bb/node_R3.h>
 
-namespace bb {
+namespace tdp {
 
 NodeR3::NodeR3(const Box& box, std::vector<uint32_t> ids) : BaseNode(ids), box_(box) {
 }

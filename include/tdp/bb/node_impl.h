@@ -1,7 +1,7 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-namespace bb {
+namespace tdp {
 
 template<class Node>
 std::vector<uint32_t> CountBranchesInTree(const std::list<Node>& nodes) {

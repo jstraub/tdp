@@ -2,9 +2,9 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-#include "bbTrans/tetrahedron.h"
+#include <tdp/bb/tetrahedron.h>
 
-namespace bb {
+namespace tdp {
 
 Eigen::Vector4d normed(const Eigen::Vector4d& x) {
   return x / x.norm();

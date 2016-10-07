@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-namespace bb {
+namespace tdp {
 template<uint32_t D>
 double ComputeLogvMFtovMFcost(const vMF<D>& vmf_A, const vMF<D>& vmf_B, 
   const Eigen::Matrix<double, D, 1>& mu_B_prime) {

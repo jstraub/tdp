@@ -8,10 +8,10 @@
 #include <vector>
 #include <list>
 #include <string>
-#include "bbTrans/node.h"
-#include "bbTrans/box.h"
+#include <tdp/bb/node.h>
+#include <tdp/bb/box.h>
 
-namespace bb {
+namespace tdp {
 
 class NodeR3 : public BaseNode {
  public:

@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node_AA.h"
+#include <tdp/bb/node_AA.h>
 
-namespace bb {
+namespace tdp {
 
 NodeAA::NodeAA(const Box& box, std::vector<uint32_t> ids) 
   : NodeLin(box,ids)

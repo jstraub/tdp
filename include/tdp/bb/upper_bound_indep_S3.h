@@ -6,13 +6,13 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include "bbTrans/node_S3.h"
-#include "bbTrans/numeric_helpers.h"
-#include "bbTrans/vmf.h"
-#include "bbTrans/vmf_mm.h"
-#include "bbTrans/bound.h"
+#include <tdp/bb/node_S3.h>
+#include <tdp/bb/numeric_helpers.h>
+#include <tdp/bb/vmf.h>
+#include <tdp/bb/vmf_mm.h>
+#include <tdp/bb/bound.h>
 
-namespace bb {
+namespace tdp {
 
 class UpperBoundIndepS3 : public Bound<NodeS3> {
  public:

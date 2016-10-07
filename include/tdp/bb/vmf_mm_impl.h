@@ -2,7 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-namespace bb {
+namespace tdp {
 
 template <uint32_t D>
 vMFMM<D>::vMFMM(const std::vector<vMF<D>>& vmfs) :

@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <vector>
 
-namespace bb {
+namespace tdp {
 
 class Combinations {
  public:

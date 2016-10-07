@@ -2,9 +2,9 @@
  * under the MIT license. See the license file LICENSE.
  */
 
-#include "bbTrans/upper_bound_convex_S3.h"
+#include <tdp/bb/upper_bound_convex_S3.h>
 
-namespace bb {
+namespace tdp {
 
 UpperBoundConvexS3::UpperBoundConvexS3(const vMFMM<3>&
     vmf_mm_A, const vMFMM<3>& vmf_mm_B) 

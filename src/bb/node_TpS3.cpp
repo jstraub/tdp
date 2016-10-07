@@ -1,9 +1,9 @@
 /* Copyright (c) 2015, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node_TpS3.h"
+#include <tdp/bb/node_TpS3.h>
 
-namespace bb {
+namespace tdp {
 
 NodeTpS3::NodeTpS3(const Box& box, std::vector<uint32_t> ids) 
   : NodeLin(box, ids)

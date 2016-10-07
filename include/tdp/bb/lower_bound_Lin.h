@@ -6,14 +6,14 @@
 #include <vector>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include "bbTrans/node_S3.h"
-#include "bbTrans/node_AA.h"
-#include "bbTrans/node_TpS3.h"
-#include "bbTrans/numeric_helpers.h"
-#include "bbTrans/bound.h"
-#include "bbTrans/lower_bound_S3.h"
+#include <tdp/bb/node_S3.h>
+#include <tdp/bb/node_AA.h>
+#include <tdp/bb/node_TpS3.h>
+#include <tdp/bb/numeric_helpers.h>
+#include <tdp/bb/bound.h>
+#include <tdp/bb/lower_bound_S3.h>
 
-namespace bb {
+namespace tdp {
 
 template<class NodeLin>
 class LowerBoundLin : public Bound<NodeLin> {
@@ -28,4 +28,4 @@ class LowerBoundLin : public Bound<NodeLin> {
 typedef LowerBoundLin<NodeTpS3> LowerBoundTpS3 ;
 typedef LowerBoundLin<NodeAA>   LowerBoundAA   ;
 }
-#include "bbTrans/lower_bound_Lin_impl.hpp"
+#include <tdp/bb/lower_bound_Lin_impl.hpp>

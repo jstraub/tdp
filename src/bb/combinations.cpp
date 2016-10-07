@@ -3,9 +3,9 @@
  */
 
 #include <iostream>
-#include "bbTrans/combinations.h"
+#include <tdp/bb/combinations.h>
 
-namespace bb {
+namespace tdp {
 
 Combinations::Combinations(uint32_t n, uint32_t k) : 
   comb_work_(k)

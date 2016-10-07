@@ -1,9 +1,9 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#include "bbTrans/node_Lin.h"
+#include <tdp/bb/node_Lin.h>
 
-namespace bb {
+namespace tdp {
 
 NodeLin::NodeLin(const Box& box, std::vector<uint32_t> ids) 
   : BaseNode(ids), nodeLin_(box, ids)

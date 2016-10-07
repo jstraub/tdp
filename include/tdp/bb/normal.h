@@ -6,7 +6,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Cholesky>
 
-namespace bb {
+namespace tdp {
 
 template<uint32_t D>
 class Normal
@@ -64,4 +64,4 @@ private:
   Eigen::Matrix<double,D,1> xi_; // Information Vector = Sigma^-1 mu
 };
 }
-#include "bbTrans/normal_impl.h"
+#include <tdp/bb/normal_impl.h>

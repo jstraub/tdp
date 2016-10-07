@@ -9,7 +9,7 @@
 #include <map>
 #include <iostream>
 
-namespace bb {
+namespace tdp {
 
 class BaseNode {
  public:
@@ -70,4 +70,4 @@ template<class Node>
 std::vector<uint32_t> CountBranchesInTree(const std::list<Node>& nodes);
 
 }
-#include "bbTrans/node_impl.h"
+#include <tdp/bb/node_impl.h>
