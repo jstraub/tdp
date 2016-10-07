@@ -32,6 +32,7 @@
 #include <pangolin/utils/timer.h>
 
 #include <tdp/io/tinyply.h>
+#include <tdp/preproc/curvature.h>
 
 int main( int argc, char* argv[] )
 {
@@ -93,6 +94,12 @@ int main( int argc, char* argv[] )
   tdp::Image<tdp::Vector3fda> vertices(verts.size()/3,1,&verts[0]);
   tdp::Image<tdp::Vector3uda> tri(tris.size()/3,1,&tris[0]);
   tdp::Image<tdp::Vector3bda> color(cols.size()/3,1,&cols[0]);
+
+  tdp::ManagedHostImage<tdp::Vector3fda> n(vertices.w_,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
+  std::map<uint32_t,std::vector<uint32_t>> neigh;
+  tdp::ComputeNeighborhood(vertices, tri, n, neigh);
+  tdp::ComputeMeanCurvature(vertices, tri, neigh, meanCurv);
 
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer cbo;
