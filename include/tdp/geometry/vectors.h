@@ -5,41 +5,60 @@
 namespace tdp {
 
 /// compute dot product at B 
-template<typename Derived>
-float DotABC(const Eigen::MatrixBase<Derived>& a,
-    const Eigen::MatrixBase<Derived>& b,
-    const Eigen::MatrixBase<Derived>& c) {
-  Eigen::MatrixBase<Derived> dirab = a-b;
-  Eigen::MatrixBase<Derived> dircb = c-b;
-  return (dirab.dot(dircb)/(dirab.norm()*dircb.norm()));
+template<typename DerivedA, typename DerivedB, typename DerivedC>
+float DotABC(const Eigen::MatrixBase<DerivedA>& a,
+    const Eigen::MatrixBase<DerivedB>& b,
+    const Eigen::MatrixBase<DerivedC>& c) {
+//  typedef typename Eigen::internal::plain_row_type<DerivedB>::type RowVectorType;
+//  RowVectorType dirab = a-b;
+//  RowVectorType dircb = c-b;
+//  return (dirab.dot(dircb)/(dirab.norm()*dircb.norm()));
+  return ((a-b).dot(c-b)/((a-b).norm()*(c-b).norm()));
 }
 
-template<typename Derived>
-float LengthOfAonB(const Eigen::MatrixBase<Derived>& a,
-    const Eigen::MatrixBase<Derived>& b) {
+//template<typename DerivedA, typename DerivedB>
+//Eigen::MatrixBase<DerivedB> ProjectAontoB(const Eigen::MatrixBase<DerivedA>& a,
+//    const Eigen::MatrixBase<DerivedB>& b) {
+//  return (a.dot(b)/b.dot(b))*b;
+//}
+//
+//template<typename DerivedA, typename DerivedB>
+//Eigen::MatrixBase<DerivedB> RejectAfromB(const Eigen::MatrixBase<DerivedA>& a, 
+//    const Eigen::MatrixBase<DerivedB>& b) {
+//  return a - ProjectAontoB(a,b);
+//}
+
+template<typename DerivedA, typename DerivedB, typename DerivedC>
+void ProjectAontoB(const Eigen::MatrixBase<DerivedA>& a,
+    const Eigen::MatrixBase<DerivedB>& b,
+    Eigen::MatrixBase<DerivedC>& c) {
+  c = (a.dot(b)/b.dot(b))*b;
+}
+
+template<typename DerivedA, typename DerivedB, typename DerivedC>
+void RejectAfromB(const Eigen::MatrixBase<DerivedA>& a, 
+    const Eigen::MatrixBase<DerivedB>& b,
+    Eigen::MatrixBase<DerivedC>& c) {
+  ProjectAontoB(a,b,c);
+  c = a - c;
+}
+
+template<typename DerivedA, typename DerivedB>
+float LengthOfAonB(const Eigen::MatrixBase<DerivedA>& a,
+    const Eigen::MatrixBase<DerivedB>& b) {
   return a.dot(b);
 }
 
-template<typename Derived>
-float LengthOfAorthoToB(const Eigen::MatrixBase<Derived>& a,
-    const Eigen::MatrixBase<Derived>& b) {
-  return RejectAfromB(a,b).norm();
-}
+//template<typename DerivedA, typename DerivedB>
+//float LengthOfAorthoToB(const Eigen::MatrixBase<DerivedA>& a,
+//    const Eigen::MatrixBase<DerivedB>& b) {
+//  Eigen::MatrixBase<DerivedA> c;
+//  RejectAfromB(a,b,c);
+//  return c.norm();
+//}
 
-template<typename Derived>
-Eigen::MatrixBase<Derived> ProjectAontoB(const Eigen::MatrixBase<Derived>& a,
-    const Eigen::MatrixBase<Derived>& b) {
-  return (a.dot(b)/b.dot(b))*b;
-}
-
-template<typename Derived>
-Eigen::MatrixBase<Derived> RejectAfromB(const Eigen::MatrixBase<Derived>& a, 
-    const Eigen::MatrixBase<Derived>& b) {
-  return a - ProjectAontoB(a,b);
-}
-
-template<typename Derived>
-Eigen::MatrixBase<Derived> Normalize(const Eigen::MatrixBase<Derived>& a) {
+template<typename DerivedIn, typename DerivedOut>
+Eigen::MatrixBase<DerivedOut> Normalize(const Eigen::MatrixBase<DerivedIn>& a) {
   return a/a.norm();
 }
 

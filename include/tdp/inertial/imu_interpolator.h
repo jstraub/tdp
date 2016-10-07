@@ -28,6 +28,7 @@ class ImuInterpolator {
   void StopRecording()  { if (record_.Get()) record_.Set(false); }
   
   tdp::PoseInterpolator Ts_wi_;
+  Eigen::Vector3f gravity0_;
  private:
   tdp::ImuInterface* imu_;
   tdp::ImuOutStream* out_;
@@ -38,7 +39,6 @@ class ImuInterpolator {
 
   bool calibrated_;
   Eigen::Vector3f gyro_bias_;
-  Eigen::Vector3f gravity0_;
 };
 
 }

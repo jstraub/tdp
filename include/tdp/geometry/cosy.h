@@ -16,14 +16,17 @@ Eigen::Matrix<T,3,3,Option> Orthonormalize(const Eigen::Matrix<T,3,1,Option>& a,
   return R;
 }
 
-template<typename T, int Option>
-Eigen::Matrix<T,3,3,Option> OrthonormalizeFromYZ(
-    const Eigen::Matrix<T,3,1,Option>& y,
-    const Eigen::Matrix<T,3,1,Option>& z) {
-  Eigen::Matrix<T,3,3,Option> R;
-  R.col(2) = Normalize(z);
-  R.col(1) = Normalize(RejectAfromB(y,z));
-  R.col(0) = Normalize(R.col(1).cross(R.col(2)));
+template<typename DerivedA, typename DerivedB>
+Eigen::Matrix3f OrthonormalizeFromYZ(
+    const Eigen::MatrixBase<DerivedA>& y,
+    const Eigen::MatrixBase<DerivedB>& z) {
+  Eigen::Matrix3f R;
+  R.col(2) = Normalize<DerivedB,Eigen::Vector3f>(z.template cast<float>());
+  Eigen::Vector3f yOrtho;
+  RejectAfromB(y.template cast<float>(), z.template cast<float>(), 
+      yOrtho);
+  R.col(1) = Normalize<DerivedA,Eigen::Vector3f>(yOrtho);
+  R.col(0) = Normalize<Eigen::Vector3f,Eigen::Vector3f>(R.col(1).cross(R.col(2)));
   return R;
 }
 

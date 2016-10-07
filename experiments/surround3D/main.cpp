@@ -39,6 +39,7 @@
 #include <tdp/manifold/SE3.h>
 #include <tdp/inertial/imu_factory.h>
 #include <tdp/inertial/imu_interpolator.h>
+#include <tdp/geometry/cosy.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;

@@ -91,16 +91,16 @@ int main( int argc, char* argv[] )
     << verts.size() << " " << tris.size() << std::endl;
 
   std::vector<uint8_t> cols(verts.size(), 128);
-  tdp::Image<tdp::Vector3fda> vertices(verts.size()/3,1,&verts[0]);
-  tdp::Image<tdp::Vector3uda> tri(tris.size()/3,1,&tris[0]);
-  tdp::Image<tdp::Vector3bda> color(cols.size()/3,1,&cols[0]);
+  tdp::Image<tdp::Vector3fda> vertices(verts.size()/3,1,(tdp::Vector3fda*)&verts[0]);
+  tdp::Image<tdp::Vector3uda> tri(tris.size()/3,1,(tdp::Vector3uda*)&tris[0]);
+  tdp::Image<tdp::Vector3bda> color(cols.size()/3,1,(tdp::Vector3bda*)&cols[0]);
 
   tdp::ManagedHostImage<tdp::Vector3fda> n(vertices.w_,1);
   tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
   tdp::ManagedHostImage<float> gausCurv(vertices.w_,1);
   std::map<uint32_t,std::vector<uint32_t>> neigh;
   tdp::ComputeNeighborhood(vertices, tri, n, neigh);
-  tdp::ComputeMeanCurvature(vertices, tri, neigh, meanCurv, gausCurv);
+  tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer cbo;
@@ -109,7 +109,7 @@ int main( int argc, char* argv[] )
       3, GL_DYNAMIC_DRAW);
   cbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,
       GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
-  ibo.Reinitialise(pangolin::GlElementArrayBuffer, tris.w_,
+  ibo.Reinitialise(pangolin::GlElementArrayBuffer, tri.w_,
       GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
 
   vbo.Upload(vertices.ptr_, vertices.SizeBytes(), 0);
