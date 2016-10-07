@@ -74,19 +74,22 @@ void ComputeNeighborhood(
   }
 }
 
-void ComputeMeanCurvature(
+void ComputeCurvature(
     const Image<Vector3fda>& vert, 
     const Image<Vector3uda>& tri, 
     const std::map<uint32_t,std::vector<uint32_t>>& neigh,
-    Image<Vector3fda>& meanCurv
+    Image<Vector3fda>& meanCurv,
+    Image<float>& gausCurv
     ) {
   meanCurv.Fill(Vector3fda(NAN,NAN,NAN));
   for (const auto& it : neigh) {
     const uint32_t i = it.first;
     const std::vector<uint32_t>& ids = it.second;  
     const Vector3fda& xi = vert[i];
-    Vector3fda c(0,0,0);
-    double A = 0;
+    Vector3fda mc(0,0,0);
+    float gc = 0.;
+    float A = 0;
+#pragma omp parallel for
     for (size_t k=0; k<ids.size(); ++k) {
       Vector3fda& xj = vert[ids[k]];
       Vector3fda& xl = vert[(ids[k]-1+ids.size())%ids.size()];
@@ -105,9 +108,11 @@ void ComputeMeanCurvature(
       } else {
         A += 0.125*((xl-xi).cross(xj-xi)).norm();
       }
-      c += (dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj);
+      mc += (dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj);
+      gc += gamma;
     }
-    meanCurv[i] = c/(2.*A[i]);
+    meanCurv[i] = mc/(2.*A[i]);
+    gausCurv[i] = (2*M_PI-gc)/A[i];
   }
 }
 

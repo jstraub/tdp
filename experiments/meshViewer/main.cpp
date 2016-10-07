@@ -97,9 +97,10 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<tdp::Vector3fda> n(vertices.w_,1);
   tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
+  tdp::ManagedHostImage<float> gausCurv(vertices.w_,1);
   std::map<uint32_t,std::vector<uint32_t>> neigh;
   tdp::ComputeNeighborhood(vertices, tri, n, neigh);
-  tdp::ComputeMeanCurvature(vertices, tri, neigh, meanCurv);
+  tdp::ComputeMeanCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer cbo;
