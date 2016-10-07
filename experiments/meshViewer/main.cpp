@@ -99,7 +99,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
   tdp::ManagedHostImage<float> gausCurv(vertices.w_,1);
   std::map<uint32_t,std::vector<uint32_t>> neigh;
+  std::cout << "Compute neighborhood" << std::endl;
   tdp::ComputeNeighborhood(vertices, tri, n, neigh);
+  std::cout << "Compute curvature" << std::endl;
   tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
   pangolin::GlBuffer vbo;
