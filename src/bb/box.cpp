@@ -4,6 +4,7 @@
 #include <tdp/bb/box.h>
 
 namespace tdp {
+
 Box::Box(const Eigen::Vector3f& p_min, const Eigen::Vector3f& p_max) 
   : p_min_(p_min), p_max_(p_max) {
   // The first 4 are on purpose the way they are layed out to allow

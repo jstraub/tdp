@@ -155,7 +155,8 @@ Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, float eps,
 }
 
 template<class Node>
-typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNodeToExplore(std::list<Node>& nodes, float eps) {
+typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNodeToExplore(
+    std::list<Node>& nodes, float eps) {
   auto node_i = std::max_element(nodes.begin(), nodes.end(),
       LessThanNodeUB<Node>());
   uint32_t Neq = 0;
@@ -172,7 +173,8 @@ typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNodeToExplore(s
 }
 
 template<class Node>
-typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNode(std::list<Node>& nodes, float eps) {
+typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNode(
+    std::list<Node>& nodes, float eps) {
   auto node_star = std::max_element(nodes.begin(), nodes.end(),
       LessThanNodeLB<Node>());
   uint32_t Neq = 0;

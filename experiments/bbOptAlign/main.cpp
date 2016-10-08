@@ -23,9 +23,7 @@
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
-#ifdef CUDA_FOUND
 #include <tdp/preproc/normals.h>
-#endif
 
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/data/managed_volume.h>
@@ -33,10 +31,13 @@
 
 #include <tdp/io/tinyply.h>
 #include <tdp/preproc/curvature.h>
+
+#include <vector>
+#include <list>
+#include <tdp/bb/bb.h>
+
 #include <tdp/distributions/normal_mm.h>
 #include <tdp/distributions/vmf_mm.h>
-
-#include <tdp/bb/bb.h>
 
 int main( int argc, char* argv[] )
 {
@@ -81,6 +82,13 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<uint16_t> zA(vertsA.w_,vertsA.h_), zB(vertsB.w_,vertsB.h_);
   tdp::ManagedDeviceImage<uint16_t> cuZA(vertsA.w_,vertsA.h_), cuZB(vertsB.w_,vertsB.h_);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNsA(vertsA.w_,vertsA.h_), cuNsB(vertsB.w_,vertsB.h_);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuVertsA(vertsA.w_,vertsA.h_), cuVertsB(vertsB.w_,vertsB.h_);
+
+  cuVertsA.CopyFrom(vertsA, cudaMemcpyHostToDevice);
+  cuVertsB.CopyFrom(vertsB, cudaMemcpyHostToDevice);
+  cuNsA.CopyFrom(nsA, cudaMemcpyHostToDevice);
+  cuNsB.CopyFrom(nsB, cudaMemcpyHostToDevice);
 
   pangolin::GlBuffer vboA, vboB;
   vboA.Reinitialise(pangolin::GlArrayBuffer, vertsA.Area(),  GL_FLOAT,
@@ -116,6 +124,10 @@ int main( int argc, char* argv[] )
   tdp::DPmeans dpmeansA(lambdaR3), dpmeansB(lambdaR3);
   tdp::DPvMFmeans dpvmfmeansA(lambdaS2), dpvmfmeansB(lambdaS2);
 
+  Eigen::Vector3f minA, minB, maxA, maxB, min, max;
+//  ComputePcBoundaries(pcA, minA, maxA);
+//  ComputePcBoundaries(pcB, minB, maxB);
+
   tdp::SE3f T_ab;
 
   // Stream and display video
@@ -138,7 +150,7 @@ int main( int argc, char* argv[] )
 			tdp::UpperBoundConvexS3 upper_bound_convex_S3(vmfmmA, vmfmmB);
 
 			std::list<tdp::NodeS3> nodesS3;
-			Eigen::Quaterniond q_star;
+			Eigen::Quaternionf q_star;
 			double lb_star = 1e99;
 			double eps = 1e-8;
 			//  double eps = 8e-7;
@@ -158,16 +170,16 @@ int main( int argc, char* argv[] )
 
 			std::list<tdp::NodeR3> nodesR3 =
 				tdp::GenerateNotesThatTessellateR3(min, max, (max-min).norm());
-			tdp::LowerBoundR3 lower_bound_R3(gmmA, gmmB, q);
-			tdp::UpperBoundIndepR3 upper_bound_R3(gmmA, gmmB, q);
-			tdp::UpperBoundConvexR3 upper_bound_convex_R3(gmmA, gmmB, q);
+			tdp::LowerBoundR3 lower_bound_R3(gmmA, gmmB, q_star);
+			tdp::UpperBoundIndepR3 upper_bound_R3(gmmA, gmmB, q_star);
+			tdp::UpperBoundConvexR3 upper_bound_convex_R3(gmmA, gmmB, q_star);
 
 			eps = 1e-9;
 			max_it = 5000;
 			max_lvl = 22;
 			tdp::BranchAndBound<tdp::NodeR3> bbR3(lower_bound_R3, upper_bound_convex_R3);
 			tdp::NodeR3 nodeR3_star = bbR3.Compute(nodesR3, eps, max_lvl, max_it);
-			Eigen::Vector3d t =  nodeR3_star.GetLbArgument();
+			Eigen::Vector3f t =  nodeR3_star.GetLbArgument();
 
 			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
     }

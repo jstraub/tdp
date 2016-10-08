@@ -46,8 +46,8 @@ bool ComputevMFMM(
       float tau = vMF3f::MLEstimateTau(xSum[k],xSum[k]/xSum[k].norm(),ws[k]);
       vmfs.push_back(vMF3f(xSum[k]/xSum[k].norm(),tau,pi));
     }
-  return true;
+    return true;
+  }
 }
-
 
 }

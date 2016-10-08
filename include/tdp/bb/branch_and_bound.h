@@ -26,13 +26,16 @@ class BranchAndBound {
   uint32_t BoundAndPrune(std::list<Node>& nodes, float& lb, float&
       ub, float eps);
 
-  typename std::list<Node>::iterator FindBestNodeToExplore(std::list<Node>& nodes, float eps);
-  typename std::list<Node>::iterator FindBestNode(std::list<Node>& nodes, float eps);
+  typename std::list<Node>::iterator FindBestNodeToExplore(
+      ::std::list<Node>& nodes, float eps);
+  typename std::list<Node>::iterator FindBestNode(
+      ::std::list<Node>& nodes, float eps);
 
   void WriteStats(std::ofstream& out, std::list<Node>& nodes, float
       lb, float ub, float dt, typename std::list<Node>::iterator& node_star);
   void WriteNodes(std::ofstream& out, std::list<Node>& nodes, float
       lb, float ub);
 };
+
 }
 #include <tdp/bb/branch_and_bound_impl.h>

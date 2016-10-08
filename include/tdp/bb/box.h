@@ -31,6 +31,5 @@ class Box {
   Eigen::Matrix<float, 3, 12> sides_;
 };
 
-
 }
 

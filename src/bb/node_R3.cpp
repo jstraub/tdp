@@ -5,7 +5,8 @@
 
 namespace tdp {
 
-NodeR3::NodeR3(const Box& box, std::vector<uint32_t> ids) : BaseNode(ids), box_(box) {
+NodeR3::NodeR3(const Box& box, std::vector<uint32_t> ids) 
+  : BaseNode(ids), box_(box) {
 }
 
 NodeR3::NodeR3(const NodeR3& node) : BaseNode(node.GetIds(),

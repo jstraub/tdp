@@ -34,4 +34,5 @@ class NodeR3 : public BaseNode {
 
 std::list<NodeR3> GenerateNotesThatTessellateR3(const Eigen::Vector3f&
     min, const Eigen::Vector3f& max, float max_side_len); 
+
 }
