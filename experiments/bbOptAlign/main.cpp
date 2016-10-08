@@ -33,6 +33,8 @@
 
 #include <tdp/io/tinyply.h>
 #include <tdp/preproc/curvature.h>
+#include <tdp/distributions/normal_mm.h>
+#include <tdp/distributions/vmf_mm.h>
 
 int main( int argc, char* argv[] )
 {
@@ -70,12 +72,13 @@ int main( int argc, char* argv[] )
   container.AddDisplay(d_cam);
   // use those OpenGL buffers
   
-  ManagedHostImage<Vector3fda> vertsA;
-  ManagedHostImage<Vector3fda> nsA;
+  tdp::ManagedHostImage<tdp::Vector3fda> vertsA, vertsB;
+  tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
   tdp::LoadPointCloud(inputA, vertsA, nsA);
-  ManagedHostImage<Vector3fda> vertsB;
-  ManagedHostImage<Vector3fda> nsB;
   tdp::LoadPointCloud(inputB, vertsB, nsB);
+
+  tdp::ManagedHostImage<uint16_t> zA(vertsA.w_,vertsA.h_), zB(vertsB.w_,vertsB.h_);
+  tdp::ManagedDeviceImage<uint16_t> cuZA(vertsA.w_,vertsA.h_), cuZB(vertsB.w_,vertsB.h_);
 
   pangolin::GlBuffer vboA, vboB;
   vboA.Reinitialise(pangolin::GlArrayBuffer, vertsA.Area(),  GL_FLOAT,
@@ -97,8 +100,16 @@ int main( int argc, char* argv[] )
       shaderRoot+std::string("valueShading.frag"));
   progValueShading.Link();
 
-  pangolin::Var<bool> showMeanCurvature("ui.show MeanCurv", false, false);
-  pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, false);
+  pangolin::Var<bool> computeAlignment("ui.align", false, true);
+
+  pangolin::Var<int> maxIt("ui.max Iter", 10, 1, 30);
+  pangolin::Var<float> minNchangePerc("ui. min change perc", 0.03, 0.001, 0.1);
+
+
+  std::vector<tdp::Normal3f> gmmA, gmmB;
+  std::vector<tdp::vMF3f> vmfmmA, vmfmmB;
+  tdp::DPmeans dpmeansA, dpmeansB;
+  tdp::DPvMFmeans dpvmfmeansA, dpvmfmeansB;
 
   tdp::SE3f T_ab;
 
@@ -110,6 +121,51 @@ int main( int argc, char* argv[] )
     glColor3f(1.0f, 1.0f, 1.0f);
 
     if (runOnce) break;
+    
+    if (pangolin::Pushed(computeAlignment)) {
+      tdp::ComputevMFMM(nsA, cuNsA, dpvmfmeansA, maxIt, minNchangePerc,
+          zA, cuZA, vmfmmA);
+      tdp::ComputevMFMM(nsB, cuNsB, dpvmfmeansB, maxIt, minNchangePerc,
+          zB, cuZB, vmfmmB);
+
+			tdp::LowerBoundS3 lower_bound_S3(vmfmmA, vmfmmB);
+			tdp::UpperBoundIndepS3 upper_bound_S3(vmfmmA, vmfmmB);
+			tdp::UpperBoundConvexS3 upper_bound_convex_S3(vmfmmA, vmfmmB);
+
+			std::list<tdp::NodeS3> nodesS3;
+			Eigen::Quaterniond q_star;
+			double lb_star = 1e99;
+			double eps = 1e-8;
+			//  double eps = 8e-7;
+			uint32_t max_lvl = 12;
+			uint32_t max_it = 5000;
+
+			nodesS3 = tdp::GenerateNotesThatTessellateS3();
+			tdp::BranchAndBound<tdp::NodeS3> bb(lower_bound_S3, upper_bound_convex_S3);
+			tdp::NodeS3 node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
+			q_star = node_star.GetLbArgument();
+			lb_star = node_star.GetLB();
+
+      tdp::ComputeGMMfromPC(vertsA, cuVertsA, 
+          dpmeansA, maxIt, minNchangePerc, zA, cuZA, gmmA);
+      tdp::ComputeGMMfromPC(vertsB, cuVertsB, 
+          dpmeansB, maxIt, minNchangePerc, zB, cuZB, gmmB);
+
+			std::list<tdp::NodeR3> nodesR3 =
+				tdp::GenerateNotesThatTessellateR3(min, max, (max-min).norm());
+			tdp::LowerBoundR3 lower_bound_R3(gmmA, gmmB, q);
+			tdp::UpperBoundIndepR3 upper_bound_R3(gmmA, gmmB, q);
+			tdp::UpperBoundConvexR3 upper_bound_convex_R3(gmmA, gmmB, q);
+
+			eps = 1e-9;
+			max_it = 5000;
+			max_lvl = 22;
+			tdp::BranchAndBound<tdp::NodeR3> bbR3(lower_bound_R3, upper_bound_convex_R3);
+			tdp::NodeR3 nodeR3_star = bbR3.Compute(nodesR3, eps, max_lvl, max_it);
+			Eigen::Vector3d t =  nodeR3_star.GetLbArgument();
+
+			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
+    }
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
