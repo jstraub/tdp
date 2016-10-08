@@ -4,44 +4,44 @@
 
 namespace tdp {
 
-template<uint32_t D>
-double ComputeLogvMFtovMFcost(const vMF<D>& vmf_A, const vMF<D>& vmf_B, 
-  const Eigen::Matrix<double, D, 1>& mu_B_prime) {
-  const double C = log(2.*M_PI) + log(vmf_A.GetPi()) +
+template<typename T, uint32_t D>
+T ComputeLogvMFtovMFcost(const vMF<T,D>& vmf_A, const vMF<T,D>& vmf_B, 
+  const Eigen::Matrix<T, D, 1>& mu_B_prime) {
+  const T C = log(2.*M_PI) + log(vmf_A.GetPi()) +
     log(vmf_B.GetPi()) + vmf_A.GetLogZ() + vmf_B.GetLogZ();
-  const double z_AB = (vmf_A.GetTau()*vmf_A.GetMu() +
+  const T z_AB = (vmf_A.GetTau()*vmf_A.GetMu() +
       vmf_B.GetTau()*mu_B_prime).norm();
 //  std::cout << mu_B_prime.transpose() << std::endl;
 //  std::cout << (vmf_A.GetTau()*vmf_A.GetMu() +
 //      vmf_B.GetTau()*mu_B_prime).transpose() << std::endl;
 //  std::cout << C << " z_AB " << z_AB << " C " << (C + ComputeLog2SinhOverZ(z_AB))
 //    << std::endl;
-  return C + ComputeLog2SinhOverZ(z_AB);
+  return C + ComputeLog2SinhOverZ<T>(z_AB);
 };
 
-template <uint32_t D>
-vMF<D>::vMF(const Eigen::Matrix<double, D, 1>& mu, double tau, double
+template <typename T, uint32_t D>
+vMF<T,D>::vMF(const Eigen::Matrix<T, D, 1>& mu, T tau, T
     pi) : mu_(mu), tau_(tau), pi_(pi)
 {}
 
-template <uint32_t D>
-double vMF<D>::GetLogZ() const {
-  return -ComputeLog2SinhOverZ(tau_) - log(2.*M_PI);
+template <typename T, uint32_t D>
+T vMF<T,D>::GetLogZ() const {
+  return -ComputeLog2SinhOverZ<T>(tau_) - log(2.*M_PI);
 }
 
-template <uint32_t D>
-double vMF<D>::MLEstimateTau(const Eigen::Vector3d& xSum, const
-    Eigen::Vector3d& mu, double count) {
-  double tau = 1.0;
-  double prevTau = 0.;
-  double eps = 1e-8;
-  double R = xSum.norm()/count;
+template <typename T, uint32_t D>
+T vMF<T,D>::MLEstimateTau(const Eigen::Matrix<T,3,1>& xSum, const
+    Eigen::Matrix<T,3,1>& mu, T count) {
+  T tau = 1.0;
+  T prevTau = 0.;
+  T eps = 1e-8;
+  T R = xSum.norm()/count;
   while (fabs(tau - prevTau) > eps) {
 //    std::cout << "tau " << tau << " R " << R << std::endl;
-    double inv_tanh_tau = 1./tanh(tau);
-    double inv_tau = 1./tau;
-    double f = -inv_tau + inv_tanh_tau - R;
-    double df = inv_tau*inv_tau - inv_tanh_tau*inv_tanh_tau + 1.;
+    T inv_tanh_tau = 1./tanh(tau);
+    T inv_tau = 1./tau;
+    T f = -inv_tau + inv_tanh_tau - R;
+    T df = inv_tau*inv_tau - inv_tanh_tau*inv_tanh_tau + 1.;
     prevTau = tau;
     tau -= f/df;
   }

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tdp/eigen/dense.h>
+#include <tdp/eigen/std_vector.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/data/image.h>
 #include <tdp/stats/sufficientStats.h>
@@ -27,7 +28,7 @@ class DPmeans {
 
   uint16_t K_;
   float lambda_;
-  std::vector<Vector3fda> centers_;
+  eigen_vector<Vector3fda> centers_;
   std::vector<size_t> Ns_;
  private:
 

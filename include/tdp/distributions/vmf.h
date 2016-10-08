@@ -10,7 +10,8 @@
 namespace tdp {
 
 /// Compute log((exp(z) - exp(-z)) / z)
-double ComputeLog2SinhOverZ(double z) {
+template <typename T>
+T ComputeLog2SinhOverZ(T z) {
   if (fabs(z) < 1.e-3) 
     return log(2.);
   else if (z < 50.) 
@@ -22,35 +23,38 @@ double ComputeLog2SinhOverZ(double z) {
 };
 
 /// vMF distribution templated on the dimension.
-template <uint32_t D>
+template <typename T, uint32_t D>
 class vMF {
  public:
-  vMF(const Eigen::Matrix<double, D, 1>& mu, double tau, double pi);
-  vMF(const vMF<D>& vmf) = default;
+  vMF(const Eigen::Matrix<T, D, 1>& mu, T tau, T pi);
+  vMF(const vMF<T,D>& vmf) = default;
   ~vMF() = default;
-  double GetPi() const {return pi_;}
-  void SetPi(double pi) {pi_ = pi;}
-  double GetTau() const {return tau_;}
-  const Eigen::Matrix<double, D, 1>& GetMu() const {return mu_;}
-  double GetLogZ() const;
+  T GetPi() const {return pi_;}
+  void SetPi(T pi) {pi_ = pi;}
+  T GetTau() const {return tau_;}
+  const Eigen::Matrix<T, D, 1>& GetMu() const {return mu_;}
+  T GetLogZ() const;
   void Print() const {
     std::cout << "vMF tau= " << tau_ << "\tmu= " << mu_.transpose() 
       << "\tpi= " << pi_ << std::endl;
   }
-  static double MLEstimateTau(const Eigen::Vector3d& xSum, const
-      Eigen::Vector3d& mu, double count);
+  static T MLEstimateTau(const Eigen::Matrix<T,3,1>& xSum, const
+      Eigen::Matrix<T,3,1>& mu, T count);
  private:
-  Eigen::Matrix<double, D, 1> mu_;
-  double tau_;
-  double pi_;
+  Eigen::Matrix<T, D, 1> mu_;
+  T tau_;
+  T pi_;
 };
 
-template<uint32_t D>
-double ComputeLogvMFtovMFcost(const vMF<D>& vmf_A, const vMF<D>& vmF_B, 
-  const Eigen::Matrix<double, D, 1>& mu_B_prime);
+typedef vMF<float,3> vMF3f;
+typedef vMF<double,3> vMF3d;
 
-//double MLEstimateTau(const Eigen::Vector3d& xSum, const
-//    Eigen::Vector3d& mu, double count);
+template<uint32_t D>
+T ComputeLogvMFtovMFcost(const vMF<T,D>& vmf_A, const vMF<T,D>& vmF_B, 
+  const Eigen::Matrix<T, D, 1>& mu_B_prime);
+
+//T MLEstimateTau(const Eigen::Vector3d& xSum, const
+//    Eigen::Vector3d& mu, T count);
 
 }
 #include <tdp/distributions/vmf_impl.h>
