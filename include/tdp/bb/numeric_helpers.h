@@ -10,7 +10,4 @@ namespace tdp {
 double LogSumExp(const Eigen::VectorXd& x);
 double SumExp(const Eigen::VectorXd& x);
 
-/// Compute log((exp(z) - exp(-z)) / z)
-double ComputeLog2SinhOverZ(double z);
-
 }

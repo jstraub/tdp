@@ -8,4 +8,5 @@ template <uint32_t D>
 vMFMM<D>::vMFMM(const std::vector<vMF<D>>& vmfs) :
   vmfs_(vmfs)
 {}
+
 }

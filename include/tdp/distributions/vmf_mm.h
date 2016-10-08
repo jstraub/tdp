@@ -5,7 +5,7 @@
 
 #include <vector>
 #include <Eigen/Dense>
-#include <tdp/bb/vmf.h>
+#include <tdp/distributions/vmf.h>
 
 namespace tdp {
 
@@ -21,5 +21,6 @@ class vMFMM {
  private:
   std::vector<vMF<D>> vmfs_;
 };
+
 }
-#include <tdp/bb/vmf_mm_impl.h>
+#include <tdp/distributions/vmf_mm_impl.h>

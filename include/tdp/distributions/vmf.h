@@ -9,6 +9,18 @@
 
 namespace tdp {
 
+/// Compute log((exp(z) - exp(-z)) / z)
+double ComputeLog2SinhOverZ(double z) {
+  if (fabs(z) < 1.e-3) 
+    return log(2.);
+  else if (z < 50.) 
+    return log(exp(z) - exp(-z)) - log(z);
+//  else
+//    return z - log(z) + log(1.- exp(-2.*z) );
+  else
+    return z - log(z);
+};
+
 /// vMF distribution templated on the dimension.
 template <uint32_t D>
 class vMF {
@@ -41,4 +53,4 @@ double ComputeLogvMFtovMFcost(const vMF<D>& vmf_A, const vMF<D>& vmF_B,
 //    Eigen::Vector3d& mu, double count);
 
 }
-#include <tdp/bb/vmf_impl.h>
+#include <tdp/distributions/vmf_impl.h>
