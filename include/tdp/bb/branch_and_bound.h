@@ -18,21 +18,21 @@ class BranchAndBound {
  public:
   BranchAndBound(Bound<Node>& lower_bound, Bound<Node>& upper_bound);
   ~BranchAndBound() = default;
-  Node Compute(std::list<Node>& nodes, double eps, uint32_t max_lvl,
+  Node Compute(std::list<Node>& nodes, float eps, uint32_t max_lvl,
       uint32_t max_it);
  private:
   Bound<Node>& lower_bound_;
   Bound<Node>& upper_bound_;
-  uint32_t BoundAndPrune(std::list<Node>& nodes, double& lb, double&
-      ub, double eps);
+  uint32_t BoundAndPrune(std::list<Node>& nodes, float& lb, float&
+      ub, float eps);
 
-  typename std::list<Node>::iterator FindBestNodeToExplore(std::list<Node>& nodes, double eps);
-  typename std::list<Node>::iterator FindBestNode(std::list<Node>& nodes, double eps);
+  typename std::list<Node>::iterator FindBestNodeToExplore(std::list<Node>& nodes, float eps);
+  typename std::list<Node>::iterator FindBestNode(std::list<Node>& nodes, float eps);
 
-  void WriteStats(std::ofstream& out, std::list<Node>& nodes, double
-      lb, double ub, double dt, typename std::list<Node>::iterator& node_star);
-  void WriteNodes(std::ofstream& out, std::list<Node>& nodes, double
-      lb, double ub);
+  void WriteStats(std::ofstream& out, std::list<Node>& nodes, float
+      lb, float ub, float dt, typename std::list<Node>::iterator& node_star);
+  void WriteNodes(std::ofstream& out, std::list<Node>& nodes, float
+      lb, float ub);
 };
 }
 #include <tdp/bb/branch_and_bound_impl.h>

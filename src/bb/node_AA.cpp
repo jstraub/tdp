@@ -15,9 +15,9 @@ NodeAA::NodeAA(const NodeAA& node)
   : NodeLin(node)
 { }
 
-Eigen::Quaterniond NodeAA::Project(const Eigen::Vector3d& c) const {
-  Eigen::Quaterniond q;
-  double theta = c.norm();
+Eigen::Quaternion<float> NodeAA::Project(const Eigen::Vector3f& c) const {
+  Eigen::Quaternion<float> q;
+  float theta = c.norm();
   if (theta > 1e-9) {
     q.w() = cos(theta*0.5);
     q.vec() = -c*sin(theta*0.5)/theta;
@@ -41,12 +41,12 @@ std::vector<NodeAA> NodeAA::Branch() const {
 }
 
 std::list<NodeAA> TessellateAA() {
-//  Eigen::Vector3d p_min(-M_PI,-M_PI,-M_PI);
-//  Eigen::Vector3d p_max( M_PI, M_PI, M_PI);
+//  Eigen::Vector3f p_min(-M_PI,-M_PI,-M_PI);
+//  Eigen::Vector3f p_max( M_PI, M_PI, M_PI);
   // split into 4 cubes for level 4 so that at level 2 we have 256
   // cubes which is close to the 270 of the 600-cell tessellation.
-  Eigen::Vector3d p_min(-M_PI,-M_PI,-M_PI);
-  Eigen::Vector3d p_max( 0., 0., M_PI);
+  Eigen::Vector3f p_min(-M_PI,-M_PI,-M_PI);
+  Eigen::Vector3f p_max( 0., 0., M_PI);
   NodeAA root00(Box(p_min, p_max),std::vector<uint32_t>(1,0));
   p_min << -M_PI,0.,-M_PI;
   p_max << 0., M_PI, M_PI;

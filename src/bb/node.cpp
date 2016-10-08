@@ -9,8 +9,8 @@ BaseNode::BaseNode(std::vector<uint32_t> ids) :
   ids_(ids), lb_(-1e12), ub_(1e12), V_(-1.)
 {}
 
-BaseNode::BaseNode(std::vector<uint32_t> ids, double lb,
-    double ub) : ids_(ids), lb_(lb), ub_(ub), V_(-1.) {
+BaseNode::BaseNode(std::vector<uint32_t> ids, float lb,
+    float ub) : ids_(ids), lb_(lb), ub_(ub), V_(-1.) {
 }
 
 BaseNode::BaseNode(const BaseNode& node) : 
@@ -27,7 +27,7 @@ uint64_t BaseNode::GetIdAtLevel(uint32_t lvl) const {
   return id;
 }
 
-double BaseNode::GetVolume() {
+float BaseNode::GetVolume() {
   if (V_ < 0.) V_ = GetVolume_();
   return V_;
 }

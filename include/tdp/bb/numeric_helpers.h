@@ -7,7 +7,7 @@
 
 namespace tdp {
 
-double LogSumExp(const Eigen::VectorXd& x);
-double SumExp(const Eigen::VectorXd& x);
+float LogSumExp(const Eigen::VectorXf& x);
+float SumExp(const Eigen::VectorXf& x);
 
 }

@@ -9,42 +9,43 @@
 #include <tdp/bb/node_S3.h>
 #include <tdp/bb/numeric_helpers.h>
 #include <tdp/distributions/vmf.h>
-#include <tdp/distributions/vmf_mm.h>
 #include <tdp/bb/bound.h>
 
 namespace tdp {
 
 class UpperBoundIndepS3 : public Bound<NodeS3> {
  public:
-  UpperBoundIndepS3(const vMFMM<3>& vmf_mm_A, const vMFMM<3>& vmf_mm_B);
-  virtual double Evaluate(const NodeS3& node);
-  virtual double EvaluateAndSet(NodeS3& node);
-  virtual double EvaluateRotationSet(const
-      std::vector<Eigen::Quaterniond>& qs) const;
+  UpperBoundIndepS3(
+      const std::vector<vMF3f>& vmf_mm_A, 
+      const std::vector<vMF3f>& vmf_mm_B);
+  virtual float Evaluate(const NodeS3& node);
+  virtual float EvaluateAndSet(NodeS3& node);
+  virtual float EvaluateRotationSet(const
+      std::vector<Eigen::Quaternion<float>>& qs) const;
  protected:
-  const vMFMM<3>& vmf_mm_A_;
-  const vMFMM<3>& vmf_mm_B_;
+  const std::vector<vMF3f>& vmf_mm_A_;
+  const std::vector<vMF3f>& vmf_mm_B_;
 
 };
 
-Eigen::Vector3d ComputeExtremumOnGeodesic(const Eigen::Vector3d& q1,
-    const Eigen::Vector3d& q2, const Eigen::Vector3d& p, bool verbose);
+Eigen::Vector3f ComputeExtremumOnGeodesic(const Eigen::Vector3f& q1,
+    const Eigen::Vector3f& q2, const Eigen::Vector3f& p, bool verbose);
 
-Eigen::Vector3d ClosestPointInRotationSet(const vMF<3>& vmf_A, const
-    vMF<3>& vmf_B, const std::vector<Eigen::Quaterniond>& qs, bool
+Eigen::Vector3f ClosestPointInRotationSet(const vMF3f& vmf_A, const
+    vMF3f& vmf_B, const std::vector<Eigen::Quaternion<float>>& qs, bool
     furthest=false, bool verbose=false);
 
-Eigen::Vector3d FurthestPointInRotationSet(const vMF<3>& vmf_A, const
-    vMF<3>& vmf_B, const std::vector<Eigen::Quaterniond>& qs, 
+Eigen::Vector3f FurthestPointInRotationSet(const vMF3f& vmf_A, const
+    vMF3f& vmf_B, const std::vector<Eigen::Quaternion<float>>& qs, 
     bool verbose);
 
 /// This function just calls ClosestPointInRotationSet with the
 /// rotations implied by Tetrahedron.
-Eigen::Vector3d ClosestPointInTetrahedron(const vMF<3>& vmf_A, const
-    vMF<3>& vmf_B, const Tetrahedron4D& tetrahedron, bool
+Eigen::Vector3f ClosestPointInTetrahedron(const vMF3f& vmf_A, const
+    vMF3f& vmf_B, const Tetrahedron4D& tetrahedron, bool
     furthest=false, bool verbose = false);
 
-Eigen::Vector3d FurthestPointInTetrahedron(const vMF<3>& vmf_A, const
-    vMF<3>& vmf_B, const Tetrahedron4D& tetrahedron, bool verbose = false);
+Eigen::Vector3f FurthestPointInTetrahedron(const vMF3f& vmf_A, const
+    vMF3f& vmf_B, const Tetrahedron4D& tetrahedron, bool verbose = false);
 
 }

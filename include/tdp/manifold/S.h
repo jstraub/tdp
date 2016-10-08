@@ -4,14 +4,13 @@
 #pragma once
 #include <random>
 #include <Eigen/Dense>
-#include <tdp/manifold/manifold.h>
 #include <tdp/manifold/SO3.h>
 
 namespace tdp {
 
 /// Class describing a data point on the sphere in D dimensions.
 template<typename T, int D>
-class S : Manifold<T,D> {
+class S {
  public:
   S();
   S(const Eigen::Matrix<T,D,1>& x);
@@ -80,9 +79,13 @@ typedef S<double,2> S2d;
 typedef S<double,3> S3d;
 typedef S<double,4> S4d;
 
+typedef S<float,2> S2f;
+typedef S<float,3> S3f;
+typedef S<float,4> S4f;
+
 template<typename T, int D>
 std::ostream& operator<<(std::ostream& out, const S<T,D>& q);
 
 }
 
-#include <manifold/S_impl.hpp>
+#include <tdp/manifold/S_impl.hpp>

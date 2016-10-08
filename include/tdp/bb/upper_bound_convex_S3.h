@@ -9,7 +9,6 @@
 #include <tdp/bb/node_S3.h>
 #include <tdp/bb/numeric_helpers.h>
 #include <tdp/distributions/vmf.h>
-#include <tdp/distributions/vmf_mm.h>
 #include <tdp/bb/bound.h>
 #include <tdp/bb/upper_bound_indep_S3.h>
 
@@ -17,35 +16,37 @@ namespace tdp {
 
 class UpperBoundConvexS3 : public Bound<NodeS3> {
  public:
-  UpperBoundConvexS3(const vMFMM<3>& vmf_mm_A, const vMFMM<3>& vmf_mm_B);
-  virtual double Evaluate(const NodeS3& node);
-  virtual double EvaluateAndSet(NodeS3& node);
-  virtual double EvaluateRotationSet(const
-      std::vector<Eigen::Quaterniond>& qs) const;
+  UpperBoundConvexS3(
+      const std::vector<vMF3f>& vmf_mm_A, 
+      const std::vector<vMF3f>& vmf_mm_B);
+  virtual float Evaluate(const NodeS3& node);
+  virtual float EvaluateAndSet(NodeS3& node);
+  virtual float EvaluateRotationSet(const
+      std::vector<Eigen::Quaternion<float>>& qs) const;
  private:
-  const vMFMM<3>& vmf_mm_A_;
-  const vMFMM<3>& vmf_mm_B_;
-  static Eigen::Matrix<double,4,4> BuildM(const Eigen::Vector3d& u, const
-    Eigen::Vector3d& v);
+  const std::vector<vMF3f>& vmf_mm_A_;
+  const std::vector<vMF3f>& vmf_mm_B_;
+  static Eigen::Matrix<float,4,4> BuildM(const Eigen::Vector3f& u, const
+    Eigen::Vector3f& v);
 };
 
-double FindMaximumQAQ(const Eigen::Matrix4d& A, const
-  Eigen::Matrix<double,4,Eigen::Dynamic> Q, bool verbose);
-double FindMaximumQAQ(const Eigen::Matrix4d& A, const Tetrahedron4D&
+float FindMaximumQAQ(const Eigen::Matrix4f& A, const
+  Eigen::Matrix<float,4,Eigen::Dynamic> Q, bool verbose);
+float FindMaximumQAQ(const Eigen::Matrix4f& A, const Tetrahedron4D&
     tetrahedron, bool verbose);
 
 template<uint32_t D>
-bool FindLambda(const Eigen::Matrix<double, D,D>& A, const
-    Eigen::Matrix<double, D,D>& B, double* lambda, bool verbose) {
+bool FindLambda(const Eigen::Matrix<float, D,D>& A, const
+    Eigen::Matrix<float, D,D>& B, float* lambda, bool verbose) {
 
-  Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::Matrix<double,D,D>>
+  Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::Matrix<float,D,D>>
     ges(A,B,true);
   
-  Eigen::Matrix<double, D, 1> ev = ges.eigenvalues();
-  Eigen::Matrix<double, D, D> V = ges.eigenvectors();
+  Eigen::Matrix<float, D, 1> ev = ges.eigenvalues();
+  Eigen::Matrix<float, D, D> V = ges.eigenvectors();
 
   if(verbose) {
-    Eigen::Matrix<double,D,D> err = (A*V - B*V*ev.asDiagonal());
+    Eigen::Matrix<float,D,D> err = (A*V - B*V*ev.asDiagonal());
     if (err.norm() > 1e-6)
       std::cout << "D=" << D << " -------------" << std::endl;
       std::cout << "EVs " << ev.transpose() << std::endl;
@@ -57,9 +58,9 @@ bool FindLambda(const Eigen::Matrix<double, D,D>& A, const
 //    std::cout << "VTBV:\n" << V.transpose()*B*V << std::endl;
   }
 
-//  Eigen::LLT<Eigen::Matrix<double,D,D>> llt(B);
-//  Eigen::Matrix<double,D,D> L = llt.matrixL();
-//  Eigen::FullPivLU<Eigen::Matrix<double,D,D>> lu(L);
+//  Eigen::LLT<Eigen::Matrix<float,D,D>> llt(B);
+//  Eigen::Matrix<float,D,D> L = llt.matrixL();
+//  Eigen::FullPivLU<Eigen::Matrix<float,D,D>> lu(L);
 //
 //  if (lu.rank() < D) {
 //    std::cout << "FindLambda: cannot find eigen vector rank " 
@@ -67,24 +68,24 @@ bool FindLambda(const Eigen::Matrix<double, D,D>& A, const
 //    return false;
 //  }
 //
-//  Eigen::Matrix<double,D,D> A__ = lu.solve(A);
-//  Eigen::Matrix<double,D,D> A_ = lu.solve(A__.transpose());
+//  Eigen::Matrix<float,D,D> A__ = lu.solve(A);
+//  Eigen::Matrix<float,D,D> A_ = lu.solve(A__.transpose());
 //
-//  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,D,D>> es(A_, true);
-//  Eigen::Matrix<double, D, 1> ev = es.eigenvalues();
+//  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,D,D>> es(A_, true);
+//  Eigen::Matrix<float, D, 1> ev = es.eigenvalues();
 ////  if ((es.eigenvalues().imag().array() > 0.).any())
 //
 //  std::cout << "-- Find Lambda " << std::endl;
 //  std::cout << A_ << std::endl;
 ////  std::cout << es.eigenvalues().transpose() << std::endl;
 //
-//  Eigen::FullPivLU<Eigen::Matrix<double,D,D>> lut(L.transpose());
+//  Eigen::FullPivLU<Eigen::Matrix<float,D,D>> lut(L.transpose());
 //  if (lut.rank() < D) {
 //    std::cout << "FindLambda: cannot find eigen vector rank " 
 //      << lut.rank() << " < " << D << std::endl;
 //    return false;
 //  }
-//  Eigen::Matrix<double, D, D> V = lut.solve(es.eigenvectors()); //.real();
+//  Eigen::Matrix<float, D, D> V = lut.solve(es.eigenvectors()); //.real();
 ////  std::cout << es.eigenvectors() << std::endl;
 //  std::cout << es.eigenvectors().transpose() * es.eigenvectors() << std::endl;
 ////  std::cout << V << std::endl;
@@ -110,20 +111,20 @@ bool FindLambda(const Eigen::Matrix<double, D,D>& A, const
 
 
 template<uint32_t k> 
-void ComputeLambdasOfSubset(const Eigen::MatrixXd& A, const
-    Eigen::MatrixXd& B, const Eigen::Matrix<double,4,Eigen::Dynamic> Q,
+void ComputeLambdasOfSubset(const Eigen::MatrixXf& A, const
+    Eigen::MatrixXf& B, const Eigen::Matrix<float,4,Eigen::Dynamic> Q,
     bool verbose,
-    std::vector<double>& lambdas) {
+    std::vector<float>& lambdas) {
   Combinations combNKs(Q.cols(),k);
   for (auto comb : combNKs.Get()) {
-    Eigen::Matrix<double,k,k> A_; 
-    Eigen::Matrix<double,k,k> B_;
+    Eigen::Matrix<float,k,k> A_; 
+    Eigen::Matrix<float,k,k> B_;
     for (uint32_t i=0; i<k; ++i)
       for (uint32_t j=0; j<k; ++j) {
         A_(i,j) = A(comb[i],comb[j]);
         B_(i,j) = B(comb[i],comb[j]);
       }
-    double lambda = 0.;
+    float lambda = 0.;
     if (FindLambda<k>(A_, B_, &lambda, verbose)) {
       lambdas.push_back(lambda);
       if(verbose) std::cout<<"lambda "<<k<<"x"<<k<<" "<< lambda << std::endl;
@@ -132,23 +133,23 @@ void ComputeLambdasOfSubset(const Eigen::MatrixXd& A, const
 }
 
 //template<uint32_t D>
-//bool FindLambda(const Eigen::Matrix<double, D,D>& A, const
-//    Eigen::Matrix<double, D,D>& B, double* lambda) {
-//  Eigen::GeneralizedEigenSolver<Eigen::Matrix<double,D,D>> ges(A, B, true);
+//bool FindLambda(const Eigen::Matrix<float, D,D>& A, const
+//    Eigen::Matrix<float, D,D>& B, float* lambda) {
+//  Eigen::GeneralizedEigenSolver<Eigen::Matrix<float,D,D>> ges(A, B, true);
 //  // eigenvalues are alphas/betas
 //  if ((ges.betas().array().abs() > 1e-10).all()) {
 ////    std::cout << "FindLambda: non singular EVs" << std::endl;
 //    uint32_t id_max = 0;
-//    Eigen::Matrix<double, D, 1> ev = ges.eigenvalues().real();
-//    double ev_max = ev.maxCoeff(&id_max);
-////    Eigen::Matrix<double,D,1> alpha = ges.eigenvectors().col(id_max);
-//    Eigen::FullPivLU<Eigen::Matrix<double,D,D>> qr(A-ev_max*B);
+//    Eigen::Matrix<float, D, 1> ev = ges.eigenvalues().real();
+//    float ev_max = ev.maxCoeff(&id_max);
+////    Eigen::Matrix<float,D,1> alpha = ges.eigenvectors().col(id_max);
+//    Eigen::FullPivLU<Eigen::Matrix<float,D,D>> qr(A-ev_max*B);
 //    if (qr.rank() < D) {
 ////      std::cout << "FindLambda: cannot find eigen vector rank " << qr.rank() << " < " << D << std::endl;
 //      return false;
 //    }
 ////    std::cout << "FindLambda: can find eigen vector." << std::endl;
-//    Eigen::Matrix<double,D,1> alpha = qr.solve(Eigen::Matrix<double,D,1>::Zero());
+//    Eigen::Matrix<float,D,1> alpha = qr.solve(Eigen::Matrix<float,D,1>::Zero());
 ////    std::cout << "FindLambda: alphas = " << alpha.transpose() << std::endl;
 //    if ((alpha.array() >= 0.).all() || (alpha.array() <= 0.).all()) {
 ////      std::cout << "FindLambda: lambda = " << ev_max << std::endl;

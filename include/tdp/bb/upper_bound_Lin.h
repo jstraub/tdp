@@ -20,8 +20,8 @@ class UpperBoundLin : public Bound<NodeLin> {
  public:
   UpperBoundLin(UpperBound& boundS3);
   virtual ~UpperBoundLin() = default;
-  virtual double Evaluate(const NodeLin& node);
-  virtual double EvaluateAndSet(NodeLin& node);
+  virtual float Evaluate(const NodeLin& node);
+  virtual float EvaluateAndSet(NodeLin& node);
  private:
   UpperBound& boundS3_;
 };

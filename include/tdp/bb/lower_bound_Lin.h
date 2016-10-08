@@ -20,8 +20,8 @@ class LowerBoundLin : public Bound<NodeLin> {
  public:
   LowerBoundLin(LowerBoundS3& boundS3);
   virtual ~LowerBoundLin() = default;
-  virtual double Evaluate(const NodeLin& node);
-  virtual double EvaluateAndSet(NodeLin& node);
+  virtual float Evaluate(const NodeLin& node);
+  virtual float EvaluateAndSet(NodeLin& node);
  private:
   LowerBoundS3& boundS3_;
 };

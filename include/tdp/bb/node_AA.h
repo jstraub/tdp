@@ -9,7 +9,7 @@
 #include <sstream>
 #include <string>
 
-#include <manifold/S.h>
+#include <tdp/manifold/S.h>
 #include <tdp/bb/node_Lin.h>
 #include <tdp/bb/node_R3.h>
 #include <tdp/bb/node_S3.h>
@@ -27,7 +27,7 @@ class NodeAA : public NodeLin {
 
   std::string GetSpace() const { return "AA"; }
  protected:
-  virtual Eigen::Quaterniond Project(const Eigen::Vector3d& c) const;
+  virtual Eigen::Quaternion<float> Project(const Eigen::Vector3f& c) const;
 };
 std::list<NodeAA> TessellateAA();
 }

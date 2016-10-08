@@ -3,7 +3,7 @@
  */
 
 #include <iostream>
-#include <tdp/bb/combinations.h>
+#include <tdp/utils/combinations.h>
 
 namespace tdp {
 

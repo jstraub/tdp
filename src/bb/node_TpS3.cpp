@@ -15,12 +15,12 @@ NodeTpS3::NodeTpS3(const NodeTpS3& node)
   : NodeLin(node)
 { }
 
-Eigen::Quaterniond NodeTpS3::Project(const Eigen::Vector3d& c) const {
+Eigen::Quaternion<float> NodeTpS3::Project(const Eigen::Vector3f& c) const {
   // In accordance with the other tessellation approaches
-  static Eigen::Vector4d north(1.,0.,0.,0.);
-  static S<double,4> s3(north);
-  Eigen::Vector4d qvec = s3.Exp(s3.ToAmbient(c)).vector();
-  return Eigen::Quaterniond(qvec(0),qvec(1),qvec(2),qvec(3));
+  static Eigen::Vector4f north(1.,0.,0.,0.);
+  static S<float,4> s3(north);
+  Eigen::Vector4f qvec = s3.Exp(s3.ToAmbient(c)).vector();
+  return Eigen::Quaternion<float>(qvec(0),qvec(1),qvec(2),qvec(3));
 }
 
 std::vector<NodeTpS3> NodeTpS3::Branch() const {
@@ -38,8 +38,8 @@ std::vector<NodeTpS3> NodeTpS3::Branch() const {
 std::list<NodeTpS3> TessellateTpS3() {
   // split into 4 cubes for level 4 so that at level 2 we have 256
   // cubes which is close to the 270 of the 600-cell tessellation.
-  Eigen::Vector3d p_min(-0.5*M_PI,-0.5*M_PI,-0.5*M_PI);
-  Eigen::Vector3d p_max( 0., 0., 0.5*M_PI);
+  Eigen::Vector3f p_min(-0.5*M_PI,-0.5*M_PI,-0.5*M_PI);
+  Eigen::Vector3f p_max( 0., 0., 0.5*M_PI);
   NodeTpS3 root00(Box(p_min, p_max),std::vector<uint32_t>(1,0));
   p_min << -0.5*M_PI,0.,-0.5*M_PI;
   p_max << 0., 0.5*M_PI, 0.5*M_PI;

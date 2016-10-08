@@ -8,9 +8,9 @@ namespace tdp {
 std::vector<Tetrahedron4D> TessellateS3() {
   // Search for a north pole to split the sphere into two halfs of
   // equal size.  The standard north 1,0,0,0 dooes not work;
-  S4d north;
+  S4f north;
   for (uint32_t i=0; i<1000; ++i) {
-    north = S4d::Random();
+    north = S4f::Random();
     std::vector<Tetrahedron4D> tetrahedra = TessellateS3(north.vector());
     if ( tetrahedra.size() == 300)  {
       break;
@@ -25,17 +25,17 @@ std::vector<Tetrahedron4D> TessellateS3() {
   return TessellateS3(north.vector());
 }
 
-std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north) {
+std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
   std::vector<Tetrahedron4D> tetrahedra;
   tetrahedra.reserve(600);
   
-  Eigen::Matrix<double, 4, 120> vertices;
+  Eigen::Matrix<float, 4, 120> vertices;
   vertices.fill(0.);
   uint32_t i = 0;
-  for (double a=0; a<2; ++a) 
-    for (double b=0; b<2; ++b) 
-      for (double c=0; c<2; ++c) 
-        for (double d=0; d<2; ++d) {
+  for (float a=0; a<2; ++a) 
+    for (float b=0; b<2; ++b) 
+      for (float c=0; c<2; ++c) 
+        for (float d=0; d<2; ++d) {
           vertices(0,i) = a*2. - 1.;
           vertices(1,i) = b*2. - 1.;
           vertices(2,i) = c*2. - 1.;
@@ -46,7 +46,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north) {
     vertices(j,i++) = -2.;
   }
   // Golden Ratio 
-  double phi = 0.5 * (1. + sqrt(5.));
+  float phi = 0.5 * (1. + sqrt(5.));
   // All even permutations
   // http://mathworld.wolfram.com/EvenPermutation.html
   Eigen::Matrix<uint32_t, 12, 4> evenPerms;
@@ -64,9 +64,9 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north) {
     3,1,0,2,
     3,2,1,0;
   for (uint32_t j=0; j<12; ++j) 
-    for (double a=0; a<2; ++a) 
-      for (double b=0; b<2; ++b) 
-        for (double c=0; c<2; ++c) {
+    for (float a=0; a<2; ++a) 
+      for (float b=0; b<2; ++b) 
+        for (float c=0; c<2; ++c) {
           vertices(evenPerms(j,0),i) = (a*2.-1.)*phi;
           vertices(evenPerms(j,1),i) = (b*2.-1.);
           vertices(evenPerms(j,2),i) = (c*2.-1.)/phi;
@@ -95,7 +95,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north) {
   Eigen::Matrix<uint8_t, Eigen::Dynamic, Eigen::Dynamic> G(n_vertices, n_vertices);
   for (i = 0; i < n_vertices; ++i) 
     for (j = 0; j < n_vertices; ++j) {
-      double ang = acos(vertices.col(i).transpose() * vertices.col(j)); 
+      float ang = acos(vertices.col(i).transpose() * vertices.col(j)); 
       if (fabs(ang - 36.*M_PI/180.) < 1e-6) {
         G(i,j) = 1;
       } else {
@@ -130,7 +130,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4d& north) {
 void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples) {
   uint32_t N = 0;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4d q = S4d::Random();
+    S4f q = S4f::Random();
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
         ++N;
@@ -138,11 +138,11 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction all over sphere intersected with tessellation: "
-    << static_cast<double>(N)/static_cast<double>(Nsamples)
+    << static_cast<float>(N)/static_cast<float>(Nsamples)
     << std::endl;
   N = 0.;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4d q = S4d::Random();
+    S4f q = S4f::Random();
     q.vector()(0) = q.vector()(0) < 0. ? -q.vector()(0) : q.vector()(0);
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
@@ -151,11 +151,11 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction on top half-sphere intersected with tessellation: "
-    << static_cast<double>(N)/static_cast<double>(Nsamples)
+    << static_cast<float>(N)/static_cast<float>(Nsamples)
     << std::endl;
   N = 0.;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4d q = S4d::Random();
+    S4f q = S4f::Random();
     q.vector()(0) = q.vector()(0) < 0. ? q.vector()(0) : -q.vector()(0);
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
@@ -164,7 +164,7 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction on bottom half-sphere intersected with tessellation: "
-    << static_cast<double>(N)/static_cast<double>(Nsamples)
+    << static_cast<float>(N)/static_cast<float>(Nsamples)
     << std::endl;
 }
 }

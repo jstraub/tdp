@@ -46,7 +46,7 @@ std::string NodeS3::ToString() const {
 
 std::string NodeS3::Serialize() const {
   std::stringstream out; 
-  Eigen::Vector4d v;
+  Eigen::Vector4f v;
   for (uint32_t i=0; i<4; ++i) {
     v = GetTetrahedron().GetVertex(i);
     out << v(0) << " " << v(1) << " " << v(2) << " " << v(3) << std::endl;

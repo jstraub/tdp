@@ -25,8 +25,8 @@ std::vector<NodeR3> NodeR3::Branch() const {
   return nodes;
 }
 
-std::list<NodeR3> GenerateNotesThatTessellateR3(const Eigen::Vector3d&
-    min, const Eigen::Vector3d& max, double max_side_len) {
+std::list<NodeR3> GenerateNotesThatTessellateR3(const Eigen::Vector3f&
+    min, const Eigen::Vector3f& max, float max_side_len) {
   NodeR3 node0(Box(min, max), std::vector<uint32_t>(1,0));
   std::vector<std::vector<NodeR3>> node_tree;
   node_tree.push_back(std::vector<NodeR3>(1,node0));
@@ -53,7 +53,7 @@ std::string NodeR3::ToString() const {
 
 std::string NodeR3::Serialize() const {
   std::stringstream out; 
-  Eigen::Vector3d c;
+  Eigen::Vector3f c;
   for (uint32_t i=0; i<8; ++i) {
     GetBox().GetCorner(i, c);
     out << c(0) << " " << c(1) << " " << c(2) << std::endl;

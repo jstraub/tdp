@@ -20,94 +20,24 @@
 #include <functional>
 
 #include <tdp/data/image.h>
+#include <tdp/data/managed_image.h>
 #include <tdp/eigen/dense.h>
 
 namespace tdp {
 
 void LoadPointCloud(
     const std::string& path,
-    ManagedHostImage<Vector3fda>& verts) {
-
-  std::vector<float> vertices;
-  std::ifstream in(path);
-  tinyply::PlyFile ply(in);
-
-  for (auto e : ply.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" 
-      << std::endl;
-    for (auto p : e.properties) {
-      std::cout << "\tproperty - " << p.name << " (" 
-        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
-    }
-  }
-  std::cout << std::endl;
-  ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
-  ply.read(in);
-  std::cout << "loaded ply file: " << vertices.size() << std::endl;
-
-  verts.Reinitialise(vertices.size()/3,1);
-  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
-}
+    ManagedHostImage<Vector3fda>& verts);
 
 void LoadPointCloud(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,
-    ManagedHostImage<Vector3fda>& ns) {
-
-  std::vector<float> vertices;
-  std::vector<float> normals;
-  std::ifstream in(path);
-  tinyply::PlyFile ply(in);
-
-  for (auto e : ply.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" 
-      << std::endl;
-    for (auto p : e.properties) {
-      std::cout << "\tproperty - " << p.name << " (" 
-        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
-    }
-  }
-  std::cout << std::endl;
-  ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
-  ply.request_properties_from_element("normal", {"x", "y", "z"}, normals);
-  ply.read(in);
-  std::cout << "loaded ply file: " << vertices.size() << std::endl;
-
-  verts.Reinitialise(vertices.size()/3,1);
-  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
-  ns.Reinitialise(normals.size()/3,1);
-  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
-}
+    ManagedHostImage<Vector3fda>& ns);
 
 void LoadMesh(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,
-    ManagedHostImage<Vector3uda>& tris) {
-
-  std::vector<float> vertices;
-  std::vector<uint32_t> triangles;
-  std::ifstream in(path);
-  tinyply::PlyFile ply(in);
-
-  for (auto e : ply.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" 
-      << std::endl;
-    for (auto p : e.properties) {
-      std::cout << "\tproperty - " << p.name << " (" 
-        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
-    }
-  }
-  std::cout << std::endl;
-  ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
-  ply.request_properties_from_element("face", {"vertex_indices"}, triangles);
-  ply.read(in);
-  std::cout << "loaded ply file: " << vertices.size() << " " << triangles.size() << std::endl;
-
-  verts.Reinitialise(vertices.size()/3,1);
-  tris.Reinitialise(triangles.size()/3,1);
-  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
-  std::memcpy(tris.ptr_, &triangles[0], tris.SizeBytes());
-}
+    ManagedHostImage<Vector3uda>& tris);
 
 }
 

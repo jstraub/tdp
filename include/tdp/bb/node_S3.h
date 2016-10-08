@@ -21,16 +21,16 @@ class NodeS3 : public BaseNode {
   virtual ~NodeS3() = default;
   virtual std::vector<NodeS3> Branch() const;
   const Tetrahedron4D& GetTetrahedron() const { return tetrahedron_;}
-  void SetLbArgument(const Eigen::Quaterniond& q) {q_lb_ = q;}
-  Eigen::Quaterniond GetLbArgument() const {return q_lb_;}
+  void SetLbArgument(const Eigen::Quaternion<float>& q) {q_lb_ = q;}
+  Eigen::Quaternion<float> GetLbArgument() const {return q_lb_;}
   virtual uint32_t GetBranchingFactor(uint32_t i) const { return i==0? 600 : 8;}
   virtual std::string ToString() const;
   virtual std::string Serialize() const;
   std::string GetSpace() const { return "S3"; }
  protected:
   Tetrahedron4D tetrahedron_;
-  Eigen::Quaterniond q_lb_;
-  virtual double GetVolume_() const { return tetrahedron_.GetVolume();}
+  Eigen::Quaternion<float> q_lb_;
+  virtual float GetVolume_() const { return tetrahedron_.GetVolume();}
 };
 
 std::list<NodeS3> GenerateNotesThatTessellateS3();

@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+
 namespace tdp {
 
 template<typename T, int D>

@@ -16,16 +16,16 @@ namespace tdp {
 
 class UpperBoundIndepR3 : public Bound<NodeR3> {
  public:
-  UpperBoundIndepR3(const std::vector<Normal<3>>& gmm_A, const
-      std::vector<Normal<3>>& gmm_B, const Eigen::Quaterniond& q);
+  UpperBoundIndepR3(const std::vector<Normal3f>& gmm_A, const
+      std::vector<Normal3f>& gmm_B, const Eigen::Quaternion<float>& q);
   virtual ~UpperBoundIndepR3() = default;
-  virtual double Evaluate(const NodeR3& node);
-  virtual double EvaluateAndSet(NodeR3& node);
+  virtual float Evaluate(const NodeR3& node);
+  virtual float EvaluateAndSet(NodeR3& node);
  private:
-  std::vector<Normal<3>> gmmT_;
+  std::vector<Normal3f> gmmT_;
 };
 
-Eigen::Vector3d FindMinTranslationInNode(const Eigen::Matrix3d& A, 
-    const Eigen::Vector3d& b, const NodeR3& node);
+Eigen::Vector3f FindMinTranslationInNode(const Eigen::Matrix3f& A, 
+    const Eigen::Vector3f& b, const NodeR3& node);
 
 }

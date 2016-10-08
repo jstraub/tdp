@@ -49,9 +49,9 @@ class vMF {
 typedef vMF<float,3> vMF3f;
 typedef vMF<double,3> vMF3d;
 
-template<uint32_t D>
+template<typename T, uint32_t D>
 T ComputeLogvMFtovMFcost(const vMF<T,D>& vmf_A, const vMF<T,D>& vmF_B, 
-  const Eigen::Matrix<T, D, 1>& mu_B_prime);
+  const Eigen::Matrix<T,D,1>& mu_B_prime);
 
 //T MLEstimateTau(const Eigen::Vector3d& xSum, const
 //    Eigen::Vector3d& mu, T count);

@@ -15,19 +15,19 @@ namespace tdp {
 
 class LowerBoundR3 : public Bound<NodeR3> {
  public:
-  LowerBoundR3(const std::vector<Normal<3>>& gmmA, const
-      std::vector<Normal<3>>& gmmB, const Eigen::Quaterniond& q);
+  LowerBoundR3(const std::vector<Normal3f>& gmmA, const
+      std::vector<Normal3f>& gmmB, const Eigen::Quaternion<float>& q);
   virtual ~LowerBoundR3() = default;
-  virtual double Evaluate(const NodeR3& node);
-  virtual double EvaluateAndSet(NodeR3& node);
+  virtual float Evaluate(const NodeR3& node);
+  virtual float EvaluateAndSet(NodeR3& node);
  private:
-  void Evaluate(const NodeR3& node, Eigen::Matrix<double,3,9>& xs,
-      Eigen::Matrix<double,9,1>& lbs);
-  std::vector<Normal<3>> gmmT_;
+  void Evaluate(const NodeR3& node, Eigen::Matrix<float,3,9>& xs,
+      Eigen::Matrix<float,9,1>& lbs);
+  std::vector<Normal3f> gmmT_;
 };
 
-void ComputeGmmT( const std::vector<Normal<3>>& gmmA, const
-    std::vector<Normal<3>>& gmmB, std::vector<Normal<3>>& gmmT, const
-    Eigen::Quaterniond& q);
+void ComputeGmmT( const std::vector<Normal3f>& gmmA, const
+    std::vector<Normal3f>& gmmB, std::vector<Normal3f>& gmmT, const
+    Eigen::Quaternion<float>& q);
 
 }

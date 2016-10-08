@@ -10,8 +10,8 @@ UpperBoundLin<UpperBound,NodeLin>::UpperBoundLin(UpperBound& boundS3)
 { }
 
 template<class UpperBound, class NodeLin>
-double UpperBoundLin<UpperBound,NodeLin>::Evaluate(const NodeLin& node) {
-//  double ub = -1e99;
+float UpperBoundLin<UpperBound,NodeLin>::Evaluate(const NodeLin& node) {
+//  float ub = -1e99;
   return boundS3_.EvaluateRotationSet(node.GetQuaternions());
 //    std::cout << ub_i << " ";
 //    if (ub_i > ub)
@@ -22,8 +22,8 @@ double UpperBoundLin<UpperBound,NodeLin>::Evaluate(const NodeLin& node) {
 }
 
 template<class UpperBound, class NodeLin>
-double UpperBoundLin<UpperBound,NodeLin>::EvaluateAndSet(NodeLin& node) {
-  double ub = Evaluate(node);
+float UpperBoundLin<UpperBound,NodeLin>::EvaluateAndSet(NodeLin& node) {
+  float ub = Evaluate(node);
   node.SetUB(ub);
   return ub;
 }

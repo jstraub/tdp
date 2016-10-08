@@ -12,8 +12,8 @@ class Bound {
  public:
   Bound() : verbose_(false) {};
   virtual ~Bound() = default;
-  virtual double Evaluate(const Node& node) { return 0;}
-  virtual double EvaluateAndSet(Node& node) { return 0;};
+  virtual float Evaluate(const Node& node) { return 0;}
+  virtual float EvaluateAndSet(Node& node) { return 0;};
   virtual void ToggleVerbose() {verbose_ = verbose_?false:true;}
  protected:
   bool verbose_;

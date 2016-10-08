@@ -4,7 +4,7 @@
 #include <tdp/bb/box.h>
 
 namespace tdp {
-Box::Box(const Eigen::Vector3d& p_min, const Eigen::Vector3d& p_max) 
+Box::Box(const Eigen::Vector3f& p_min, const Eigen::Vector3f& p_max) 
   : p_min_(p_min), p_max_(p_max) {
   // The first 4 are on purpose the way they are layed out to allow
   // fast access for edges and sides.
@@ -47,7 +47,7 @@ Box::Box(const Eigen::Vector3d& p_min, const Eigen::Vector3d& p_max)
 
 }
 
-Eigen::Vector3d Box::GetCenter() const {
+Eigen::Vector3f Box::GetCenter() const {
   return 0.5*(corners_.col(0) + corners_.col(6));
 }
 
@@ -75,13 +75,13 @@ std::vector<Box> Box::Subdivide() const {
   return boxs;
 }
 
-bool Box::IsInside(const Eigen::Vector3d& t) const {
+bool Box::IsInside(const Eigen::Vector3f& t) const {
   return (p_min_.array() <= t.array()).all() 
     && (t.array() <= p_max_.array()).all();
 }
 
-Eigen::Vector3d Box::GetSideLengths() const {
-  Eigen::Vector3d ls;
+Eigen::Vector3f Box::GetSideLengths() const {
+  Eigen::Vector3f ls;
   ls << edges_.col(0).norm(), edges_.col(1).norm(), edges_.col(2).norm(); 
   return ls;
 }

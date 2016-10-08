@@ -14,37 +14,37 @@ namespace tdp {
 class BaseNode {
  public:
   BaseNode(std::vector<uint32_t> ids);
-  BaseNode(std::vector<uint32_t> ids, double lb, double ub);
+  BaseNode(std::vector<uint32_t> ids, float lb, float ub);
   BaseNode(const BaseNode& node);
   virtual ~BaseNode() = default;
 //  virtual std::vector<std::unique_ptr<BaseNode>> Branch() const = 0;
   uint32_t GetLevel() const {return ids_.size()-1;}
   std::vector<uint32_t> GetIds() const {return ids_;}
-  double GetUB() const { return ub_;}
-  double GetLB() const { return lb_;}
-  void SetUB(double ub) { ub_ = ub;}
-  void SetLB(double lb) { lb_ = lb;}
-  double GetBoundGap() const {return ub_-lb_;}
+  float GetUB() const { return ub_;}
+  float GetLB() const { return lb_;}
+  void SetUB(float ub) { ub_ = ub;}
+  void SetLB(float lb) { lb_ = lb;}
+  float GetBoundGap() const {return ub_-lb_;}
   uint64_t GetIdAtLevel(uint32_t lvl) const;
   virtual uint32_t GetBranchingFactor(uint32_t i) const = 0;
   virtual std::string ToString() const = 0;
-  virtual double GetVolume();
+  virtual float GetVolume();
  protected:
   std::vector<uint32_t> ids_;
-  double lb_;
-  double ub_;
-  double V_;
-  virtual double GetVolume_() const = 0;
+  float lb_;
+  float ub_;
+  float V_;
+  virtual float GetVolume_() const = 0;
 };
 
 // For use with std::forward_list::remove_if
 template <class Node>
 class IsPrunableNode {
  public:
-  IsPrunableNode(double lb) : lb_(lb) {}
+  IsPrunableNode(float lb) : lb_(lb) {}
   bool operator() (const Node& node) {return node.GetUB() < lb_;}
  private:
-  double lb_;
+  float lb_;
 };
 
 template <class Node>

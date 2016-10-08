@@ -6,41 +6,41 @@
 
 namespace tdp {
 
-Eigen::Vector4d normed(const Eigen::Vector4d& x) {
+Eigen::Vector4f normed(const Eigen::Vector4f& x) {
   return x / x.norm();
 }
 
-Tetrahedron4D::Tetrahedron4D(const Eigen::Matrix<double, 4, 4>& vertices) :
+Tetrahedron4D::Tetrahedron4D(const Eigen::Matrix<float, 4, 4>& vertices) :
   vertices_(vertices) {}
 
-Tetrahedron4D::Tetrahedron4D(const Eigen::Vector4d& a, const
-    Eigen::Vector4d& b, const Eigen::Vector4d& c, const
-    Eigen::Vector4d& d) {
+Tetrahedron4D::Tetrahedron4D(const Eigen::Vector4f& a, const
+    Eigen::Vector4f& b, const Eigen::Vector4f& c, const
+    Eigen::Vector4f& d) {
   vertices_ << a, b, c, d;
 }
 
-Eigen::Vector4d Tetrahedron4D::GetCenter() const {
-  Eigen::Vector4d c = normed(vertices_.rowwise().sum());
+Eigen::Vector4f Tetrahedron4D::GetCenter() const {
+  Eigen::Vector4f c = normed(vertices_.rowwise().sum());
 //  c.bottomRows<3>() *= -1;
   return c;
 }
 
-Eigen::Vector4d Tetrahedron4D::GetVertex(uint32_t i) const {
-  Eigen::Vector4d v = vertices_.col(i);
+Eigen::Vector4f Tetrahedron4D::GetVertex(uint32_t i) const {
+  Eigen::Vector4f v = vertices_.col(i);
 //  v.bottomRows<3>() *= -1;
   return v;
 }
 
-Eigen::Quaterniond Tetrahedron4D::GetCenterQuaternion() const {
-  Eigen::Vector4d q = GetCenter();
-  return Eigen::Quaterniond(q(0), q(1), q(2), q(3));
+Eigen::Quaternion<float> Tetrahedron4D::GetCenterQuaternion() const {
+  Eigen::Vector4f q = GetCenter();
+  return Eigen::Quaternion<float>(q(0), q(1), q(2), q(3));
 }
-Eigen::Quaterniond Tetrahedron4D::GetVertexQuaternion(uint32_t i) const {
-  Eigen::Vector4d q = GetVertex(i);
-  return Eigen::Quaterniond(q(0), q(1), q(2), q(3));
+Eigen::Quaternion<float> Tetrahedron4D::GetVertexQuaternion(uint32_t i) const {
+  Eigen::Vector4f q = GetVertex(i);
+  return Eigen::Quaternion<float>(q(0), q(1), q(2), q(3));
 }
 
-double Tetrahedron4D::GetVolume(const Tetrahedron4D& tetra) {
+float Tetrahedron4D::GetVolume(const Tetrahedron4D& tetra) {
   // The volume of a parallelepiped is the sqrt of the determinant of
   // the Grammian matrix G
   // https://en.wikipedia.org/wiki/Parallelepiped
@@ -48,17 +48,17 @@ double Tetrahedron4D::GetVolume(const Tetrahedron4D& tetra) {
   // The volume of the n simplex is obtained by dividing the volume of
   // the parallelepiped by the factorial of dimension.
   // https://en.wikipedia.org/wiki/Gramian_matrix
-  Eigen::Matrix4d G = tetra.vertices_.transpose()*tetra.vertices_;
+  Eigen::Matrix4f G = tetra.vertices_.transpose()*tetra.vertices_;
   return sqrt(G.determinant())/6.;
 }
 
-double Tetrahedron4D::GetVolume(uint32_t maxLvl) const {
+float Tetrahedron4D::GetVolume(uint32_t maxLvl) const {
   return RecursivelyApproximateSurfaceArea(*this, maxLvl);
 }
 
-double Tetrahedron4D::RecursivelyApproximateSurfaceArea(Tetrahedron4D
+float Tetrahedron4D::RecursivelyApproximateSurfaceArea(Tetrahedron4D
     tetra, uint32_t lvl) const {
-  double V = 0;
+  float V = 0;
   if (lvl == 0) {
     V = GetVolume(tetra);
   } else {
@@ -87,7 +87,7 @@ std::vector<Tetrahedron4D> Tetrahedron4D::Subdivide() const {
   std::vector<Tetrahedron4D> tetrahedra;  
   tetrahedra.reserve(8);
   // Compute new vertices and "pop" them out to the sphere.
-  Eigen::Matrix<double, 4, 6> vertices;
+  Eigen::Matrix<float, 4, 6> vertices;
   vertices << normed(vertices_.col(0) + vertices_.col(1)), //0
     normed(vertices_.col(1) + vertices_.col(2)), //1
     normed(vertices_.col(2) + vertices_.col(0)), //2
@@ -106,7 +106,7 @@ std::vector<Tetrahedron4D> Tetrahedron4D::Subdivide() const {
   // Corner tetrahedron at 3th corner of parent.
   tetrahedra.push_back(Tetrahedron4D(vertices_.col(3), vertices.col(3),
         vertices.col(4), vertices.col(5)));
-  Eigen::Vector3d dots;
+  Eigen::Vector3f dots;
   dots[0] = vertices.col(0).transpose() * vertices.col(5);
   dots[1] = vertices.col(2).transpose() * vertices.col(4);
   dots[2] = vertices.col(3).transpose() * vertices.col(1);
@@ -143,8 +143,8 @@ std::vector<Tetrahedron4D> Tetrahedron4D::Subdivide() const {
   return tetrahedra;
 }
 
-bool Tetrahedron4D::Intersects(const Eigen::Vector4d& q) const {
-  Eigen::Vector3d alpha = vertices_.lu().solve(q);
+bool Tetrahedron4D::Intersects(const Eigen::Vector4f& q) const {
+  Eigen::Vector4f alpha = vertices_.lu().solve(q);
   return (alpha.array() >= 0.).all();
 }
 
