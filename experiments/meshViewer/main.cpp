@@ -105,10 +105,13 @@ int main( int argc, char* argv[] )
   tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
   pangolin::GlBuffer vbo;
+  pangolin::GlBuffer valuebo;
   pangolin::GlBuffer cbo;
   pangolin::GlBuffer ibo;
   vbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
+  valuebo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
+      1, GL_DYNAMIC_DRAW);
   cbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,
       GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
   ibo.Reinitialise(pangolin::GlElementArrayBuffer, tri.w_,
@@ -120,14 +123,25 @@ int main( int argc, char* argv[] )
 
   // load and compile shader
   std::string shaderRoot = SHADER_DIR;
-  pangolin::GlSlProgram colorPc;
-  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader, 
+  pangolin::GlSlProgram progNormalShading;
+  progNormalShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("normalShading.vert"));
-  colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
+  progNormalShading.AddShaderFromFile(pangolin::GlSlGeometryShader,
       shaderRoot+std::string("normalShading.geom"));
-  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
+  progNormalShading.AddShaderFromFile(pangolin::GlSlFragmentShader,
       shaderRoot+std::string("normalShading.frag"));
-  colorPc.Link();
+  progNormalShading.Link();
+
+  std::string shaderRoot = SHADER_DIR;
+  pangolin::GlSlProgram progValueShading;
+  progValueShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("valueShading.vert"));
+  progValueShading.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("valueShading.frag"));
+  progValueShading.Link();
+
+  pangolin::Var<bool> showMeanCurvature("ui.show MeanCurv", false, false);
+  pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, false);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -147,26 +161,51 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
+    if (showGausCurvature || showMeanCurvature) {
+      progValueShading.Bind();
+      progvalueShading.SetUniform("P",P);
+      progvalueShading.SetUniform("MV",MV);
+      std::pair<double,double> minMax;
+      if (showGausCurvature) {
+        minMax = gausCurv.MinMax();
+        valuebo.Upload(gausCurv.ptr_,  gausCurv.SizeBytes(), 0);
+      } else if (showMeanCurvature) {
+        minMax = meanCurv.MinMax();
+        valuebo.Upload(meanCurv.ptr_,  meanCurv.SizeBytes(), 0);
+      }
+      progvalueShading.SetUniform("minValue", minMax.first);
+      progvalueShading.SetUniform("maxValue", minMax.second);
+
+      valuebo.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+    } else {
+      progNormalShading.Bind();
+      progNormalShading.SetUniform("P",P);
+      progNormalShading.SetUniform("MV",MV);
+
+      cbo.Bind();
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+    }
     vbo.Bind();
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-    cbo.Bind();
-    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
 
     glEnableVertexAttribArray(0);                                               
     glEnableVertexAttribArray(1);                                               
-
-    colorPc.Bind();
-    colorPc.SetUniform("P",P);
-    colorPc.SetUniform("MV",MV);
 
     ibo.Bind();
     glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
     ibo.Unbind();
 
-    colorPc.Unbind();
-    glDisableVertexAttribArray(1);
+    if (showGausCurvature || showMeanCurvature) {
+      progValueShading.Unbind();
+      glDisableVertexAttribArray(1);
+      valuebo.Unbind();
+    } else {
+      progNormalShading.Unbind();
+      glDisableVertexAttribArray(1);
+      cbo.Unbind();
+    }
     glDisableVertexAttribArray(0);
-    cbo.Unbind();
     vbo.Unbind();
 
     glDisable(GL_DEPTH_TEST);
