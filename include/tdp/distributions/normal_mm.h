@@ -24,9 +24,9 @@ bool ComputeGMMfromPC(
   // Run the clustering algorithm.
   dpmeans.Compute(x, cuX, cuZ, maxIt, minNchangePerc);
   z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
-  eigen_vector<Vector3fda>& centers = dpvmfmeans.centers_;
-  std::vector<size_t> Ns = dpvmfmeans.Ns_;
-  uint32_t K = dpvmfmeans.K_;
+  eigen_vector<Vector3fda>& centers = dpmeans.centers_;
+  std::vector<size_t> Ns = dpmeans.Ns_;
+  uint32_t K = dpmeans.K_;
   eigen_vector<Eigen::Vector3f> xSum(K,Eigen::Vector3f::Zero());
   eigen_vector<Eigen::Matrix3f> Ss(K,Eigen::Matrix3f::Zero());
   eigen_vector<Eigen::Vector3f> mus(K,Eigen::Vector3f::Zero());

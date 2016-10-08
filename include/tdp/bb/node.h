@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <string>
 #include <list>
 #include <map>
 #include <iostream>
@@ -13,13 +14,13 @@ namespace tdp {
 
 class BaseNode {
  public:
-  BaseNode(std::vector<uint32_t> ids);
-  BaseNode(std::vector<uint32_t> ids, float lb, float ub);
+  BaseNode(::std::vector<uint32_t> ids);
+  BaseNode(::std::vector<uint32_t> ids, float lb, float ub);
   BaseNode(const BaseNode& node);
   virtual ~BaseNode() = default;
 //  virtual std::vector<std::unique_ptr<BaseNode>> Branch() const = 0;
   uint32_t GetLevel() const {return ids_.size()-1;}
-  std::vector<uint32_t> GetIds() const {return ids_;}
+  ::std::vector<uint32_t> GetIds() const {return ids_;}
   float GetUB() const { return ub_;}
   float GetLB() const { return lb_;}
   void SetUB(float ub) { ub_ = ub;}
@@ -30,7 +31,7 @@ class BaseNode {
   virtual std::string ToString() const = 0;
   virtual float GetVolume();
  protected:
-  std::vector<uint32_t> ids_;
+  ::std::vector<uint32_t> ids_;
   float lb_;
   float ub_;
   float V_;

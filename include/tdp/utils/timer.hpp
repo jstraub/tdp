@@ -7,12 +7,6 @@
 #include <sys/time.h>
 #include <string>
 
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::ostream;
-using std::string;
-
 namespace tdp { 
 
 class Timer
@@ -37,11 +31,11 @@ public:
     return dt_;
   };
 
-  float toctic(string description="")
+  float toctic(std::string description="")
   {
     toc();
     if (description.size()>0)
-      cerr<<description<<" :"<<dt_<<"ms"<<endl;
+      std::cerr<<description<<" :"<<dt_<<"ms"<<std::endl;
     tic();
     return dt_;
   };
@@ -85,7 +79,7 @@ protected:
   };
 };
 
-inline ostream& operator<<(ostream &out, const Timer& t)
+inline std::ostream& operator<<(std::ostream &out, const Timer& t)
 {
   out << t.lastDt() << "ms";
   return out;

@@ -132,7 +132,6 @@ int main( int argc, char* argv[] )
       shaderRoot+std::string("normalShading.frag"));
   progNormalShading.Link();
 
-  std::string shaderRoot = SHADER_DIR;
   pangolin::GlSlProgram progValueShading;
   progValueShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("valueShading.vert"));
@@ -163,8 +162,8 @@ int main( int argc, char* argv[] )
 
     if (showGausCurvature || showMeanCurvature) {
       progValueShading.Bind();
-      progvalueShading.SetUniform("P",P);
-      progvalueShading.SetUniform("MV",MV);
+      progValueShading.SetUniform("P",P);
+      progValueShading.SetUniform("MV",MV);
       std::pair<double,double> minMax;
       if (showGausCurvature) {
         minMax = gausCurv.MinMax();
@@ -173,8 +172,8 @@ int main( int argc, char* argv[] )
         minMax = meanCurv.MinMax();
         valuebo.Upload(meanCurv.ptr_,  meanCurv.SizeBytes(), 0);
       }
-      progvalueShading.SetUniform("minValue", minMax.first);
-      progvalueShading.SetUniform("maxValue", minMax.second);
+      progValueShading.SetUniform("minValue", float(minMax.first));
+      progValueShading.SetUniform("maxValue", float(minMax.second));
 
       valuebo.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0); 

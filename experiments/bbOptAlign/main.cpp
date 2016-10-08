@@ -36,6 +36,8 @@
 #include <tdp/distributions/normal_mm.h>
 #include <tdp/distributions/vmf_mm.h>
 
+#include <tdp/bb/bb.h>
+
 int main( int argc, char* argv[] )
 {
   const std::string inputA = std::string(argv[1]);
@@ -105,11 +107,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt("ui.max Iter", 10, 1, 30);
   pangolin::Var<float> minNchangePerc("ui. min change perc", 0.03, 0.001, 0.1);
 
+  pangolin::Var<float> lambdaS2("ui.lambda S2", 30.*M_PI/180., 10.*M_PI/180., 180.*M_PI/180.);
+  pangolin::Var<float> lambdaR3("ui.lambda R3", 0.3, 0.1, 1.0);
+
 
   std::vector<tdp::Normal3f> gmmA, gmmB;
   std::vector<tdp::vMF3f> vmfmmA, vmfmmB;
-  tdp::DPmeans dpmeansA, dpmeansB;
-  tdp::DPvMFmeans dpvmfmeansA, dpvmfmeansB;
+  tdp::DPmeans dpmeansA(lambdaR3), dpmeansB(lambdaR3);
+  tdp::DPvMFmeans dpvmfmeansA(lambdaS2), dpvmfmeansB(lambdaS2);
 
   tdp::SE3f T_ab;
 

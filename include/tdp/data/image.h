@@ -14,6 +14,8 @@
 #  include <tdp/nvidia/helper_cuda.h>
 #endif
 
+#include <tdp/eigen/dense.h>
+
 namespace tdp {
 
 template <class T>
@@ -76,21 +78,8 @@ class Image {
   TDP_HOST_DEVICE
   size_t Area() const { return w_*h_; }
 
-  std::pair<double,double> MinMax(size_t* iMin=nullptr, size_t* iMax=nullptr) const {
-    std::pair<double,double> minMax(std::numeric_limits<double>::max(),
-        std::numeric_limits<double>::lowest());
-    for (size_t i=0; i<Area(); ++i) {
-      if (minMax.first > ptr_[i]) {
-        minMax.first = ptr_[i];
-        if (iMin) *iMin = i;
-      }
-      if (minMax.second < ptr_[i]) {
-        minMax.second = ptr_[i];
-        if (iMax) *iMax = i;
-      }
-    }
-    return minMax;
-  }
+  inline std::pair<double,double> MinMax(size_t* iMin=nullptr, size_t*
+      iMax=nullptr) const;
 
   std::string Description() const {
     std::stringstream ss;
@@ -123,5 +112,41 @@ class Image {
  private:
   
 };
+
+template<typename T>
+inline std::pair<double,double> Image<T>::MinMax(size_t* iMin, size_t* iMax) const {
+  std::pair<double,double> minMax(std::numeric_limits<double>::max(),
+      std::numeric_limits<double>::lowest());
+  for (size_t i=0; i<Area(); ++i) {
+    if (minMax.first > ptr_[i]) {
+      minMax.first = ptr_[i];
+      if (iMin) *iMin = i;
+    }
+    if (minMax.second < ptr_[i]) {
+      minMax.second = ptr_[i];
+      if (iMax) *iMax = i;
+    }
+  }
+  return minMax;
+}
+
+template<>
+inline std::pair<double,double> Image<Vector3fda>::MinMax(size_t* iMin, 
+    size_t* iMax) const {
+  std::pair<double,double> minMax(std::numeric_limits<double>::max(),
+      std::numeric_limits<double>::lowest());
+  for (size_t i=0; i<Area(); ++i) {
+    if (minMax.first > ptr_[i].norm()) {
+      minMax.first = ptr_[i].norm();
+      if (iMin) *iMin = i;
+    }
+    if (minMax.second < ptr_[i].norm()) {
+      minMax.second = ptr_[i].norm();
+      if (iMax) *iMax = i;
+    }
+  }
+  return minMax;
+}
+
 
 }
