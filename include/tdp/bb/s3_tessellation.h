@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <manifold/S.h>
-#include <tdp/bb/combinations.h>
+#include <tdp/utils/combinations.h>
 #include <tdp/bb/tetrahedron.h>
 
 namespace tdp {

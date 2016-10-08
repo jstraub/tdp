@@ -8,7 +8,7 @@
 #include <Eigen/Geometry>
 #include <tdp/bb/node_R3.h>
 #include <tdp/bb/numeric_helpers.h>
-#include <tdp/bb/normal.h>
+#include <tdp/distributions/normal.h>
 #include <tdp/bb/bound.h>
 #include <tdp/bb/lower_bound_R3.h>
 

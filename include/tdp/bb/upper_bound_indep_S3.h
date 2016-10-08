@@ -8,8 +8,8 @@
 #include <Eigen/Geometry>
 #include <tdp/bb/node_S3.h>
 #include <tdp/bb/numeric_helpers.h>
-#include <tdp/bb/vmf.h>
-#include <tdp/bb/vmf_mm.h>
+#include <tdp/distributions/vmf.h>
+#include <tdp/distributions/vmf_mm.h>
 #include <tdp/bb/bound.h>
 
 namespace tdp {

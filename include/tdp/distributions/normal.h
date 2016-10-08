@@ -64,4 +64,4 @@ private:
   Eigen::Matrix<double,D,1> xi_; // Information Vector = Sigma^-1 mu
 };
 }
-#include <tdp/bb/normal_impl.h>
+#include <tdp/distributions/normal_impl.h>
