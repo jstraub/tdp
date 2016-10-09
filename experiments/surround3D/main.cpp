@@ -271,6 +271,7 @@ int main( int argc, char* argv[] )
       << imuInterp.gravity0_.transpose() << std::endl
       << T_mr << std::endl;
   }
+  std::vector<tdp::SE3f> T_mrs;
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video
@@ -532,6 +533,8 @@ int main( int argc, char* argv[] )
     tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
     TOCK("Ray Trace TSDF");
 
+    T_mrs.push_back(T_mr);
+
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
     T_mv.matrix()(2,3) = -3.;
@@ -550,6 +553,8 @@ int main( int argc, char* argv[] )
       d_cam.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
+      for (tdp::SE3f& T : T_mrs)  
+        pangolin::glDrawAxis(T.matrix(), 0.1);
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
