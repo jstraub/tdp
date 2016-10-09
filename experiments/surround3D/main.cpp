@@ -145,6 +145,10 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
 
+  viewRgb.Show(false);
+  viewD.Show(false);
+  viewN2D.Show(false);
+
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
   pangolin::DataLog logInliers;
@@ -202,6 +206,11 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
+  pangolin::Var<bool> odomImu("ui.odom IMU", false, true);
+  pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", false, true);
+  pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", true, true);
+  pangolin::Var<bool> resetOdom("ui.reset odom",false,false);
+
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
@@ -213,7 +222,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEy("ui.gridE y",5.0,2,0);
   pangolin::Var<float> gridEz("ui.gridE z",5.0,2,0);
 
-  pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
@@ -284,12 +292,22 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
+    if (odomFrame2Model) {
+      odomImu = false;
+      odomFrame2Frame = false;
+    } else if (odomFrame2Frame) {
+      odomImu = false;
+      odomFrame2Model = false;
+    } else if (odomImu) {
+      odomFrame2Frame = false;
+      odomFrame2Model = false;
+    }
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
     gui.NextFrames();
-
 
     TICK("rgb collection");
     // get rgb image
@@ -371,39 +389,44 @@ int main( int argc, char* argv[] )
     ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
-
-    if (runICP && numFused > 30) {
-      if (gui.verbose) std::cout << "icp" << std::endl;
-      if (icpImu && imu) 
-        T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
-      TICK("ICP");
-      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      std::vector<float> errPerLvl;
-      std::vector<float> countPerLvl;
-      if (useRgbCamParasForDepth) {
-        ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
-            rig, rgbStream2cam, maxIt, angleThr_deg, distThr,
-            T_mr, errPerLvl, countPerLvl);
-      } else {
-        ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
-            rig, dStream2cam, maxIt, angleThr_deg, distThr,
-            T_mr, errPerLvl, countPerLvl);
+    
+    if (odomImu) {
+      T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
+    } else if (odomFrame2Model || odomFrame2Frame) {
+      if (runICP && numFused > 30) {
+        if (gui.verbose) std::cout << "icp" << std::endl;
+        if (icpImu && imu) 
+          T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
+        TICK("ICP");
+        std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+        std::vector<float> errPerLvl;
+        std::vector<float> countPerLvl;
+        if (useRgbCamParasForDepth) {
+          ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
+              rig, rgbStream2cam, maxIt, angleThr_deg, distThr,
+              T_mr, errPerLvl, countPerLvl);
+        } else {
+          ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
+              rig, dStream2cam, maxIt, angleThr_deg, distThr,
+              T_mr, errPerLvl, countPerLvl);
+        }
+        logInliers.Log(countPerLvl);
+        logCost.Log(errPerLvl);
+        if (countPerLvl[0] < inlierThrLvl0 
+            || errPerLvl[0] != errPerLvl[0]
+            || errPerLvl[1] != errPerLvl[1]
+            || errPerLvl[2] != errPerLvl[2]) {
+          std::cout << "# inliers " << countPerLvl[0] << " to small "
+            << "probably have tracking failure"
+            << std::endl;
+          gui.pause();
+          runICP = false;
+          fuseTSDF = false;
+        } 
+        TOCK("ICP");
       }
-      logInliers.Log(countPerLvl);
-      logCost.Log(errPerLvl);
-      if (countPerLvl[0] < inlierThrLvl0 
-          || errPerLvl[0] != errPerLvl[0]
-          || errPerLvl[1] != errPerLvl[1]
-          || errPerLvl[2] != errPerLvl[2]) {
-        std::cout << "# inliers " << countPerLvl[0] << " to small "
-          << "probably have tracking failure"
-          << std::endl;
-        gui.pause();
-        runICP = false;
-        fuseTSDF = false;
-      } 
-      TOCK("ICP");
     }
+    T_mrs.push_back(T_mr);
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mr.matrix() = Eigen::Matrix4f::Identity();
@@ -411,7 +434,7 @@ int main( int argc, char* argv[] )
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       numFused = 0;
     }
-    if (pangolin::Pushed(resetICP)) {
+    if (pangolin::Pushed(resetOdom)) {
       T_mr.matrix() = Eigen::Matrix4f::Identity();
     }
 
@@ -436,35 +459,39 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
-    TICK("Ray Trace TSDF");
-    tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
-    tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
-      int32_t cId;
-      if (useRgbCamParasForDepth) {
-        cId = rgbStream2cam[sId]; 
-      } else {
-        cId = dStream2cam[sId]; 
+    if (odomImu || odomFrame2Model) {
+      TICK("Ray Trace TSDF");
+      tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
+      tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
+      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+        int32_t cId;
+        if (useRgbCamParasForDepth) {
+          cId = rgbStream2cam[sId]; 
+        } else {
+          cId = dStream2cam[sId]; 
+        }
+        CameraT cam = rig.cams_[cId];
+        tdp::SE3f T_rc = rig.T_rcs_[cId];
+        tdp::SE3f T_mo = T_mr*T_rc;
+
+        tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
+            rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+        tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
+            rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+
+        // ray trace the TSDF to get pc and normals in model cosy
+        RayTraceTSDF(cuTSDF, cuPcEst_i, 
+            cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
       }
-      CameraT cam = rig.cams_[cId];
-      tdp::SE3f T_rc = rig.T_rcs_[cId];
-      tdp::SE3f T_mo = T_mr*T_rc;
-
-      tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
-      tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
-
-      // ray trace the TSDF to get pc and normals in model cosy
-      RayTraceTSDF(cuTSDF, cuPcEst_i, 
-          cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+      // just complete the surface normals obtained from the TSDF
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
+      tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
+      TOCK("Ray Trace TSDF");
+    } else if (odomFrame2Frame) {
+      pcs_m.CopyFrom(pcs_o, cudaMemcpyDeviceToDevice);
+      ns_m.CopyFrom(ns_o, cudaMemcpyDeviceToDevice);
     }
-    // just complete the surface normals obtained from the TSDF
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
-    TOCK("Ray Trace TSDF");
 
-    T_mrs.push_back(T_mr);
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
