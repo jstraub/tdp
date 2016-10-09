@@ -75,6 +75,22 @@ class ICP {
     const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
     );
 
+  /// Same as above but for multi-camera rigs
+  template<typename CameraT>
+  static void ComputeProjective(
+    Pyramid<Vector3fda,3>& pcs_m,
+    Pyramid<Vector3fda,3>& ns_m,
+    Pyramid<Vector3fda,3>& pcs_o,
+    Pyramid<Vector3fda,3>& ns_o,
+    const Rig<CameraT>& rig,
+    const std::vector<size_t>& stream2cam,
+    const std::vector<size_t>& maxIt, 
+    float angleThr_deg, float distThr,
+    SE3f& T_mr,
+    std::vector<float>& errPerLvl,
+    std::vector<float>& countPerLvl
+    );
+
   /// Compute relative rotation between two surface normal "images";
   /// uese projective data association
   template<int D, typename Derived>
