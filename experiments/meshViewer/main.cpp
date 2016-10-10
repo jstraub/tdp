@@ -104,6 +104,13 @@ int main( int argc, char* argv[] )
   std::cout << "Compute curvature" << std::endl;
   tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
+  std::pair<double,double> minMaxGausCurv = gausCurv.MinMax();
+  std::cout << " GausCurvature range: " << minMaxGausCurv.first << " to " 
+    << minMaxGausCurv.second << std::endl;
+  std::pair<double,double> minMaxMeanCurv = meanCurv.MinMax();
+  std::cout << " MeanCurvature range: " << minMaxMeanCurv.first << " to " 
+    << minMaxMeanCurv.second << std::endl;
+
   pangolin::GlBuffer vbo;
   pangolin::GlBuffer valuebo;
   pangolin::GlBuffer cbo;
@@ -160,23 +167,30 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
+    if (showGausCurvature.GuiChanged() && showGausCurvature) {
+      valuebo.Upload(gausCurv.ptr_,  gausCurv.SizeBytes(), 0);
+      showMeanCurvature = false;
+    }
+    if (showMeanCurvature.GuiChanged() && showMeanCurvature) {
+      valuebo.Upload(meanCurv.ptr_,  meanCurv.SizeBytes(), 0);
+      showGausCurvature = false;
+    }
+
     if (showGausCurvature || showMeanCurvature) {
       progValueShading.Bind();
       progValueShading.SetUniform("P",P);
       progValueShading.SetUniform("MV",MV);
-      std::pair<double,double> minMax;
       if (showGausCurvature) {
-        minMax = gausCurv.MinMax();
-        valuebo.Upload(gausCurv.ptr_,  gausCurv.SizeBytes(), 0);
+        progValueShading.SetUniform("minValue", float(minMaxGausCurv.first));
+        progValueShading.SetUniform("maxValue", float(minMaxGausCurv.second));
       } else if (showMeanCurvature) {
-        minMax = meanCurv.MinMax();
-        valuebo.Upload(meanCurv.ptr_,  meanCurv.SizeBytes(), 0);
+        progValueShading.SetUniform("minValue", float(minMaxMeanCurv.first));
+        progValueShading.SetUniform("maxValue", float(minMaxMeanCurv.second));
       }
-      progValueShading.SetUniform("minValue", float(minMax.first));
-      progValueShading.SetUniform("maxValue", float(minMax.second));
 
       valuebo.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+
     } else {
       progNormalShading.Bind();
       progNormalShading.SetUniform("P",P);

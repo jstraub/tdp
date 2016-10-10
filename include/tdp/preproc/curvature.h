@@ -81,8 +81,18 @@ void ComputeNeighborhood(
         n[i] += ni/ni.norm();
       }
       std::sort(ids.begin(), ids.end());
+      bool checkAllDuplicate = true;
+      for (size_t k=0; k<ids.size(); k+=2) {
+        if (!ids[k] == ids[k+1]) {
+          checkAllDuplicate = false; 
+          break;
+        }
+      }
+      if (!checkAllDuplicate) {
+        neigh.erase(i);
+        continue;
+      }
       auto end = std::unique(ids.begin(), ids.end());
-
       // sort according to angle from dir0 in tangent plane defined by n
       Vector3fda dir0;
       RejectAfromB(vert[ids[0]] - x0, n[i], dir0);
@@ -98,8 +108,7 @@ void ComputeNeighborhood(
           });
       neigh[i] = std::vector<uint32_t>(ids.begin(), end);
     }
-    if (i%1000 == 0)
-      std::cout << i << " of " << vert.w_ << std::endl;
+    Progress(i, vert.w_);
   }
 }
 
@@ -111,7 +120,7 @@ void ComputeCurvature(
     Image<float>& gausCurv
     ) {
   meanCurv.Fill(Vector3fda(NAN,NAN,NAN));
-#pragma omp parallel for
+  size_t c=0;
   for (const auto& it : neigh) {
     const uint32_t i = it.first;
     const std::vector<uint32_t>& ids = it.second;  
@@ -142,6 +151,7 @@ void ComputeCurvature(
     }
     meanCurv[i] = mc/(2.*A);
     gausCurv[i] = (2*M_PI-gc)/A;
+    Progress(c++, neigh.size());
   }
 }
 
@@ -155,6 +165,7 @@ void ComputePrincipalCurvature(
     float sqrtDelta = sqrt(std::max(0.f,kappaH*kappaH-gausCurv[i]));
     principalCurv[i](0) = kappaH + sqrtDelta;
     principalCurv[i](1) = kappaH - sqrtDelta;
+    Progress(i, meanCurv.w_);
   }
 }
 
