@@ -80,32 +80,43 @@ void ComputeNeighborhood(
         Vector3fda ni = (vert[ids[k]]-x0).cross(vert[ids[k+1]]-x0);
         n[i] += ni/ni.norm();
       }
+//      for (size_t k=0; k<ids.size(); k++) std::cout << ids[k] << " "; std::cout << std::endl;
       std::sort(ids.begin(), ids.end());
+//      for (size_t k=0; k<ids.size(); k++) std::cout << ids[k] << " "; std::cout << std::endl;
       bool checkAllDuplicate = true;
       for (size_t k=0; k<ids.size(); k+=2) {
-        if (!ids[k] == ids[k+1]) {
+        if (ids[k] != ids[k+1]) {
           checkAllDuplicate = false; 
           break;
         }
       }
       if (!checkAllDuplicate) {
+//        std::cout << "found non-duplicate ids; aborting" << i << std::endl;
         neigh.erase(i);
         continue;
       }
       auto end = std::unique(ids.begin(), ids.end());
-      // sort according to angle from dir0 in tangent plane defined by n
-      Vector3fda dir0;
-      RejectAfromB(vert[ids[0]] - x0, n[i], dir0);
-      std::sort(ids.begin(), end,[&](uint32_t a, uint32_t b){
-          Vector3fda dira, dirb, diray, dirby;
+//      for (size_t k=0; k<std::distance(ids.begin(),end); k++) std::cout << ids[k] << " "; std::cout << std::endl;
+
+      // setup  orthogonal cosy
+      Vector3fda dirx;
+      RejectAfromB(vert[ids[0]] - x0, n[i], dirx);
+      dirx.normalize();
+      Vector3fda diry = dirx.cross(n[i]).normalized();
+
+      auto angleToDir0 = [&](uint32_t a) -> float {
+          Vector3fda dira;
           RejectAfromB(vert[a] - x0, n[i], dira);
-          RejectAfromB(vert[b] - x0, n[i], dirb);
-          RejectAfromB(dira,dir0, diray);
-          RejectAfromB(dirb,dir0, dirby);
-          float alphaa = atan2(diray.norm(), LengthOfAonB(dira,dir0));
-          float alphab = atan2(dirby.norm(), LengthOfAonB(dirb,dir0));
-          return alphaa < alphab;
+          return atan2(LengthOfAonB(dira,diry), LengthOfAonB(dira,dirx));
+      };
+
+      std::sort(ids.begin(), end,[&](uint32_t a, uint32_t b){
+            return angleToDir0(a) < angleToDir0(b);
           });
+//      for (size_t k=0; k<std::distance(ids.begin(),end); k++) std::cout << ids[k] << " "; std::cout << std::endl;
+//      for (size_t k=0; k<std::distance(ids.begin(),end); k++) 
+//        std::cout << angleToDir0(ids[k])*180./M_PI << " "; 
+//      std::cout << std::endl;
       neigh[i] = std::vector<uint32_t>(ids.begin(), end);
     }
     Progress(i, vert.w_);
@@ -117,10 +128,12 @@ void ComputeCurvature(
     const Image<Vector3uda>& tri, 
     const std::map<uint32_t,std::vector<uint32_t>>& neigh,
     Image<Vector3fda>& meanCurv,
-    Image<float>& gausCurv
+    Image<float>& gausCurv,
+    Image<float>& area
     ) {
   meanCurv.Fill(Vector3fda(NAN,NAN,NAN));
   gausCurv.Fill(NAN);
+  area.Fill(NAN);
   size_t c=0;
   for (const auto& it : neigh) {
     const uint32_t i = it.first;
@@ -129,35 +142,64 @@ void ComputeCurvature(
     Vector3fda mc(0,0,0);
     float gc = 0.;
     float A = 0;
-    for (size_t k=0; k<ids.size(); ++k) {
+    std::cout << "@ vert " << i << std::endl;
+    for (int32_t k=0; k<(int32_t)ids.size(); ++k) {
+      int32_t l = (k-1+ids.size())%ids.size();
+      int32_t r = (k+1+ids.size())%ids.size();
       const Vector3fda& xj = vert[ids[k]];
-      const Vector3fda& xl = vert[(ids[k]-1+ids.size())%ids.size()];
-      const Vector3fda& xr = vert[(ids[k]+1+ids.size())%ids.size()];
+      const Vector3fda& xl = vert[ids[l]];
+      const Vector3fda& xr = vert[ids[r]];
       float dotAlpha = DotABC(xi,xl,xj);
       float dotBeta = DotABC(xi,xr,xj);
       float alpha = acos(dotAlpha);
       float beta = acos(dotBeta);
 
+      std::cout << ids[k]-i << " " << ids[l]-i << " " << ids[r]-i << std::endl;
+
       float gamma = acos(DotABC(xl,xi,xj));
-      if (gamma < 0.5*M_PI || alpha < 0.5*M_PI || alpha+gamma > 0.5*M_PI) {
+      if (gamma < 0.5*M_PI && alpha < 0.5*M_PI && alpha+gamma > 0.5*M_PI) {
         // non-obtuse triangle -> voronoi formula
         A += 0.125*(dotAlpha/sin(alpha)+dotBeta/sin(beta)) *(xi-xj).norm();
+        std::cout << "non-obtuse: " 
+          << gamma * 180./M_PI << ": " 
+          << alpha * 180./M_PI << ": " 
+          << (dotAlpha/sin(alpha)+dotBeta/sin(beta)) << " " 
+          << (xi-xj).norm() << " " 
+          << 0.125*(dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj).norm() << std::endl;
       } else if (gamma > 0.5*M_PI) {
         A += 0.25*((xl-xi).cross(xj-xi)).norm();
+        std::cout << "obtuse at xi: " 
+          << gamma * 180./M_PI << ": " 
+          << alpha * 180./M_PI << ": " 
+          << (xl-xi).norm() << " " 
+          << (xj-xi).norm() << " " 
+          << 0.25*((xl-xi).cross(xj-xi)).norm() << std::endl;
       } else {
         A += 0.125*((xl-xi).cross(xj-xi)).norm();
+        std::cout << "obtuse at other than xi: " 
+          << gamma * 180./M_PI << ": " 
+          << alpha * 180./M_PI << ": " 
+          << (xl-xi).norm() << " " 
+          << (xj-xi).norm() << " " 
+          << 0.125*((xl-xi).cross(xj-xi)).norm() << std::endl;
       }
       mc += (dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj);
       gc += gamma;
     }
     if (gc!=gc) 
       std::cerr << "gauss curvature nan at " << c << std::endl;
-    if (A>0.) {
+    if (1e-6 < A) {
       meanCurv[i] = mc/(2.*A);
       gausCurv[i] = (2*M_PI-gc)/A;
     }
+    area[i] = A;
     Progress(c++, neigh.size());
   }
+
+//  for (size_t i=0; i < vert.w_; ++i) {
+//    std::cout << "@vert " << i << ": " << meanCurv[i].transpose()
+//      << ", " << gausCurv[i] << std::endl;
+//  }
 }
 
 void ComputePrincipalCurvature(

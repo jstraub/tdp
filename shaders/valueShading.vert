@@ -19,8 +19,12 @@ vec3 ColorMapHot(float cVal) {
 
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
-  float c = (value-minValue)/(maxValue-minValue);
-  color = vec4(ColorMapHot(c),1.);
+  if (value==value) {
+    float c = (value-minValue)/(maxValue-minValue);
+    color = vec4(ColorMapHot(c),1.);
+  } else {
+    color = vec4(0.,0.,0.,0.);
+  }
 }
 
 

@@ -59,9 +59,9 @@ int main( int argc, char* argv[] )
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f};
 
-  float xScale = 0.002f;
-  float yScale = 0.002f;
-  float zScale = 0.002f;
+  float xScale = 6./512;
+  float yScale = 6./512;
+  float zScale = 6./512;
   size_t xDim = tsdf.w_;
   size_t yDim = tsdf.h_;
   size_t zDim = tsdf.d_;

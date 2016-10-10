@@ -2,6 +2,7 @@
 layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
 uniform mat4  P;  //from application program.
+uniform mat4  MV;  //from application program.
 out vec3      normal;      //to fragment shader.
  
 void main (void) {
@@ -12,13 +13,13 @@ void main (void) {
   vector1 = gl_in[1].gl_Position.xyz - gl_Position.xyz;
   vector2 = gl_in[2].gl_Position.xyz - gl_Position.xyz;
   normal = normalize (cross (vector1, vector2));
-  gl_Position = P * gl_Position;
+  gl_Position = P * MV * gl_Position;
   EmitVertex ();
  
-  gl_Position = P * gl_in[1].gl_Position;
+  gl_Position = P * MV * gl_in[1].gl_Position;
   EmitVertex ();
  
-  gl_Position = P * gl_in[2].gl_Position;
+  gl_Position = P * MV * gl_in[2].gl_Position;
   EmitVertex ();
   //EndPrimitve ();
 }
