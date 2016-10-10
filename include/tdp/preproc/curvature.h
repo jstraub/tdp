@@ -120,6 +120,7 @@ void ComputeCurvature(
     Image<float>& gausCurv
     ) {
   meanCurv.Fill(Vector3fda(NAN,NAN,NAN));
+  gausCurv.Fill(NAN);
   size_t c=0;
   for (const auto& it : neigh) {
     const uint32_t i = it.first;
@@ -149,8 +150,12 @@ void ComputeCurvature(
       mc += (dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj);
       gc += gamma;
     }
-    meanCurv[i] = mc/(2.*A);
-    gausCurv[i] = (2*M_PI-gc)/A;
+    if (gc!=gc) 
+      std::cerr << "gauss curvature nan at " << c << std::endl;
+    if (A>0.) {
+      meanCurv[i] = mc/(2.*A);
+      gausCurv[i] = (2*M_PI-gc)/A;
+    }
     Progress(c++, neigh.size());
   }
 }

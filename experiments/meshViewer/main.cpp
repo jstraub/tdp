@@ -98,16 +98,21 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n(vertices.w_,1);
   tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
   tdp::ManagedHostImage<float> gausCurv(vertices.w_,1);
+  tdp::ManagedHostImage<float> meanCurvLength(vertices.w_,1);
   std::map<uint32_t,std::vector<uint32_t>> neigh;
   std::cout << "Compute neighborhood" << std::endl;
   tdp::ComputeNeighborhood(vertices, tri, n, neigh);
   std::cout << "Compute curvature" << std::endl;
   tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv);
 
+  for (size_t i=0; i<meanCurv.Area(); ++i) {
+    meanCurvLength[i] = meanCurv[i].norm();
+  }
+
   std::pair<double,double> minMaxGausCurv = gausCurv.MinMax();
   std::cout << " GausCurvature range: " << minMaxGausCurv.first << " to " 
     << minMaxGausCurv.second << std::endl;
-  std::pair<double,double> minMaxMeanCurv = meanCurv.MinMax();
+  std::pair<double,double> minMaxMeanCurv = meanCurvLength.MinMax();
   std::cout << " MeanCurvature range: " << minMaxMeanCurv.first << " to " 
     << minMaxMeanCurv.second << std::endl;
 
@@ -146,8 +151,22 @@ int main( int argc, char* argv[] )
       shaderRoot+std::string("valueShading.frag"));
   progValueShading.Link();
 
-  pangolin::Var<bool> showMeanCurvature("ui.show MeanCurv", false, false);
-  pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, false);
+  pangolin::Var<bool> showMeanCurvature("ui.show MeanCurv", false, true);
+  pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, true);
+
+  pangolin::Var<float>minGausCurv("ui min GausCurv", 
+      float(minMaxGausCurv.first), float(minMaxGausCurv.first),
+      float(minMaxGausCurv.second));
+  pangolin::Var<float>maxGausCurv("ui max GausCurv", 
+      float(minMaxGausCurv.second), float(minMaxGausCurv.first), 
+      float(minMaxGausCurv.second));
+
+  pangolin::Var<float>minMeanCurv("ui min MeanCurv", 
+      float(minMaxMeanCurv.first), float(minMaxMeanCurv.first),
+      float(minMaxMeanCurv.second));
+  pangolin::Var<float>maxMeanCurv("ui max MeanCurv", 
+      float(minMaxMeanCurv.second), float(minMaxMeanCurv.first), 
+      float(minMaxMeanCurv.second));
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -172,7 +191,7 @@ int main( int argc, char* argv[] )
       showMeanCurvature = false;
     }
     if (showMeanCurvature.GuiChanged() && showMeanCurvature) {
-      valuebo.Upload(meanCurv.ptr_,  meanCurv.SizeBytes(), 0);
+      valuebo.Upload(meanCurvLength.ptr_,  meanCurvLength.SizeBytes(), 0);
       showGausCurvature = false;
     }
 
@@ -181,11 +200,11 @@ int main( int argc, char* argv[] )
       progValueShading.SetUniform("P",P);
       progValueShading.SetUniform("MV",MV);
       if (showGausCurvature) {
-        progValueShading.SetUniform("minValue", float(minMaxGausCurv.first));
-        progValueShading.SetUniform("maxValue", float(minMaxGausCurv.second));
+        progValueShading.SetUniform("minValue", minGausCurv);
+        progValueShading.SetUniform("maxValue", maxGausCurv);
       } else if (showMeanCurvature) {
-        progValueShading.SetUniform("minValue", float(minMaxMeanCurv.first));
-        progValueShading.SetUniform("maxValue", float(minMaxMeanCurv.second));
+        progValueShading.SetUniform("minValue", minMeanCurv);
+        progValueShading.SetUniform("maxValue", maxMeanCurv);
       }
 
       valuebo.Bind();

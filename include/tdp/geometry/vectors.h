@@ -13,7 +13,8 @@ float DotABC(const Eigen::MatrixBase<DerivedA>& a,
 //  RowVectorType dirab = a-b;
 //  RowVectorType dircb = c-b;
 //  return (dirab.dot(dircb)/(dirab.norm()*dircb.norm()));
-  return ((a-b).dot(c-b)/((a-b).norm()*(c-b).norm()));
+  return std::min(1.f,std::max(-1.f, 
+        static_cast<float>(((a-b).dot(c-b)/((a-b).norm()*(c-b).norm())))));
 }
 
 //template<typename DerivedA, typename DerivedB>

@@ -10,10 +10,17 @@ uniform float maxValue;
 
 varying vec4 color;
 
+vec3 ColorMapHot(float cVal) {
+  return vec3(
+      cVal<0.20 ? 1.*cVal*5 : 1.,
+      cVal<0.40 ? 0 : cVal < 0.80 ? (cVal-.4)*2.5 : 1.,
+      cVal<0.80 ? 0 : (cVal-0.8)*5 );
+}
+
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
   float c = (value-minValue)/(maxValue-minValue);
-  color = vec4(c,c,c,1.);
+  color = vec4(ColorMapHot(c),1.);
 }
 
 

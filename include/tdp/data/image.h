@@ -118,6 +118,7 @@ inline std::pair<double,double> Image<T>::MinMax(size_t* iMin, size_t* iMax) con
   std::pair<double,double> minMax(std::numeric_limits<double>::max(),
       std::numeric_limits<double>::lowest());
   for (size_t i=0; i<Area(); ++i) {
+    if (!std::isfinite(ptr_[i])) continue;
     if (minMax.first > ptr_[i]) {
       minMax.first = ptr_[i];
       if (iMin) *iMin = i;
@@ -136,6 +137,10 @@ inline std::pair<double,double> Image<Vector3fda>::MinMax(size_t* iMin,
   std::pair<double,double> minMax(std::numeric_limits<double>::max(),
       std::numeric_limits<double>::lowest());
   for (size_t i=0; i<Area(); ++i) {
+    if (!std::isfinite(ptr_[i](0))
+        || !std::isfinite(ptr_[i](1))
+        || !std::isfinite(ptr_[i](2))) 
+      continue;
     if (minMax.first > ptr_[i].norm()) {
       minMax.first = ptr_[i].norm();
       if (iMin) *iMin = i;
