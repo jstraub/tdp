@@ -402,12 +402,12 @@ int main( int argc, char* argv[] )
         std::vector<float> errPerLvl;
         std::vector<float> countPerLvl;
         if (useRgbCamParasForDepth) {
-          ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
-              rig, rgbStream2cam, maxIt, angleThr_deg, distThr,
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+              rig, rgbStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
               T_mr, errPerLvl, countPerLvl);
         } else {
-          ComputeProjective(pcs_m, ns_m, pcs_o, ns_o,
-              rig, dStream2cam, maxIt, angleThr_deg, distThr,
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+              rig, dStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
               T_mr, errPerLvl, countPerLvl);
         }
         logInliers.Log(countPerLvl);
@@ -512,7 +512,7 @@ int main( int argc, char* argv[] )
       // draw the axis
       pangolin::glDrawAxis(0.1);
       for (tdp::SE3f& T : T_mrs)  
-        pangolin::glDrawAxis(T.matrix(), 0.1);
+        pangolin::glDrawAxis(T.matrix(), 0.1f);
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);

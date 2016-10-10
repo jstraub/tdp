@@ -166,6 +166,10 @@ struct Rig {
   // depth scale scaling model as a function of depth
   eigen_vector<Eigen::Vector2f> scaleVsDepths_;
 
+  std::vector<int32_t> rgbStream2cam_;
+  std::vector<int32_t> dStream2cam_;
+  std::vector<int32_t> rgbdStream2cam_;
+
   // camera serial IDs
   std::vector<std::string> serials_;
   // raw properties
@@ -177,7 +181,7 @@ struct Rig {
 template<class Cam>
 bool CorrespondOpenniStreams2Cams(
     const std::vector<pangolin::VideoInterface*>& streams,
-    const tdp::Rig<Cam>& rig,
+    tdp::Rig<Cam>& rig,
     std::vector<int32_t>& rgbStream2cam,
     std::vector<int32_t>& dStream2cam,
     std::vector<int32_t>& rgbdStream2cam
@@ -214,6 +218,10 @@ bool CorrespondOpenniStreams2Cams(
     dStream2cam.push_back(camId+1); // ir/depth
     rgbdStream2cam.push_back(camId/2); // rgbd
   }
+
+  rig.rgbStream2cam_ = rgbStream2cam;
+  rig.rgbdStream2cam_ = rgbdStream2cam;
+  rig.dStream2cam_ = dStream2cam;
   return true;
 }
 

@@ -2,6 +2,7 @@
 #include <tdp/icp/icp.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {
@@ -97,7 +98,7 @@ void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& pcs_o,
     Pyramid<Vector3fda,3>& ns_o,
     const Rig<CameraT>& rig,
-    const std::vector<size_t>& stream2cam,
+    const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
     SE3f& T_mr,
@@ -106,8 +107,8 @@ void ICP::ComputeProjective(
     ) {
 
   size_t lvls = maxIt.size();
-  std::vector<float> errPerLvl(lvls, 0);
-  std::vector<float> countPerLvl(lvls, 0);
+  errPerLvl   = std::vector<float>(lvls, 0);
+  countPerLvl = std::vector<float>(lvls, 0);
   for (int lvl=lvls-1; lvl >= 0; --lvl) {
     float errPrev = 0.f; 
     float error = 0.f; 
@@ -132,13 +133,13 @@ void ICP::ComputeProjective(
 
         // all PC and normals are in rig coordinates
         tdp::Image<tdp::Vector3fda> pc_mli = pc_ml.GetRoi(0,
-            rig.rgbdStream2cam[sId]*h_l, w_l, h_l);
+            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
         tdp::Image<tdp::Vector3fda> pc_oli = pc_ol.GetRoi(0,
-            rig.rgbdStream2cam[sId]*h_l, w_l, h_l);
+            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
         tdp::Image<tdp::Vector3fda> n_mli = n_ml.GetRoi(0,
-            rig.rgbdStream2cam[sId]*h_l, w_l, h_l);
+            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
         tdp::Image<tdp::Vector3fda> n_oli = n_ol.GetRoi(0,
-            rig.rgbdStream2cam[sId]*h_l, w_l, h_l);
+            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
 
         Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
         Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
@@ -148,8 +149,8 @@ void ICP::ComputeProjective(
         ICPStep(pc_mli, n_mli, pc_oli, n_oli,
             T_mr, T_cr, 
             tdp::ScaleCamera<float>(cam,pow(0.5,lvl)),
-            cos(icpAngleThr_deg*M_PI/180.),
-            icpDistThr,ATA_i,ATb_i,error_i,count_i);
+            cos(angleThr_deg*M_PI/180.),
+            distThr,ATA_i,ATb_i,error_i,count_i);
         ATA += ATA_i;
         ATb += ATb_i;
         error += error_i;
@@ -184,8 +185,8 @@ template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& pcs_o,
     Pyramid<Vector3fda,3>& ns_o,
-    const Rig<Camera3f>& rig,
-    const std::vector<size_t>& stream2cam,
+    const Rig<Cameraf>& rig,
+    const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
     SE3f& T_mr,
@@ -199,7 +200,7 @@ template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& pcs_o,
     Pyramid<Vector3fda,3>& ns_o,
     const Rig<CameraPoly3f>& rig,
-    const std::vector<size_t>& stream2cam,
+    const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
     SE3f& T_mr,

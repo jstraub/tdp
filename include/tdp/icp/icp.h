@@ -7,6 +7,7 @@
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_base.h>
 #include <tdp/camera/camera_poly.h>
+#include <tdp/camera/rig.h>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
 
@@ -83,7 +84,7 @@ class ICP {
     Pyramid<Vector3fda,3>& pcs_o,
     Pyramid<Vector3fda,3>& ns_o,
     const Rig<CameraT>& rig,
-    const std::vector<size_t>& stream2cam,
+    const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
     SE3f& T_mr,
