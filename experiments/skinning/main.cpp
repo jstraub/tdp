@@ -21,7 +21,6 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
-#include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
 #include <tdp/preproc/normals.h>
 #endif
