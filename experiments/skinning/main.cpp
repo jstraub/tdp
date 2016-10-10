@@ -27,6 +27,9 @@
 #endif
 
 #include <tdp/gui/gui.hpp>
+#include <complex>
+#include <vector>
+#include <Eigen/Eigenvalues>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -153,61 +156,79 @@ tdp::Vector3fda getMean(pc){
 }
 
 
-void matrix getCovariance(pc){
+tdp::Matrix3fda getCovariance(tdp::ManagedHostImage<tdp::Vector3fda> pc){
   // get covariance of the point cloud
   //tdp::ManagedHostImage<tdp::Vector3fda> 
+  tdp::Matrix3fda cov;
+  cov.setZero(3,3);
+
   tdp::Vector3fda mean = getMean(pc);
   for(int x=0; x<pc.w; ++x){
     for (int y=0; y<pc.h; ++y){
-      
+        cov += (pc(x,y)-mean)*(pc(x,y)-mean).transpose();
+        std::cout << "x,y, and cov: " << x << ", " << y << ", " << cov << std::endl;
     }
   }
+  cov /= (float)(pc.w_*pc.h_);
+  std::cout << "final: " << cov << std::endl;
+  return cov;
 }
+
+tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
+
+    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
+    for (int i=0; i<10; i++){
+            tdp::Vector3fda p(i,0,0);
+            pc(i) = p;
+        }
+    return pc;
+}
+
+//todo: void and then in an array
+std::vector<tdp::Vector3fda> getMeanAndSpread(tdp::ManagedHostImage<tdp::Vector3fda> pc){
+    tdp::Vector3fda mean = getMean(pc);
+    tdp::Matrix3fda cov = getCovariance(pc);
+    std::cout << "mean: " << mu << std::endl;
+    std::cout << "cov: " << cov << std::endl;
+
+    Eigen::EigenSolver<MatrixXd> es(cov);
+    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
+    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
+
+    std::complex<float> maxEval(-1,0);
+    int maxIdx(-1);
+    for (int i=0; i< cov.rows();++i ){
+        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
+            maxEval = es.eigenvalues().col(0)[i];
+            maxIdx = i;
+        }
+    }
+    tdp::Vector3fda spread = es.eigenvector().col(maxIdx);
+    std::vector spec = {mu, spread};
+    return spec;
+}
+
 int main( int argc, char* argv[] )
 {
-  const std::string dflt_output_uri = "pango://video.pango";
+    std::cout << "skinning started... " << std::endl;
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
+    tdp::Matrix3fda cov = getCovariance(pc);
+    tdp::Vector3fda mu = getMean(pc);
+    std::cout << "mean: " << mu << std::endl;
+    std::cout << "cov: " << cov << std::endl;
 
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-    try{
-      VideoViewer(input_uri, output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
+    EigenSolver<MatrixXd> es(cov);
+    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
+    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
+
+    complex<float> maxEval(-1,0);
+    for (int i=0; i< es.eigenvalues().size();++i ){
+        if (maxEval < es.eigenvalue()[i]){
+                maxEval = es.eigenvalue()[i];
+        }
     }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
 
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
 
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
-  }
 
   return 0;
 }
