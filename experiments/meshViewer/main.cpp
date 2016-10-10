@@ -166,6 +166,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, true);
   pangolin::Var<bool> showArea("ui.show Area", false, true);
 
+  pangolin::Var<bool> drawTriangles("ui.draw Tri", false, true);
+
   pangolin::Var<float>minGausCurv("ui min GausCurv", 
       float(minMaxGausCurv.first), float(minMaxGausCurv.first),
       float(minMaxGausCurv.second));
@@ -265,9 +267,16 @@ int main( int argc, char* argv[] )
     glEnableVertexAttribArray(0);                                               
     glEnableVertexAttribArray(1);                                               
 
-    ibo.Bind();
-    glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
-    ibo.Unbind();
+    if (drawTriangles) {
+      ibo.Bind();
+      glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
+      ibo.Unbind();
+    } else {
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+      //pangolin::RenderVbo(vbo);
+    }
+
 
     if (showGausCurvature || showArea) {
       progValueShading.Unbind();

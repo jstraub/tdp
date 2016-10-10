@@ -144,28 +144,35 @@ void ComputeCurvature(
     float A = 0;
     std::cout << "@ vert " << i << std::endl;
     for (int32_t k=0; k<(int32_t)ids.size(); ++k) {
-      int32_t l = (k-1+ids.size())%ids.size();
-      int32_t r = (k+1+ids.size())%ids.size();
+      const int32_t l = (k-1+ids.size())%ids.size();
+      const int32_t r = (k+1+ids.size())%ids.size();
       const Vector3fda& xj = vert[ids[k]];
       const Vector3fda& xl = vert[ids[l]];
       const Vector3fda& xr = vert[ids[r]];
-      float dotAlpha = DotABC(xi,xl,xj);
-      float dotBeta = DotABC(xi,xr,xj);
-      float alpha = acos(dotAlpha);
-      float beta = acos(dotBeta);
+      const float dotAlpha = DotABC(xi,xl,xj);
+      const float dotBeta = DotABC(xi,xr,xj);
+      const float alpha = acos(dotAlpha);
+      const float beta = acos(dotBeta);
+      const float gamma = acos(DotABC(xl,xi,xj));
 
-      std::cout << ids[k]-i << " " << ids[l]-i << " " << ids[r]-i << std::endl;
+      std::cout << int32_t(ids[k])-int32_t(i) 
+        << " " << int32_t(ids[l])-int32_t(i)
+        << " " << int32_t(ids[r])-int32_t(i) << std::endl;
 
-      float gamma = acos(DotABC(xl,xi,xj));
+//        float b = (dotAlpha/sin(alpha)+dotBeta/sin(beta));
+      float b = std::max(0.f,dotAlpha/sqrtf(1.f-dotAlpha*dotAlpha)+dotBeta/sqrtf(1.f-dotBeta*dotBeta));
+      std::cout << std::setprecision(6);
       if (gamma < 0.5*M_PI && alpha < 0.5*M_PI && alpha+gamma > 0.5*M_PI) {
         // non-obtuse triangle -> voronoi formula
-        A += 0.125*(dotAlpha/sin(alpha)+dotBeta/sin(beta)) *(xi-xj).norm();
+        A += 0.125* b *(xi-xj).norm();
         std::cout << "non-obtuse: " 
           << gamma * 180./M_PI << ": " 
           << alpha * 180./M_PI << ": " 
-          << (dotAlpha/sin(alpha)+dotBeta/sin(beta)) << " " 
+          << b << " " 
           << (xi-xj).norm() << " " 
-          << 0.125*(dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj).norm() << std::endl;
+          << " dA=" << 0.125*b*(xi-xj).norm() 
+          << "xis: " << xi.transpose() << ", " << xj.transpose()
+          << std::endl;
       } else if (gamma > 0.5*M_PI) {
         A += 0.25*((xl-xi).cross(xj-xi)).norm();
         std::cout << "obtuse at xi: " 
@@ -173,7 +180,11 @@ void ComputeCurvature(
           << alpha * 180./M_PI << ": " 
           << (xl-xi).norm() << " " 
           << (xj-xi).norm() << " " 
-          << 0.25*((xl-xi).cross(xj-xi)).norm() << std::endl;
+          << " dA=" << 0.25*((xl-xi).cross(xj-xi)).norm() 
+          << " dxis: " << (xl- xi).transpose() 
+          << ", " <<  (xj-xi).transpose() 
+          << ", " << (xl-xi).cross(xj-xi).transpose()
+          << std::endl;
       } else {
         A += 0.125*((xl-xi).cross(xj-xi)).norm();
         std::cout << "obtuse at other than xi: " 
@@ -183,7 +194,7 @@ void ComputeCurvature(
           << (xj-xi).norm() << " " 
           << 0.125*((xl-xi).cross(xj-xi)).norm() << std::endl;
       }
-      mc += (dotAlpha/sin(alpha)+dotBeta/sin(beta))*(xi-xj);
+      mc += b*(xi-xj);
       gc += gamma;
     }
     if (gc!=gc) 

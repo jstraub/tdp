@@ -190,7 +190,7 @@ int main( int argc, char* argv[] )
       plyFile.comments.push_back("generated from TSDF");
 
       std::ostringstream outStream;
-      plyFile.write(outStream, false);
+      plyFile.write(outStream, true);
 
       std::ofstream out(meshOutputPath);
       out << outStream.str();
