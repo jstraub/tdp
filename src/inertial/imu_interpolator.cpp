@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <iomanip>
 #include <tdp/inertial/imu_interpolator.h>
 
 namespace tdp {
@@ -20,8 +21,10 @@ void ImuInterpolator::Start() {
             gyro_bias_ += imuObs.omega;
             gravity0_ += imuObs.acc;
             numCalib ++;
-            std::cout << "rotVel: " << imuObs.omega.norm()*180./M_PI 
-              << " acc: " << imuObs.acc.norm() << std::endl;
+            std::cout << "rotVel: " 
+              << std::setprecision(3) << imuObs.omega.norm()*180./M_PI 
+              << "\tacc: " 
+              << std::setprecision(3) << imuObs.acc.norm() << std::endl;
           } else if (!calibrated_ && numReceived_.Get() > 10) {
             calibrated_ = true;
             gyro_bias_ /= numCalib;

@@ -9,10 +9,10 @@ Eigen::Matrix<T,3,3,Option> Orthonormalize(const Eigen::Matrix<T,3,1,Option>& a,
   const Eigen::Matrix<T,3,1,Option>& b) {
   Eigen::Matrix<T,3,3,Option> R;
   R.col(0) = a/a.norm();
-  R.col(1) = RejectAfromB(b,a);
-  R.col(1) /= R.col(1).norm();
-  R.col(2) = R.col(0).cross(R.col(1));
-  R.col(2) /= R.col(2).norm();
+  Eigen::Vector3f bOrtho;
+  RejectAfromB(b,a,bOrtho);
+  R.col(1) = bOrtho.normalized();
+  R.col(2) = (R.col(0).cross(R.col(1))).normalized();
   return R;
 }
 

@@ -67,7 +67,7 @@ struct Rig {
     if (f.is_open()) {
       std::string err = pangolin::json::parse(file_json,f);
       if (!err.empty()) {
-        std::cout << file_json.serialize(true) << std::endl;
+//        std::cout << file_json.serialize(true) << std::endl;
         if (file_json.size() > 0) {
           std::cout << "found " << file_json.size() << " elements" << std::endl ;
           depthScales_.reserve(file_json.size());

@@ -18,6 +18,11 @@ SE3<T>::SE3(const Eigen::Matrix<T,3,3>& Rmat, const
 }
 
 template<typename T>
+SE3<T>::SE3(const SO3<T>& R) : SE3<T>() {
+  T_.topLeftCorner(3,3) = R.matrix();
+}
+
+template<typename T>
 SE3<T>::SE3(const SE3<T>& other)
   : T_(other.T_)
 {}

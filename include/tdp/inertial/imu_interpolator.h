@@ -14,9 +14,10 @@ namespace tdp {
 class ImuInterpolator {
  public:
   ImuInterpolator(tdp::ImuInterface* imu, tdp::ImuOutStream* out = nullptr)  
-    : imu_(imu), out_(out), receiveImu_(false), numReceived_(0),
-      calibrated_(false),
-      gyro_bias_(Eigen::Vector3f::Zero())
+    : gravity0_(Eigen::Vector3f::Zero()),
+      gyro_bias_(Eigen::Vector3f::Zero()),
+      imu_(imu), out_(out), receiveImu_(false), numReceived_(0),
+      calibrated_(false)
   {}            
   ~ImuInterpolator()
   {}
@@ -29,6 +30,7 @@ class ImuInterpolator {
   
   tdp::PoseInterpolator Ts_wi_;
   Eigen::Vector3f gravity0_;
+  Eigen::Vector3f gyro_bias_;
  private:
   tdp::ImuInterface* imu_;
   tdp::ImuOutStream* out_;
@@ -38,7 +40,6 @@ class ImuInterpolator {
   std::thread receiverThread_;
 
   bool calibrated_;
-  Eigen::Vector3f gyro_bias_;
 };
 
 }

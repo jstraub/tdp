@@ -300,7 +300,7 @@ int main( int argc, char* argv[] )
     tdp::Image<uint16_t> dRaw;
     int64_t t_host_us_d = 0;
     if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
-    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
+    tdp::SE3f T_wr_imu = T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);

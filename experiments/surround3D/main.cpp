@@ -271,15 +271,24 @@ int main( int argc, char* argv[] )
         }
       });
 
-  tdp::SE3f T_mr;
+  tdp::SE3f T_mr0;
   if (imu) {
-    T_mr.matrix().topLeftCorner(3,3) =
-      tdp::OrthonormalizeFromYZ(Eigen::Vector3f(0,1,0), -imuInterp.gravity0_);
+    tdp::SO3f R_im (tdp::OrthonormalizeFromYZ(Eigen::Vector3f(0,1,0), 
+        -imuInterp.gravity0_));
+    tdp::SE3f T_im(R_im);
+    T_mr0 = T_im.Inverse() * T_ir;
     std::cout << "found IMU and used gravity estimate " 
       << imuInterp.gravity0_.transpose() << std::endl
-      << T_mr << std::endl;
+      << T_mr0 << std::endl;
+//    T_mr.matrix().topLeftCorner(3,3) =
+//      tdp::Orthonormalize(Eigen::Vector3f(1,0,0), imuInterp.gravity0_);
+//    std::cout << "found IMU and used gravity estimate " 
+//      << imuInterp.gravity0_.transpose() << std::endl
+//      << T_mr << std::endl;
   }
+  tdp::SE3f T_mr = T_mr0;
   std::vector<tdp::SE3f> T_mrs;
+  std::vector<tdp::SE3f> T_wr_imus;
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
   // Stream and display video
@@ -292,13 +301,14 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
-    if (odomFrame2Model) {
+    if (odomFrame2Model.GuiChanged() && odomFrame2Model) {
       odomImu = false;
       odomFrame2Frame = false;
-    } else if (odomFrame2Frame) {
+    } else if (odomFrame2Frame.GuiChanged() && odomFrame2Frame) {
       odomImu = false;
       odomFrame2Model = false;
-    } else if (odomImu) {
+      T_mr = tdp::SE3f();
+    } else if (odomImu.GuiChanged() && odomImu) {
       odomFrame2Frame = false;
       odomFrame2Model = false;
     }
@@ -353,7 +363,7 @@ int main( int argc, char* argv[] )
     }
     TOCK("depth collection");
     t_host_us_d /= numStreams;  
-    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
+    tdp::SE3f T_wr_imu = T_mr0*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId;
@@ -427,6 +437,9 @@ int main( int argc, char* argv[] )
       }
     }
     T_mrs.push_back(T_mr);
+    // Get translation from T_mr
+    T_wr_imu.matrix().topRightCorner(3,1) = T_mr.translation();
+    T_wr_imus.push_back(T_wr_imu);
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mr.matrix() = Eigen::Matrix4f::Identity();
@@ -511,8 +524,34 @@ int main( int argc, char* argv[] )
       d_cam.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
-      for (tdp::SE3f& T : T_mrs)  
-        pangolin::glDrawAxis(T.matrix(), 0.1f);
+      for (size_t i=0; i<T_mrs.size(); ++i) {
+        if (i%3==0) 
+          pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
+        glColor4f(1.,1.,0.,0.6);
+        if (i>0) {
+          pangolin::glDrawLine(
+              T_mrs[i].translation()(0),
+              T_mrs[i].translation()(1),
+              T_mrs[i].translation()(2),
+              T_mrs[i-1].translation()(0),
+              T_mrs[i-1].translation()(1),
+              T_mrs[i-1].translation()(2));
+        }
+      }
+      for (size_t i=0; i<T_wr_imus.size(); ++i) {
+        if (i%3==0) 
+          pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
+        glColor4f(0.,1.,1.,0.6);
+        if (i>0) {
+          pangolin::glDrawLine(
+              T_wr_imus[i].translation()(0),
+              T_wr_imus[i].translation()(1),
+              T_wr_imus[i].translation()(2),
+              T_wr_imus[i-1].translation()(0),
+              T_wr_imus[i-1].translation()(1),
+              T_wr_imus[i-1].translation()(2));
+        }
+      }
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
