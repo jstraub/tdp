@@ -19,6 +19,11 @@ void TransformPc(
     Image<Vector3fda>& pc_c
     );
 
+void BoundingBox(
+    const Image<Vector3fda>& pc,
+    Eigen::Vector3f& minPc,
+    Eigen::Vector3f& maxPc, bool resetMinMax);
+
 void L2Distance(
     const Image<Vector3fda>& pcA,
     const Image<Vector3fda>& pcB,
