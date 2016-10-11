@@ -39,6 +39,12 @@ void LoadMesh(
     ManagedHostImage<Vector3fda>& verts,
     ManagedHostImage<Vector3uda>& tris);
 
+void SavePointCloud(
+    const std::string& path,
+    const Image<Vector3fda>& verts,
+    const Image<Vector3fda>& ns,
+    std::vector<std::string>& comments);
+
 }
 
 // original tinyply

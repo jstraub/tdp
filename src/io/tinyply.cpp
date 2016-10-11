@@ -103,6 +103,25 @@ void LoadMesh(
   std::memcpy(tris.ptr_, &triangles[0], tris.SizeBytes());
 }
 
+void SavePointCloud(
+    const std::string& path,
+    const Image<Vector3fda>& pc,
+    const Image<Vector3fda>& n,
+    std::vector<std::string>& comments) {
+  std::vector<float> verts((float*)pc.ptr_, (float*)(&pc.ptr_[pc.Area()]));
+  std::vector<float> norms((float*)n.ptr_, (float*)(&n.ptr_[n.Area()]));
+  tinyply::PlyFile plyFile;
+  plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+  plyFile.add_properties_to_element("vertex", {"nx", "ny", "nz"}, norms);
+  for (auto& comment : comments) 
+    plyFile.comments.push_back(comment);
+  std::ostringstream outStream;
+  plyFile.write(outStream, true);
+  std::ofstream out(path);
+  out << outStream.str();
+  out.close();
+}
+
 }
 
 using namespace tinyply;
