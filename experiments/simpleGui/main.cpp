@@ -25,6 +25,7 @@
 #include <tdp/preproc/normals.h>
 
 #include <tdp/gui/gui.hpp>
+#include <tdp/io/tinyply.h>
 
 int main( int argc, char* argv[] )
 {
@@ -73,6 +74,7 @@ int main( int argc, char* argv[] )
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // device image: image in GPU memory
@@ -88,6 +90,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+  pangolin::Var<bool> savePC("ui.save current PC",false,false);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -135,6 +138,15 @@ int main( int argc, char* argv[] )
     gui.ShowFrames();
     // render normals image
     viewN2D.SetImage(n2D);
+
+    // if pressed savePC button save the point cloud to a file.
+    if (pangolin::Pushed(savePC)) {
+      n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+      std::vector<std::string> comments;
+      comments.push_back("generated from simpleGui");
+      tdp::SavePointCloud(pangolin::MakeUniqueFilename("mesh.ply"),
+          pc, n, comments);
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
