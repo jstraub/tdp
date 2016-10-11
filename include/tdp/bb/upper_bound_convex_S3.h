@@ -40,7 +40,7 @@ bool FindLambda(const Eigen::Matrix<float, D,D>& A, const
     Eigen::Matrix<float, D,D>& B, float* lambda, bool verbose) {
 
   Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::Matrix<float,D,D>>
-    ges(A,B,true);
+    ges(A,B,Eigen::ComputeEigenvectors | Eigen::Ax_lBx);
   
   Eigen::Matrix<float, D, 1> ev = ges.eigenvalues();
   Eigen::Matrix<float, D, D> V = ges.eigenvectors();

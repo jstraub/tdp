@@ -64,7 +64,7 @@ Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, float eps,
     uint32_t max_lvl, uint32_t max_it) {
 
   // Prepare output
-  bool write_stats = true;
+  bool write_stats = false;
   std::ofstream out, outNodes;
   if (write_stats) {
     std::stringstream ss;

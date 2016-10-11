@@ -79,28 +79,28 @@ int main( int argc, char* argv[] )
   container.AddDisplay(viewN);
   // use those OpenGL buffers
   
-  tdp::ManagedHostImage<tdp::Vector3fda> vertsA, vertsB;
+  tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
   tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
-  tdp::LoadPointCloud(inputA, vertsA, nsA);
-  tdp::LoadPointCloud(inputB, vertsB, nsB);
+  tdp::LoadPointCloud(inputA, pcA, nsA);
+  tdp::LoadPointCloud(inputB, pcB, nsB);
 
-  tdp::ManagedHostImage<uint16_t> zA(vertsA.w_,vertsA.h_), zB(vertsB.w_,vertsB.h_);
-  tdp::ManagedDeviceImage<uint16_t> cuZA(vertsA.w_,vertsA.h_), cuZB(vertsB.w_,vertsB.h_);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNsA(vertsA.w_,vertsA.h_), cuNsB(vertsB.w_,vertsB.h_);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuVertsA(vertsA.w_,vertsA.h_), cuVertsB(vertsB.w_,vertsB.h_);
+  tdp::ManagedHostImage<uint16_t> zA(pcA.w_,pcA.h_), zB(pcB.w_,pcB.h_);
+  tdp::ManagedDeviceImage<uint16_t> cuZA(pcA.w_,pcA.h_), cuZB(pcB.w_,pcB.h_);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNsA(pcA.w_,pcA.h_), cuNsB(pcB.w_,pcB.h_);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(pcA.w_,pcA.h_), cuPcB(pcB.w_,pcB.h_);
 
-  cuVertsA.CopyFrom(vertsA, cudaMemcpyHostToDevice);
-  cuVertsB.CopyFrom(vertsB, cudaMemcpyHostToDevice);
+  cuPcA.CopyFrom(pcA, cudaMemcpyHostToDevice);
+  cuPcB.CopyFrom(pcB, cudaMemcpyHostToDevice);
   cuNsA.CopyFrom(nsA, cudaMemcpyHostToDevice);
   cuNsB.CopyFrom(nsB, cudaMemcpyHostToDevice);
 
   pangolin::GlBuffer vboA, vboB;
-  vboA.Reinitialise(pangolin::GlArrayBuffer, vertsA.Area(),  GL_FLOAT,
+  vboA.Reinitialise(pangolin::GlArrayBuffer, pcA.Area(),  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
-  vboA.Upload(vertsA.ptr_, vertsA.SizeBytes(), 0);
-  vboB.Reinitialise(pangolin::GlArrayBuffer, vertsB.Area(),  GL_FLOAT,
+  vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
+  vboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
-  vboB.Upload(vertsB.ptr_, vertsB.SizeBytes(), 0);
+  vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
   pangolin::GlBuffer nboA, nboB;
   nboA.Reinitialise(pangolin::GlArrayBuffer, nsA.Area(),  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
@@ -110,9 +110,9 @@ int main( int argc, char* argv[] )
   nboB.Upload(nsB.ptr_, nsB.SizeBytes(), 0);
 
   pangolin::GlBuffer valueboA, valueboB;
-  valueboA.Reinitialise(pangolin::GlArrayBuffer, vertsA.Area(),
+  valueboA.Reinitialise(pangolin::GlArrayBuffer, pcA.Area(),
       GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
-  valueboB.Reinitialise(pangolin::GlArrayBuffer, vertsB.Area(),
+  valueboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),
       GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
 
   // load and compile shader
@@ -140,9 +140,9 @@ int main( int argc, char* argv[] )
   tdp::DPvMFmeans dpvmfmeansA(cos(lambdaS2*M_PI/180.)-1.), 
                   dpvmfmeansB(cos(lambdaS2*M_PI/180.)-1.);
 
-  Eigen::Vector3f minA, minB, maxA, maxB, min, max;
-//  ComputePcBoundaries(pcA, minA, maxA);
-//  ComputePcBoundaries(pcB, minB, maxB);
+  Eigen::Vector3f minAB, maxAB;
+  BoundingBox(pcA, minAB, maxAB, true);
+  BoundingBox(pcB, minAB, maxAB, false);
 
   tdp::SE3f T_ab;
 
@@ -182,12 +182,12 @@ int main( int argc, char* argv[] )
       dpmeansB.lambda_ = lambdaR3;
 
       std::cout << "computing GMM A" << std::endl;
-      tdp::ComputeGMMfromPC(vertsA, cuVertsA, 
+      tdp::ComputeGMMfromPC(pcA, cuPcA, 
           dpmeansA, maxIt, minNchangePerc, zA, cuZA, gmmA);
       for (auto& g : gmmA) g.Print();
 
       std::cout << "computing GMM B" << std::endl;
-      tdp::ComputeGMMfromPC(vertsB, cuVertsB, 
+      tdp::ComputeGMMfromPC(pcB, cuPcB, 
           dpmeansB, maxIt, minNchangePerc, zB, cuZB, gmmB);
       for (auto& g : gmmB) g.Print();
 
@@ -212,8 +212,9 @@ int main( int argc, char* argv[] )
       std::cout << "Tesselating Sphere for initial nodes" << std::endl;
 			nodesS3 = tdp::GenerateNotesThatTessellateS3();
 
-      std::cout << "Running B&B for Rotation" << std::endl;
 			tdp::BranchAndBound<tdp::NodeS3> bb(lower_bound_S3, upper_bound_convex_S3);
+      std::cout << "Running B&B for Rotation " 
+        << " #nodes0 " << nodesS3.size() << std::endl;
 			tdp::NodeS3 node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
 			q_star = node_star.GetLbArgument();
 			lb_star = node_star.GetLB();
@@ -222,7 +223,7 @@ int main( int argc, char* argv[] )
         << std::endl << q_star.matrix() << std::endl;
 
 			std::list<tdp::NodeR3> nodesR3 =
-				tdp::GenerateNotesThatTessellateR3(min, max, (max-min).norm());
+				tdp::GenerateNotesThatTessellateR3(minAB, maxAB, (maxAB-minAB).norm());
 			tdp::LowerBoundR3 lower_bound_R3(gmmA, gmmB, q_star);
 			tdp::UpperBoundIndepR3 upper_bound_R3(gmmA, gmmB, q_star);
 			tdp::UpperBoundConvexR3 upper_bound_convex_R3(gmmA, gmmB, q_star);
