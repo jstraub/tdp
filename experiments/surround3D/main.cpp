@@ -307,7 +307,6 @@ int main( int argc, char* argv[] )
     } else if (odomFrame2Frame.GuiChanged() && odomFrame2Frame) {
       odomImu = false;
       odomFrame2Model = false;
-      T_mr = tdp::SE3f();
     } else if (odomImu.GuiChanged() && odomImu) {
       odomFrame2Frame = false;
       odomFrame2Model = false;
@@ -501,11 +500,7 @@ int main( int argc, char* argv[] )
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
       tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
       TOCK("Ray Trace TSDF");
-    } else if (odomFrame2Frame) {
-      pcs_m.CopyFrom(pcs_o, cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_o, cudaMemcpyDeviceToDevice);
     }
-
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
@@ -607,6 +602,16 @@ int main( int argc, char* argv[] )
     plotInliers.ScrollView(1,0);
     plotCost.ScrollView(1,0);
 
+    if (odomFrame2Frame) {
+      for (size_t lvl=0; lvl<3; ++lvl) {
+        tdp::Image<tdp::Vector3fda> pc = pcs_o.GetImage(lvl);
+        tdp::Image<tdp::Vector3fda> n = ns_o.GetImage(lvl);
+        tdp::TransformPc(T_mr, pc);
+        tdp::TransformPc(T_mr.rotation(), n);
+      }
+      pcs_m.CopyFrom(pcs_o, cudaMemcpyDeviceToDevice);
+      ns_m.CopyFrom(ns_o, cudaMemcpyDeviceToDevice);
+    }
     if (!gui.paused()) {
       T_wr_imu_prev = T_wr_imu;
     }
