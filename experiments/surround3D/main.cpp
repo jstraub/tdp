@@ -363,7 +363,7 @@ int main( int argc, char* argv[] )
     }
     TOCK("depth collection");
     t_host_us_d /= numStreams;  
-    tdp::SE3f T_wr_imu = T_mr0*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
+    tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
     for (size_t sId=0; sId < dStream2cam.size(); sId++) {
       int32_t cId;
@@ -401,7 +401,8 @@ int main( int argc, char* argv[] )
     TOCK("Setup Pyramids");
     
     if (odomImu) {
-      T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
+//      T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
+      T_mr = T_wr_imu;
     } else if (odomFrame2Model || odomFrame2Frame) {
       if (runICP && numFused > 30) {
         if (gui.verbose) std::cout << "icp" << std::endl;
