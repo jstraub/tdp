@@ -154,16 +154,14 @@ tdp::Vector3fda getMean(pc){
   return mean/(pc.w*pc.h);
 }
 
-
 tdp::Matrix3fda getCovariance(tdp::ManagedHostImage<tdp::Vector3fda> pc){
   // get covariance of the point cloud
-  //tdp::ManagedHostImage<tdp::Vector3fda> 
   tdp::Matrix3fda cov;
   cov.setZero(3,3);
 
   tdp::Vector3fda mean = getMean(pc);
-  for(int x=0; x<pc.w; ++x){
-    for (int y=0; y<pc.h; ++y){
+  for(int x=0; x<pc.w_; ++x){
+    for (int y=0; y<pc.h_; ++y){
         cov += (pc(x,y)-mean)*(pc(x,y)-mean).transpose();
         std::cout << "x,y, and cov: " << x << ", " << y << ", " << cov << std::endl;
     }
@@ -174,8 +172,8 @@ tdp::Matrix3fda getCovariance(tdp::ManagedHostImage<tdp::Vector3fda> pc){
 }
 
 tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
-
-    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
+  // PC for test  
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
     for (int i=0; i<10; i++){
             tdp::Vector3fda p(i,0,0);
             pc(i) = p;
@@ -183,8 +181,8 @@ tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
     return pc;
 }
 
-//todo: void and then in an array
-std::vector<tdp::Vector3fda> getMeanAndSpread(tdp::ManagedHostImage<tdp::Vector3fda> pc){
+//todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
+std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
     tdp::Matrix3fda cov = getCovariance(pc);
     std::cout << "mean: " << mu << std::endl;
@@ -206,75 +204,98 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(tdp::ManagedHostImage<tdp::Vector3
     std::vector spec = {mu, spread};
     return spec;
 }
-
-
-inline bool inBVoxel(tdp::Vector3fda p, tdp::Vector3fda topLeft, tdp::Vector3fda btmRight){
+inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda btmRight){
     return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
 }
 
-tdp::Vector3fda getBVowelDict(pc){
-    for
-}
-
-vector<tdp::Vector3fda> meanAndCovOfBVoxel(tdp::ManagedDeviceImage<tdp::Vector3fda> pc, tdp::Vector3fda p1, tdp::Vector3fda p2){
+vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
     tdp::Vector3fda topLeft, btmRight;
-    tdp::Vector3fda mean(0,0,0); //check this?
-
-    tdp::Matrix3fda cov;
-    cov.setZero(3,3);
-    // Find the correct boundingbox coordinations
+    tdp::Vector3fda mean(0,0,0); //todo: check this?
+    // Find the correct bounding voxel's coordinates
     for (int i=0; i<3; ++i){
-        topLeft[i] = std::min(p1[i], p2[i]);
+        topLeft[i] = std::min(p1[i],p2[i]);
         btmRight[i] = std::max(p1[i],p2[i]);
     }
-
     //Calculate mean
+    //overhead
+    //Todo: implement BVoxelId (image of the same size as pc where each entry is BVoxel id)
+    count = 0; 
+    vector<tdp::Vect3fda> points;
     for (int i=0; i<pc.w_; ++i){
         for (int j=0; j<pc.h_; ++j){
             if inBVoxel(p, topLeft, btmRight){
                 mean += p;
-            }
+                points.puch_back(p);
+                count += 1; 
+	    }
         }
     }
-    mean /= numPointsInBVoxel;
+    mean /= count; 
+    // calculate covariance
+    tdp::Matrix3fda cov;
+    cov.setZero(3,3);
+    for (int i=0; i<count; ++i){
+      cov += (points[i]-mean)*(points[i]-mean).transpose();
+    }
+    cov /= count;
+    std::cout << "final: " << cov << std::endl;
+    
+    // eigenvector
+    Eigen::EigenSolver<MatrixXd> es(cov);
+    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
+    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
 
-    //Calculate cov
-
-
-}
-
-void
-1. Given the pc, find the mean and eigenvector -> its size is eigenvalue
-tdp::Vector3fda mean = getMean(pc);
-tdp::Matrix3fda cov = getCovariance(pc);
-tdp::Vector3fda spread (eigenvector) = pc.spread_; //without normalization
-tdp::Vector3fda direction = pc.spread_/abs(pc.spread);
-float spread_size = norm(spread);
-int nsteps = pc.nsteps_; //nsteps in the positive/negative direction. totalsteps is 2*nsteps.
-float stepsize = spread_size/nsteps;
-tdp::Vector3fda stepVec = stepsize*direction;
-
-
-tdp::Vector3fda start = mean;
-tdp::Vector3fda end = mean+stepVec;
-
-
-meanLists=[];
-for (int i=1; i<=nsteps; ++i){
-    //Step in the positive direction
-    vector<tdp::Vector3fda> meanAndCov = meanAndCovOfBVoxel(pc, start,end);
-    mean =
-
+    std::complex<float> maxEval(-1,0);
+    int maxIdx(-1);
+    for (int i=0; i< cov.rows();++i ){
+        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
+            maxEval = es.eigenvalues().col(0)[i];
+            maxIdx = i;
+        }
+    }
+    tdp::Vector3fda spread = es.eigenvector().col(maxIdx);
+    std::vector spec = {mean, spread};
+    return spec;
 
 }
 
-for (int i=1; i<=nsteps; ++i){
-    //step in the negative direction
-    //use -eigenvector
+
+vector<tdp::Vector3fda> getMeans(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const int nsteps){
+  //nsteps in the positive/negative direction. totalsteps is 2*nsteps.
+
+  // find the mean and eigenvector -> its size is eigenvalue
+  vector<tdp::Vector3fda> meanAndSpread = getMeanAndSpread(pc);
+  tdp::Vector3fda mean, spread, stepVec;
+  mean = meanAndSPread[0];
+  spread = meanAndSpread[1];
+  tdp::Vector3fda direction = pc.spread_/abs(pc.spread);
+
+  float spread_size, step_size;
+  spread_size = norm(spread);
+  step_size = spread_size/nsteps;
+  stepVec = step_size*(spread/spread_size);
+
+  tdp::Vector3fda start1 = mean;
+  tdp::Vector3fda end1 = mean+stepVec;
+  tdp::Vector3fda start2 = mean;
+  tdp::Vector3fda end2 = mean-stepVec;
+
+  vector<tdp::Vect3fda> means;
+  for (int i=1; i<=nsteps; ++i){
+      vector<tdp::Vector3fda> meanAndCov_pos = meanAndCovOfBVoxel(pc, start1, end1);
+      vector<tdp::Vector3fda> meanAndCov_neg = meanAndCovOfBVoxel(pc, start2, end2);
+      means.push_back(meanAndCov_pos[0], meanAndCov_neg[0]);
+   
+      start1 = end1;
+      end1 += stepVec;
+      start2 = end2;
+      end2 -= stepVec;
+  }
 }
 
 int main( int argc, char* argv[] )
 {
-
+  //todo: send the points (in 3d) to draw to opengl
+  //
   return 0;
 }
