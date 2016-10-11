@@ -38,6 +38,7 @@
 
 #include <tdp/distributions/normal_mm.h>
 #include <tdp/distributions/vmf_mm.h>
+#include <tdp/gl/shaders.h>
 
 int main( int argc, char* argv[] )
 {
@@ -70,9 +71,12 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& d_cam = pangolin::CreateDisplay()
+  pangolin::View& viewPc = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  container.AddDisplay(d_cam);
+  container.AddDisplay(viewPc);
+  pangolin::View& viewN = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  container.AddDisplay(viewN);
   // use those OpenGL buffers
   
   tdp::ManagedHostImage<tdp::Vector3fda> vertsA, vertsB;
@@ -97,38 +101,53 @@ int main( int argc, char* argv[] )
   vboB.Reinitialise(pangolin::GlArrayBuffer, vertsB.Area(),  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
   vboB.Upload(vertsB.ptr_, vertsB.SizeBytes(), 0);
-//  pangolin::GlBuffer valuebo;
-//  valuebo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
-//      1, GL_DYNAMIC_DRAW);
+  pangolin::GlBuffer nboA, nboB;
+  nboA.Reinitialise(pangolin::GlArrayBuffer, nsA.Area(),  GL_FLOAT,
+      3, GL_DYNAMIC_DRAW);
+  nboA.Upload(nsA.ptr_, nsA.SizeBytes(), 0);
+  nboB.Reinitialise(pangolin::GlArrayBuffer, nsB.Area(),  GL_FLOAT,
+      3, GL_DYNAMIC_DRAW);
+  nboB.Upload(nsB.ptr_, nsB.SizeBytes(), 0);
+
+  pangolin::GlBuffer valueboA, valueboB;
+  valueboA.Reinitialise(pangolin::GlArrayBuffer, vertsA.Area(),
+      GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
+  valueboB.Reinitialise(pangolin::GlArrayBuffer, vertsB.Area(),
+      GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
 
   // load and compile shader
-  std::string shaderRoot = SHADER_DIR;
-  pangolin::GlSlProgram progValueShading;
-  progValueShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
-      shaderRoot+std::string("valueShading.vert"));
-  progValueShading.AddShaderFromFile(pangolin::GlSlFragmentShader,
-      shaderRoot+std::string("valueShading.frag"));
-  progValueShading.Link();
+  //std::string shaderRoot = SHADER_DIR;
+  //pangolin::GlSlProgram progValueShading;
+  //progValueShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
+  //    shaderRoot+std::string("labelShading.vert"));
+  //progValueShading.AddShaderFromFile(pangolin::GlSlFragmentShader,
+  //    shaderRoot+std::string("setColor.frag"));
+  //progValueShading.Link();
 
-  pangolin::Var<bool> computeAlignment("ui.align", false, true);
+  pangolin::Var<bool> computevMFMMs("ui.compute vMFMMs", false, false);
+  pangolin::Var<bool> computeGMMs("ui.compute GMMs", false, false);
+  pangolin::Var<bool> computeAlignment("ui.align", false, false);
 
-  pangolin::Var<int> maxIt("ui.max Iter", 10, 1, 30);
+  pangolin::Var<int> maxIt("ui.max Iter", 100, 1, 100);
   pangolin::Var<float> minNchangePerc("ui. min change perc", 0.03, 0.001, 0.1);
 
-  pangolin::Var<float> lambdaS2("ui.lambda S2", 30.*M_PI/180., 10.*M_PI/180., 180.*M_PI/180.);
-  pangolin::Var<float> lambdaR3("ui.lambda R3", 0.3, 0.1, 1.0);
-
+  pangolin::Var<float> lambdaS2("ui.lambda S2", 30., 10., 180.);
+  pangolin::Var<float> lambdaR3("ui.lambda R3", 1.0, 0.5, 2.0);
 
   std::vector<tdp::Normal3f> gmmA, gmmB;
   std::vector<tdp::vMF3f> vmfmmA, vmfmmB;
   tdp::DPmeans dpmeansA(lambdaR3), dpmeansB(lambdaR3);
-  tdp::DPvMFmeans dpvmfmeansA(lambdaS2), dpvmfmeansB(lambdaS2);
+  tdp::DPvMFmeans dpvmfmeansA(cos(lambdaS2*M_PI/180.)-1.), 
+                  dpvmfmeansB(cos(lambdaS2*M_PI/180.)-1.);
 
   Eigen::Vector3f minA, minB, maxA, maxB, min, max;
 //  ComputePcBoundaries(pcA, minA, maxA);
 //  ComputePcBoundaries(pcB, minB, maxB);
 
   tdp::SE3f T_ab;
+
+  float maxVal, minVal;
+  minVal = -1.f;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -138,13 +157,46 @@ int main( int argc, char* argv[] )
     glColor3f(1.0f, 1.0f, 1.0f);
 
     if (runOnce) break;
-    
-    if (pangolin::Pushed(computeAlignment)) {
+
+    if (pangolin::Pushed(computevMFMMs)) {
+      dpvmfmeansA.lambda_ = cos(lambdaS2*M_PI/180.)-1.;
+      dpvmfmeansB.lambda_ = cos(lambdaS2*M_PI/180.)-1.;
+
+      std::cout << "computing vMF MM A" << std::endl;
       tdp::ComputevMFMM(nsA, cuNsA, dpvmfmeansA, maxIt, minNchangePerc,
           zA, cuZA, vmfmmA);
+      for (auto& vmf : vmfmmA) vmf.Print();
+
+      std::cout << "computing vMF MM B" << std::endl;
       tdp::ComputevMFMM(nsB, cuNsB, dpvmfmeansB, maxIt, minNchangePerc,
           zB, cuZB, vmfmmB);
+      for (auto& vmf : vmfmmB) vmf.Print();
 
+      maxVal = vmfmmA.size();
+      valueboA.Upload(zA.ptr_, zA.SizeBytes(), 0);
+      valueboB.Upload(zB.ptr_, zB.SizeBytes(), 0);
+    }
+
+    if (pangolin::Pushed(computeGMMs)) {
+      dpmeansA.lambda_ = lambdaR3;
+      dpmeansB.lambda_ = lambdaR3;
+
+      std::cout << "computing GMM A" << std::endl;
+      tdp::ComputeGMMfromPC(vertsA, cuVertsA, 
+          dpmeansA, maxIt, minNchangePerc, zA, cuZA, gmmA);
+      for (auto& g : gmmA) g.Print();
+
+      std::cout << "computing GMM B" << std::endl;
+      tdp::ComputeGMMfromPC(vertsB, cuVertsB, 
+          dpmeansB, maxIt, minNchangePerc, zB, cuZB, gmmB);
+      for (auto& g : gmmB) g.Print();
+
+      maxVal = gmmA.size();
+      valueboA.Upload(zA.ptr_, zA.SizeBytes(), 0);
+      valueboB.Upload(zB.ptr_, zB.SizeBytes(), 0);
+    }
+    
+    if (pangolin::Pushed(computeAlignment)) {
 			tdp::LowerBoundS3 lower_bound_S3(vmfmmA, vmfmmB);
 			tdp::UpperBoundIndepS3 upper_bound_S3(vmfmmA, vmfmmB);
 			tdp::UpperBoundConvexS3 upper_bound_convex_S3(vmfmmA, vmfmmB);
@@ -157,16 +209,17 @@ int main( int argc, char* argv[] )
 			uint32_t max_lvl = 12;
 			uint32_t max_it = 5000;
 
+      std::cout << "Tesselating Sphere for initial nodes" << std::endl;
 			nodesS3 = tdp::GenerateNotesThatTessellateS3();
+
+      std::cout << "Running B&B for Rotation" << std::endl;
 			tdp::BranchAndBound<tdp::NodeS3> bb(lower_bound_S3, upper_bound_convex_S3);
 			tdp::NodeS3 node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
 			q_star = node_star.GetLbArgument();
 			lb_star = node_star.GetLB();
 
-      tdp::ComputeGMMfromPC(vertsA, cuVertsA, 
-          dpmeansA, maxIt, minNchangePerc, zA, cuZA, gmmA);
-      tdp::ComputeGMMfromPC(vertsB, cuVertsB, 
-          dpmeansB, maxIt, minNchangePerc, zB, cuZB, gmmB);
+      std::cout << " optimal rotation: "
+        << std::endl << q_star.matrix() << std::endl;
 
 			std::list<tdp::NodeR3> nodesR3 =
 				tdp::GenerateNotesThatTessellateR3(min, max, (max-min).norm());
@@ -186,21 +239,71 @@ int main( int argc, char* argv[] )
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
+    if (viewPc.IsShown()) {
+      viewPc.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
 
-    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-    // draw the axis
+      glPointSize(1.);
+      pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
+      shader.Bind();
+      shader.SetUniform("P",s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV",s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal);
+      shader.SetUniform("maxValue", maxVal);
+      valueboA.Bind();
+      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
+      vboA.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      glEnableVertexAttribArray(0);                                               
+      glEnableVertexAttribArray(1);                                               
+      //pangolin::RenderVbo(vboA);
+      glDrawArrays(GL_POINTS, 0, vboA.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valueboA.Unbind();
+      glDisableVertexAttribArray(0);
+      vboA.Unbind();
 
-    glColor4f(1.,0.,0.,1.);
-    pangolin::glDrawAxis(0.1);
-    pangolin::RenderVbo(vboA);
+      pangolin::glSetFrameOfReference(T_ab.matrix());
+      pangolin::glDrawAxis(0.1);
+      glColor4f(0.,1.,0.,1.);
+      pangolin::RenderVbo(vboB);
+      pangolin::glUnsetFrameOfReference();
+    }
+    if (viewN.IsShown()) {
+      viewN.Activate(s_cam);
+      // draw the axis
+      pangolin::glDrawAxis(0.1);
 
-    pangolin::glSetFrameOfReference(T_ab.matrix());
-    glColor4f(0.,1.,0.,1.);
-    pangolin::glDrawAxis(0.1);
-    pangolin::RenderVbo(vboB);
-    pangolin::glUnsetFrameOfReference();
+      glPointSize(1.);
+      pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
+      shader.Bind();
+      shader.SetUniform("P",s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV",s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal);
+      shader.SetUniform("maxValue", maxVal);
+      valueboA.Bind();
+      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
+      nboA.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      glEnableVertexAttribArray(0);                                               
+      glEnableVertexAttribArray(1);                                               
+      //pangolin::RenderVbo(nboA);
+      glDrawArrays(GL_POINTS, 0, nboA.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valueboA.Unbind();
+      glDisableVertexAttribArray(0);
+      nboA.Unbind();
+
+      tdp::SE3f T(T_ab);
+      T.matrix()(2,3) += 2.5;
+      pangolin::glSetFrameOfReference(T.matrix());
+      pangolin::glDrawAxis(0.1);
+      glColor4f(0.,1.,0.,1.);
+      pangolin::RenderVbo(nboB);
+      pangolin::glUnsetFrameOfReference();
+    }
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff

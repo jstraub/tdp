@@ -174,6 +174,7 @@ int main( int argc, char* argv[] )
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
@@ -609,8 +610,11 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(savePC)) {
       pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
       std::vector<float> verts((float*)pc.ptr_, (float*)(&pc.ptr_[pc.Area()]));
+      n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
+      std::vector<float> norms((float*)n.ptr_, (float*)(&n.ptr_[n.Area()]));
       tinyply::PlyFile plyFile;
       plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+      plyFile.add_properties_to_element("vertex", {"nx", "ny", "nz"}, norms);
       plyFile.comments.push_back("generated from surround3D");
       plyFile.comments.push_back("PC in rig coordinate system");
       plyFile.comments.push_back(input_uri);

@@ -21,6 +21,7 @@ bool ComputevMFMM(
     Image<uint16_t>& z,
     Image<uint16_t>& cuZ,
     std::vector<vMF<float,3>>& vmfs) {
+  vmfs.clear();
   // Run the clustering algorithm.
   dpvmfmeans.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
   z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
@@ -41,13 +42,14 @@ bool ComputevMFMM(
       W += w;
     }
   for(uint32_t k=0; k<K; ++k) {
+    std::cout << Ns[k] << " " << ws[k] << std::endl;
     if (Ns[k] > 5) {
       float pi = ws[k]/W;
       float tau = vMF3f::MLEstimateTau(xSum[k],xSum[k]/xSum[k].norm(),ws[k]);
       vmfs.push_back(vMF3f(xSum[k]/xSum[k].norm(),tau,pi));
     }
-    return true;
   }
+  return true;
 }
 
 }

@@ -32,16 +32,17 @@ T vMF<T,D>::GetLogZ() const {
 template <typename T, uint32_t D>
 T vMF<T,D>::MLEstimateTau(const Eigen::Matrix<T,3,1>& xSum, const
     Eigen::Matrix<T,3,1>& mu, T count) {
-  T tau = 1.0;
-  T prevTau = 0.;
-  T eps = 1e-8;
-  T R = xSum.norm()/count;
+  // Need double precision to achive convergence; single is not enough.
+  double tau = 1.0;
+  double prevTau = 0.;
+  double eps = 1e-8;
+  double R = xSum.norm()/count;
   while (fabs(tau - prevTau) > eps) {
 //    std::cout << "tau " << tau << " R " << R << std::endl;
-    T inv_tanh_tau = 1./tanh(tau);
-    T inv_tau = 1./tau;
-    T f = -inv_tau + inv_tanh_tau - R;
-    T df = inv_tau*inv_tau - inv_tanh_tau*inv_tanh_tau + 1.;
+    double inv_tanh_tau = 1./tanh(tau);
+    double inv_tau = 1./tau;
+    double f = -inv_tau + inv_tanh_tau - R;
+    double df = inv_tau*inv_tau - inv_tanh_tau*inv_tanh_tau + 1.;
     prevTau = tau;
     tau -= f/df;
   }

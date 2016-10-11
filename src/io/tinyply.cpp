@@ -14,7 +14,7 @@ void LoadPointCloud(
     ManagedHostImage<Vector3fda>& verts) {
 
   std::vector<float> vertices;
-  std::ifstream in(path);
+  std::ifstream in(path, std::ios::binary);
   tinyply::PlyFile ply(in);
 
   for (auto e : ply.get_elements()) {
@@ -41,7 +41,7 @@ void LoadPointCloud(
 
   std::vector<float> vertices;
   std::vector<float> normals;
-  std::ifstream in(path);
+  std::ifstream in(path, std::ios::binary);
   tinyply::PlyFile ply(in);
 
   for (auto e : ply.get_elements()) {
@@ -54,14 +54,23 @@ void LoadPointCloud(
   }
   std::cout << std::endl;
   ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
-  ply.request_properties_from_element("normal", {"x", "y", "z"}, normals);
+  ply.request_properties_from_element("vertex", {"nx", "ny", "nz"}, normals);
   ply.read(in);
-  std::cout << "loaded ply file: " << vertices.size() << std::endl;
+  std::cout << "loaded ply file: " << vertices.size()
+    << " normals: " << normals.size() << std::endl;
 
   verts.Reinitialise(vertices.size()/3,1);
-  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
   ns.Reinitialise(normals.size()/3,1);
-  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
+  for (size_t i=0; i<vertices.size(); ++i) {
+    verts[i/3](i%3) = vertices[i];
+    ns[i/3](i%3) = normals[i];
+//    if (i%3==2 &&  i < 10000) {
+//      std::cout << verts[i/3].transpose()
+//        << ", "<< ns[i/3].transpose() << std::endl;
+//    }
+  }
+//  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
+//  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
 }
 
 void LoadMesh(

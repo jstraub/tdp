@@ -21,6 +21,7 @@ bool ComputeGMMfromPC(
     Image<uint16_t>& z,
     Image<uint16_t>& cuZ,
     std::vector<Normal<float,3>>& gmm) {
+  gmm.clear();
   // Run the clustering algorithm.
   dpmeans.Compute(x, cuX, cuZ, maxIt, minNchangePerc);
   z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);

@@ -86,6 +86,8 @@ void DPvMFmeans::Compute(const Image<Vector3fda>& n,
         << minNchangePerc*N << std::endl;
       if (Nchange < minNchangePerc*N)
         break;
+    } else {
+      std::cout << "K:" << K_ << std::endl;
     }
     Kprev = K_;
     Nsprev = Ns_;

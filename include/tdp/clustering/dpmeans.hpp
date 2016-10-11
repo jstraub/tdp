@@ -86,6 +86,8 @@ void DPmeans::Compute(const Image<Vector3fda>& x,
         << minNchangePerc*x << std::endl;
       if (Nchange < minNchangePerc*x)
         break;
+    } else {
+      std::cout << "K:" << K_ << std::endl;
     }
     Kprev = K_;
     Nsprev = Ns_;
