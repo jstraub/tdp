@@ -9,6 +9,8 @@ class Shaders {
   static Shaders* Instance();
 
   pangolin::GlSlProgram labelShader_;
+  pangolin::GlSlProgram valueShader_;
+  pangolin::GlSlProgram matcapShader_;
  private:
   Shaders();
   ~Shaders() { delete shaders_; };

@@ -14,6 +14,7 @@ void main() {
   vec3 e = normalize((MV*vec4(pos,1.)).xyz);
   // surface normal direction
   vec3 n = normalize((MV*vec4(normal,0.)).xyz);
+
   // reflection direction
   vec3 r = reflect(e,n);
 

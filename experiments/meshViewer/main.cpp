@@ -33,6 +33,7 @@
 
 #include <tdp/io/tinyply.h>
 #include <tdp/preproc/curvature.h>
+#include <tdp/gl/shaders.h>
 
 int main( int argc, char* argv[] )
 {
@@ -103,27 +104,24 @@ int main( int argc, char* argv[] )
   std::map<uint32_t,std::vector<uint32_t>> neigh;
   std::cout << "Compute neighborhood" << std::endl;
   tdp::ComputeNeighborhood(vertices, tri, n, neigh);
+
   std::cout << "Compute curvature" << std::endl;
   tdp::ComputeCurvature(vertices, tri, neigh, meanCurv, gausCurv, area);
-
   for (size_t i=0; i<meanCurv.Area(); ++i) {
     meanCurvLength[i] = meanCurv[i].norm();
   }
 
   std::pair<double,double> minMaxGausCurv = gausCurv.MinMax();
+  std::pair<double,double> minMaxMeanCurv = meanCurvLength.MinMax();
+  std::pair<double,double> minMaxArea = area.MinMax();
   std::cout << " GausCurvature range: " << minMaxGausCurv.first << " to " 
     << minMaxGausCurv.second << std::endl;
-  std::pair<double,double> minMaxMeanCurv = meanCurvLength.MinMax();
   std::cout << " MeanCurvature range: " << minMaxMeanCurv.first << " to " 
     << minMaxMeanCurv.second << std::endl;
-  std::pair<double,double> minMaxArea = area.MinMax();
   std::cout << " Area range: " << minMaxArea.first << " to " 
     << minMaxArea.second << std::endl;
 
-  pangolin::GlBuffer vbo;
-  pangolin::GlBuffer valuebo;
-  pangolin::GlBuffer cbo;
-  pangolin::GlBuffer ibo;
+  pangolin::GlBuffer vbo, nbo, cbo, ibo, valuebo;
   vbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);
   valuebo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
@@ -132,10 +130,19 @@ int main( int argc, char* argv[] )
       GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
   ibo.Reinitialise(pangolin::GlElementArrayBuffer, tri.w_,
       GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
+  nbo.Reinitialise(pangolin::GlArrayBuffer, vertices.w_,  GL_FLOAT,
+      3, GL_DYNAMIC_DRAW);
 
   vbo.Upload(vertices.ptr_, vertices.SizeBytes(), 0);
   cbo.Upload(color.ptr_,  color.SizeBytes(), 0);
   ibo.Upload(tri.ptr_,  tri.SizeBytes(), 0);
+  nbo.Upload(n.ptr_, n.SizeBytes(), 0);
+
+  pangolin::GlTexture matcapTex(512,512,GL_RGB8);
+  pangolin::TypedImage matcapImg = pangolin::LoadImage(
+      "/home/jstraub/workspace/research/tdp/shaders/wood.jpg");
+//      "/home/jstraub/workspace/research/tdp/shaders/normal.png");
+  matcapTex.Upload(matcapImg.ptr,GL_RGB,GL_UNSIGNED_BYTE);
 
   // load and compile shader
   std::string shaderRoot = SHADER_DIR;
@@ -165,6 +172,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showMeanCurvature("ui.show MeanCurv", false, true);
   pangolin::Var<bool> showGausCurvature("ui.show GausCurv", false, true);
   pangolin::Var<bool> showArea("ui.show Area", false, true);
+  pangolin::Var<bool> showMatcap("ui.show Matcap", false, true);
 
   pangolin::Var<bool> drawTriangles("ui.draw Tri", false, true);
 
@@ -253,6 +261,17 @@ int main( int argc, char* argv[] )
       progValue3Shading.SetUniform("maxValue", maxMeanCurv);
       valuebo.Bind();
       glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+    } else if (showMatcap) {
+      auto& shader = tdp::Shaders::Instance()->matcapShader_;   
+      shader.Bind();
+      shader.SetUniform("P",P);
+      shader.SetUniform("MV",MV);
+      glEnable(GL_TEXTURE_2D);
+//      glActivateTexture(GL_TEXTURE0);
+      matcapTex.Bind();
+      shader.SetUniform("matcap",0);
+      nbo.Bind();
+      glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0); 
     } else {
       progNormalShading.Bind();
       progNormalShading.SetUniform("P",P);
@@ -277,7 +296,6 @@ int main( int argc, char* argv[] )
       //pangolin::RenderVbo(vbo);
     }
 
-
     if (showGausCurvature || showArea) {
       progValueShading.Unbind();
       glDisableVertexAttribArray(1);
@@ -286,6 +304,12 @@ int main( int argc, char* argv[] )
       progValue3Shading.Unbind();
       glDisableVertexAttribArray(1);
       valuebo.Unbind();
+    } else if (showMatcap) {
+      matcapTex.Unbind();
+      glDisable(GL_TEXTURE_2D);
+      tdp::Shaders::Instance()->matcapShader_.Unbind();
+      glDisableVertexAttribArray(1);
+      nbo.Unbind();
     } else {
       progNormalShading.Unbind();
       glDisableVertexAttribArray(1);
