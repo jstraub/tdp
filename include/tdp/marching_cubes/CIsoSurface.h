@@ -12,24 +12,26 @@
 
 #include <map>
 #include <vector>
-#include "Vectors.h"
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/data/volume.h>
 
+typedef float POINT3D[3];
+typedef float VECTOR3D[3];
+
 struct POINT3DID {
-	unsigned int newID;
+    unsigned int newID;
 	float x, y, z;
 };
 
 typedef std::map<unsigned int, POINT3DID> ID2POINT3DID;
 
 struct TRIANGLE {
-	unsigned int pointID[3];
+    unsigned int pointID[3];
 };
 
 typedef std::vector<TRIANGLE> TRIANGLEVECTOR;
 
-template <class T> class CIsoSurface {
+class CIsoSurface {
 public:
 	// Constructor and destructor.
 	CIsoSurface();
@@ -37,10 +39,8 @@ public:
 
 	// Generates the isosurface from the scalar field contained in the
 	// buffer ptScalarField[].
-	void GenerateSurface(const T* ptScalarField, 
-            const tdp::Volume<tdp::TSDFval>& tsdf,
-      T tIsoLevel, unsigned int nCellsX, unsigned int nCellsY,
-      unsigned int nCellsZ, float fCellLengthX, float fCellLengthY,
+    void GenerateSurface(const tdp::Volume<tdp::TSDFval>* tsdf,
+      float tIsoLevel, float fCellLengthX, float fCellLengthY,
       float fCellLengthZ,
             float wThr,
             float fThr);
@@ -51,11 +51,6 @@ public:
 	// Deletes the isosurface.
 	void DeleteSurface();
 
-	// Returns the length, width, and height of the volume in which the
-	// isosurface in enclosed in.  Returns -1 if the surface is not
-	// valid.
-	int GetVolumeLengths(float& fVolLengthX, float& fVolLengthY, float& fVolLengthZ);
-
     int numVertices() const;
     int numTriangles() const;
     void getVertices(float* vertexStore) const;
@@ -63,19 +58,19 @@ public:
 
 protected:
 	// The number of vertices which make up the isosurface.
-	unsigned int m_nVertices;
+    unsigned int m_nVertices;
 
 	// The vertices which make up the isosurface.
 	POINT3D* m_ppt3dVertices;
 
-	// The number of triangles which make up the isosurface.
-	unsigned int m_nTriangles;
+    // The number of triangles which make up the isosurface.
+    unsigned int m_nTriangles;
 
 	// The indices of the vertices which make up the triangles.
-	unsigned int* m_piTriangleIndices;
+    unsigned int* m_piTriangleIndices;
 
 	// The number of normals.
-	unsigned int m_nNormals;
+    unsigned int m_nNormals;
 
 	// The normals.
 	VECTOR3D* m_pvec3dNormals;
@@ -87,18 +82,18 @@ protected:
 	TRIANGLEVECTOR m_trivecTriangles;
 
 	// Returns the edge ID.
-	unsigned int GetEdgeID(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
+    unsigned int GetEdgeID(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
 
 	// Returns the vertex ID.
-	unsigned int GetVertexID(unsigned int nX, unsigned int nY, unsigned int nZ);
+    unsigned int GetVertexID(unsigned int nX, unsigned int nY, unsigned int nZ);
 
 	// Calculates the intersection point of the isosurface with an
 	// edge.
-	POINT3DID CalculateIntersection(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
+    POINT3DID CalculateIntersection(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
 
 	// Interpolates between two grid points to produce the point at which
 	// the isosurface intersects an edge.
-	POINT3DID Interpolate(float fX1, float fY1, float fZ1, float fX2, float fY2, float fZ2, T tVal1, T tVal2);
+    POINT3DID Interpolate(float fX1, float fY1, float fZ1, float fX2, float fY2, float fZ2, float tVal1, float tVal2);
 
 	// Renames vertices and triangles so that they can be accessed more
 	// efficiently.
@@ -108,16 +103,13 @@ protected:
 	void CalculateNormals();
 
 	// No. of cells in x, y, and z directions.
-	unsigned int m_nCellsX, m_nCellsY, m_nCellsZ;
+    unsigned int m_nCellsX, m_nCellsY, m_nCellsZ;
 
 	// Cell length in x, y, and z directions.
-	float m_fCellLengthX, m_fCellLengthY, m_fCellLengthZ;
+    float m_fCellLengthX, m_fCellLengthY, m_fCellLengthZ;
 
-	// The buffer holding the scalar field.
-	const T* m_ptScalarField;
-
-	// The isosurface value.
-	T m_tIsoLevel;
+    // The isosurface value.
+    float m_tIsoLevel;
 
 	// Indicates whether a valid surface is present.
 	bool m_bValidSurface;
@@ -125,6 +117,8 @@ protected:
 	// Lookup tables used in the construction of the isosurface.
 	static const int m_edgeTable[256];
 	static const int m_triTable[256][16];
+
+    const tdp::Volume<tdp::TSDFval>* m_tsdf;
 };
 #endif // CISOSURFACE_H
 

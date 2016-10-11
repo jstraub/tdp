@@ -13,6 +13,7 @@ file(GLOB SRCS
   "./tsdf/*cpp"
   "./utils/*cpp"
   "./inertial/*cpp"
+  "./marching_cubes/*cpp"
   "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
   "./bb/*cpp"

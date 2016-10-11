@@ -28,7 +28,7 @@
 
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/data/managed_volume.h>
-#include "CIsoSurface.h"
+#include <tdp/marching_cubes/CIsoSurface.h>
 #include <iostream>
 #include <pangolin/utils/timer.h>
 
@@ -62,14 +62,6 @@ int main( int argc, char* argv[] )
   float xScale = 6./512;
   float yScale = 6./512;
   float zScale = 6./512;
-  size_t xDim = tsdf.w_;
-  size_t yDim = tsdf.h_;
-  size_t zDim = tsdf.d_;
-  float *points = new float[xDim * yDim * zDim];
-  for (size_t i = 0; i < xDim * yDim * zDim; i++) {
-      points[i] = tsdf.ptr_[i].f;
-  }
-
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
@@ -132,9 +124,8 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(recomputeMesh)) {
       // procesing of TSDF
       int64_t start = pangolin::Time_us(pangolin::TimeNow());
-      CIsoSurface<float> surface;
-      surface.GenerateSurface(points, tsdf, 0.0f, xDim - 1, yDim - 1, zDim - 1,
-          xScale, yScale, zScale, wThr, fThr);
+      CIsoSurface surface;
+      surface.GenerateSurface(&tsdf, 0.0f, xScale, yScale, zScale, wThr, fThr);
       if (!surface.IsSurfaceValid()) {
         pango_print_error("Unable to generate surface");
         return 1;
