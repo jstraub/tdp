@@ -41,6 +41,8 @@
 #include <tdp/inertial/imu_interpolator.h>
 #include <tdp/geometry/cosy.h>
 
+#include <tdp/io/tinyply.h>
+
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
 //
@@ -210,6 +212,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", false, true);
   pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", true, true);
   pangolin::Var<bool> resetOdom("ui.reset odom",false,false);
+
+  pangolin::Var<bool> savePC("ui.save current PC",false,false);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
@@ -601,6 +605,25 @@ int main( int argc, char* argv[] )
 
     plotInliers.ScrollView(1,0);
     plotCost.ScrollView(1,0);
+
+    if (pangolin::Pushed(savePC)) {
+      pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
+      std::vector<float> verts((float*)pc.ptr_, (float*)(&pc.ptr_[pc.Area()]));
+      tinyply::PlyFile plyFile;
+      plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+      plyFile.comments.push_back("generated from surround3D");
+      plyFile.comments.push_back("PC in rig coordinate system");
+      plyFile.comments.push_back(input_uri);
+      plyFile.comments.push_back(configPath);
+      std::stringstream ss;
+      ss << "frame" << gui.frame;
+      plyFile.comments.push_back(ss.str());
+      std::ostringstream outStream;
+      plyFile.write(outStream, true);
+      std::ofstream out(uri.url+ss.str()+std::string(".ply"));
+      out << outStream.str();
+      out.close();
+    }
 
     if (odomFrame2Frame) {
       for (size_t lvl=0; lvl<3; ++lvl) {
