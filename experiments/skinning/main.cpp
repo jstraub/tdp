@@ -207,27 +207,74 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(tdp::ManagedHostImage<tdp::Vector3
     return spec;
 }
 
-int main( int argc, char* argv[] )
-{
-    std::cout << "skinning started... " << std::endl;
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
-    tdp::Matrix3fda cov = getCovariance(pc);
-    tdp::Vector3fda mu = getMean(pc);
-    std::cout << "mean: " << mu << std::endl;
-    std::cout << "cov: " << cov << std::endl;
 
-    EigenSolver<MatrixXd> es(cov);
-    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
-    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
+inline bool inBVoxel(tdp::Vector3fda p, tdp::Vector3fda topLeft, tdp::Vector3fda btmRight){
+    return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
+}
 
-    complex<float> maxEval(-1,0);
-    for (int i=0; i< es.eigenvalues().size();++i ){
-        if (maxEval < es.eigenvalue()[i]){
-                maxEval = es.eigenvalue()[i];
-        }
+tdp::Vector3fda getBVowelDict(pc){
+    for
+}
+
+vector<tdp::Vector3fda> meanAndCovOfBVoxel(tdp::ManagedDeviceImage<tdp::Vector3fda> pc, tdp::Vector3fda p1, tdp::Vector3fda p2){
+    tdp::Vector3fda topLeft, btmRight;
+    tdp::Vector3fda mean(0,0,0); //check this?
+
+    tdp::Matrix3fda cov;
+    cov.setZero(3,3);
+    // Find the correct boundingbox coordinations
+    for (int i=0; i<3; ++i){
+        topLeft[i] = std::min(p1[i], p2[i]);
+        btmRight[i] = std::max(p1[i],p2[i]);
     }
 
+    //Calculate mean
+    for (int i=0; i<pc.w_; ++i){
+        for (int j=0; j<pc.h_; ++j){
+            if inBVoxel(p, topLeft, btmRight){
+                mean += p;
+            }
+        }
+    }
+    mean /= numPointsInBVoxel;
 
+    //Calculate cov
+
+
+}
+
+void
+1. Given the pc, find the mean and eigenvector -> its size is eigenvalue
+tdp::Vector3fda mean = getMean(pc);
+tdp::Matrix3fda cov = getCovariance(pc);
+tdp::Vector3fda spread (eigenvector) = pc.spread_; //without normalization
+tdp::Vector3fda direction = pc.spread_/abs(pc.spread);
+float spread_size = norm(spread);
+int nsteps = pc.nsteps_; //nsteps in the positive/negative direction. totalsteps is 2*nsteps.
+float stepsize = spread_size/nsteps;
+tdp::Vector3fda stepVec = stepsize*direction;
+
+
+tdp::Vector3fda start = mean;
+tdp::Vector3fda end = mean+stepVec;
+
+
+meanLists=[];
+for (int i=1; i<=nsteps; ++i){
+    //Step in the positive direction
+    vector<tdp::Vector3fda> meanAndCov = meanAndCovOfBVoxel(pc, start,end);
+    mean =
+
+
+}
+
+for (int i=1; i<=nsteps; ++i){
+    //step in the negative direction
+    //use -eigenvector
+}
+
+int main( int argc, char* argv[] )
+{
 
   return 0;
 }
