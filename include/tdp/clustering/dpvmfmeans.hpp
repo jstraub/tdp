@@ -18,6 +18,8 @@ uint32_t dpvMFlabelsOptimistic(
     Image<uint16_t> z,
     float lambda, uint32_t i0, uint16_t K);
 
+/// DPvMF clustering algorithm 
+/// Note: lambda is cos(lambda_deg) (no -1 as in the paper!)
 class DPvMFmeans {
  public: 
   DPvMFmeans(float lambda) : lambda_(lambda) {};

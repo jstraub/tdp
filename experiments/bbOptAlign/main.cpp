@@ -115,15 +115,6 @@ int main( int argc, char* argv[] )
   valueboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),
       GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
 
-  // load and compile shader
-  //std::string shaderRoot = SHADER_DIR;
-  //pangolin::GlSlProgram progValueShading;
-  //progValueShading.AddShaderFromFile(pangolin::GlSlVertexShader, 
-  //    shaderRoot+std::string("labelShading.vert"));
-  //progValueShading.AddShaderFromFile(pangolin::GlSlFragmentShader,
-  //    shaderRoot+std::string("setColor.frag"));
-  //progValueShading.Link();
-
   pangolin::Var<bool> computevMFMMs("ui.compute vMFMMs", false, false);
   pangolin::Var<bool> computeGMMs("ui.compute GMMs", false, false);
   pangolin::Var<bool> computeAlignment("ui.align", false, false);
@@ -137,8 +128,8 @@ int main( int argc, char* argv[] )
   std::vector<tdp::Normal3f> gmmA, gmmB;
   std::vector<tdp::vMF3f> vmfmmA, vmfmmB;
   tdp::DPmeans dpmeansA(lambdaR3), dpmeansB(lambdaR3);
-  tdp::DPvMFmeans dpvmfmeansA(cos(lambdaS2*M_PI/180.)-1.), 
-                  dpvmfmeansB(cos(lambdaS2*M_PI/180.)-1.);
+  tdp::DPvMFmeans dpvmfmeansA(cos(lambdaS2*M_PI/180.)), 
+                  dpvmfmeansB(cos(lambdaS2*M_PI/180.));
 
   Eigen::Vector3f minAB, maxAB;
   BoundingBox(pcA, minAB, maxAB, true);
@@ -159,8 +150,9 @@ int main( int argc, char* argv[] )
     if (runOnce) break;
 
     if (pangolin::Pushed(computevMFMMs)) {
-      dpvmfmeansA.lambda_ = cos(lambdaS2*M_PI/180.)-1.;
-      dpvmfmeansB.lambda_ = cos(lambdaS2*M_PI/180.)-1.;
+      std::cout << " lambda " << lambdaS2 << std::endl;
+      dpvmfmeansA.lambda_ = cos(lambdaS2*M_PI/180.);
+      dpvmfmeansB.lambda_ = cos(lambdaS2*M_PI/180.);
 
       std::cout << "computing vMF MM A" << std::endl;
       tdp::ComputevMFMM(nsA, cuNsA, dpvmfmeansA, maxIt, minNchangePerc,
