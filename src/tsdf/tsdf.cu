@@ -102,10 +102,10 @@ inline bool RayTraceTSDF(
 
   idItMin = (r_d_in_r.p(dimIt)-grid0(dimIt))/dGrid(dimIt);
 
-  if (verbose) {
-    printf("%f %f %f: %d %d, (%d %d)\n",  r_d_in_r.dir(0),  r_d_in_r.dir(1),
-      r_d_in_r.dir(2), dimIt, dimInc, idItMin, idItMax);
-  }
+//  if (verbose) {
+//    printf("%f %f %f: %d %d, (%d %d)\n",  r_d_in_r.dir(0),  r_d_in_r.dir(1),
+//      r_d_in_r.dir(2), dimIt, dimInc, idItMin, idItMax);
+//  }
 
   for (int idIt = idItMin; idIt != idItMax; idIt += dimInc) {
     Vector3fda nOverD = Vector3fda::Zero();
@@ -161,8 +161,8 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
 
     float di = 0;
     Vector3ida idTSDF;
-    if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF,
-          idx==d.w_/2 && idy==d.h_/2)) {
+    if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF)) {
+//          idx==d.w_/2 && idy==d.h_/2)) {
       // depth
       d(idx,idy) = di;
       // surface normal: 
@@ -287,11 +287,11 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
 
     float di = 0;
     Vector3ida idTSDF;
-    if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF,
-          (idx==pc_d.w_-1 && idy==pc_d.h_-1) || 
-          (idx==0 && idy==pc_d.h_-1) || 
-          (idx==pc_d.w_-1 && idy==0) || 
-          (idx==0 && idy==0)
+    if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF
+//          (idx==pc_d.w_-1 && idy==pc_d.h_-1) || 
+//          (idx==0 && idy==pc_d.h_-1) || 
+//          (idx==pc_d.w_-1 && idy==0) || 
+//          (idx==0 && idy==0)
           )) {
       // surface normal: 
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
