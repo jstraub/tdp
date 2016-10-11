@@ -608,25 +608,21 @@ int main( int argc, char* argv[] )
     plotCost.ScrollView(1,0);
 
     if (pangolin::Pushed(savePC)) {
+
       pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
-      std::vector<float> verts((float*)pc.ptr_, (float*)(&pc.ptr_[pc.Area()]));
       n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
-      std::vector<float> norms((float*)n.ptr_, (float*)(&n.ptr_[n.Area()]));
-      tinyply::PlyFile plyFile;
-      plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
-      plyFile.add_properties_to_element("vertex", {"nx", "ny", "nz"}, norms);
-      plyFile.comments.push_back("generated from surround3D");
-      plyFile.comments.push_back("PC in rig coordinate system");
-      plyFile.comments.push_back(input_uri);
-      plyFile.comments.push_back(configPath);
+
+      std::vector<std::string> comments;
       std::stringstream ss;
       ss << "frame" << gui.frame;
-      plyFile.comments.push_back(ss.str());
-      std::ostringstream outStream;
-      plyFile.write(outStream, true);
-      std::ofstream out(uri.url+ss.str()+std::string(".ply"));
-      out << outStream.str();
-      out.close();
+      comments.push_back("generated from surround3D");
+      comments.push_back("PC in rig coordinate system");
+      comments.push_back(input_uri);
+      comments.push_back(configPath);
+      comments.push_back(ss.str());
+
+      SavePointCloud(uri.url+ss.str()+std::string(".ply"),
+          pc, n, comments);
     }
 
     if (odomFrame2Frame) {
