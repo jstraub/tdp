@@ -39,6 +39,7 @@
 #include <tdp/distributions/normal_mm.h>
 #include <tdp/distributions/vmf_mm.h>
 #include <tdp/gl/shaders.h>
+#include <tdp/gl/render.h>
 
 int main( int argc, char* argv[] )
 {
@@ -74,9 +75,12 @@ int main( int argc, char* argv[] )
   pangolin::View& viewPc = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewPc);
-  pangolin::View& viewN = pangolin::CreateDisplay()
+  pangolin::View& viewNA = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  container.AddDisplay(viewN);
+  container.AddDisplay(viewNA);
+  pangolin::View& viewNB = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  container.AddDisplay(viewNB);
   // use those OpenGL buffers
   
   tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
@@ -241,64 +245,28 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAxis(0.1);
 
       glPointSize(1.);
-      pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
-      shader.Bind();
-      shader.SetUniform("P",s_cam.GetProjectionMatrix());
-      shader.SetUniform("MV",s_cam.GetModelViewMatrix());
-      shader.SetUniform("minValue", minVal);
-      shader.SetUniform("maxValue", maxVal);
-      valueboA.Bind();
-      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
-      vboA.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-      glEnableVertexAttribArray(0);                                               
-      glEnableVertexAttribArray(1);                                               
-      //pangolin::RenderVbo(vboA);
-      glDrawArrays(GL_POINTS, 0, vboA.num_elements);
-      shader.Unbind();
-      glDisableVertexAttribArray(1);
-      valueboA.Unbind();
-      glDisableVertexAttribArray(0);
-      vboA.Unbind();
+      tdp::RenderLabeledVbo(vboA, valueboA, s_cam, maxVal);
 
       pangolin::glSetFrameOfReference(T_ab.matrix());
       pangolin::glDrawAxis(0.1);
-      glColor4f(0.,1.,0.,1.);
-      pangolin::RenderVbo(vboB);
+      tdp::RenderLabeledVbo(vboB, valueboB, s_cam, maxVal);
       pangolin::glUnsetFrameOfReference();
     }
-    if (viewN.IsShown()) {
-      viewN.Activate(s_cam);
+    if (viewNA.IsShown()) {
+      viewNA.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
-
       glPointSize(1.);
-      pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
-      shader.Bind();
-      shader.SetUniform("P",s_cam.GetProjectionMatrix());
-      shader.SetUniform("MV",s_cam.GetModelViewMatrix());
-      shader.SetUniform("minValue", minVal);
-      shader.SetUniform("maxValue", maxVal);
-      valueboA.Bind();
-      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
-      nboA.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-      glEnableVertexAttribArray(0);                                               
-      glEnableVertexAttribArray(1);                                               
-      //pangolin::RenderVbo(nboA);
-      glDrawArrays(GL_POINTS, 0, nboA.num_elements);
-      shader.Unbind();
-      glDisableVertexAttribArray(1);
-      valueboA.Unbind();
-      glDisableVertexAttribArray(0);
-      nboA.Unbind();
+      tdp::RenderLabeledVbo(nboA, valueboA, s_cam, maxVal);
+    }
 
+    if (viewNB.IsShown()) {
+      viewNB.Activate(s_cam);
       tdp::SE3f T(T_ab);
-      T.matrix()(2,3) += 2.5;
+      T.matrix().topRightCorner(3,1).fill(0.);
       pangolin::glSetFrameOfReference(T.matrix());
       pangolin::glDrawAxis(0.1);
-      glColor4f(0.,1.,0.,1.);
-      pangolin::RenderVbo(nboB);
+      tdp::RenderLabeledVbo(nboB, valueboB, s_cam, maxVal);
       pangolin::glUnsetFrameOfReference();
     }
 
