@@ -79,7 +79,7 @@ tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
 }
 
 ////todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
-std::vector<Eigen::MatrixXf> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
+std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
     //Eigen::MatrixXf mean = (Eigen::MatrixXf)getMean(pc);
 
@@ -100,14 +100,14 @@ std::vector<Eigen::MatrixXf> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
         }
     }
     Eigen::VectorXcf spread = es.eigenvectors().col(maxIdx);
-    Eigen::VectorXf spread_real, spread_imag;
-    spread_real = spread.real();
-    spread_imag = spread.imag();
+    tdp::Vector3fda spread_real, spread_imag;
+    spread_real = (tdp::Vector3fda)spread.real();
+    spread_imag = (tdp::Vector3fda)spread.imag();
 
-    std::vector<Eigen::MatrixXf> spec;
-    spec[0] = (Eigen::MatrixXf)mean;
-    spec[1] = (Eigen::MatrixXf)spread_real;
-    spec[2] = (Eigen::MatrixXf)spread_imag;
+    std::vector<tdp::Vector3fda> spec;
+    spec[0] = mean;
+    spec[1] = spread_real;
+    spec[2] = spread_imag;
     return spec;
 }
 
@@ -115,9 +115,10 @@ inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, c
     return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
 }
 
-std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
+std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedHostImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
     tdp::Vector3fda topLeft, btmRight;
-    tdp::Vector3fda mean(0,0,0); //todo: check this?
+    tdp::Vector3fda mean; //todo: check this?
+    mean << 0,0,0;
     // Find the correct bounding voxel's coordinates
     for (int i=0; i<3; ++i){
         topLeft[i] = std::min(p1[i],p2[i]);
@@ -126,13 +127,13 @@ std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage
     //Calculate mean
     //overhead
     //Todo: implement BVoxelId (image of the same size as pc where each entry is BVoxel id)
-    count = 0;
-    vector<tdp::Vect3fda> points;
+    int count = 0;
+    std::vector<tdp::Vector3fda> points;
     for (int i=0; i<pc.w_; ++i){
         for (int j=0; j<pc.h_; ++j){
             if (inBVoxel(pc(i,j), topLeft, btmRight)){
                 mean += pc(i,j);
-                points.puch_back(pc(i,j));
+                points.push_back(pc(i,j));
                 count += 1;
             }
         }
@@ -148,7 +149,7 @@ std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage
     std::cout << "final: " << cov << std::endl;
     
     // eigenvector
-    Eigen::EigenSolver<MatrixXd> es(cov);
+    Eigen::EigenSolver<tdp::Matrix3fda> es(cov);
     std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
     std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
 
@@ -160,42 +161,59 @@ std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage
             maxIdx = i;
         }
     }
-    tdp::Vector3fda spread = es.eigenvector().col(maxIdx);
-    std::vector spec = {mean, spread};
+    Eigen::VectorXcf spread = es.eigenvectors().col(maxIdx);
+    //Eigen::VectorXf spread_real, spread_imag;
+    tdp::Vector3fda spread_real, spread_imag;
+    spread_real = (tdp::Vector3fda)spread.real(); 
+    spread_imag = (tdp::Vector3fda)spread.imag();
+
+
+    std::vector<tdp::Vector3fda> spec;
+    spec[0] = mean;
+    spec[1] = spread_real;
+    spec[2] = spread_imag;
+
+   // std::vector<Eigen::MatrixXf> spec;
+   // spec[0] = (Eigen::MatrixXf)mean;
+   // spec[1] = (Eigen::MatrixXf)spread_real;
+   // spec[2] = (Eigen::MatrixXf)spread_imag;
+
     return spec;
 }
 
-//std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const int nsteps){
-//  //nsteps in the positive/negative direction. totalsteps is 2*nsteps.
+std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedHostImage<tdp::Vector3fda>& pc, int nsteps){
+  ///nsteps in the positive/negative direction. totalsteps is 2*nsteps.
 
-//  // find the mean and eigenvector -> its size is eigenvalue
-//  vector<tdp::Vector3fda> meanAndSpread = getMeanAndSpread(pc);
-//  tdp::Vector3fda mean, spread, stepVec;
-//  mean = meanAndSPread[0];
-//  spread = meanAndSpread[1];
+  // find the mean and eigenvector 
+  std::vector<tdp::Vector3fda> meanAndSpread = getMeanAndSpread(pc); 
+  tdp::Vector3fda mean, spread_real, spread_imag, stepVec; 
+  mean = meanAndSpread[0];
+  spread_real = meanAndSpread[1];
+  spread_imag = meanAndSpread[2];
+  float spread_size, step_size;
+  spread_size = spread_real.norm(); //todo: get the magnitude of complex //todo: eigen's norm?
+  step_size = spread_size/nsteps;
+  stepVec = step_size*(spread_real/spread_size);//todo: what to do with spread_imag?
 
-//  float spread_size, step_size;
-//  spread_size = norm(spread);
-//  step_size = spread_size/nsteps;
-//  stepVec = step_size*(spread/spread_size);
+  tdp::Vector3fda start1 = mean;
+  tdp::Vector3fda end1 = mean+stepVec;
+  tdp::Vector3fda start2 = mean;
+  tdp::Vector3fda end2 = mean-stepVec;
 
-//  tdp::Vector3fda start1 = mean;
-//  tdp::Vector3fda end1 = mean+stepVec;
-//  tdp::Vector3fda start2 = mean;
-//  tdp::Vector3fda end2 = mean-stepVec;
+  std::vector<tdp::Vector3fda> means;
+  for (int i=1; i<=nsteps; ++i){
+    std::vector<tdp::Vector3fda> meanAndCov_pos = meanAndSpreadOfBVoxel(pc, start1, end1);
+    std::vector<tdp::Vector3fda> meanAndCov_neg = meanAndSpreadOfBVoxel(pc, start2, end2);
+    means.push_back(meanAndCov_pos[0]);
+    means.push_back(meanAndCov_neg[0]);
 
-//  vector<tdp::Vect3fda> means;
-//  for (int i=1; i<=nsteps; ++i){
-//      vector<tdp::Vector3fda> meanAndCov_pos = meanAndCovOfBVoxel(pc, start1, end1);
-//      vector<tdp::Vector3fda> meanAndCov_neg = meanAndCovOfBVoxel(pc, start2, end2);
-//      means.push_back(meanAndCov_pos[0], meanAndCov_neg[0]);
-   
-//      start1 = end1;
-//      end1 += stepVec;
-//      start2 = end2;
-//      end2 -= stepVec;
-//  }
-//}
+    start1 = end1;
+    end1 += stepVec;
+    start2 = end2;
+    end2 -= stepVec;
+  }
+return means;
+}
 
 int main( int argc, char* argv[] )
 {
@@ -236,11 +254,12 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewN);
   // use those OpenGL buffers
-
   tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
   tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
   tdp::LoadPointCloud(inputA, pcA, nsA);
   tdp::LoadPointCloud(inputB, pcB, nsB);
 
+  //todo: getMeans
+  //then draw 
   return 0;
 }
