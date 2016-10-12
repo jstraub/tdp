@@ -211,11 +211,6 @@ std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedHostImage<t
     spec[1] = spread_real;
     spec[2] = spread_imag;
 
-   // std::vector<Eigen::MatrixXf> spec;
-   // spec[0] = (Eigen::MatrixXf)mean;
-   // spec[1] = (Eigen::MatrixXf)spread_real;
-   // spec[2] = (Eigen::MatrixXf)spread_imag;
-
     return spec;
 }
 
@@ -254,8 +249,7 @@ std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedHostImage<tdp::Vector3fd
 return means;
 }
 
-int main( int argc, char* argv[] )
-{
+int main( int argc, char* argv[] ){
   if (argc < 2){
       std::cout << "Must input two plyfile paths!" << std::endl;
       return -1;
@@ -318,46 +312,49 @@ int main( int argc, char* argv[] )
   std::cout << "Vboxa: " << vboA.num_elements << std::endl;
   std::cout << "Vboxb: " << vboB.num_elements << std::endl;
   // Add variables to pangolin GUI
-
-  //pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
+  pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    glColor3f(1.0f, 1.0f, 1.0f);
 
     if (runOnce) break;
-    if (false){//(pangolin::Pushed(runSkinning)) {
+    if (pangolin::Pushed(runSkinning)) {
       //  processing of PC for skinning
+      glColor3f(1.0f, 1.0f, 1.0f);
+
       std::cout << "Running skinning..." << std::endl;
       int nSteps = 10;
       std::vector<tdp::Vector3fda> means = getMeans(pcA,nSteps);
       size_t nMeans= means.size();
       std::cout << "number of means (should be 2*nsteps + 1):" << nMeans << std::endl;
+
+      // put the mean points to GLBuffer vboM
+      vboM.Reinitialise(pangolin::GlArrayBuffer, nMeans, GL_FLOAT, 3, GL_DYNAMIC_DRAW );
+      vboM.Upload(&means[0], sizeof(float) * nMeans * 3, 0);
+
     }
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
+    glColor3f(1.0f, 1.0f, 1.0f);
     if (viewPc.IsShown()) {
       viewPc.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
 
-      glPointSize(1.);
-      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0);
-      vboA.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-      glEnableVertexAttribArray(0);
-      glEnableVertexAttribArray(1);
-      //pangolin::RenderVbo(vboA);
-      glDrawArrays(GL_POINTS, 0, vboA.num_elements);
-      glDisableVertexAttribArray(1);
-      glDisableVertexAttribArray(0);
-      vboA.Unbind();
+      glPointSize(10.);
+      glColor3f(1.0f, 0.0f, 1.0f);
+      pangolin::RenderVbo(vboM);
 
-      pangolin::glDrawAxis(0.1);
-      glColor4f(0.,1.,0.,1.);
+      glPointSize(1.);
+      // draw the first arm pc
+      glColor3f(1.0f, 0.0f, 0.0f);
+      pangolin::RenderVbo(vboA);
+
+      // draw the second arm pc
+      glColor3f(0., 1., 0.);
       pangolin::RenderVbo(vboB);
     }
 
@@ -370,5 +367,4 @@ int main( int argc, char* argv[] )
 
   std::cout << "good morning!" << std::endl;
   return 0;
-
 }
