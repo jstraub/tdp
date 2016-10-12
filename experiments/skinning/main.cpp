@@ -111,59 +111,59 @@ std::vector<Eigen::MatrixXf> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     return spec;
 }
 
-//inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
-//    return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
-//}
+inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
+    return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
+}
 
-//std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
-//    tdp::Vector3fda topLeft, btmRight;
-//    tdp::Vector3fda mean(0,0,0); //todo: check this?
-//    // Find the correct bounding voxel's coordinates
-//    for (int i=0; i<3; ++i){
-//        topLeft[i] = std::min(p1[i],p2[i]);
-//        btmRight[i] = std::max(p1[i],p2[i]);
-//    }
-//    //Calculate mean
-//    //overhead
-//    //Todo: implement BVoxelId (image of the same size as pc where each entry is BVoxel id)
-//    count = 0;
-//    vector<tdp::Vect3fda> points;
-//    for (int i=0; i<pc.w_; ++i){
-//        for (int j=0; j<pc.h_; ++j){
-//            if (inBVoxel(pc(i,j), topLeft, btmRight)){
-//                mean += pc(i,j);
-//                points.puch_back(pc(i,j));
-//                count += 1;
-//            }
-//        }
-//    }
-//    mean /= count;
-//    // calculate covariance
-//    tdp::Matrix3fda cov;
-//    cov.setZero(3,3);
-//    for (int i=0; i<count; ++i){
-//      cov += (points[i]-mean)*(points[i]-mean).transpose();
-//    }
-//    cov /= count;
-//    std::cout << "final: " << cov << std::endl;
+std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
+    tdp::Vector3fda topLeft, btmRight;
+    tdp::Vector3fda mean(0,0,0); //todo: check this?
+    // Find the correct bounding voxel's coordinates
+    for (int i=0; i<3; ++i){
+        topLeft[i] = std::min(p1[i],p2[i]);
+        btmRight[i] = std::max(p1[i],p2[i]);
+    }
+    //Calculate mean
+    //overhead
+    //Todo: implement BVoxelId (image of the same size as pc where each entry is BVoxel id)
+    count = 0;
+    vector<tdp::Vect3fda> points;
+    for (int i=0; i<pc.w_; ++i){
+        for (int j=0; j<pc.h_; ++j){
+            if (inBVoxel(pc(i,j), topLeft, btmRight)){
+                mean += pc(i,j);
+                points.puch_back(pc(i,j));
+                count += 1;
+            }
+        }
+    }
+    mean /= count;
+    // calculate covariance
+    tdp::Matrix3fda cov;
+    cov.setZero(3,3);
+    for (int i=0; i<count; ++i){
+      cov += (points[i]-mean)*(points[i]-mean).transpose();
+    }
+    cov /= count;
+    std::cout << "final: " << cov << std::endl;
     
-//    // eigenvector
-//    Eigen::EigenSolver<MatrixXd> es(cov);
-//    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
-//    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
+    // eigenvector
+    Eigen::EigenSolver<MatrixXd> es(cov);
+    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
+    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
 
-//    std::complex<float> maxEval(-1,0);
-//    int maxIdx(-1);
-//    for (int i=0; i< cov.rows();++i ){
-//        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
-//            maxEval = es.eigenvalues().col(0)[i];
-//            maxIdx = i;
-//        }
-//    }
-//    tdp::Vector3fda spread = es.eigenvector().col(maxIdx);
-//    std::vector spec = {mean, spread};
-//    return spec;
-//}
+    std::complex<float> maxEval(-1,0);
+    int maxIdx(-1);
+    for (int i=0; i< cov.rows();++i ){
+        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
+            maxEval = es.eigenvalues().col(0)[i];
+            maxIdx = i;
+        }
+    }
+    tdp::Vector3fda spread = es.eigenvector().col(maxIdx);
+    std::vector spec = {mean, spread};
+    return spec;
+}
 
 //std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedDeviceImage<tdp::Vector3fda>& pc, const int nsteps){
 //  //nsteps in the positive/negative direction. totalsteps is 2*nsteps.
