@@ -12,22 +12,26 @@
 
 namespace tdp {
 
-class LowerBoundS3 : public Bound<NodeS3> {
+template <typename T>
+class LowerBoundS3 : public Bound<T,NodeS3<T>> {
  public:
   LowerBoundS3(
-      const std::vector<vMF3f>& vmf_mm_A, 
-      const std::vector<vMF3f>& vmf_mm_B);
+      const std::vector<vMF<T,3>>& vmf_mm_A, 
+      const std::vector<vMF<T,3>>& vmf_mm_B);
   virtual ~LowerBoundS3() = default;
-  virtual float Evaluate(const NodeS3& node);
-  virtual float EvaluateAndSet(NodeS3& node);
+  virtual T Evaluate(const NodeS3<T>& node);
+  virtual T EvaluateAndSet(NodeS3<T>& node);
 
-  void EvaluateRotationSet(const std::vector<Eigen::Quaternion<float>>& qs,
-      Eigen::VectorXf& lbs) const;
+  void EvaluateRotationSet(const std::vector<Eigen::Quaternion<T>>& qs,
+      Eigen::Matrix<T,Eigen::Dynamic,1>& lbs) const;
  private:
-//  void Evaluate(const NodeS3& node, std::vector<Eigen::Quaternion<float>>& qs,
-//      Eigen::Matrix<float,5,1>& lbs);
-  const std::vector<vMF3f>& vmf_mm_A_;
-  const std::vector<vMF3f>& vmf_mm_B_;
+//  void Evaluate(const NodeS3& node, std::vector<Eigen::Quaternion<T>>& qs,
+//      Eigen::Matrix<T,5,1>& lbs);
+  const std::vector<vMF<T,3>>& vmf_mm_A_;
+  const std::vector<vMF<T,3>>& vmf_mm_B_;
 };
+
+typedef LowerBoundS3<float>  LowerBoundS3f;
+typedef LowerBoundS3<double> LowerBoundS3d;
 
 }

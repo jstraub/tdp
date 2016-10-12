@@ -13,26 +13,31 @@
 
 namespace tdp {
 
-class NodeR3 : public BaseNode {
+template<typename T>
+class NodeR3 : public BaseNode<T> {
  public:
-  NodeR3(const Box& box, std::vector<uint32_t> ids);
-  NodeR3(const NodeR3& node);
+  NodeR3(const Box<T>& box, std::vector<uint32_t> ids);
+  NodeR3(const NodeR3<T>& node);
   virtual ~NodeR3() = default;
-  virtual std::vector<NodeR3> Branch() const;
-  const Box& GetBox() const { return box_;}
-  const Eigen::Vector3f& GetLbArgument() const {return t_lb_;}
-  void SetLbArgument(const Eigen::Vector3f& t) {t_lb_ = t;}
+  virtual std::vector<NodeR3<T>> Branch() const;
+  const Box<T>& GetBox() const { return box_;}
+  const Eigen::Matrix<T,3,1>& GetLbArgument() const {return t_lb_;}
+  void SetLbArgument(const Eigen::Matrix<T,3,1>& t) {t_lb_ = t;}
   virtual uint32_t GetBranchingFactor(uint32_t i) const { return 8;}
   virtual std::string ToString() const;
   virtual std::string Serialize() const;
   std::string GetSpace() const { return "R3"; }
  protected:
-  Box box_;
-  Eigen::Vector3f t_lb_;
-  virtual float GetVolume_() const { return box_.GetVolume();}
+  Box<T> box_;
+  Eigen::Matrix<T,3,1> t_lb_;
+  virtual T GetVolume_() const { return box_.GetVolume();}
 };
 
-std::list<NodeR3> GenerateNotesThatTessellateR3(const Eigen::Vector3f&
-    min, const Eigen::Vector3f& max, float max_side_len); 
+typedef NodeR3<float>  NodeR3f;
+typedef NodeR3<double> NodeR3d;
+
+template<typename T>
+std::list<NodeR3<T>> GenerateNotesThatTessellateR3(const Eigen::Matrix<T,3,1>&
+    min, const Eigen::Matrix<T,3,1>& max, T max_side_len); 
 
 }

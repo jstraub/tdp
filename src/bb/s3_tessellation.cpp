@@ -5,13 +5,14 @@
 
 namespace tdp {
 
-std::vector<Tetrahedron4D> TessellateS3() {
+template <typename T>
+std::vector<Tetrahedron4D<T>> TessellateS3() {
   // Search for a north pole to split the sphere into two halfs of
   // equal size.  The standard north 1,0,0,0 dooes not work;
-  S4f north;
+  S<T,4> north;
   for (uint32_t i=0; i<1000; ++i) {
-    north = S4f::Random();
-    std::vector<Tetrahedron4D> tetrahedra = TessellateS3(north.vector());
+    north = S<T,4>::Random();
+    std::vector<Tetrahedron4D<T>> tetrahedra = TessellateS3(north.vector());
     if ( tetrahedra.size() == 300)  {
       break;
     }
@@ -24,18 +25,21 @@ std::vector<Tetrahedron4D> TessellateS3() {
     << std::endl;
   return TessellateS3(north.vector());
 }
+template std::vector<Tetrahedron4D<float>> TessellateS3();
+template std::vector<Tetrahedron4D<double>> TessellateS3();
 
-std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
-  std::vector<Tetrahedron4D> tetrahedra;
+template <typename T>
+std::vector<Tetrahedron4D<T>> TessellateS3(const Eigen::Matrix<T,4,1>& north) {
+  std::vector<Tetrahedron4D<T>> tetrahedra;
   tetrahedra.reserve(600);
   
-  Eigen::Matrix<float, 4, 120> vertices;
+  Eigen::Matrix<T, 4, 120> vertices;
   vertices.fill(0.);
   uint32_t i = 0;
-  for (float a=0; a<2; ++a) 
-    for (float b=0; b<2; ++b) 
-      for (float c=0; c<2; ++c) 
-        for (float d=0; d<2; ++d) {
+  for (T a=0; a<2; ++a) 
+    for (T b=0; b<2; ++b) 
+      for (T c=0; c<2; ++c) 
+        for (T d=0; d<2; ++d) {
           vertices(0,i) = a*2. - 1.;
           vertices(1,i) = b*2. - 1.;
           vertices(2,i) = c*2. - 1.;
@@ -46,7 +50,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
     vertices(j,i++) = -2.;
   }
   // Golden Ratio 
-  float phi = 0.5 * (1. + sqrt(5.));
+  T phi = 0.5 * (1. + sqrt(5.));
   // All even permutations
   // http://mathworld.wolfram.com/EvenPermutation.html
   Eigen::Matrix<uint32_t, 12, 4> evenPerms;
@@ -64,9 +68,9 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
     3,1,0,2,
     3,2,1,0;
   for (uint32_t j=0; j<12; ++j) 
-    for (float a=0; a<2; ++a) 
-      for (float b=0; b<2; ++b) 
-        for (float c=0; c<2; ++c) {
+    for (T a=0; a<2; ++a) 
+      for (T b=0; b<2; ++b) 
+        for (T c=0; c<2; ++c) {
           vertices(evenPerms(j,0),i) = (a*2.-1.)*phi;
           vertices(evenPerms(j,1),i) = (b*2.-1.);
           vertices(evenPerms(j,2),i) = (c*2.-1.)/phi;
@@ -95,7 +99,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
   Eigen::Matrix<uint8_t, Eigen::Dynamic, Eigen::Dynamic> G(n_vertices, n_vertices);
   for (i = 0; i < n_vertices; ++i) 
     for (j = 0; j < n_vertices; ++j) {
-      float ang = acos(vertices.col(i).transpose() * vertices.col(j)); 
+      T ang = acos(vertices.col(i).transpose() * vertices.col(j)); 
       if (fabs(ang - 36.*M_PI/180.) < 1e-6) {
         G(i,j) = 1;
       } else {
@@ -117,7 +121,7 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
     if (G(p(0),p(1))==1 && G(p(0),p(2))==1 && G(p(0),p(3))==1 
         && G(p(1),p(2))==1 && G(p(1),p(3))==1 && G(p(2),p(3))==1) {
 //      std::cout << " found tetrahedron" << std::endl;
-      tetrahedra.push_back(Tetrahedron4D(
+      tetrahedra.push_back(Tetrahedron4D<T>(
             vertices.col(p(0)),
             vertices.col(p(1)),
             vertices.col(p(2)),
@@ -127,10 +131,16 @@ std::vector<Tetrahedron4D> TessellateS3(const Eigen::Vector4f& north) {
   return tetrahedra;
 }
 
-void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples) {
+template std::vector<Tetrahedron4D<float>> TessellateS3(
+    const Eigen::Matrix<float,4,1>& north);
+template std::vector<Tetrahedron4D<double>> TessellateS3(
+    const Eigen::Matrix<double,4,1>& north);
+
+template <typename T>
+void TessellationTest(std::vector<Tetrahedron4D<T>>& tetrahedra, uint32_t Nsamples) {
   uint32_t N = 0;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4f q = S4f::Random();
+    S<T,4> q = S<T,4>::Random();
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
         ++N;
@@ -138,11 +148,11 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction all over sphere intersected with tessellation: "
-    << static_cast<float>(N)/static_cast<float>(Nsamples)
+    << static_cast<T>(N)/static_cast<T>(Nsamples)
     << std::endl;
   N = 0.;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4f q = S4f::Random();
+    S<T,4> q = S<T,4>::Random();
     q.vector()(0) = q.vector()(0) < 0. ? -q.vector()(0) : q.vector()(0);
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
@@ -151,11 +161,11 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction on top half-sphere intersected with tessellation: "
-    << static_cast<float>(N)/static_cast<float>(Nsamples)
+    << static_cast<T>(N)/static_cast<T>(Nsamples)
     << std::endl;
   N = 0.;
   for (uint32_t i=0; i<Nsamples; ++i) {
-    S4f q = S4f::Random();
+    S<T,4> q = S<T,4>::Random();
     q.vector()(0) = q.vector()(0) < 0. ? q.vector()(0) : -q.vector()(0);
     for (const auto& tetra : tetrahedra) 
       if (tetra.Intersects(q.vector())) {
@@ -164,7 +174,12 @@ void TessellationTest(std::vector<Tetrahedron4D>& tetrahedra, uint32_t Nsamples)
       }
   }
   std::cout << "fraction on bottom half-sphere intersected with tessellation: "
-    << static_cast<float>(N)/static_cast<float>(Nsamples)
+    << static_cast<T>(N)/static_cast<T>(Nsamples)
     << std::endl;
 }
+template void TessellationTest(std::vector<Tetrahedron4D<float>>& tetrahedra,
+    uint32_t Nsamples);
+template void TessellationTest(std::vector<Tetrahedron4D<double>>& tetrahedra, 
+    uint32_t Nsamples);
+
 }

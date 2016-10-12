@@ -15,13 +15,13 @@
 
 namespace tdp {
 
-template<class UpperBound, class NodeLin>
-class UpperBoundLin : public Bound<NodeLin> {
+template<typename T, class UpperBound, class NodeLin>
+class UpperBoundLin : public Bound<T,NodeLin> {
  public:
   UpperBoundLin(UpperBound& boundS3);
   virtual ~UpperBoundLin() = default;
-  virtual float Evaluate(const NodeLin& node);
-  virtual float EvaluateAndSet(NodeLin& node);
+  virtual T Evaluate(const NodeLin& node);
+  virtual T EvaluateAndSet(NodeLin& node);
  private:
   UpperBound& boundS3_;
 };

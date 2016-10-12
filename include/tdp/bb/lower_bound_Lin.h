@@ -15,17 +15,20 @@
 
 namespace tdp {
 
-template<class NodeLin>
-class LowerBoundLin : public Bound<NodeLin> {
+template<typename T, class NodeLin>
+class LowerBoundLin : public Bound<T,NodeLin> {
  public:
-  LowerBoundLin(LowerBoundS3& boundS3);
+  LowerBoundLin(LowerBoundS3<T>& boundS3);
   virtual ~LowerBoundLin() = default;
-  virtual float Evaluate(const NodeLin& node);
-  virtual float EvaluateAndSet(NodeLin& node);
+  virtual T Evaluate(const NodeLin& node);
+  virtual T EvaluateAndSet(NodeLin& node);
  private:
-  LowerBoundS3& boundS3_;
+  LowerBoundS3<T>& boundS3_;
 };
-typedef LowerBoundLin<NodeTpS3> LowerBoundTpS3 ;
-typedef LowerBoundLin<NodeAA>   LowerBoundAA   ;
+typedef LowerBoundLin<float,NodeTpS3<float>> LowerBoundTpS3f ;
+typedef LowerBoundLin<float,NodeAA<float>>   LowerBoundAAf   ;
+
+typedef LowerBoundLin<double,NodeTpS3<double>> LowerBoundTpS3d ;
+typedef LowerBoundLin<double,NodeAA<double>>   LowerBoundAAd   ;
 }
 #include <tdp/bb/lower_bound_Lin_impl.hpp>

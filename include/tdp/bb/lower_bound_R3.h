@@ -13,21 +13,26 @@
 
 namespace tdp {
 
-class LowerBoundR3 : public Bound<NodeR3> {
+template <typename T>
+class LowerBoundR3 : public Bound<T,NodeR3<T>> {
  public:
-  LowerBoundR3(const std::vector<Normal3f>& gmmA, const
-      std::vector<Normal3f>& gmmB, const Eigen::Quaternion<float>& q);
+  LowerBoundR3(const std::vector<Normal<T,3>>& gmmA, const
+      std::vector<Normal<T,3>>& gmmB, const Eigen::Quaternion<T>& q);
   virtual ~LowerBoundR3() = default;
-  virtual float Evaluate(const NodeR3& node);
-  virtual float EvaluateAndSet(NodeR3& node);
+  virtual T Evaluate(const NodeR3<T>& node);
+  virtual T EvaluateAndSet(NodeR3<T>& node);
  private:
-  void Evaluate(const NodeR3& node, Eigen::Matrix<float,3,9>& xs,
-      Eigen::Matrix<float,9,1>& lbs);
-  std::vector<Normal3f> gmmT_;
+  void Evaluate(const NodeR3<T>& node, Eigen::Matrix<T,3,9>& xs,
+      Eigen::Matrix<T,9,1>& lbs);
+  std::vector<Normal<T,3>> gmmT_;
 };
 
-void ComputeGmmT( const std::vector<Normal3f>& gmmA, const
-    std::vector<Normal3f>& gmmB, std::vector<Normal3f>& gmmT, const
-    Eigen::Quaternion<float>& q);
+typedef LowerBoundR3<float>  LowerBoundR3f;
+typedef LowerBoundR3<double> LowerBoundR3d;
+
+template <typename T>
+void ComputeGmmT( const std::vector<Normal<T,3>>& gmmA, const
+    std::vector<Normal<T,3>>& gmmB, std::vector<Normal<T,3>>& gmmT, const
+    Eigen::Quaternion<T>& q);
 
 }

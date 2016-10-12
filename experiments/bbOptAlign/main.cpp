@@ -125,8 +125,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> lambdaS2("ui.lambda S2", 30., 10., 180.);
   pangolin::Var<float> lambdaR3("ui.lambda R3", 1.0, 0.5, 2.0);
 
-  std::vector<tdp::Normal3f> gmmA, gmmB;
-  std::vector<tdp::vMF3f> vmfmmA, vmfmmB;
+  std::vector<tdp::Normal3d> gmmA, gmmB;
+  std::vector<tdp::vMF3d> vmfmmA, vmfmmB;
   tdp::DPmeans dpmeansA(lambdaR3), dpmeansB(lambdaR3);
   tdp::DPvMFmeans dpvmfmeansA(cos(lambdaS2*M_PI/180.)), 
                   dpvmfmeansB(cos(lambdaS2*M_PI/180.));
@@ -155,12 +155,12 @@ int main( int argc, char* argv[] )
       dpvmfmeansB.lambda_ = cos(lambdaS2*M_PI/180.);
 
       std::cout << "computing vMF MM A" << std::endl;
-      tdp::ComputevMFMM(nsA, cuNsA, dpvmfmeansA, maxIt, minNchangePerc,
+      tdp::ComputevMFMM<double>(nsA, cuNsA, dpvmfmeansA, maxIt, minNchangePerc,
           zA, cuZA, vmfmmA);
       for (auto& vmf : vmfmmA) vmf.Print();
 
       std::cout << "computing vMF MM B" << std::endl;
-      tdp::ComputevMFMM(nsB, cuNsB, dpvmfmeansB, maxIt, minNchangePerc,
+      tdp::ComputevMFMM<double>(nsB, cuNsB, dpvmfmeansB, maxIt, minNchangePerc,
           zB, cuZB, vmfmmB);
       for (auto& vmf : vmfmmB) vmf.Print();
 
@@ -174,12 +174,12 @@ int main( int argc, char* argv[] )
       dpmeansB.lambda_ = lambdaR3;
 
       std::cout << "computing GMM A" << std::endl;
-      tdp::ComputeGMMfromPC(pcA, cuPcA, 
+      tdp::ComputeGMMfromPC<double>(pcA, cuPcA, 
           dpmeansA, maxIt, minNchangePerc, zA, cuZA, gmmA);
       for (auto& g : gmmA) g.Print();
 
       std::cout << "computing GMM B" << std::endl;
-      tdp::ComputeGMMfromPC(pcB, cuPcB, 
+      tdp::ComputeGMMfromPC<double>(pcB, cuPcB, 
           dpmeansB, maxIt, minNchangePerc, zB, cuZB, gmmB);
       for (auto& g : gmmB) g.Print();
 
@@ -189,12 +189,12 @@ int main( int argc, char* argv[] )
     }
     
     if (pangolin::Pushed(computeAlignment)) {
-			tdp::LowerBoundS3 lower_bound_S3(vmfmmA, vmfmmB);
-			tdp::UpperBoundIndepS3 upper_bound_S3(vmfmmA, vmfmmB);
-			tdp::UpperBoundConvexS3 upper_bound_convex_S3(vmfmmA, vmfmmB);
+			tdp::LowerBoundS3d lower_bound_S3(vmfmmA, vmfmmB);
+			tdp::UpperBoundIndepS3d upper_bound_S3(vmfmmA, vmfmmB);
+			tdp::UpperBoundConvexS3d upper_bound_convex_S3(vmfmmA, vmfmmB);
 
-			std::list<tdp::NodeS3> nodesS3;
-			Eigen::Quaternionf q_star;
+			std::list<tdp::NodeS3d> nodesS3;
+			Eigen::Quaterniond q_star;
 			double lb_star = 1e99;
 			double eps = 1e-8;
 			//  double eps = 8e-7;
@@ -202,30 +202,34 @@ int main( int argc, char* argv[] )
 			uint32_t max_it = 5000;
 
       std::cout << "Tesselating Sphere for initial nodes" << std::endl;
-			nodesS3 = tdp::GenerateNotesThatTessellateS3();
+			nodesS3 = tdp::GenerateNotesThatTessellateS3<double>();
 
-			tdp::BranchAndBound<tdp::NodeS3> bb(lower_bound_S3, upper_bound_convex_S3);
+			tdp::BranchAndBound<double,tdp::NodeS3d> bb(lower_bound_S3, 
+          upper_bound_convex_S3);
       std::cout << "Running B&B for Rotation " 
         << " #nodes0 " << nodesS3.size() << std::endl;
-			tdp::NodeS3 node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
+			tdp::NodeS3d node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
 			q_star = node_star.GetLbArgument();
 			lb_star = node_star.GetLB();
 
       std::cout << " optimal rotation: "
         << std::endl << q_star.matrix() << std::endl;
 
-			std::list<tdp::NodeR3> nodesR3 =
-				tdp::GenerateNotesThatTessellateR3(minAB, maxAB, (maxAB-minAB).norm());
-			tdp::LowerBoundR3 lower_bound_R3(gmmA, gmmB, q_star);
-			tdp::UpperBoundIndepR3 upper_bound_R3(gmmA, gmmB, q_star);
-			tdp::UpperBoundConvexR3 upper_bound_convex_R3(gmmA, gmmB, q_star);
+			std::list<tdp::NodeR3d> nodesR3 =
+				tdp::GenerateNotesThatTessellateR3<double>(
+            minAB.cast<double>(), maxAB.cast<double>(), 
+            static_cast<double>((maxAB-minAB).norm()));
+			tdp::LowerBoundR3d lower_bound_R3(gmmA, gmmB, q_star);
+			tdp::UpperBoundIndepR3d upper_bound_R3(gmmA, gmmB, q_star);
+			tdp::UpperBoundConvexR3d upper_bound_convex_R3(gmmA, gmmB, q_star);
 
 			eps = 1e-9;
 			max_it = 5000;
 			max_lvl = 22;
-			tdp::BranchAndBound<tdp::NodeR3> bbR3(lower_bound_R3, upper_bound_convex_R3);
-			tdp::NodeR3 nodeR3_star = bbR3.Compute(nodesR3, eps, max_lvl, max_it);
-			Eigen::Vector3f t =  nodeR3_star.GetLbArgument();
+			tdp::BranchAndBound<double,tdp::NodeR3d> bbR3(lower_bound_R3, 
+          upper_bound_convex_R3);
+			tdp::NodeR3d nodeR3_star = bbR3.Compute(nodesR3, eps, max_lvl, max_it);
+			Eigen::Vector3d t =  nodeR3_star.GetLbArgument();
 
 			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
     }

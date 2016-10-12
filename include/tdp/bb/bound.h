@@ -7,13 +7,13 @@
 
 namespace tdp {
 
-template <class Node>
+template <typename T, class Node>
 class Bound {
  public:
   Bound() : verbose_(false) {};
   virtual ~Bound() = default;
-  virtual float Evaluate(const Node& node) { return 0;}
-  virtual float EvaluateAndSet(Node& node) { return 0;};
+  virtual T Evaluate(const Node& node) { return 0;}
+  virtual T EvaluateAndSet(Node& node) { return 0;};
   virtual void ToggleVerbose() {verbose_ = verbose_?false:true;}
  protected:
   bool verbose_;

@@ -13,28 +13,28 @@
 
 namespace tdp {
 
-template <class Node>
+template <typename T, class Node>
 class BranchAndBound {
  public:
-  BranchAndBound(Bound<Node>& lower_bound, Bound<Node>& upper_bound);
+  BranchAndBound(Bound<T,Node>& lower_bound, Bound<T,Node>& upper_bound);
   ~BranchAndBound() = default;
-  Node Compute(std::list<Node>& nodes, float eps, uint32_t max_lvl,
+  Node Compute(std::list<Node>& nodes, T eps, uint32_t max_lvl,
       uint32_t max_it);
  private:
-  Bound<Node>& lower_bound_;
-  Bound<Node>& upper_bound_;
-  uint32_t BoundAndPrune(std::list<Node>& nodes, float& lb, float&
-      ub, float eps);
+  Bound<T,Node>& lower_bound_;
+  Bound<T,Node>& upper_bound_;
+  uint32_t BoundAndPrune(std::list<Node>& nodes, T& lb, T&
+      ub, T eps);
 
   typename std::list<Node>::iterator FindBestNodeToExplore(
-      ::std::list<Node>& nodes, float eps);
+      ::std::list<Node>& nodes, T eps);
   typename std::list<Node>::iterator FindBestNode(
-      ::std::list<Node>& nodes, float eps);
+      ::std::list<Node>& nodes, T eps);
 
-  void WriteStats(std::ofstream& out, std::list<Node>& nodes, float
-      lb, float ub, float dt, typename std::list<Node>::iterator& node_star);
-  void WriteNodes(std::ofstream& out, std::list<Node>& nodes, float
-      lb, float ub);
+  void WriteStats(std::ofstream& out, std::list<Node>& nodes, T
+      lb, T ub, T dt, typename std::list<Node>::iterator& node_star);
+  void WriteNodes(std::ofstream& out, std::list<Node>& nodes, T
+      lb, T ub);
 };
 
 }

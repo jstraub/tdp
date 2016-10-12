@@ -18,17 +18,22 @@
 
 namespace tdp {
 
-class NodeTpS3 : public NodeLin {
+template<typename T>
+class NodeTpS3 : public NodeLin<T> {
  public:
-  NodeTpS3(const Box& box, std::vector<uint32_t> ids);
-  NodeTpS3(const NodeTpS3& node);
+  NodeTpS3(const Box<T>& box, std::vector<uint32_t> ids);
+  NodeTpS3(const NodeTpS3<T>& node);
   virtual ~NodeTpS3() = default;
-  virtual std::vector<NodeTpS3> Branch() const;
+  virtual std::vector<NodeTpS3<T>> Branch() const;
 
   std::string GetSpace() const { return "TpS3"; }
  protected:
-  virtual Eigen::Quaternion<float> Project(const Eigen::Vector3f& c) const;
+  virtual Eigen::Quaternion<T> Project(const Eigen::Matrix<T,3,1>& c) const;
 };
 
-std::list<NodeTpS3> TessellateTpS3();
+typedef NodeTpS3<float>  NodeTpS3f;
+typedef NodeTpS3<double> NodeTpS3d;
+
+template<typename T>
+std::list<NodeTpS3<T>> TessellateTpS3();
 }

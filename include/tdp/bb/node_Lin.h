@@ -20,31 +20,32 @@
 
 namespace tdp {
 
-class NodeLin : public BaseNode {
+template<typename T>
+class NodeLin : public BaseNode<T> {
  public:
-  NodeLin(const Box& box, std::vector<uint32_t> ids);
-  NodeLin(const NodeLin& node);
+  NodeLin(const Box<T>& box, std::vector<uint32_t> ids);
+  NodeLin(const NodeLin<T>& node);
   virtual ~NodeLin() = default;
 
-  void SetLbArgument(const Eigen::Quaternion<float>& q) {q_lb_ = q;}
-  Eigen::Quaternion<float> GetLbArgument() const {return q_lb_;}
-  Eigen::Quaternion<float> GetCenter() const;
+  void SetLbArgument(const Eigen::Quaternion<T>& q) {q_lb_ = q;}
+  Eigen::Quaternion<T> GetLbArgument() const {return q_lb_;}
+  Eigen::Quaternion<T> GetCenter() const;
   virtual uint32_t GetBranchingFactor(uint32_t i) const { return 8;}
   virtual std::string ToString() const;
   virtual std::string Serialize() const;
   std::string GetSpace() const { return "Lin"; }
-  NodeS3 GetNodeS3() const;
-  const std::vector<Eigen::Quaternion<float>>& GetQuaternions() const { return qs_; }
-  std::vector<Eigen::Quaternion<float>>& GetQuaternions() { return qs_; }
+  NodeS3<T> GetNodeS3() const;
+  const std::vector<Eigen::Quaternion<T>>& GetQuaternions() const { return qs_; }
+  std::vector<Eigen::Quaternion<T>>& GetQuaternions() { return qs_; }
  protected:
-  NodeR3 nodeLin_;
-  std::vector<Eigen::Quaternion<float>> qs_;
-  Eigen::Quaternion<float> q_lb_;
-  virtual float GetVolume_() const;
-  virtual void Linearize(const Box& box);
-  virtual Eigen::Quaternion<float> Project(const Eigen::Vector3f& c) const = 0;
-  Tetrahedron4D TetraFromBox(const Box& box, uint32_t i,
+  NodeR3<T> nodeLin_;
+  std::vector<Eigen::Quaternion<T>> qs_;
+  Eigen::Quaternion<T> q_lb_;
+  virtual T GetVolume_() const;
+  virtual void Linearize(const Box<T>& box);
+  virtual Eigen::Quaternion<T> Project(const Eigen::Matrix<T,3,1>& c) const = 0;
+  Tetrahedron4D<T> TetraFromBox(const Box<T>& box, uint32_t i,
       uint32_t j, uint32_t k, uint32_t l) const;
-  static Eigen::Vector4f QuaternionToVec(const Eigen::Quaternion<float>& q);
+  static Eigen::Matrix<T,4,1> QuaternionToVec(const Eigen::Quaternion<T>& q);
 };
 }

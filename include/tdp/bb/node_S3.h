@@ -14,24 +14,29 @@
 
 namespace tdp {
 
-class NodeS3 : public BaseNode {
+template<typename T>
+class NodeS3 : public BaseNode<T> {
  public:
-  NodeS3(const Tetrahedron4D& tetrahedron, std::vector<uint32_t> ids);
-  NodeS3(const NodeS3& node);
+  NodeS3(const Tetrahedron4D<T>& tetrahedron, std::vector<uint32_t> ids);
+  NodeS3(const NodeS3<T>& node);
   virtual ~NodeS3() = default;
-  virtual std::vector<NodeS3> Branch() const;
-  const Tetrahedron4D& GetTetrahedron() const { return tetrahedron_;}
-  void SetLbArgument(const Eigen::Quaternion<float>& q) {q_lb_ = q;}
-  Eigen::Quaternion<float> GetLbArgument() const {return q_lb_;}
+  virtual std::vector<NodeS3<T>> Branch() const;
+  const Tetrahedron4D<T>& GetTetrahedron() const { return tetrahedron_;}
+  void SetLbArgument(const Eigen::Quaternion<T>& q) {q_lb_ = q;}
+  Eigen::Quaternion<T> GetLbArgument() const {return q_lb_;}
   virtual uint32_t GetBranchingFactor(uint32_t i) const { return i==0? 600 : 8;}
   virtual std::string ToString() const;
   virtual std::string Serialize() const;
   std::string GetSpace() const { return "S3"; }
  protected:
-  Tetrahedron4D tetrahedron_;
-  Eigen::Quaternion<float> q_lb_;
-  virtual float GetVolume_() const { return tetrahedron_.GetVolume();}
+  Tetrahedron4D<T> tetrahedron_;
+  Eigen::Quaternion<T> q_lb_;
+  virtual T GetVolume_() const { return tetrahedron_.GetVolume();}
 };
 
-std::list<NodeS3> GenerateNotesThatTessellateS3();
+typedef NodeS3<float>  NodeS3f;
+typedef NodeS3<double> NodeS3d;
+
+template<typename T>
+std::list<NodeS3<T>> GenerateNotesThatTessellateS3();
 }

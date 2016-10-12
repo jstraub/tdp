@@ -5,7 +5,9 @@
 
 namespace tdp {
 
-Box::Box(const Eigen::Vector3f& p_min, const Eigen::Vector3f& p_max) 
+template <typename T>
+Box<T>::Box(const Eigen::Matrix<T,3,1>& p_min, 
+    const Eigen::Matrix<T,3,1>& p_max) 
   : p_min_(p_min), p_max_(p_max) {
   // The first 4 are on purpose the way they are layed out to allow
   // fast access for edges and sides.
@@ -48,43 +50,50 @@ Box::Box(const Eigen::Vector3f& p_min, const Eigen::Vector3f& p_max)
 
 }
 
-Eigen::Vector3f Box::GetCenter() const {
+template <typename T>
+Eigen::Matrix<T,3,1> Box<T>::GetCenter() const {
   return 0.5*(corners_.col(0) + corners_.col(6));
 }
 
-std::vector<Box> Box::Subdivide() const {
-  std::vector<Box> boxs;
+template <typename T>
+std::vector<Box<T>> Box<T>::Subdivide() const {
+  std::vector<Box<T>> boxs;
   boxs.reserve(8);
   // Lower half.
-  boxs.push_back(Box(corners_.col(0),
+  boxs.push_back(Box<T>(corners_.col(0),
         0.5*(corners_.col(0)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(5)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(5)), 
         0.5*(corners_.col(5)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(4)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(4)), 
         0.5*(corners_.col(4)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(1)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(1)), 
         0.5*(corners_.col(1)+corners_.col(6))));
   // Upper half.
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(7)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(7)), 
         0.5*(corners_.col(7)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(3)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(3)), 
         0.5*(corners_.col(3)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(2)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(2)), 
         0.5*(corners_.col(2)+corners_.col(6))));
-  boxs.push_back(Box(0.5*(corners_.col(0)+corners_.col(6)), 
+  boxs.push_back(Box<T>(0.5*(corners_.col(0)+corners_.col(6)), 
         corners_.col(6)));
   return boxs;
 }
 
-bool Box::IsInside(const Eigen::Vector3f& t) const {
+template <typename T>
+bool Box<T>::IsInside(const Eigen::Matrix<T,3,1>& t) const {
   return (p_min_.array() <= t.array()).all() 
     && (t.array() <= p_max_.array()).all();
 }
 
-Eigen::Vector3f Box::GetSideLengths() const {
-  Eigen::Vector3f ls;
+template <typename T>
+Eigen::Matrix<T,3,1> Box<T>::GetSideLengths() const {
+  Eigen::Matrix<T,3,1> ls;
   ls << edges_.col(0).norm(), edges_.col(1).norm(), edges_.col(2).norm(); 
   return ls;
 }
+
+template class Box<float>;
+template class Box<double>;
 
 }

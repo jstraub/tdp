@@ -4,49 +4,49 @@
 
 namespace tdp {
 
-template<class NodeLin>
-LowerBoundLin<NodeLin>::LowerBoundLin(LowerBoundS3& boundS3) 
+template<typename T, class NodeLin>
+LowerBoundLin<T,NodeLin>::LowerBoundLin(LowerBoundS3<T>& boundS3) 
   : boundS3_(boundS3)
 { }
 
-template<class NodeLin>
-float LowerBoundLin<NodeLin>::Evaluate(const NodeLin& node) {
+template<typename T, class NodeLin>
+T LowerBoundLin<T,NodeLin>::Evaluate(const NodeLin& node) {
   // We evaluate at the center of the center tetrahedron.
   // Only one evaluation point to be fair with direct S tessellation.
-//  Eigen::Matrix<float,5,1> lbs;
+//  Eigen::Matrix<T,5,1> lbs;
 //  for (uint32_t i=0; i<5; ++i)
 //    lbs(i) = boundS3_.Evaluate(node.GetNodeS3(i));
 //  return lbs.minCoeff();
 
   // Last node is the center tetrahedron according to
   // NodeLin::Linearize()
-  Eigen::VectorXf lbs(1);
-  std::vector<Eigen::Quaternion<float>> qs(1,node.GetCenter());
+  Eigen::Matrix<T,Eigen::Dynamic,1> lbs(1);
+  std::vector<Eigen::Quaternion<T>> qs(1,node.GetCenter());
   boundS3_.EvaluateRotationSet(qs, lbs);
   return lbs(0);
 }
 
-template<class NodeLin>
-float LowerBoundLin<NodeLin>::EvaluateAndSet(NodeLin& node) {
-//  Eigen::Matrix<float,5,1> lbs;
+template<typename T, class NodeLin>
+T LowerBoundLin<T,NodeLin>::EvaluateAndSet(NodeLin& node) {
+//  Eigen::Matrix<T,5,1> lbs;
 //  uint32_t id = 0;
 //  for (uint32_t i=0; i<5; ++i)
 //    lbs(i) = boundS3_.Evaluate(node.GetNodeS3(i));
-//  float lb = lbs.minCoeff(&id);
-//  float lb = boundS3_.Evaluate(node.GetNodeS3(id));
-//  Eigen::Matrix<float,3,9> xs;
-//  Eigen::Matrix<float,9,1> lbs;
+//  T lb = lbs.minCoeff(&id);
+//  T lb = boundS3_.Evaluate(node.GetNodeS3(id));
+//  Eigen::Matrix<T,3,9> xs;
+//  Eigen::Matrix<T,9,1> lbs;
 //  Evaluate(node, xs, lbs);
 //  uint32_t id_max = 0;
-////  float lb = lbs.maxCoeff(&id_max);
-//  float lb = lbs(id_max);
+////  T lb = lbs.maxCoeff(&id_max);
+//  T lb = lbs(id_max);
 //  node.SetLbArgument(xs.col(id_max));
 
-  Eigen::VectorXf lbs(1);
-  std::vector<Eigen::Quaternion<float>> qs(1,node.GetCenter());
+  Eigen::Matrix<T,Eigen::Dynamic,1> lbs(1);
+  std::vector<Eigen::Quaternion<T>> qs(1,node.GetCenter());
   boundS3_.EvaluateRotationSet(qs, lbs);
   uint32_t id = 0;
-  float lb = lbs(0);
+  T lb = lbs(0);
 
   node.SetLB(lb);
   // Set the LB argument in the S3 node

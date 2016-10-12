@@ -6,41 +6,45 @@
 
 namespace tdp {
 
-Eigen::Vector4f normed(const Eigen::Vector4f& x) {
-  return x / x.norm();
-}
-
-Tetrahedron4D::Tetrahedron4D(const Eigen::Matrix<float, 4, 4>& vertices) :
+template <typename T>
+Tetrahedron4D<T>::Tetrahedron4D(const Eigen::Matrix<T, 4, 4>& vertices) :
   vertices_(vertices) {}
 
-Tetrahedron4D::Tetrahedron4D(const Eigen::Vector4f& a, const
-    Eigen::Vector4f& b, const Eigen::Vector4f& c, const
-    Eigen::Vector4f& d) {
+template <typename T>
+Tetrahedron4D<T>::Tetrahedron4D(const Eigen::Matrix<T,4,1>& a, const
+    Eigen::Matrix<T,4,1>& b, const Eigen::Matrix<T,4,1>& c, const
+    Eigen::Matrix<T,4,1>& d) {
   vertices_ << a, b, c, d;
 }
 
-Eigen::Vector4f Tetrahedron4D::GetCenter() const {
-  Eigen::Vector4f c = normed(vertices_.rowwise().sum());
+template <typename T>
+Eigen::Matrix<T,4,1> Tetrahedron4D<T>::GetCenter() const {
+  Eigen::Matrix<T,4,1> c = (vertices_.rowwise().sum()).normalized();
 //  c.bottomRows<3>() *= -1;
   return c;
 }
 
-Eigen::Vector4f Tetrahedron4D::GetVertex(uint32_t i) const {
-  Eigen::Vector4f v = vertices_.col(i);
+template <typename T>
+Eigen::Matrix<T,4,1> Tetrahedron4D<T>::GetVertex(uint32_t i) const {
+  Eigen::Matrix<T,4,1> v = vertices_.col(i);
 //  v.bottomRows<3>() *= -1;
   return v;
 }
 
-Eigen::Quaternion<float> Tetrahedron4D::GetCenterQuaternion() const {
-  Eigen::Vector4f q = GetCenter();
-  return Eigen::Quaternion<float>(q(0), q(1), q(2), q(3));
-}
-Eigen::Quaternion<float> Tetrahedron4D::GetVertexQuaternion(uint32_t i) const {
-  Eigen::Vector4f q = GetVertex(i);
-  return Eigen::Quaternion<float>(q(0), q(1), q(2), q(3));
+template <typename T>
+Eigen::Quaternion<T> Tetrahedron4D<T>::GetCenterQuaternion() const {
+  Eigen::Matrix<T,4,1> q = GetCenter();
+  return Eigen::Quaternion<T>(q(0), q(1), q(2), q(3));
 }
 
-float Tetrahedron4D::GetVolume(const Tetrahedron4D& tetra) {
+template <typename T>
+Eigen::Quaternion<T> Tetrahedron4D<T>::GetVertexQuaternion(uint32_t i) const {
+  Eigen::Matrix<T,4,1> q = GetVertex(i);
+  return Eigen::Quaternion<T>(q(0), q(1), q(2), q(3));
+}
+
+template <typename T>
+T Tetrahedron4D<T>::GetVolume(const Tetrahedron4D<T>& tetra) {
   // The volume of a parallelepiped is the sqrt of the determinant of
   // the Grammian matrix G
   // https://en.wikipedia.org/wiki/Parallelepiped
@@ -48,21 +52,23 @@ float Tetrahedron4D::GetVolume(const Tetrahedron4D& tetra) {
   // The volume of the n simplex is obtained by dividing the volume of
   // the parallelepiped by the factorial of dimension.
   // https://en.wikipedia.org/wiki/Gramian_matrix
-  Eigen::Matrix4f G = tetra.vertices_.transpose()*tetra.vertices_;
+  Eigen::Matrix<T,4,4> G = tetra.vertices_.transpose()*tetra.vertices_;
   return sqrt(G.determinant())/6.;
 }
 
-float Tetrahedron4D::GetVolume(uint32_t maxLvl) const {
+template <typename T>
+T Tetrahedron4D<T>::GetVolume(uint32_t maxLvl) const {
   return RecursivelyApproximateSurfaceArea(*this, maxLvl);
 }
 
-float Tetrahedron4D::RecursivelyApproximateSurfaceArea(Tetrahedron4D
+template <typename T>
+T Tetrahedron4D<T>::RecursivelyApproximateSurfaceArea(Tetrahedron4D<T>
     tetra, uint32_t lvl) const {
-  float V = 0;
+  T V = 0;
   if (lvl == 0) {
     V = GetVolume(tetra);
   } else {
-    std::vector<Tetrahedron4D> tetras_i = tetra.Subdivide();
+    std::vector<Tetrahedron4D<T>> tetras_i = tetra.Subdivide();
     for (auto& tetra_i: tetras_i) {
       V += RecursivelyApproximateSurfaceArea(tetra_i, lvl-1);
     }
@@ -70,82 +76,88 @@ float Tetrahedron4D::RecursivelyApproximateSurfaceArea(Tetrahedron4D
   return V;
 }
 
-void Tetrahedron4D::RecursivelySubdivide(Tetrahedron4D
-    tetra, std::vector<Tetrahedron4D>& tetras, uint32_t lvl)
+template <typename T>
+void Tetrahedron4D<T>::RecursivelySubdivide(Tetrahedron4D<T>
+    tetra, std::vector<Tetrahedron4D<T>>& tetras, uint32_t lvl)
   const {
   if (lvl == 0) {
     tetras.push_back(tetra);
   } else {
-    std::vector<Tetrahedron4D> tetras_i = tetra.Subdivide();
+    std::vector<Tetrahedron4D<T>> tetras_i = tetra.Subdivide();
     for (auto& tetra_i: tetras_i) {
       RecursivelySubdivide(tetra_i, tetras, lvl-1);
     }
   }
 }
 
-std::vector<Tetrahedron4D> Tetrahedron4D::Subdivide() const {
-  std::vector<Tetrahedron4D> tetrahedra;  
+template <typename T>
+std::vector<Tetrahedron4D<T>> Tetrahedron4D<T>::Subdivide() const {
+  std::vector<Tetrahedron4D<T>> tetrahedra;  
   tetrahedra.reserve(8);
   // Compute new vertices and "pop" them out to the sphere.
-  Eigen::Matrix<float, 4, 6> vertices;
-  vertices << normed(vertices_.col(0) + vertices_.col(1)), //0
-    normed(vertices_.col(1) + vertices_.col(2)), //1
-    normed(vertices_.col(2) + vertices_.col(0)), //2
-    normed(vertices_.col(0) + vertices_.col(3)), //3
-    normed(vertices_.col(1) + vertices_.col(3)), //4
-    normed(vertices_.col(2) + vertices_.col(3)); //5
+  Eigen::Matrix<T, 4, 6> vertices;
+  vertices << (vertices_.col(0) + vertices_.col(1)).normalized(), //0
+    (vertices_.col(1) + vertices_.col(2)).normalized(), //1
+    (vertices_.col(2) + vertices_.col(0)).normalized(), //2
+    (vertices_.col(0) + vertices_.col(3)).normalized(), //3
+    (vertices_.col(1) + vertices_.col(3)).normalized(), //4
+    (vertices_.col(2) + vertices_.col(3)).normalized(); //5
   // Corner tetrahedron at 0th corner of parent.
-  tetrahedra.push_back(Tetrahedron4D(vertices_.col(0), vertices.col(0),
+  tetrahedra.push_back(Tetrahedron4D<T>(vertices_.col(0), vertices.col(0),
         vertices.col(2), vertices.col(3)));
   // Corner tetrahedron at 1th corner of parent.
-  tetrahedra.push_back(Tetrahedron4D(vertices_.col(1), vertices.col(0),
+  tetrahedra.push_back(Tetrahedron4D<T>(vertices_.col(1), vertices.col(0),
         vertices.col(1), vertices.col(4)));
   // Corner tetrahedron at 2th corner of parent.
-  tetrahedra.push_back(Tetrahedron4D(vertices_.col(2), vertices.col(1),
+  tetrahedra.push_back(Tetrahedron4D<T>(vertices_.col(2), vertices.col(1),
         vertices.col(2), vertices.col(5)));
   // Corner tetrahedron at 3th corner of parent.
-  tetrahedra.push_back(Tetrahedron4D(vertices_.col(3), vertices.col(3),
+  tetrahedra.push_back(Tetrahedron4D<T>(vertices_.col(3), vertices.col(3),
         vertices.col(4), vertices.col(5)));
-  Eigen::Vector3f dots;
+  Eigen::Matrix<T,3,1> dots;
   dots[0] = vertices.col(0).transpose() * vertices.col(5);
   dots[1] = vertices.col(2).transpose() * vertices.col(4);
   dots[2] = vertices.col(3).transpose() * vertices.col(1);
   uint32_t skewEdgeId = 0;
   dots.maxCoeff(&skewEdgeId);
   if (skewEdgeId == 0) {
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(0), vertices.col(5),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(0), vertices.col(5),
         vertices.col(3), vertices.col(2)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(0), vertices.col(5),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(0), vertices.col(5),
         vertices.col(3), vertices.col(4)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(0), vertices.col(5),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(0), vertices.col(5),
         vertices.col(1), vertices.col(4)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(0), vertices.col(5),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(0), vertices.col(5),
         vertices.col(1), vertices.col(2)));
   } else if (skewEdgeId == 1) {
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(2), vertices.col(4),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(2), vertices.col(4),
         vertices.col(3), vertices.col(0)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(2), vertices.col(4),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(2), vertices.col(4),
         vertices.col(0), vertices.col(1)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(2), vertices.col(4),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(2), vertices.col(4),
         vertices.col(1), vertices.col(5)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(2), vertices.col(4),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(2), vertices.col(4),
         vertices.col(3), vertices.col(5)));
   } else if (skewEdgeId == 2) {
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(3), vertices.col(1),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(3), vertices.col(1),
         vertices.col(0), vertices.col(2)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(3), vertices.col(1),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(3), vertices.col(1),
         vertices.col(0), vertices.col(4)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(3), vertices.col(1),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(3), vertices.col(1),
         vertices.col(5), vertices.col(4)));
-    tetrahedra.push_back(Tetrahedron4D(vertices.col(3), vertices.col(1),
+    tetrahedra.push_back(Tetrahedron4D<T>(vertices.col(3), vertices.col(1),
         vertices.col(5), vertices.col(2)));
   }
   return tetrahedra;
 }
 
-bool Tetrahedron4D::Intersects(const Eigen::Vector4f& q) const {
-  Eigen::Vector4f alpha = vertices_.lu().solve(q);
+template <typename T>
+bool Tetrahedron4D<T>::Intersects(const Eigen::Matrix<T,4,1>& q) const {
+  Eigen::Matrix<T,4,1> alpha = vertices_.lu().solve(q);
   return (alpha.array() >= 0.).all();
 }
+
+template class Tetrahedron4D<float>;
+template class Tetrahedron4D<double>;
 
 }

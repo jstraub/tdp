@@ -5,29 +5,33 @@
 
 namespace tdp {
 
-NodeS3::NodeS3(const Tetrahedron4D& tetrahedron,
-    std::vector<uint32_t> ids) : BaseNode(ids),
+template <typename T>
+NodeS3<T>::NodeS3(const Tetrahedron4D<T>& tetrahedron,
+    std::vector<uint32_t> ids) : BaseNode<T>(ids),
   tetrahedron_(tetrahedron) {
 }
 
-NodeS3::NodeS3(const NodeS3& node) : BaseNode(node.GetIds(),
+template <typename T>
+NodeS3<T>::NodeS3(const NodeS3<T>& node) : BaseNode<T>(node.GetIds(),
     node.GetLB(), node.GetUB()), tetrahedron_(node.GetTetrahedron()),
   q_lb_(node.GetLbArgument()) {
 }
 
-std::vector<NodeS3> NodeS3::Branch() const {
-  std::vector<NodeS3> nodes;
+template <typename T>
+std::vector<NodeS3<T>> NodeS3<T>::Branch() const {
+  std::vector<NodeS3<T>> nodes;
   nodes.reserve(8);
-  std::vector<Tetrahedron4D> tetrahedra = tetrahedron_.Subdivide();
+  std::vector<Tetrahedron4D<T>> tetrahedra = tetrahedron_.Subdivide();
   for (uint32_t i=0; i < tetrahedra.size(); ++i) {
     std::vector<uint32_t> ids(this->ids_);
     ids.push_back(i);
-    nodes.push_back(NodeS3(tetrahedra[i], ids));
+    nodes.push_back(NodeS3<T>(tetrahedra[i], ids));
   }
   return nodes;
 }
 
-std::string NodeS3::ToString() const {
+template <typename T>
+std::string NodeS3<T>::ToString() const {
   std::stringstream out; 
   out << GetTetrahedron().GetCenter().transpose() << std::endl;
 
@@ -44,9 +48,10 @@ std::string NodeS3::ToString() const {
   return out.str();
 };
 
-std::string NodeS3::Serialize() const {
+template <typename T>
+std::string NodeS3<T>::Serialize() const {
   std::stringstream out; 
-  Eigen::Vector4f v;
+  Eigen::Matrix<T,4,1> v;
   for (uint32_t i=0; i<4; ++i) {
     v = GetTetrahedron().GetVertex(i);
     out << v(0) << " " << v(1) << " " << v(2) << " " << v(3) << std::endl;
@@ -54,15 +59,18 @@ std::string NodeS3::Serialize() const {
   return out.str();
 };
 
-std::list<NodeS3> GenerateNotesThatTessellateS3() {
-  std::vector<Tetrahedron4D> tetrahedra = TessellateS3();
-  std::list<NodeS3> nodes; 
+template <typename T>
+std::list<NodeS3<T>> GenerateNotesThatTessellateS3() {
+  std::vector<Tetrahedron4D<T>> tetrahedra = TessellateS3<T>();
+  std::list<NodeS3<T>> nodes; 
 //  nodes.reserve(tetrahedra.size());
   for (uint32_t i=0; i<tetrahedra.size(); ++i) {
-    nodes.push_back(NodeS3(tetrahedra[i], std::vector<uint32_t>(1,i)));
+    nodes.push_back(NodeS3<T>(tetrahedra[i], std::vector<uint32_t>(1,i)));
   }
   return nodes;
 }
 
+template class NodeS3<float>;
+template class NodeS3<double>;
 
 }

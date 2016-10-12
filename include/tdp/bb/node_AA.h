@@ -18,16 +18,22 @@
 
 namespace tdp {
 
-class NodeAA : public NodeLin {
+template<typename T>
+class NodeAA : public NodeLin<T> {
  public:
-  NodeAA(const Box& box, std::vector<uint32_t> ids);
-  NodeAA(const NodeAA& node);
+  NodeAA(const Box<T>& box, std::vector<uint32_t> ids);
+  NodeAA(const NodeAA<T>& node);
   virtual ~NodeAA() = default;
-  virtual std::vector<NodeAA> Branch() const;
+  virtual std::vector<NodeAA<T>> Branch() const;
 
   std::string GetSpace() const { return "AA"; }
  protected:
-  virtual Eigen::Quaternion<float> Project(const Eigen::Vector3f& c) const;
+  virtual Eigen::Quaternion<T> Project(const Eigen::Matrix<T,3,1>& c) const;
 };
-std::list<NodeAA> TessellateAA();
+
+typedef NodeAA<float> NodeAAf;
+typedef NodeAA<double> NodeAAd;
+
+template<typename T>
+std::list<NodeAA<T>> TessellateAA();
 }

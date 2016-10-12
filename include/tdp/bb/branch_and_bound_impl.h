@@ -4,15 +4,15 @@
 
 namespace tdp {
 
-template <class Node>
-BranchAndBound<Node>::BranchAndBound(Bound<Node>& lower_bound,
-    Bound<Node>& upper_bound)
+template<typename T, class Node>
+BranchAndBound<T,Node>::BranchAndBound(Bound<T,Node>& lower_bound,
+    Bound<T,Node>& upper_bound)
   : lower_bound_(lower_bound), upper_bound_(upper_bound)
 {}
 
-template <class Node>
-uint32_t BranchAndBound<Node>::BoundAndPrune(std::list<Node>& nodes, float& lb,
-    float& ub, float eps) {
+template<typename T, class Node>
+uint32_t BranchAndBound<T,Node>::BoundAndPrune(std::list<Node>& nodes, T& lb,
+    T& ub, T eps) {
   lb = -1e40; ub = -1e40; 
   for (auto& node : nodes) {
     // Because of numerics...
@@ -27,16 +27,16 @@ uint32_t BranchAndBound<Node>::BoundAndPrune(std::list<Node>& nodes, float& lb,
     ub = std::max(ub, node.GetUB());
   }
   // Prune
-  nodes.remove_if(IsPrunableNode<Node>(lb));
+  nodes.remove_if(IsPrunableNode<T,Node>(lb));
   return std::distance(nodes.begin(), nodes.end());
 }
 
-template <class Node>
-void BranchAndBound<Node>::WriteStats(std::ofstream& out,
-    std::list<Node>& nodes, float lb, float ub, float dt,
+template<typename T, class Node>
+void BranchAndBound<T,Node>::WriteStats(std::ofstream& out,
+    std::list<Node>& nodes, T lb, T ub, T dt,
     typename
     std::list<Node>::iterator& node_star) {
-    float V = 0.; // Volume that the nodes explain
+    T V = 0.; // Volume that the nodes explain
     for (auto& node : nodes) V += node.GetVolume(); 
     uint32_t n_nodes = std::distance(nodes.begin(), nodes.end());
     out << lb << " " << ub << " " << n_nodes << " " << V 
@@ -46,9 +46,9 @@ void BranchAndBound<Node>::WriteStats(std::ofstream& out,
       << " " << node_star->GetLevel() << std::endl;
 };
 
-template <class Node>
-void BranchAndBound<Node>::WriteNodes(std::ofstream& out, std::list<Node>& nodes, float lb, float ub) {
-    float V = 0.; // Volume that the nodes explain
+template<typename T, class Node>
+void BranchAndBound<T,Node>::WriteNodes(std::ofstream& out, std::list<Node>& nodes, T lb, T ub) {
+    T V = 0.; // Volume that the nodes explain
     for (auto& node : nodes) V += node.GetVolume(); 
     uint32_t n_nodes = std::distance(nodes.begin(), nodes.end());
     out << lb << " " << ub << " " << n_nodes << " " << V << std::endl;
@@ -59,8 +59,8 @@ void BranchAndBound<Node>::WriteNodes(std::ofstream& out, std::list<Node>& nodes
     }
 };
 
-template <class Node>
-Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, float eps,
+template<typename T, class Node>
+Node BranchAndBound<T,Node>::Compute(std::list<Node>& nodes, T eps,
     uint32_t max_lvl, uint32_t max_it) {
 
   // Prepare output
@@ -76,8 +76,8 @@ Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, float eps,
   }
   Timer t0;
   // Get initial upper and lower bounds
-  float lb = -1.e6;
-  float ub = -1.e6;
+  T lb = -1.e6;
+  T ub = -1.e6;
   for (auto& node : nodes) {
     lower_bound_.EvaluateAndSet(node);
     upper_bound_.EvaluateAndSet(node);
@@ -154,9 +154,9 @@ Node BranchAndBound<Node>::Compute(std::list<Node>& nodes, float eps,
   return *node_star;
 }
 
-template<class Node>
-typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNodeToExplore(
-    std::list<Node>& nodes, float eps) {
+template<typename T, class Node>
+typename std::list<Node>::iterator BranchAndBound<T,Node>::FindBestNodeToExplore(
+    std::list<Node>& nodes, T eps) {
   auto node_i = std::max_element(nodes.begin(), nodes.end(),
       LessThanNodeUB<Node>());
   uint32_t Neq = 0;
@@ -172,9 +172,9 @@ typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNodeToExplore(
   return node_istar;
 }
 
-template<class Node>
-typename std::list<Node>::iterator BranchAndBound<Node>::FindBestNode(
-    std::list<Node>& nodes, float eps) {
+template<typename T, class Node>
+typename std::list<Node>::iterator BranchAndBound<T,Node>::FindBestNode(
+    std::list<Node>& nodes, T eps) {
   auto node_star = std::max_element(nodes.begin(), nodes.end(),
       LessThanNodeLB<Node>());
   uint32_t Neq = 0;

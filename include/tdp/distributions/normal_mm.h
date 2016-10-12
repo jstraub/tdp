@@ -12,6 +12,8 @@
 
 namespace tdp {
 
+ 
+template<typename T>
 bool ComputeGMMfromPC(
     const Image<Vector3fda>& x,
     const Image<Vector3fda>& cuX,
@@ -20,7 +22,7 @@ bool ComputeGMMfromPC(
     float minNchangePerc,
     Image<uint16_t>& z,
     Image<uint16_t>& cuZ,
-    std::vector<Normal<float,3>>& gmm) {
+    std::vector<Normal<T,3>>& gmm) {
   gmm.clear();
   // Run the clustering algorithm.
   dpmeans.Compute(x, cuX, cuZ, maxIt, minNchangePerc);
@@ -28,17 +30,18 @@ bool ComputeGMMfromPC(
   eigen_vector<Vector3fda>& centers = dpmeans.centers_;
   std::vector<size_t> Ns = dpmeans.Ns_;
   uint32_t K = dpmeans.K_;
-  eigen_vector<Eigen::Vector3f> xSum(K,Eigen::Vector3f::Zero());
-  eigen_vector<Eigen::Matrix3f> Ss(K,Eigen::Matrix3f::Zero());
-  eigen_vector<Eigen::Vector3f> mus(K,Eigen::Vector3f::Zero());
-  std::vector<float> ws(K,0.f);
-  float W = 0.f;
+
+  eigen_vector<Eigen::Matrix<T,3,1>> xSum(K,Eigen::Matrix<T,3,1>::Zero());
+  eigen_vector<Eigen::Matrix<T,3,3>> Ss(K,Eigen::Matrix<T,3,3>::Zero());
+  eigen_vector<Eigen::Matrix<T,3,1>> mus(K,Eigen::Matrix<T,3,1>::Zero());
+  std::vector<T> ws(K,0.f);
+  T W = 0.f;
   // Compute Gaussian statistics: 
   for (uint32_t i=0; i<x.Area(); ++i) 
     if(z[i] < K) {
       // TODO have no weighting right now!
-      float w = 1;
-      xSum[z[i]] += x[i]*w;
+      T w = 1;
+      xSum[z[i]] += x[i].cast<T>()*w;
       ws[z[i]] += w;
       W += w;
     }
@@ -48,17 +51,17 @@ bool ComputeGMMfromPC(
     if(z[i] < K) {
       //TODO
       float w = 1.f;
-      Ss[z[i]] += w*(x[i]-mus[z[i]])*(x[i]-mus[z[i]]).transpose();
+      Ss[z[i]] += w*(x[i].cast<T>()-mus[z[i]])*(x[i].cast<T>()-mus[z[i]]).transpose();
     }
   const float maxEvFactor = 1e-2f;
   for(uint32_t k=0; k<K; ++k)
     if (Ns[k] > 5) {
-      float pi = ws[k]/W;
-      Eigen::Matrix3f cov = Ss[k]/ws[k];
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(cov);
-      Eigen::Vector3f e = eig.eigenvalues();
+      T pi = ws[k]/W;
+      Eigen::Matrix<T,3,3> cov = Ss[k]/ws[k];
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<T,3,3>> eig(cov);
+      Eigen::Matrix<T,3,1> e = eig.eigenvalues();
       uint32_t iMax = 0;
-      float eMax = e.maxCoeff(&iMax);
+      T eMax = e.maxCoeff(&iMax);
       bool regularized = false;
       for (uint32_t i=0; i<3; ++i)
         if (i!=iMax && eMax*maxEvFactor > e(i)) {
@@ -68,10 +71,10 @@ bool ComputeGMMfromPC(
           regularized = true;
         }
       if (regularized) {
-        Eigen::Matrix3f V = eig.eigenvectors();
+        Eigen::Matrix<T,3,3> V = eig.eigenvectors();
         cov = V*e.asDiagonal()*V.inverse();
       }
-      gmm.push_back(Normal3f(mus[k], cov, pi));
+      gmm.push_back(Normal<T,3>(mus[k], cov, pi));
     }
   return true;
 }
