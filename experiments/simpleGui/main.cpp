@@ -99,6 +99,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // get depth image
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
+    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
     // copy raw image to gpu
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     // convet depth image from uint16_t to float [m]
