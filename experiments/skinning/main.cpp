@@ -26,15 +26,53 @@
 #endif
 
 #include <tdp/io/tinyply.h>
-
+#include <tdp/gl/shaders.h>
 #include <tdp/gui/gui.hpp>
+
 #include <iostream>
 #include <complex>
 #include <vector>
 #include <Eigen/Eigenvalues>
 #include "skinning.h"
 
-//test
+//void SkinningViewer(const std::string& input_uri)
+//{
+//  tdp::GUI gui(1200,800,video);
+
+//  size_t w = video.Streams()[gui.iD[0]].Width();
+//  size_t h = video.Streams()[gui.iD[0]].Height();
+//  // width and height need to be multiple of 64 for convolution
+//  // algorithm to compute normals.
+//  w += w%64;
+//  h += h%64;
+
+//  // Define Camera Render Object (for view / scene browsing)
+//  pangolin::OpenGlRenderState s_cam(
+//      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+//      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+//      );
+//  // Add named OpenGL viewport to window and provide 3D Handler
+//  pangolin::View& d_cam = pangolin::CreateDisplay()
+//    .SetHandler(new pangolin::Handler3D(s_cam));
+//  gui.container().AddDisplay(d_cam);
+//  // add a simple image viewer
+//  tdp::QuickView viewN2D(w,h);
+//  gui.container().AddDisplay(viewN2D);
+
+//  // camera model for computing point cloud and normals
+//  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5));
+
+//  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
+//  pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
+
+//  // Add some variables to GUI
+//  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+//  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
+//  pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+//  pangolin::Var<bool> savePC("ui.save current PC",false,false);
+//}
+
+
 void test_getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
     std::cout << "mean: " << mean << std::endl;
@@ -201,6 +239,7 @@ std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedHostImage<tdp::Vector3fd
   tdp::Vector3fda end2 = mean-stepVec;
 
   std::vector<tdp::Vector3fda> means;
+  means.push_back(mean);
   for (int i=1; i<=nsteps; ++i){
     std::vector<tdp::Vector3fda> meanAndCov_pos = meanAndSpreadOfBVoxel(pc, start1, end1);
     std::vector<tdp::Vector3fda> meanAndCov_neg = meanAndSpreadOfBVoxel(pc, start2, end2);
@@ -217,16 +256,22 @@ return means;
 
 int main( int argc, char* argv[] )
 {
-  //todo: send the points (in 3d) to draw to opengl
-  //
+  if (argc < 2){
+      std::cout << "Must input two plyfile paths!" << std::endl;
+      return -1;
+  }
+  //todo: send the points to draw with opengl
   const std::string inputA = std::string(argv[1]);
   const std::string inputB = std::string(argv[2]);
+  std::cout << "inputA, B: " << inputA << ", " << inputB << std::endl;
+  std::cout << "argc: " << argc << std::endl;
   const std::string option = (argc > 3) ? std::string(argv[3]) : "";
 
   bool runOnce = false;
   if (!option.compare("-1")) {
     runOnce = true;
   }
+
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -253,13 +298,77 @@ int main( int argc, char* argv[] )
   pangolin::View& viewN = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewN);
-  // use those OpenGL buffers
+
+  // load pc and normal from the input paths
   tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
   tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
   tdp::LoadPointCloud(inputA, pcA, nsA);
   tdp::LoadPointCloud(inputB, pcB, nsB);
 
-  //todo: getMeans
-  //then draw 
+//  std::cout << "pcA area:  " << pcA.Area() << std::endl;
+//  std::cout << "pcB area:  " << pcB.Area() << std::endl;
+
+  // use those OpenGL buffers
+  pangolin::GlBuffer vboA, vboB, vboM;
+  vboA.Reinitialise(pangolin::GlArrayBuffer, pcA.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
+  vboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
+
+  std::cout << "Vboxa: " << vboA.num_elements << std::endl;
+  std::cout << "Vboxb: " << vboB.num_elements << std::endl;
+  // Add variables to pangolin GUI
+
+  //pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
+
+  // Stream and display video
+  while(!pangolin::ShouldQuit())
+  {
+    // clear the OpenGL render buffers
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    if (runOnce) break;
+    if (false){//(pangolin::Pushed(runSkinning)) {
+      //  processing of PC for skinning
+      std::cout << "Running skinning..." << std::endl;
+      int nSteps = 10;
+      std::vector<tdp::Vector3fda> means = getMeans(pcA,nSteps);
+      size_t nMeans= means.size();
+      std::cout << "number of means (should be 2*nsteps + 1):" << nMeans << std::endl;
+    }
+
+    // Draw 3D stuff
+    glEnable(GL_DEPTH_TEST);
+    if (viewPc.IsShown()) {
+      viewPc.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
+
+      glPointSize(1.);
+      glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0);
+      vboA.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      //pangolin::RenderVbo(vboA);
+      glDrawArrays(GL_POINTS, 0, vboA.num_elements);
+      glDisableVertexAttribArray(1);
+      glDisableVertexAttribArray(0);
+      vboA.Unbind();
+
+      pangolin::glDrawAxis(0.1);
+      glColor4f(0.,1.,0.,1.);
+      pangolin::RenderVbo(vboB);
+    }
+
+    glDisable(GL_DEPTH_TEST);
+    // leave in pixel orthographic for slider to render.
+    pangolin::DisplayBase().ActivatePixelOrthographic();
+    // finish this frame
+    pangolin::FinishFrame();
+  }
+
+  std::cout << "good morning!" << std::endl;
   return 0;
+
 }
