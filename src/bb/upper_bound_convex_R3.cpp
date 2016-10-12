@@ -26,14 +26,14 @@ T UpperBoundConvexR3<T>::Evaluate(const NodeR3<T>& node) {
 
   for (uint32_t i=0; i<gmmT_.size(); ++i) {
     auto& gT = gmmT_[i];
-    Eigen::Matrix<T,3,1> tU = FindMinTranslationInNode(gT.GetOmega(),
+    Eigen::Matrix<T,3,1> tU = FindMinTranslationInNode<T>(gT.GetOmega(),
         gT.GetXi(), node);
-    Eigen::Matrix<T,3,1> tL = FindMaxTranslationInNode(gT.GetOmega(),
+    Eigen::Matrix<T,3,1> tL = FindMaxTranslationInNode<T>(gT.GetOmega(),
         gT.GetXi(), node);
-    T L = -0.5*(tL-gT.GetMu()).transpose() *
-      gT.GetSigmaLDLT().solve(tL-gT.GetMu());
-    T U = -0.5*(tU-gT.GetMu()).transpose() *
-      gT.GetSigmaLDLT().solve(tU-gT.GetMu());
+    T L = -0.5*(tL-gT.GetMu()).dot(
+      gT.GetSigmaLDLT().solve(tL-gT.GetMu()));
+    T U = -0.5*(tU-gT.GetMu()).dot(
+      gT.GetSigmaLDLT().solve(tU-gT.GetMu()));
     T g = log(1.-exp(L-U)) + U - log(U-L);
     T h = log(U*exp(L-U)-L) + U - log(U-L);
     T D = log(gT.GetPi()) - 1.5*log(2.*M_PI) - 0.5*gT.GetLogDetSigma();
@@ -43,12 +43,12 @@ T UpperBoundConvexR3<T>::Evaluate(const NodeR3<T>& node) {
     Aelem(i) = D + g - log(2.);
     belem(i) = D + g;
     celem.row(i) << D+h, D-log(2)+g;
-    celemSign.row(i) << 1., -(gT.GetMu().transpose()*gT.GetXi())(0);
+    celemSign.row(i) << 1., -gT.GetMu().dot(gT.GetXi());
 //    std::cout << "-- L<U: " << L << " " << U << std::endl;
 //    std::cout << "-- g,h: " << g << " " << h << std::endl;
   }
 
-  Eigen::Matrix3f A;
+  Eigen::Matrix<T,3,3> A;
   for (uint32_t j=0; j<3; ++j)
     for (uint32_t k=0; k<3; ++k) {
       Eigen::Matrix<T,Eigen::Dynamic,1> A_jk_elem(gmmT_.size());
@@ -70,8 +70,9 @@ T UpperBoundConvexR3<T>::Evaluate(const NodeR3<T>& node) {
   T c = (celemSign.array()*(celem.array() -
         celem.maxCoeff()).exp()).sum()*exp(celem.maxCoeff());
 
-  Eigen::Matrix<T,3,1> t = FindMinTranslationInNode(-A, 0.5*b, node);
-  T ub = (t.transpose()*A*t)(0) + (b.transpose()*t)(0) + c;
+  Eigen::Matrix<T,3,1> t = FindMinTranslationInNode<T>(-A, 0.5*b, node);
+//  T ub = (t.transpose()*A*t)(0) + (b.transpose()*t)(0) + c;
+  T ub = t.dot(A*t) + b.dot(t) + c;
 
   if (this->verbose_) {
     std::cout << "# GMM " << gmmT_.size() << std::endl;
@@ -93,7 +94,7 @@ T UpperBoundConvexR3<T>::Evaluate(const NodeR3<T>& node) {
 }
 
 //T UpperBoundConvexR3<T>::Evaluate(const NodeR3<T>& node) {
-//  Eigen::Matrix3f A = Eigen::Matrix3f::Zero();
+//  Eigen::Matrix<T,3,3> A = Eigen::Matrix<T,3,3>::Zero();
 //  Eigen::Matrix<T,3,1> b = Eigen::Matrix<T,3,1>::Zero();
 //  T c = 0.;
 //  for (auto& gT : gmmT_) {
@@ -136,21 +137,7 @@ T UpperBoundConvexR3<T>::EvaluateAndSet(NodeR3<T>& node) {
   return ub;
 }
 
-template <typename T>
-Eigen::Matrix<T,3,1> FindMaxTranslationInNode(const Eigen::Matrix3f& A, 
-    const Eigen::Matrix<T,3,1>& b, const NodeR3<T>& node) {
-  // Check corners of box.
-  Eigen::Matrix<T,8,1> vals;
-  for (uint32_t i=0; i<8; ++i) {
-    Eigen::Matrix<T,3,1> t;
-    node.GetBox().GetCorner(i, t);
-    vals(i) = (t.transpose()*A*t - 2.*t.transpose()*b)(0);
-  }
-  uint32_t id_max = 0;
-  vals.maxCoeff(&id_max);
-  Eigen::Matrix<T,3,1> t;
-  node.GetBox().GetCorner(id_max, t);
-  return t;
-}
+template class UpperBoundConvexR3<float>;
+template class UpperBoundConvexR3<double>;
 
 }

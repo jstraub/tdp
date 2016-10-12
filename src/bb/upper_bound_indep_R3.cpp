@@ -16,7 +16,7 @@ template <typename T>
 T UpperBoundIndepR3<T>::Evaluate(const NodeR3<T>& node) {
   T ub = 0.;
   for (auto& gT : gmmT_) {
-    Eigen::Matrix<T,3,1> t = FindMinTranslationInNode(gT.GetOmega(),
+    Eigen::Matrix<T,3,1> t = FindMinTranslationInNode<T>(gT.GetOmega(),
         gT.GetXi(), node);
     ub += gT.GetPi() * gT.pdf(t);
   }
@@ -30,14 +30,17 @@ T UpperBoundIndepR3<T>::EvaluateAndSet(NodeR3<T>& node) {
   return ub;
 }
 
+template class UpperBoundIndepR3<float>;
+template class UpperBoundIndepR3<double>;
+
 template <typename T>
-Eigen::Matrix<T,3,1> FindMinTranslationInNode(const Eigen::Matrix3f& A, 
+Eigen::Matrix<T,3,1> FindMinTranslationInNode(const Eigen::Matrix<T,3,3>& A, 
     const Eigen::Matrix<T,3,1>& b, const NodeR3<T>& node) {
   // Check if the unconstraint maximum lies inside the node.
   // This maximum is the mean of the Gaussian with Information matrix A
   // and Information vector b.
-//  Eigen::ColPivHouseholderQR<Eigen::Matrix3f> qr(A);
-  Eigen::FullPivLU<Eigen::Matrix3f> lu(A);
+//  Eigen::ColPivHouseholderQR<Eigen::Matrix<T,3,3>> qr(A);
+  Eigen::FullPivLU<Eigen::Matrix<T,3,3>> lu(A);
   Eigen::Matrix<T,3,1> t;
   if (lu.rank() == 3) {
     t = lu.solve(b);
@@ -82,5 +85,14 @@ Eigen::Matrix<T,3,1> FindMinTranslationInNode(const Eigen::Matrix3f& A,
   vals.minCoeff(&id_min);
   return ts[id_min];
 }
+
+template Eigen::Matrix<float,3,1> FindMinTranslationInNode(
+    const Eigen::Matrix<float,3,3>& A, 
+    const Eigen::Matrix<float,3,1>& b, 
+    const NodeR3<float>& node);
+template Eigen::Matrix<double,3,1> FindMinTranslationInNode(
+    const Eigen::Matrix<double,3,3>& A, 
+    const Eigen::Matrix<double,3,1>& b, 
+    const NodeR3<double>& node);
 
 }

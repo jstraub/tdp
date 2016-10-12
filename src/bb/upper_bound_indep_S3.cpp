@@ -25,10 +25,10 @@ template <typename T>
 T UpperBoundIndepS3<T>::EvaluateRotationSet(const
     std::vector<Eigen::Quaternion<T>>& qs) const {
 
-  Eigen::VectorXf ubElem(vmf_mm_A_.size()*vmf_mm_B_.size());
+  Eigen::Matrix<T,Eigen::Dynamic,1> ubElem(vmf_mm_A_.size()*vmf_mm_B_.size());
   for (std::size_t j=0; j < vmf_mm_A_.size(); ++j)
     for (std::size_t k=0; k < vmf_mm_B_.size(); ++k) {
-      Eigen::Matrix<T,3,1> p_star = ClosestPointInRotationSet(vmf_mm_A_[j],
+      Eigen::Matrix<T,3,1> p_star = ClosestPointInRotationSet<T>(vmf_mm_A_[j],
           vmf_mm_B_[k], qs);
 //      std::cout << "p_star " << p_star.transpose() << std::endl;
       ubElem(j*vmf_mm_B_.size() + k) =
@@ -46,12 +46,18 @@ T UpperBoundIndepS3<T>::EvaluateAndSet(NodeS3<T>& node) {
   return ub;
 }
 
+template class UpperBoundIndepS3<float>;
+template class UpperBoundIndepS3<double>;
+
 template <typename T>
 Eigen::Matrix<T,3,1> ComputeExtremumOnGeodesic(const Eigen::Matrix<T,3,1>& q1,
     const Eigen::Matrix<T,3,1>& q2, const Eigen::Matrix<T,3,1>& p, bool verbose) {
-  const T theta12 = acos(std::min(1.f, std::max(-1.f, (q1.transpose()*q2)(0))));
-  const T theta1 =  acos(std::min(1.f, std::max(-1.f, (q1.transpose()*p)(0))));
-  const T theta2 =  acos(std::min(1.f, std::max(-1.f, (q2.transpose()*p)(0))));
+  const T theta12 = acos(std::min(static_cast<T>(1.f), 
+        std::max(static_cast<T>(-1.f), (q1.transpose()*q2)(0))));
+  const T theta1 =  acos(std::min(static_cast<T>(1.f), 
+        std::max(static_cast<T>(-1.f), (q1.transpose()*p)(0))));
+  const T theta2 =  acos(std::min(static_cast<T>(1.f), 
+        std::max(static_cast<T>(-1.f), (q2.transpose()*p)(0))));
   if (verbose)
     std::cout << "theta: " << theta12*180./M_PI << " "  << theta1*180./M_PI
       << " "  << theta2*180./M_PI << std::endl;
@@ -67,10 +73,20 @@ Eigen::Matrix<T,3,1> ComputeExtremumOnGeodesic(const Eigen::Matrix<T,3,1>& q1,
   }
   t = atan2(cos(theta2) - cos(theta12)*cos(theta1),
       cos(theta1)*sin(theta12)) / theta12;
-  t = std::min(1.f, std::max(0.f, t));
+  t = std::min(static_cast<T>(1.f), 
+      std::max(static_cast<T>(0.f), t));
   if(verbose) std::cout << "  on geodesic at " << t << std::endl;
   return (q1*sin((1.-t)*theta12) + q2*sin(t*theta12))/sin(theta12);
 }
+
+template Eigen::Matrix<float,3,1> ComputeExtremumOnGeodesic(
+    const Eigen::Matrix<float,3,1>& q1,
+    const Eigen::Matrix<float,3,1>& q2, 
+    const Eigen::Matrix<float,3,1>& p, bool verbose);
+template Eigen::Matrix<double,3,1> ComputeExtremumOnGeodesic(
+    const Eigen::Matrix<double,3,1>& q1,
+    const Eigen::Matrix<double,3,1>& q2, 
+    const Eigen::Matrix<double,3,1>& p, bool verbose);
 
 template <typename T>
 Eigen::Matrix<T,3,1> ClosestPointInRotationSet(const vMF<T,3>& vmf_A, const
@@ -95,12 +111,12 @@ Eigen::Matrix<T,3,1> ClosestPointInRotationSet(const vMF<T,3>& vmf_A, const
   }
   // Check if muA is in any of the triangles spanned by the rotated
   // muBs
-  Eigen::Matrix3f A;
+  Eigen::Matrix<T,3,3> A;
   Combinations combinations(qs.size(),3);
   for (auto tri : combinations.Get()) {
     A << mus[tri[0]], mus[tri[1]], mus[tri[2]];
     // Check if muA inside triangle of rotated muBs
-    Eigen::ColPivHouseholderQR<Eigen::Matrix3f> qr(A);
+    Eigen::ColPivHouseholderQR<Eigen::Matrix<T,3,3>> qr(A);
     if (qr.rank() == 3) {
       Eigen::Matrix<T,3,1> a = qr.solve(muA);
       if ((a.array() > 0.).all()) {
@@ -117,7 +133,7 @@ Eigen::Matrix<T,3,1> ClosestPointInRotationSet(const vMF<T,3>& vmf_A, const
     }
   }
   // Check the edges and corners.
-  Eigen::MatrixXf ps(3, qs.size()+(qs.size()*(qs.size()-1))/2);
+  Eigen::Matrix<T,Eigen::Dynamic,Eigen::Dynamic> ps(3, qs.size()+(qs.size()*(qs.size()-1))/2);
   uint32_t k = 0;
   for (uint32_t i=0; i<qs.size(); ++i) {
     ps.col(k++) = mus[i];
@@ -125,7 +141,7 @@ Eigen::Matrix<T,3,1> ClosestPointInRotationSet(const vMF<T,3>& vmf_A, const
       ps.col(k++) = ComputeExtremumOnGeodesic(mus[i],
           mus[j], vmf_A.GetMu(), verbose);
   }
-  Eigen::VectorXf dots = ps.transpose()*vmf_A.GetMu();
+  Eigen::Matrix<T,Eigen::Dynamic,1> dots = ps.transpose()*vmf_A.GetMu();
 //  std::cout << "dots " << dots.transpose() << std::endl;
   uint32_t id = 0;
   if (furthest) 
@@ -145,29 +161,14 @@ Eigen::Matrix<T,3,1> ClosestPointInRotationSet(const vMF<T,3>& vmf_A, const
   return ps.col(id);
 }
 
-template class UpperBoundIndepS3<float>;
-template class UpperBoundIndepS3<double>;
-
-template <typename T>
-Eigen::Matrix<T,3,1> FurthestPointInRotationSet(const vMF<T,3>& vmf_A, const
-    vMF<T,3>& vmf_B, const std::vector<Eigen::Quaternion<T>>& qs, 
-    bool verbose) {
-  return ClosestPointInRotationSet(vmf_A, vmf_B, qs, true, verbose);
-}
-
-template <typename T>
-Eigen::Matrix<T,3,1> ClosestPointInTetrahedron(const vMF<T,3>& vmf_A, const
-    vMF<T,3>& vmf_B, const Tetrahedron4D<T>& tetrahedron, bool furthest,
-    bool verbose) {
-  std::vector<Eigen::Quaternion<T>> qs(4);
-  for (uint32_t i=0; i<4; ++i)
-    qs[i] = tetrahedron.GetVertexQuaternion(i);
-  return ClosestPointInRotationSet(vmf_A, vmf_B, qs, furthest, verbose);
-}
-
-template <typename T>
-Eigen::Matrix<T,3,1> FurthestPointInTetrahedron(const vMF<T,3>& vmf_A, const
-    vMF<T,3>& vmf_B, const Tetrahedron4D<T>& tetrahedron, bool verbose) {
-  return ClosestPointInTetrahedron(vmf_A, vmf_B, tetrahedron, true, verbose);
-}
+template Eigen::Matrix<float,3,1> ClosestPointInRotationSet(
+    const vMF<float,3>& vmf_A, 
+    const vMF<float,3>& vmf_B, 
+    const std::vector<Eigen::Quaternion<float>>& qs, 
+    bool furthest, bool verbose);
+template Eigen::Matrix<double,3,1> ClosestPointInRotationSet(
+    const vMF<double,3>& vmf_A, 
+    const vMF<double,3>& vmf_B, 
+    const std::vector<Eigen::Quaternion<double>>& qs, 
+    bool furthest, bool verbose);
 }

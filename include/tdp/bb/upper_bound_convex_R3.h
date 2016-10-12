@@ -31,8 +31,21 @@ typedef UpperBoundConvexR3<float>  UpperBoundConvexR3f;
 typedef UpperBoundConvexR3<double> UpperBoundConvexR3d;
 
 template <typename T>
-Eigen::Matrix<T,3,1> FindMaxTranslationInNode(const Eigen::Matrix3f& A, 
-    const Eigen::Matrix<T,3,1>& b, const NodeR3<T>& node);
+Eigen::Matrix<T,3,1> FindMaxTranslationInNode(const Eigen::Matrix<T,3,3>& A, 
+    const Eigen::Matrix<T,3,1>& b, const NodeR3<T>& node) {
+  // Check corners of box.
+  Eigen::Matrix<T,8,1> vals;
+  for (uint32_t i=0; i<8; ++i) {
+    Eigen::Matrix<T,3,1> t;
+    node.GetBox().GetCorner(i, t);
+    vals(i) = (t.transpose()*A*t - 2.*t.transpose()*b)(0);
+  }
+  uint32_t id_max = 0;
+  vals.maxCoeff(&id_max);
+  Eigen::Matrix<T,3,1> t;
+  node.GetBox().GetCorner(id_max, t);
+  return t;
+}
 
 }
 

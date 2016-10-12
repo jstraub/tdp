@@ -59,6 +59,9 @@ std::string NodeS3<T>::Serialize() const {
   return out.str();
 };
 
+template class NodeS3<float>;
+template class NodeS3<double>;
+
 template <typename T>
 std::list<NodeS3<T>> GenerateNotesThatTessellateS3() {
   std::vector<Tetrahedron4D<T>> tetrahedra = TessellateS3<T>();
@@ -70,7 +73,7 @@ std::list<NodeS3<T>> GenerateNotesThatTessellateS3() {
   return nodes;
 }
 
-template class NodeS3<float>;
-template class NodeS3<double>;
+template std::list<NodeS3<float>> GenerateNotesThatTessellateS3();
+template std::list<NodeS3<double>> GenerateNotesThatTessellateS3();
 
 }

@@ -52,7 +52,7 @@ T UpperBoundConvexS3<T>::EvaluateRotationSet(const
   Eigen::Matrix<T,4,Eigen::Dynamic> Q(4,qs.size());
   for (uint32_t i=0; i<qs.size(); ++i) {
     Q(0,i) = qs[i].w();
-    Q.block<3,1>(1,i) = qs[i].vec();
+    Q.template block<3,1>(1,i) = qs[i].vec();
 //    std::cout << Q.col(i).norm() << " ";
   }
 //  std::cout << std::endl << Q << std::endl;
@@ -158,7 +158,7 @@ T UpperBoundConvexS3<T>::EvaluateRotationSet(const
     }
     std::cout << " = " << Bb << std::endl;
   }
-  T lambda_max = FindMaximumQAQ(A, Q, this->verbose_);
+  T lambda_max = FindMaximumQAQ<T>(A, Q, this->verbose_);
   if (this->verbose_) {
     std::cout << "B " << B << " lambda_max " << lambda_max << std::endl;
   }
@@ -214,7 +214,7 @@ T FindMaximumQAQ(const Eigen::Matrix<T,4,4>& A, const Tetrahedron4D<T>&
   Eigen::Matrix<T,4,Eigen::Dynamic> Q(4,4);
   for (uint32_t i=0; i<4; ++i)
     Q.col(i) = tetrahedron.GetVertex(i);
-  return FindMaximumQAQ(A,Q,verbose);
+  return FindMaximumQAQ<T>(A,Q,verbose);
 }
 
 }

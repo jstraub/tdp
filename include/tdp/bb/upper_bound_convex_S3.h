@@ -134,7 +134,7 @@ void ComputeLambdasOfSubset(
         B_(i,j) = B(comb[i],comb[j]);
       }
     T lambda = 0.;
-    if (FindLambda<k>(A_, B_, &lambda, verbose)) {
+    if (FindLambda<T,k>(A_, B_, &lambda, verbose)) {
       lambdas.push_back(lambda);
       if(verbose) std::cout<<"lambda "<<k<<"x"<<k<<" "<< lambda << std::endl;
     }

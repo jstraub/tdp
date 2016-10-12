@@ -30,26 +30,6 @@ std::vector<NodeR3<T>> NodeR3<T>::Branch() const {
 }
 
 template <typename T>
-std::list<NodeR3<T>> GenerateNotesThatTessellateR3(const Eigen::Matrix<T,3,1>&
-    min, const Eigen::Matrix<T,3,1>& max, T max_side_len) {
-  NodeR3<T> node0(Box<T>(min, max), std::vector<uint32_t>(1,0));
-  std::vector<std::vector<NodeR3<T>>> node_tree;
-  node_tree.push_back(std::vector<NodeR3<T>>(1,node0));
-  for (uint32_t lvl = 0; lvl < 20; ++lvl) {
-    node_tree.push_back(node_tree[lvl][0].Branch());
-    for (uint32_t i = 1; i < node_tree[lvl].size(); ++i) {
-      std::vector<NodeR3<T>> nodes_new = node_tree[lvl][i].Branch();
-      for (auto& node: nodes_new) node_tree[lvl+1].push_back(node);
-    }
-    std::cout << "@" << lvl+1 << ": # " << node_tree[lvl+1].size() <<  std::endl;
-    if (node_tree[lvl+1][0].GetBox().GetSideLengths().maxCoeff() < max_side_len)
-      break;
-  }
-  uint32_t lvl = node_tree.size() -1;
-  return std::list<NodeR3<T>>(node_tree[lvl].begin(), node_tree[lvl].end());
-}
-
-template <typename T>
 std::string NodeR3<T>::ToString() const {
   std::stringstream out; 
   out << GetBox().GetCenter().transpose();
@@ -70,5 +50,34 @@ std::string NodeR3<T>::Serialize() const {
 
 template class NodeR3<float>;
 template class NodeR3<double>;
+
+template <typename T>
+std::list<NodeR3<T>> GenerateNotesThatTessellateR3(const Eigen::Matrix<T,3,1>&
+    min, const Eigen::Matrix<T,3,1>& max, T max_side_len) {
+  NodeR3<T> node0(Box<T>(min, max), std::vector<uint32_t>(1,0));
+  std::vector<std::vector<NodeR3<T>>> node_tree;
+  node_tree.push_back(std::vector<NodeR3<T>>(1,node0));
+  for (uint32_t lvl = 0; lvl < 20; ++lvl) {
+    node_tree.push_back(node_tree[lvl][0].Branch());
+    for (uint32_t i = 1; i < node_tree[lvl].size(); ++i) {
+      std::vector<NodeR3<T>> nodes_new = node_tree[lvl][i].Branch();
+      for (auto& node: nodes_new) node_tree[lvl+1].push_back(node);
+    }
+    std::cout << "@" << lvl+1 << ": # " << node_tree[lvl+1].size() <<  std::endl;
+    if (node_tree[lvl+1][0].GetBox().GetSideLengths().maxCoeff() < max_side_len)
+      break;
+  }
+  uint32_t lvl = node_tree.size() -1;
+  return std::list<NodeR3<T>>(node_tree[lvl].begin(), node_tree[lvl].end());
+}
+
+template std::list<NodeR3<float>> GenerateNotesThatTessellateR3(
+    const Eigen::Matrix<float,3,1>& min, 
+    const Eigen::Matrix<float,3,1>& max, 
+    float max_side_len);
+template std::list<NodeR3<double>> GenerateNotesThatTessellateR3(
+    const Eigen::Matrix<double,3,1>& min, 
+    const Eigen::Matrix<double,3,1>& max, 
+    double max_side_len);
 
 }
