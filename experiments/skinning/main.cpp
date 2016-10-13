@@ -107,6 +107,29 @@ void test_with_pc(const std::string inputA, const std::string inputB){
   std::cout << "covA: \n " << covA << ", \ncovB:\n" << covB << std::endl;
 }
 
+void test_getMeanAndSpread(){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
+  std::vector<tdp::Vector3fda> meanSpread;
+  meanSpread = getMeanAndSpread(pc);
+  tdp::Vector3fda mean, spread_real;
+  mean = meanSpread[0]; spread_real = meanSpread[1];
+
+  std::cout << "test mean: \n" << mean << std::endl;
+  std::cout << "test spread: \n" << spread_real<< std::endl;
+}
+
+tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
+  // PC for test
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    for (int i=0; i<10; i++){
+            tdp::Vector3fda p(i,i,i);
+            pc(i,0) = p;
+    }
+    std::cout << "test mean: \n" << getMean(pc) << std::endl;
+    std::cout << "test cov: \n " << getCovariance(pc) << std::endl;
+    return pc;
+}
+
 tdp::Vector3fda getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   tdp::Vector3fda mean;
   mean << 0,0,0;
@@ -144,17 +167,6 @@ tdp::Matrix3fda getCovariance(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   return cov;
 }
 
-tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
-  // PC for test
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
-    for (int i=0; i<10; i++){
-            tdp::Vector3fda p(i,i,i);
-            pc(i,0) = p;
-    }
-    std::cout << "test mean: \n" << getMean(pc) << std::endl;
-    std::cout << "test cov: \n " << getCovariance(pc) << std::endl;
-    return pc;
-}
 ////todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
 std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
@@ -169,13 +181,15 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
 
     std::complex<float> maxEval(-1,0);
-    int maxIdx(-1);
+    int maxIdx = -1;
     for (int i=0; i< cov.rows();++i ){
-        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
-            maxEval = es.eigenvalues().col(0)[i];
-            maxIdx = i;
-        }
+      std::cout << "current evalue: " << es.eigenvalues().col(0)[i] << std::endl;  
+      if (maxEval < es.eigenvalues().col(0)[i]){
+          maxEval = es.eigenvalues().col(0)[i];
+          maxIdx = i;
+      }
     }
+    std::cout << "final maxIdx: " << maxIdx << std::endl;
     Eigen::VectorXcf spread = es.eigenvectors().col(maxIdx);
     tdp::Vector3fda spread_real, spread_imag;
     spread_real = (tdp::Vector3fda)spread.real();
@@ -187,16 +201,7 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     spec[2] = spread_imag;
     return spec;
 }
-void test_getMeanAndSpread(){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
-  std::vector<tdp::Vector3fda> meanSpread;
-  meanSpread = getMeanAndSpread(pc);
-  tdp::Vector3fda mean, spread_real;
-  mean = meanSpread[0]; spread_real = meanSpread[1];
 
-  std::cout << "test mean: \n" << mean << std::endl;
-  std::cout << "test spread: \n" << spread_real<< std::endl;
-}
 inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
     return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
 }
@@ -253,7 +258,6 @@ std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedHostImage<t
     spread_real = (tdp::Vector3fda)spread.real(); 
     spread_imag = (tdp::Vector3fda)spread.imag();
 
-
     std::vector<tdp::Vector3fda> spec;
     spec[0] = mean;
     spec[1] = spread_real;
@@ -298,7 +302,7 @@ return means;
 }
 
 int main( int argc, char* argv[] ){
-  test_getMeanAndSpread();
+  //test_getMeanAndSpread();
   if (argc < 2){
       std::cout << "Must input two plyfile paths!" << std::endl;
       return -1;
