@@ -21,10 +21,7 @@ if (GTEST_FOUND)
 
   if (ANN_FOUND)
     add_executable(testANN ann.cpp)
-    target_link_libraries(testANN 
-      tdp ${GTEST_BOTH_LIBRARIES} pthread
-      ${ANN_LIBRARY}
-      )
+    target_link_libraries(testANN tdp ${GTEST_BOTH_LIBRARIES} pthread)
   endif()
 
   add_executable(testSO3 SO3.cpp)
