@@ -41,16 +41,35 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/gl/render.h>
 
+#include <tdp/icp/icp.h>
+#include <tdp/data/pyramid.h>
+#include <tdp/data/managed_pyramid.h>
+
+typedef tdp::CameraPoly3<float> CameraT;
+//typedef tdp::Camera<float> CameraT;
+
 int main( int argc, char* argv[] )
 {
   const std::string inputA = std::string(argv[1]);
   const std::string inputB = std::string(argv[2]);
-  const std::string option = (argc > 3) ? std::string(argv[3]) : "";
+  const std::string configPath = std::string(argv[3]);
+  const std::string option = (argc > 4) ? std::string(argv[4]) : "";
 
   bool runOnce = false;
   if (!option.compare("-1")) {
     runOnce = true; 
   }
+
+  // Read rig file
+  tdp::Rig<CameraT> rig;
+  if (!rig.FromFile(configPath, false)) {
+    pango_print_error("No config file specified.\n");
+    return 1;
+  }
+  std::vector<int32_t> rgbStream2cam = {0,1,2};
+  rig.rgbdStream2cam_ = {0,1,2};
+  rig.rgbStream2cam_ = {0,1,2};
+  rig.dStream2cam_ = {0,1,2};
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
@@ -93,6 +112,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNsA(pcA.w_,pcA.h_), cuNsB(pcB.w_,pcB.h_);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(pcA.w_,pcA.h_), cuPcB(pcB.w_,pcB.h_);
 
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPcA(pcA.w_,pcA.h_);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrNsA(pcA.w_,pcA.h_);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPcB(pcB.w_,pcB.h_);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrNsB(pcB.w_,pcB.h_);
+
   cuPcA.CopyFrom(pcA, cudaMemcpyHostToDevice);
   cuPcB.CopyFrom(pcB, cudaMemcpyHostToDevice);
   cuNsA.CopyFrom(nsA, cudaMemcpyHostToDevice);
@@ -121,13 +145,23 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> computevMFMMs("ui.compute vMFMMs", false, false);
   pangolin::Var<bool> computeGMMs("ui.compute GMMs", false, false);
-  pangolin::Var<bool> computeAlignment("ui.align", false, false);
 
   pangolin::Var<int> maxIt("ui.max Iter", 100, 1, 100);
   pangolin::Var<float> minNchangePerc("ui. min change perc", 0.03, 0.001, 0.1);
-
-  pangolin::Var<float> lambdaS2("ui.lambda S2", 30., 10., 180.);
+  pangolin::Var<float> lambdaS2("ui.lambda S2", 55., 10., 180.);
   pangolin::Var<float> lambdaR3("ui.lambda R3", 1.0, 0.5, 2.0);
+
+  pangolin::Var<bool> computeAlignment("ui.align", false, false);
+  pangolin::Var<int>   maxLvlRot("ui.max lvl rot",12,1,15);
+  pangolin::Var<int>   maxLvlTrans("ui.max lvl trans",20,10,22);
+  pangolin::Var<int>   maxItBB("ui.max Iter BB", 3000, 1000, 5000);
+
+  pangolin::Var<bool> computeProjectiveICP("ui.projtive ICP", false, false);
+  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   std::vector<tdp::Normal3d> gmmA, gmmB;
   std::vector<tdp::vMF3d> vmfmmA, vmfmmB;
@@ -201,9 +235,6 @@ int main( int argc, char* argv[] )
 			Eigen::Quaterniond q_star;
 			double lb_star = 1e99;
 			double eps = 1e-8;
-			//  double eps = 8e-7;
-			uint32_t max_lvl = 12;
-			uint32_t max_it = 5000;
 
       std::cout << "Tesselating Sphere for initial nodes" << std::endl;
 			nodesS3 = tdp::GenerateNotesThatTessellateS3<double>();
@@ -212,7 +243,7 @@ int main( int argc, char* argv[] )
           upper_bound_convex_S3);
       std::cout << "Running B&B for Rotation " 
         << " #nodes0 " << nodesS3.size() << std::endl;
-			tdp::NodeS3d node_star = bb.Compute(nodesS3, eps, max_lvl, max_it);
+			tdp::NodeS3d node_star = bb.Compute(nodesS3, eps, maxLvlRot, maxItBB);
 			q_star = node_star.GetLbArgument();
 			lb_star = node_star.GetLB();
 
@@ -228,14 +259,33 @@ int main( int argc, char* argv[] )
 			tdp::UpperBoundConvexR3d upper_bound_convex_R3(gmmA, gmmB, q_star);
 
 			eps = 1e-9;
-			max_it = 5000;
-			max_lvl = 22;
 			tdp::BranchAndBound<double,tdp::NodeR3d> bbR3(lower_bound_R3, 
           upper_bound_convex_R3);
-			tdp::NodeR3d nodeR3_star = bbR3.Compute(nodesR3, eps, max_lvl, max_it);
+			tdp::NodeR3d nodeR3_star = bbR3.Compute(nodesR3, eps, maxLvlTrans, maxItBB);
 			Eigen::Vector3d t =  nodeR3_star.GetLbArgument();
 
 			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
+    }
+
+    if (pangolin::Pushed(computeProjectiveICP)) {
+
+    cuPyrPcB.GetImage(0).CopyFrom(cuPcB, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(cuPyrPcB,cudaMemcpyDeviceToDevice);
+    cuPyrNsB.GetImage(0).CopyFrom(cuNsB, cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(cuPyrNsB,cudaMemcpyDeviceToDevice);
+
+    cuPyrPcA.GetImage(0).CopyFrom(cuPcA, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(cuPyrPcA,cudaMemcpyDeviceToDevice);
+    cuPyrNsA.GetImage(0).CopyFrom(cuNsA, cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(cuPyrNsA,cudaMemcpyDeviceToDevice);
+
+    std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+    std::vector<float> errPerLvl;
+    std::vector<float> countPerLvl;
+
+    tdp::ICP::ComputeProjective<CameraT>(cuPyrPcA, cuPyrNsA, cuPyrPcB, cuPyrNsB,
+        rig, rgbStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
+        T_ab, errPerLvl, countPerLvl);
     }
 
     // Draw 3D stuff
