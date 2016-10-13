@@ -43,6 +43,7 @@ endif()
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
+
 find_package(Pangolin REQUIRED)
 message(${Pangolin_DIR}/include)
 
@@ -75,6 +76,12 @@ find_package (ASIO QUIET)
 if (ASIO_FOUND) 
   message("found ASIO")
   include_directories(${ASIO_INCLUDE_DIRS})
+endif()
+
+find_package (ANN QUIET)
+if (ANN_FOUND) 
+  message("found ANN")
+  include_directories(${ANN_INCLUDE_DIRS})
 endif()
 
 # Help GTSAM be found

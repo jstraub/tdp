@@ -10,3 +10,6 @@ tags
 *.log
 writeup.pdf
 log*.txt
+
+*.o
+lib
