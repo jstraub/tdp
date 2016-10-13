@@ -11,7 +11,7 @@ void LoadPointCloudCsv(
   size_t w=0;
   size_t h=0;
   in >> w >> h;
-  verts.Reinitialize(w,h);
+  verts.Reinitialise(w,h);
   for (size_t i=0; i<verts.Area(); ++i) {
     in >> verts[i](0) >> verts[i](1) >> verts[i](2);
   }
