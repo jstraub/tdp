@@ -23,6 +23,7 @@ class ANN {
     // wants the data
     N_ = pc.Area();
     pc_ = new ANNpoint[N_];
+//    std::cout << "building ann PC data structure " << N_ << std::endl;
     for (size_t i=0; i<pc.Area(); ++i) pc_[i] = &pc[i](0);
     // build KD tree
     kdTree_ = new ANNkd_tree(pc_, N_, 3, 1, ANN_KD_SUGGEST);

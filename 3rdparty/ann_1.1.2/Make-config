@@ -76,6 +76,8 @@ linux-g++:
 	"MAKELIB = gcc -shared -o " \
 	"RANLIB = true"
 
+#"CFLAGS = -O3 -fPIC" \
+
 #					Mac OS X using g++
 macosx-g++:
 	$(MAKE) targets \

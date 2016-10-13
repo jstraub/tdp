@@ -10,6 +10,7 @@
 #include <tdp/camera/rig.h>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/utils/status.h>
 
 #ifdef ANN_FOUND
 #  include <tdp/nn/ann.h>
@@ -28,11 +29,20 @@ void AssociateANN(
   int k = 1;
   Eigen::VectorXi nnIds(k);
   Eigen::VectorXf dists(k);
+
+  int Nassoc = 0;
   for (size_t i=0; i<pc_m.w_; ++i) {
     Vector3fda p_m_in_o = T_om*pc_m[i];
-    ann.Search(p_m_in_o, k, 0., nnIds, dists);
-    assoc_om[i] = nnIds(0);
+    if (IsValidData(p_m_in_o)) {
+      ann.Search(p_m_in_o, k, 0., nnIds, dists);
+      assoc_om[i] = nnIds(0);
+      ++Nassoc;
+    } else {
+      assoc_om[i] = std::numeric_limits<int>::max();
+    }
+    Progress(i,pc_m.w_);
   }
+  std::cout << "N assoc: " << Nassoc << std::endl;
 }
 #endif
 

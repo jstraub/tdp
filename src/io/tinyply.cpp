@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <tdp/io/tinyply.h>
+#include <tdp/cuda/cuda.h>
 
 namespace tdp {
 
@@ -108,8 +109,23 @@ void SavePointCloud(
     const Image<Vector3fda>& pc,
     const Image<Vector3fda>& n,
     std::vector<std::string>& comments) {
-  std::vector<float> verts((float*)pc.ptr_, (float*)(&pc.ptr_[pc.Area()]));
-  std::vector<float> norms((float*)n.ptr_, (float*)(&n.ptr_[n.Area()]));
+  std::vector<float> verts;
+  std::vector<float> norms;
+  verts.reserve(pc.Area()*3);
+  norms.reserve(n.Area()*3);
+  // filter out NAN points.
+  for (size_t i=0; i<pc.Area(); ++i)  {
+    if (IsValidData(pc[i])) {
+      verts.push_back(pc[i](0));
+      verts.push_back(pc[i](1));
+      verts.push_back(pc[i](2));
+    }
+    if (IsValidData(n[i])) {
+      norms.push_back(n[i](0));
+      norms.push_back(n[i](1));
+      norms.push_back(n[i](2));
+    }
+  }
   tinyply::PlyFile plyFile;
   plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
   plyFile.add_properties_to_element("vertex", {"nx", "ny", "nz"}, norms);

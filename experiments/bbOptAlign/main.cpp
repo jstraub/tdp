@@ -52,8 +52,7 @@ int main( int argc, char* argv[] )
 {
   const std::string inputA = std::string(argv[1]);
   const std::string inputB = std::string(argv[2]);
-  const std::string configPath = std::string(argv[3]);
-  const std::string option = (argc > 4) ? std::string(argv[4]) : "";
+  const std::string option = (argc > 3) ? std::string(argv[3]) : "";
 
   bool runOnce = false;
   if (!option.compare("-1")) {
@@ -255,19 +254,22 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(computeProjectiveICP)) {
+        size_t maxIt = icpIter0;
+      for (size_t it=0; it<maxIt; ++it) {
+        //    tdp::TransformPc(T_ab, cuPcB);
+        //    tdp::TransformPc(T_ab.rotation(), cuNsB);
+        tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba);
+        cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
 
-//    tdp::TransformPc(T_ab, cuPcB);
-//    tdp::TransformPc(T_ab.rotation(), cuNsB);
-      tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba);
-    cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
+        float err;
+        float count;
 
-    size_t maxIt = icpIter0;
-    float err;
-    float count;
+        tdp::ICP::ComputeGivenAssociation(cuPcA, cuNsA, cuPcB, cuNsB,
+            cuAssoc_ba, T_ab, 1, icpAngleThr_deg, icpDistThr,
+            err, count);
 
-    tdp::ICP::ComputeGivenAssociation(cuPcA, cuNsA, cuPcB, cuNsB,
-        cuAssoc_ba, T_ab, maxIt, icpAngleThr_deg, icpDistThr,
-         err, count);
+        std::cout << T_ab.matrix3x4() << std::endl;
+      }
     }
 
     // Draw 3D stuff
