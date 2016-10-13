@@ -30,6 +30,7 @@
 #include <tdp/gui/gui.hpp>
 
 #include <iostream>
+#include <cmath>
 #include <complex>
 #include <vector>
 #include <Eigen/Eigenvalues>
@@ -78,15 +79,47 @@ void test_getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     std::cout << "mean: " << mean << std::endl;
 }
 
+void test_mean(){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
+  for (int i=0; i<10;++i){
+    tdp::Vector3fda p1,p2;
+    p1 << i,2*i,0;
+    //p2 << i,0,2*i;
+    pc(i,0) = p1;
+    //pc(i,1) = p2;
+  }
+  std::cout << "mean: " << getMean(pc) << std::endl;
+  std::cout << "cov: \n" << getCovariance(pc) << std::endl;
+}
+void test_with_pc(const std::string inputA, const std::string inputB){
+  // load pc and normal from the input paths
+  tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
+  tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
+  tdp::LoadPointCloud(inputA, pcA, nsA);
+  tdp::LoadPointCloud(inputB, pcB, nsB);
+
+  tdp::Vector3fda meanA, meanB;
+  tdp::Matrix3fda covA, covB;
+  meanA = getMean(pcA); covA = getCovariance(pcA);
+  meanB = getMean(pcB); covB = getCovariance(pcB);
+
+  std::cout << "meanA: \n" << meanA << ",\nmeanB: " << meanB << std::endl;
+  std::cout << "covA: \n " << covA << ", \ncovB:\n" << covB << std::endl;
+}
+
 tdp::Vector3fda getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   tdp::Vector3fda mean;
   mean << 0,0,0;
+  int count = 0;
   for (int i=0; i<pc.w_; ++i){
     for (int j=0; j<pc.h_; ++j){
+      if (not std::isnan(pc(i,j)[0]*pc(i,j)[1]*pc(i,j)[2])){ //check for nan
         mean +=  pc(i,j);
+        count += 1;
+      }
     }
   }
-  return mean/(pc.w_*pc.h_);
+  return mean/count;
 }
 
 tdp::Matrix3fda getCovariance(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
@@ -95,27 +128,33 @@ tdp::Matrix3fda getCovariance(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   cov.setZero(3,3);
 
   tdp::Vector3fda mean = getMean(pc);
+  int count = 0;
   for(int x=0; x<pc.w_; ++x){
     for (int y=0; y<pc.h_; ++y){
-        cov += (pc(x,y)-mean)*(pc(x,y)-mean).transpose();
-        std::cout << "x,y, and cov: " << x << ", " << y << ", " << cov << std::endl;
+      if (not std::isnan(pc(x,y)[0]*pc(x,y)[1]*pc(x,y)[2])){ //check for nan 
+         cov += (pc(x,y)-mean)*(pc(x,y)-mean).transpose();
+         count += 1;
+        //std::cout << "x,y, and cov: " << x << ", " << y << ", " << cov << std::endl;
+      }
     }
   }
-  cov /= (float)(pc.w_*pc.h_);
-  std::cout << "final: " << cov << std::endl;
+  cov /= (float)(count);
+  std::cout << "total number: " << (pc.w_*pc.h_) << std::endl;
+  std::cout << "count : " << count << std::endl;
   return cov;
 }
 
 tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
   // PC for test
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
     for (int i=0; i<10; i++){
-            tdp::Vector3fda p(i,0,0);
+            tdp::Vector3fda p(i,i,i);
             pc(i,0) = p;
-        }
+    }
+    std::cout << "test mean: \n" << getMean(pc) << std::endl;
+    std::cout << "test cov: \n " << getCovariance(pc) << std::endl;
     return pc;
 }
-
 ////todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
 std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
@@ -148,7 +187,16 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     spec[2] = spread_imag;
     return spec;
 }
+void test_getMeanAndSpread(){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
+  std::vector<tdp::Vector3fda> meanSpread;
+  meanSpread = getMeanAndSpread(pc);
+  tdp::Vector3fda mean, spread_real;
+  mean = meanSpread[0]; spread_real = meanSpread[1];
 
+  std::cout << "test mean: \n" << mean << std::endl;
+  std::cout << "test spread: \n" << spread_real<< std::endl;
+}
 inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
     return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
 }
@@ -250,6 +298,7 @@ return means;
 }
 
 int main( int argc, char* argv[] ){
+  test_getMeanAndSpread();
   if (argc < 2){
       std::cout << "Must input two plyfile paths!" << std::endl;
       return -1;
@@ -257,6 +306,7 @@ int main( int argc, char* argv[] ){
   //todo: send the points to draw with opengl
   const std::string inputA = std::string(argv[1]);
   const std::string inputB = std::string(argv[2]);
+  test_with_pc(inputA, inputB);
   std::cout << "inputA, B: " << inputA << ", " << inputB << std::endl;
   std::cout << "argc: " << argc << std::endl;
   const std::string option = (argc > 3) ? std::string(argv[3]) : "";
