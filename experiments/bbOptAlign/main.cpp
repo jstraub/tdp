@@ -249,6 +249,10 @@ int main( int argc, char* argv[] )
 			tdp::NodeR3d nodeR3_star = bbR3.Compute(nodesR3, eps, maxLvlTrans, maxItBB);
 			Eigen::Vector3d t =  nodeR3_star.GetLbArgument();
 
+      std::cout << "min t: " << minAB.transpose() << std::endl
+        << "max t: " << maxAB.transpose() << std::endl;
+      std::cout << "optimal translation " << t.transpose() << std::endl;
+
 			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
     }
 
