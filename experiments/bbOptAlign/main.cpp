@@ -145,9 +145,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> computeProjectiveICP("ui.projtive ICP", false, false);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
-  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",1,0,10);
+  pangolin::Var<int>   icpDownSample("ui.ICP downsample",10,10,100);
 
   std::vector<tdp::Normal3d> gmmA, gmmB;
   std::vector<tdp::vMF3d> vmfmmA, vmfmmB;
@@ -258,7 +257,7 @@ int main( int argc, char* argv[] )
       for (size_t it=0; it<maxIt; ++it) {
         //    tdp::TransformPc(T_ab, cuPcB);
         //    tdp::TransformPc(T_ab.rotation(), cuNsB);
-        tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba);
+        tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba, icpDownSample);
         cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
 
         float err;
@@ -283,7 +282,9 @@ int main( int argc, char* argv[] )
 
       pangolin::glSetFrameOfReference(T_ab.matrix());
       pangolin::glDrawAxis(0.1);
-      tdp::RenderLabeledVbo(vboB, valueboB, s_cam, maxVal);
+      glColor4f(0,0,1,0.8);
+      pangolin::RenderVbo(vboB);
+//      tdp::RenderLabeledVbo(vboB, valueboB, s_cam, maxVal);
       pangolin::glUnsetFrameOfReference();
     }
     if (viewNA.IsShown()) {
@@ -300,7 +301,9 @@ int main( int argc, char* argv[] )
       T.matrix().topRightCorner(3,1).fill(0.);
       pangolin::glSetFrameOfReference(T.matrix());
       pangolin::glDrawAxis(0.1);
-      tdp::RenderLabeledVbo(nboB, valueboB, s_cam, maxVal);
+      glColor4f(0,0,1,0.8);
+      pangolin::RenderVbo(nboB);
+//      tdp::RenderLabeledVbo(nboB, valueboB, s_cam, maxVal);
       pangolin::glUnsetFrameOfReference();
     }
 

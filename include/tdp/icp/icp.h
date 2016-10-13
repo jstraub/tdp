@@ -23,7 +23,8 @@ void AssociateANN(
     Image<Vector3fda>& pc_m,
     Image<Vector3fda>& pc_o,
     const SE3f& T_om,
-    Image<int>& assoc_om) {
+    Image<int>& assoc_om, 
+    size_t stride = 1) {
   tdp::ANN ann;
   ann.ComputeKDtree(pc_o);
   int k = 1;
@@ -32,15 +33,19 @@ void AssociateANN(
 
   int Nassoc = 0;
   for (size_t i=0; i<pc_m.w_; ++i) {
-    Vector3fda p_m_in_o = T_om*pc_m[i];
-    if (IsValidData(p_m_in_o)) {
-      ann.Search(p_m_in_o, k, 0., nnIds, dists);
-      assoc_om[i] = nnIds(0);
-      ++Nassoc;
+    if (i%stride == 0) {
+      Vector3fda p_m_in_o = T_om*pc_m[i];
+      if (IsValidData(p_m_in_o)) {
+        ann.Search(p_m_in_o, k, 0., nnIds, dists);
+        assoc_om[i] = nnIds(0);
+        ++Nassoc;
+      } else {
+        assoc_om[i] = std::numeric_limits<int>::max();
+      }
+      Progress(i,pc_m.w_);
     } else {
       assoc_om[i] = std::numeric_limits<int>::max();
     }
-    Progress(i,pc_m.w_);
   }
   std::cout << "N assoc: " << Nassoc << std::endl;
 }
