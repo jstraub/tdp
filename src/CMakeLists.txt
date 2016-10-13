@@ -39,6 +39,10 @@ if (Calibu_FOUND)
   list(APPEND LIBS ${Calibu_LIBRARIES})
 endif()
 
+if (ANN_FOUND) 
+  list(APPEND LIBS ${ANN_LIBRARY})
+endif()
+
 if (aruco_FOUND) 
   list(APPEND LIBS ${aruco_LIBS})
   list(APPEND SRCS "./marker/aruco.cpp")

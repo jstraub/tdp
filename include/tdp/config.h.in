@@ -19,5 +19,6 @@
 #cmakedefine OPENNI2_FOUND
 #cmakedefine Calibu_FOUND
 #cmakedefine GTSAM_FOUND
+#cmakedefine ANN_FOUND
 
 #define SHADER_DIR "${SHADER_DIR}"

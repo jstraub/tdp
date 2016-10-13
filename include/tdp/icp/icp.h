@@ -11,7 +11,30 @@
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SE3.h>
 
+#ifdef ANN_FOUND
+#  include <tdp/nn/ann.h>
+#endif
+
 namespace tdp {
+
+#ifdef ANN_FOUND
+void AssociateANN(
+    Image<Vector3fda>& pc_m,
+    Image<Vector3fda>& pc_o,
+    const SE3f& T_om,
+    Image<int>& assoc_om) {
+  tdp::ANN ann;
+  ann.ComputeKDtree(pc_o);
+  int k = 1;
+  Eigen::VectorXi nnIds(k);
+  Eigen::VectorXf dists(k);
+  for (size_t i=0; i<pc_m.w_; ++i) {
+    Vector3fda p_m_in_o = T_om*pc_m[i];
+    ann.Search(p_m_in_o, k, 0., nnIds, dists);
+    assoc_om[i] = nnIds(0);
+  }
+}
+#endif
 
 #ifdef CUDA_FOUND
 template<int D, typename Derived>
@@ -23,6 +46,21 @@ void ICPStep (
     const SE3f& T_mo, 
     const SE3f& T_mc, 
     const CameraBase<float,D,Derived>& cam,
+    float dotThr,
+    float distThr,
+    Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
+    Eigen::Matrix<float,6,1,Eigen::DontAlign>& ATb,
+    float& error,
+    float& count
+    );
+
+void ICPStep (
+    Image<Vector3fda> pc_m,
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> pc_o,
+    Image<Vector3fda> n_o,
+    Image<int> assoc_om,
+    const SE3f& T_mo, 
     float dotThr,
     float distThr,
     Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
@@ -90,6 +128,17 @@ class ICP {
     SE3f& T_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
+    );
+
+  static void ComputeGivenAssociation(
+    Image<Vector3fda>& pc_m,
+    Image<Vector3fda>& n_m,
+    Image<Vector3fda>& pc_o,
+    Image<Vector3fda>& n_o,
+    Image<int>& assoc_om,
+    SE3f& T_mo,
+    size_t maxIt, float angleThr_deg, float distThr,
+    float& error, float& count
     );
 
   /// Compute relative rotation between two surface normal "images";

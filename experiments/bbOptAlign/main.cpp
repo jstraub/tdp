@@ -60,17 +60,6 @@ int main( int argc, char* argv[] )
     runOnce = true; 
   }
 
-  // Read rig file
-  tdp::Rig<CameraT> rig;
-  if (!rig.FromFile(configPath, false)) {
-    pango_print_error("No config file specified.\n");
-    return 1;
-  }
-  std::vector<int32_t> rgbStream2cam = {0,1,2};
-  rig.rgbdStream2cam_ = {0,1,2};
-  rig.rgbStream2cam_ = {0,1,2};
-  rig.dStream2cam_ = {0,1,2};
-
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -112,15 +101,13 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNsA(pcA.w_,pcA.h_), cuNsB(pcB.w_,pcB.h_);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(pcA.w_,pcA.h_), cuPcB(pcB.w_,pcB.h_);
 
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPcA(pcA.w_,pcA.h_);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrNsA(pcA.w_,pcA.h_);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPcB(pcB.w_,pcB.h_);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrNsB(pcB.w_,pcB.h_);
-
   cuPcA.CopyFrom(pcA, cudaMemcpyHostToDevice);
   cuPcB.CopyFrom(pcB, cudaMemcpyHostToDevice);
   cuNsA.CopyFrom(nsA, cudaMemcpyHostToDevice);
   cuNsB.CopyFrom(nsB, cudaMemcpyHostToDevice);
+
+  tdp::ManagedHostImage<int> assoc_ba(pcA.w_,pcA.h_);
+  tdp::ManagedDeviceImage<int> cuAssoc_ba(pcA.w_,pcA.h_);
 
   pangolin::GlBuffer vboA, vboB;
   vboA.Reinitialise(pangolin::GlArrayBuffer, pcA.Area(),  GL_FLOAT,
@@ -269,23 +256,18 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(computeProjectiveICP)) {
 
-    cuPyrPcB.GetImage(0).CopyFrom(cuPcB, cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(cuPyrPcB,cudaMemcpyDeviceToDevice);
-    cuPyrNsB.GetImage(0).CopyFrom(cuNsB, cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(cuPyrNsB,cudaMemcpyDeviceToDevice);
+//    tdp::TransformPc(T_ab, cuPcB);
+//    tdp::TransformPc(T_ab.rotation(), cuNsB);
+      tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba);
+    cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
 
-    cuPyrPcA.GetImage(0).CopyFrom(cuPcA, cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(cuPyrPcA,cudaMemcpyDeviceToDevice);
-    cuPyrNsA.GetImage(0).CopyFrom(cuNsA, cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(cuPyrNsA,cudaMemcpyDeviceToDevice);
+    size_t maxIt = icpIter0;
+    float err;
+    float count;
 
-    std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-    std::vector<float> errPerLvl;
-    std::vector<float> countPerLvl;
-
-    tdp::ICP::ComputeProjective<CameraT>(cuPyrPcA, cuPyrNsA, cuPyrPcB, cuPyrNsB,
-        rig, rgbStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
-        T_ab, errPerLvl, countPerLvl);
+    tdp::ICP::ComputeGivenAssociation(cuPcA, cuNsA, cuPcB, cuNsB,
+        cuAssoc_ba, T_ab, maxIt, icpAngleThr_deg, icpDistThr,
+         err, count);
     }
 
     // Draw 3D stuff
