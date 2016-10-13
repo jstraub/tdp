@@ -19,11 +19,20 @@ if (GTEST_FOUND)
   add_executable(testDirectionalHist directionalHist.cpp)
   target_link_libraries(testDirectionalHist tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+  if (ANN_FOUND)
+    add_executable(testANN ann.cpp)
+    target_link_libraries(testANN 
+      tdp ${GTEST_BOTH_LIBRARIES} pthread
+      ${ANN_LIBRARY}
+      )
+  endif()
 
   add_executable(testSO3 SO3.cpp)
   target_link_libraries(testSO3 tdp)
 
   add_executable(testSE3 SE3.cpp)
   target_link_libraries(testSE3 tdp)
+
+
 
 endif()

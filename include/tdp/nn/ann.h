@@ -1,5 +1,7 @@
 #pragma once
 #include <ANN/ANN.h>
+#include <tdp/eigen/dense.h>
+#include <tdp/data/image.h>
 
 // ANN wrapper
 namespace tdp {
@@ -7,26 +9,36 @@ namespace tdp {
 class ANN {
  public:
 
-  ANN() : kdTree(nullptr) 
+  ANN() : pc_(nullptr), N_(0), kdTree_(nullptr) 
   {}
   ~ANN() {
-    if (kdTree) delete kdTree;
+    if (kdTree_) delete kdTree_;
+    if (pc_) delete[] pc_;
   };
 
-  void ComputeKDtree(const Image<Vector3fda>& pc) {
-    if (kdTree) delete kdTree;
-    kdTree = new ANNkd_tree( pc.ptr_, pc.w_, 3);					
+  void ComputeKDtree(Image<Vector3fda>& pc) {
+    if (kdTree_) delete kdTree_;
+    if (pc_) delete[] pc_;
+    // build array of pointers to the data points because thats how ANN
+    // wants the data
+    N_ = pc.Area();
+    pc_ = new ANNpoint[N_];
+    for (size_t i=0; i<pc.Area(); ++i) pc_[i] = &pc[i](0);
+    // build KD tree
+    kdTree_ = new ANNkd_tree(pc_, N_, 3, 1, ANN_KD_SUGGEST);
   }
 
-  void Search(const Vector3fda& query, int k, float eps, 
-       Eigen::VectorXi& nnIdx, Eigen::VectorXf& dists) {
-    assert(nnIdx.size() == k);
+  void Search(Vector3fda& query, int k, float eps, 
+       Eigen::VectorXi& nnIds, Eigen::VectorXf& dists) {
+    assert(nnIds.size() == k);
     assert(dists.size() == k);
-    kdTree->annkSearch(&query(0), k, &nnIdx(0), &dists(0), eps);
+    kdTree_->annkSearch(&query(0), k, &nnIds(0), &dists(0), eps);
   }
 
  private:
-  ANNkd_tree* kdTree;
+  ANNpointArray pc_;
+  int N_;
+  ANNkd_tree* kdTree_;
 };
 
 }

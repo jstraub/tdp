@@ -81,7 +81,7 @@ endif()
 find_package (ANN QUIET)
 if (ANN_FOUND) 
   message("found ANN")
-  include_directories(${ANN_INCLUDE_DIRS})
+  include_directories(${ANN_INCLUDE_DIR})
 endif()
 
 # Help GTSAM be found
