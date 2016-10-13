@@ -34,6 +34,7 @@
 #include <tdp/io/tinyply.h>
 #include <tdp/preproc/curvature.h>
 #include <tdp/gl/shaders.h>
+#include <tdp/gl/matcap.h>
 
 int main( int argc, char* argv[] )
 {
@@ -138,12 +139,6 @@ int main( int argc, char* argv[] )
   ibo.Upload(tri.ptr_,  tri.SizeBytes(), 0);
   nbo.Upload(n.ptr_, n.SizeBytes(), 0);
 
-  pangolin::GlTexture matcapTex(512,512,GL_RGB8);
-  pangolin::TypedImage matcapImg = pangolin::LoadImage(
-      "/home/jstraub/workspace/research/tdp/shaders/wood.jpg");
-//      "/home/jstraub/workspace/research/tdp/shaders/normal.png");
-  matcapTex.Upload(matcapImg.ptr,GL_RGB,GL_UNSIGNED_BYTE);
-
   // load and compile shader
   std::string shaderRoot = SHADER_DIR;
   pangolin::GlSlProgram progNormalShading;
@@ -174,7 +169,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showArea("ui.show Area", false, true);
   pangolin::Var<bool> showMatcap("ui.show Matcap", false, true);
 
-  pangolin::Var<bool> drawTriangles("ui.draw Tri", false, true);
+  pangolin::Var<bool> drawTriangles("ui.draw Tri", true, true);
+  pangolin::Var<int> matcapId("ui.matcap", 0, 0, 10);
 
   pangolin::Var<float>minGausCurv("ui min GausCurv", 
       float(minMaxGausCurv.first), float(minMaxGausCurv.first),
@@ -268,7 +264,7 @@ int main( int argc, char* argv[] )
       shader.SetUniform("MV",MV);
       glEnable(GL_TEXTURE_2D);
 //      glActivateTexture(GL_TEXTURE0);
-      matcapTex.Bind();
+      tdp::Matcap::Instance()->Bind(matcapId);
       shader.SetUniform("matcap",0);
       nbo.Bind();
       glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0); 
@@ -305,7 +301,7 @@ int main( int argc, char* argv[] )
       glDisableVertexAttribArray(1);
       valuebo.Unbind();
     } else if (showMatcap) {
-      matcapTex.Unbind();
+      tdp::Matcap::Instance()->Unbind();
       glDisable(GL_TEXTURE_2D);
       tdp::Shaders::Instance()->matcapShader_.Unbind();
       glDisableVertexAttribArray(1);

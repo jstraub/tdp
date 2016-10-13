@@ -13,9 +13,9 @@ class Shaders {
   pangolin::GlSlProgram matcapShader_;
  private:
   Shaders();
-  ~Shaders() { delete shaders_; };
-  Shaders(const Shaders&) {};
-  Shaders& operator=(const Shaders&) {};
+  ~Shaders() { if (shaders_) delete shaders_; };
+  Shaders(const Shaders&) = delete;
+  Shaders& operator=(const Shaders&) = delete;
   static Shaders* shaders_;
 };
 
