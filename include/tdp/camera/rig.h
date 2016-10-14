@@ -19,6 +19,8 @@
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/manifold/SE3.h>
 #include <tdp/preproc/depth.h>
+#include <tdp/preproc/pc.h>
+#include <tdp/preproc/normals.h>
 
 namespace tdp {
 
@@ -154,11 +156,17 @@ struct Rig {
     const std::vector<pangolin::VideoInterface*>& streams);
 
   void CollectRGB(const GuiBase& gui,
-    Image<Vector3bda>& rgb, cudaMemcpyKind type) const ;
+    Image<Vector3bda>& rgb, cudaMemcpyKind type) ;
 
   void CollectD(const GuiBase& gui,
     float dMin, float dMax, Image<uint16_t>& cuDraw,
     Image<float>& cuD, int64_t& t_host_us_d) ;
+
+  void ComputePc(Image<float>& cuD, bool useRgbCamParasForDepth, 
+    Image<Vector3fda>& cuPc);
+
+  void ComputeNormals(Image<float>& cuD, bool useRgbCamParasForDepth, 
+    Image<Vector3fda>& cuN);
 
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
@@ -176,6 +184,9 @@ struct Rig {
   std::vector<int32_t> rgbStream2cam_;
   std::vector<int32_t> dStream2cam_;
   std::vector<int32_t> rgbdStream2cam_;
+
+  size_t wSingle;
+  size_t hSingle;
 
   // camera serial IDs
   std::vector<std::string> serials_;
@@ -225,13 +236,15 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
 
 template<class CamT>
 void Rig<CamT>::CollectRGB(const GuiBase& gui,
-    Image<Vector3bda>& rgb, cudaMemcpyKind type) const {
+    Image<Vector3bda>& rgb, cudaMemcpyKind type) {
   for (size_t sId=0; sId < rgbdStream2cam_.size(); sId++) {
     Image<Vector3bda> rgbStream;
     if (!gui.ImageRGB(rgbStream, sId)) continue;
+    // TODO: this is a bit hackie; should get the w and h somehow else
+    // beforehand
     int32_t cId = rgbdStream2cam_[sId]; 
-    const size_t wSingle = rgbStream.w_+rgbStream.w_%64;
-    const size_t hSingle = rgbStream.h_+rgbStream.h_%64;
+    wSingle = rgbStream.w_+rgbStream.w_%64;
+    hSingle = rgbStream.h_+rgbStream.h_%64;
     Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
     rgb_i.CopyFrom(rgbStream,type);
   }
@@ -249,11 +262,13 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     tdp::Image<uint16_t> dStream;
     int64_t t_host_us_di = 0;
     if (!gui.ImageD(dStream, sId, &t_host_us_di)) continue;
+    // TODO: this is a bit hackie; should get the w and h somehow else
+    // beforehand
     t_host_us_d += t_host_us_di;
     numStreams ++;
     int32_t cId = rgbdStream2cam_[sId]; 
-    const size_t wSingle = dStream.w_+dStream.w_%64;
-    const size_t hSingle = dStream.h_+dStream.h_%64;
+    wSingle = dStream.w_+dStream.w_%64;
+    hSingle = dStream.h_+dStream.h_%64;
     tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
         wSingle, hSingle);
     cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
@@ -271,5 +286,51 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
   t_host_us_d /= numStreams;  
 }
 
+template<class CamT>
+void Rig<CamT>::ComputeNormals(Image<float>& cuD,
+    bool useRgbCamParasForDepth, 
+    Image<Vector3fda>& cuN) {
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+
+    tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    tdp::Image<float> cuD_i = cuD.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    // compute normals from depth in rig coordinate system
+    tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
+  }
+}
+
+template<class CamT>
+void Rig<CamT>::ComputePc(Image<float>& cuD, 
+    bool useRgbCamParasForDepth, 
+    Image<Vector3fda>& cuPc) {
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+
+    tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    tdp::Image<float> cuD_i = cuD.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+
+    // compute point cloud from depth in rig coordinate system
+    tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
+  }
+}
 
 }

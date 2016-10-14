@@ -335,28 +335,30 @@ int main( int argc, char* argv[] )
     TOCK("depth collection");
     tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
-    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
-      int32_t cId;
-      if (useRgbCamParasForDepth) {
-        cId = rig.rgbStream2cam_[sId]; 
-      } else {
-        cId = rig.dStream2cam_[sId]; 
-      }
-      CameraT cam = rig.cams_[cId];
-      tdp::SE3f T_rc = rig.T_rcs_[cId];
-
-      tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
-          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-      tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
-          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-      tdp::Image<float> cuD_i = cuD.GetRoi(0,
-          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-
-      // compute point cloud from depth in rig coordinate system
-      tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
-      // compute normals from depth in rig coordinate system
-      tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
-    }
+    rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
+    rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+//    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
+//      int32_t cId;
+//      if (useRgbCamParasForDepth) {
+//        cId = rig.rgbStream2cam_[sId]; 
+//      } else {
+//        cId = rig.dStream2cam_[sId]; 
+//      }
+//      CameraT cam = rig.cams_[cId];
+//      tdp::SE3f T_rc = rig.T_rcs_[cId];
+//
+//      tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
+//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+//      tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
+//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+//      tdp::Image<float> cuD_i = cuD.GetRoi(0,
+//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+//
+//      // compute point cloud from depth in rig coordinate system
+//      tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
+//      // compute normals from depth in rig coordinate system
+//      tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
+//    }
     TOCK("pc and normals");
     if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
     TICK("Setup Pyramids");
