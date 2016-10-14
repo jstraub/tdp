@@ -84,7 +84,8 @@ class Image {
   std::string Description() const {
     std::stringstream ss;
     ss << w_ << "x" << h_ << " pitch=" << pitch_ 
-      << " " << SizeBytes() << "bytes";
+      << " " << SizeBytes() << "bytes " 
+      << " ptr: " << ptr_;
     return ss.str();
   }
 

@@ -26,9 +26,9 @@ template <class Cam>
 struct Rig {
 
   ~Rig() {
-    for (size_t i=0; i<depthScales_.size(); ++i) {
-      delete[] depthScales_[i].ptr_;
-    }
+//    for (size_t i=0; i<depthScales_.size(); ++i) {
+//      delete[] depthScales_[i].ptr_;
+//    }
   }
 
   bool ParseTransformation(const pangolin::json::value& jsT, SE3f& T) {
@@ -69,7 +69,7 @@ struct Rig {
 //        std::cout << file_json.serialize(true) << std::endl;
         if (file_json.size() > 0) {
           std::cout << "found " << file_json.size() << " elements" << std::endl ;
-          depthScales_.reserve(file_json.size());
+          cuDepthScales_.reserve(file_json.size());
           for (size_t i=0; i<file_json.size(); ++i) {
             if (file_json[i].contains("camera")) {
               // serial number
@@ -96,20 +96,12 @@ struct Rig {
                   std::cout << "w x h: " << w << "x" << h << std::endl;
                   Image<float> scaleWrap(w,h,w*sizeof(float),
                       (float*)scale8bit.ptr);
-                  depthScales_.push_back(tdp::Image<float>(w,h,w*sizeof(float),
-                        CpuAllocator<float>::construct(w*h)));
-                  depthScales_[depthScales_.size()-1].CopyFrom(scaleWrap,
-                      cudaMemcpyHostToHost);
-                  cuDepthScales_.push_back(tdp::Image<float>(w,h,w*sizeof(float),
-                        GpuAllocator<float>::construct(w*h)));
+                  cuDepthScales_.emplace_back(w,h);
                   cuDepthScales_[cuDepthScales_.size()-1].CopyFrom(scaleWrap,
                       cudaMemcpyHostToDevice);
                   std::cout << "found and loaded depth scale file"
-                    << depthScales_[depthScales_.size()-1].ptr_ 
-                    << " " <<  cuDepthScales_[cuDepthScales_.size()-1].ptr_ << std::endl;
-//                  ManagedDeviceImage<float> cuScale(w,h);
-//                  cuScale.CopyFrom(depthScales_[depthScales_.size()-1],
-//                      cudaMemcpyHostToDevice);
+                    << " " 
+                    <<  cuDepthScales_[cuDepthScales_.size()-1].ptr_ << std::endl;
                 }
               }
               if (file_json[i]["camera"].contains("depthScaleVsDepthModel")) {
@@ -176,8 +168,8 @@ struct Rig {
   std::vector<Cam> cams_;
   // depth scale calibration images
   std::vector<std::string> depthScalePaths_;
-  std::vector<Image<float>> depthScales_;
-  std::vector<Image<float>> cuDepthScales_;
+//  std::vector<Image<float>> depthScales_;
+  std::vector<ManagedDeviceImage<float>> cuDepthScales_;
   // depth scale scaling model as a function of depth
   eigen_vector<Eigen::Vector2f> scaleVsDepths_;
 
@@ -238,8 +230,8 @@ void Rig<CamT>::CollectRGB(const GuiBase& gui,
     Image<Vector3bda> rgbStream;
     if (!gui.ImageRGB(rgbStream, sId)) continue;
     int32_t cId = rgbdStream2cam_[sId]; 
-    const size_t wSingle = rgbStream.w_;
-    const size_t hSingle = rgbStream.h_;
+    const size_t wSingle = rgbStream.w_+rgbStream.w_%64;
+    const size_t hSingle = rgbStream.h_+rgbStream.h_%64;
     Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
     rgb_i.CopyFrom(rgbStream,type);
   }
@@ -260,20 +252,17 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     t_host_us_d += t_host_us_di;
     numStreams ++;
     int32_t cId = rgbdStream2cam_[sId]; 
-    const size_t wSingle = dStream.w_;
-    const size_t hSingle = dStream.h_;
+    const size_t wSingle = dStream.w_+dStream.w_%64;
+    const size_t hSingle = dStream.h_+dStream.h_%64;
     tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
         wSingle, hSingle);
     cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
     // convert depth image from uint16_t to float [m]
     tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
-    if (depthScales_.size() > cId) {
+    if (cuDepthScales_.size() > cId) {
       float a = scaleVsDepths_[cId](0);
       float b = scaleVsDepths_[cId](1);
-      // TODO: should not need to load this every time
-      cuDepthScales_[cId].CopyFrom(depthScales_[cId],cudaMemcpyHostToDevice);
-      Image<float> cuDepthScale = cuDepthScales_[cId];
-      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuDepthScale, 
+      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuDepthScales_[cId], 
           a, b, dMin, dMax);
       //} else {
       //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
