@@ -269,14 +269,14 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     if (depthScales_.size() > cId) {
       float a = scaleVsDepths_[cId](0);
       float b = scaleVsDepths_[cId](1);
-      // TODO: dont need to load this every time
-//      cuScale.CopyFrom(depthScales_[cId],cudaMemcpyHostToDevice);
+      // TODO: should not need to load this every time
+      cuDepthScales_[cId].CopyFrom(depthScales_[cId],cudaMemcpyHostToDevice);
       Image<float> cuDepthScale = cuDepthScales_[cId];
       tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuDepthScale, 
           a, b, dMin, dMax);
       //} else {
       //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
-  }
+    }
   }
   t_host_us_d /= numStreams;  
 }
