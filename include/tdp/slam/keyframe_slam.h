@@ -39,7 +39,8 @@ class KeyframeSLAM {
       int idA = kfs_.size() - 1;
       int idB = kfs_.size() - 2;
       tdp::SE3f T_ab = kfs_[idA].T_wk_.Inverse() * kfs_[idB].T_wk_;
-      initials_->insert(idA, kfs_[idA].T_wk_);
+      initials_->insert(idA, 
+          gtsam::Pose3(kfs_[idA].T_wk_.matrix().cast<double>()));
       gtsam::NonlinearFactor::shared_ptr factor(
           new gtsam::BetweenFactor<gtsam::Pose3>(idA, idB, 
             gtsam::Pose3(T_ab.matrix().cast<double>()), odomModel_));
