@@ -145,9 +145,13 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
 
+  tdp::QuickView viewDebug(640,480);
+  gui.container().AddDisplay(viewDebug);
+
   viewRgb.Show(false);
   viewD.Show(false);
   viewN2D.Show(false);
+  viewDebug.Show(false);
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
@@ -203,7 +207,7 @@ int main( int argc, char* argv[] )
 
   // Add some variables to GUI
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",8.,0.1,10.);
+  pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
@@ -323,46 +327,9 @@ int main( int argc, char* argv[] )
     gui.NextFrames();
 
     TICK("rgb collection");
-    // get rgb image
-//    for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-//      tdp::Image<tdp::Vector3bda> rgbStream;
-//      if (!gui.ImageRGB(rgbStream, sId)) continue;
-//      int32_t cId = rig.rgbdStream2cam_[sId]; 
-//      tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
-//          wSingle, hSingle);
-//      rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
-//    }
     rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
     TOCK("rgb collection");
     TICK("depth collection");
-    // get depth image
-//    int64_t t_host_us_d = 0;
-//    int32_t numStreams = 0;
-//    for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-//      tdp::Image<uint16_t> dStream;
-//      int64_t t_host_us_di = 0;
-//      if (!gui.ImageD(dStream, sId, &t_host_us_di)) continue;
-//      t_host_us_d += t_host_us_di;
-//      numStreams ++;
-//      int32_t cId = rig.rgbdStream2cam_[sId]; 
-//      //std::cout << sId << " " << cId << std::endl;
-//      tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-//          wSingle, hSingle);
-//      cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
-//      // convert depth image from uint16_t to float [m]
-//      tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
-//          wSingle, hSingle);
-//      if (rig.depthScales_.size() > cId) {
-//        float a = rig.scaleVsDepths_[cId](0);
-//        float b = rig.scaleVsDepths_[cId](1);
-//        // TODO: dont need to load this every time
-//        cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
-//        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
-//      //} else {
-//      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
-//      }
-//    }
-//    t_host_us_d /= numStreams;  
     int64_t t_host_us_d = 0;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     TOCK("depth collection");
@@ -394,11 +361,8 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
     TICK("Setup Pyramids");
     // TODO might want to use the pyramid construction with smoothing
-//    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-//        cudaMemcpyDeviceToDevice, 0.03);
     pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
     tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
-
     ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
@@ -506,9 +470,9 @@ int main( int argc, char* argv[] )
       TOCK("Ray Trace TSDF");
     }
 
-    if (tryLoopClose) {
-      gui.SeekFrames(0);
-    }
+//    if (tryLoopClose) {
+//      gui.SeekFrames(0);
+//    }
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
@@ -605,6 +569,11 @@ int main( int argc, char* argv[] )
       }
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
+    }
+    if (viewDebug.IsShown()) {
+      tdp::ManagedHostImage<float> debug(640,480);
+      debug.CopyFrom(rig.cuDepthScales_[0], cudaMemcpyDeviceToHost);
+      viewDebug.SetImage(debug);
     }
 
     plotInliers.ScrollView(1,0);
