@@ -28,6 +28,7 @@
 #include <tdp/io/tinyply.h>
 #include <tdp/gl/shaders.h>
 #include <tdp/gui/gui.hpp>
+#include <tdp/nn/ann.h>
 
 #include <iostream>
 #include <cmath>
@@ -36,76 +37,6 @@
 #include <Eigen/Eigenvalues>
 #include "laplace_beltrami.h"
 
-//void SkinningViewer(const std::string& input_uri)
-//{
-//  tdp::GUI gui(1200,800,video);
-
-//  size_t w = video.Streams()[gui.iD[0]].Width();
-//  size_t h = video.Streams()[gui.iD[0]].Height();
-//  // width and height need to be multiple of 64 for convolution
-//  // algorithm to compute normals.
-//  w += w%64;
-//  h += h%64;
-
-//  // Define Camera Render Object (for view / scene browsing)
-//  pangolin::OpenGlRenderState s_cam(
-//      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
-//      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
-//      );
-//  // Add named OpenGL viewport to window and provide 3D Handler
-//  pangolin::View& d_cam = pangolin::CreateDisplay()
-//    .SetHandler(new pangolin::Handler3D(s_cam));
-//  gui.container().AddDisplay(d_cam);
-//  // add a simple image viewer
-//  tdp::QuickView viewN2D(w,h);
-//  gui.container().AddDisplay(viewN2D);
-
-//  // camera model for computing point cloud and normals
-//  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5));
-
-//  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
-//  pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
-
-//  // Add some variables to GUI
-//  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
-//  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-//  pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
-//  pangolin::Var<bool> savePC("ui.save current PC",false,false);
-//}
-
-
-void test_getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
-    tdp::Vector3fda mean = getMean(pc);
-    std::cout << "mean: " << mean << std::endl;
-}
-
-void test_mean(){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,10);
-  for (int i=0; i<10;++i){
-    tdp::Vector3fda p1,p2;
-    p1 << i,2*i,0;
-    //p2 << i,0,2*i;
-    pc(i,0) = p1;
-    //pc(i,1) = p2;
-  }
-  std::cout << "mean: " << getMean(pc) << std::endl;
-  std::cout << "cov: \n" << getCovariance(pc) << std::endl;
-}
-void test_with_pc(const std::string inputA, const std::string inputB){
-  // load pc and normal from the input paths
-  tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
-  tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
-  tdp::LoadPointCloud(inputA, pcA, nsA);
-  tdp::LoadPointCloud(inputB, pcB, nsB);
-
-  tdp::Vector3fda meanA, meanB;
-  tdp::Matrix3fda covA, covB;
-  meanA = getMean(pcA); covA = getCovariance(pcA);
-  meanB = getMean(pcB); covB = getCovariance(pcB);
-
-  std::cout << "meanA: \n" << meanA << ",\nmeanB: " << meanB << std::endl;
-  std::cout << "covA: \n " << covA << ", \ncovB:\n" << covB << std::endl;
-}
 
 tdp::Vector3fda getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   tdp::Vector3fda mean;
@@ -144,17 +75,6 @@ tdp::Matrix3fda getCovariance(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
   return cov;
 }
 
-tdp::ManagedHostImage<tdp::Vector3fda> getSimplePc(){
-  // PC for test
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
-    for (int i=0; i<10; i++){
-            tdp::Vector3fda p(i,i,i);
-            pc(i,0) = p;
-    }
-    std::cout << "test mean: \n" << getMean(pc) << std::endl;
-    std::cout << "test cov: \n " << getCovariance(pc) << std::endl;
-    return pc;
-}
 ////todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
 std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     tdp::Vector3fda mean = getMean(pc);
@@ -186,16 +106,6 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     spec[1] = spread_real;
     spec[2] = spread_imag;
     return spec;
-}
-void test_getMeanAndSpread(){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc = getSimplePc();
-  std::vector<tdp::Vector3fda> meanSpread;
-  meanSpread = getMeanAndSpread(pc);
-  tdp::Vector3fda mean, spread_real;
-  mean = meanSpread[0]; spread_real = meanSpread[1];
-
-  std::cout << "test mean: \n" << mean << std::endl;
-  std::cout << "test spread: \n" << spread_real<< std::endl;
 }
 inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
     return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
@@ -298,7 +208,9 @@ return means;
 }
 
 int main( int argc, char* argv[] ){
-  test_getMeanAndSpread();
+  tdp::ANN ann();
+ // ann.ComputeKDtree(getSimplePc());
+  std::cout << "good evening, maybe?" << std::endl;
   if (argc < 2){
       std::cout << "Must input two plyfile paths!" << std::endl;
       return -1;
@@ -348,9 +260,6 @@ int main( int argc, char* argv[] ){
   tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
   tdp::LoadPointCloud(inputA, pcA, nsA);
   tdp::LoadPointCloud(inputB, pcB, nsB);
-
-//  std::cout << "pcA area:  " << pcA.Area() << std::endl;
-//  std::cout << "pcB area:  " << pcB.Area() << std::endl;
 
   // use those OpenGL buffers
   pangolin::GlBuffer vboA, vboB, vboM;
