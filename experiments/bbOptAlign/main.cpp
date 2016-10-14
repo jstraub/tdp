@@ -129,6 +129,7 @@ int main( int argc, char* argv[] )
   valueboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),
       GL_UNSIGNED_SHORT, 1, GL_DYNAMIC_DRAW);
 
+  pangolin::Var<bool> verbose("ui.verbose", false, true);
   pangolin::Var<bool> computevMFMMs("ui.compute vMFMMs", false, false);
   pangolin::Var<bool> computeGMMs("ui.compute GMMs", false, false);
 
@@ -254,22 +255,13 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(computeICP)) {
-        size_t maxIt = icpIter0;
-      for (size_t it=0; it<maxIt; ++it) {
-        //    tdp::TransformPc(T_ab, cuPcB);
-        //    tdp::TransformPc(T_ab.rotation(), cuNsB);
-        tdp::AssociateANN(pcA, pcB, T_ab.Inverse(), assoc_ba, icpDownSample);
-        cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
-
-        float err;
-        float count;
-
-        tdp::ICP::ComputeGivenAssociation(cuPcA, cuNsA, cuPcB, cuNsB,
-            cuAssoc_ba, T_ab, 1, icpAngleThr_deg, icpDistThr,
-            err, count);
-
-        std::cout << T_ab.matrix3x4() << std::endl;
-      }
+      float err;
+      float count;
+      tdp::ICP::ComputeANN(pcA, cuPcA, cuNsA, pcB, cuPcB, cuNsB, 
+          assoc_ba, cuAssoc_ba, T_ab, icpIter0, 
+          icpAngleThr_deg, icpDistThr, 
+          icpDownSample, verbose, err, count);
+      std::cout << T_ab.matrix3x4() << std::endl;
     }
 
     // Draw 3D stuff

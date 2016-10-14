@@ -268,7 +268,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",3,1,10);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,1,10);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",10,0,10);
@@ -365,6 +365,7 @@ int main( int argc, char* argv[] )
     TOCK("rgb collection");
     TICK("depth collection");
     int64_t t_host_us_d = 0;
+    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     TOCK("depth collection");
     TICK("pc and normals");
@@ -517,18 +518,22 @@ int main( int argc, char* argv[] )
           << T_ab.matrix3x4() << std::endl;
         float err;
         float count;
-        for (size_t it=0; it<icpLoopCloseIter0; ++it) {
-          tdp::AssociateANN(kfA.pc_, kfB.pc_,
-              T_ab.Inverse(), assoc_ba, icpDownSample);
-          cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
-
-          tdp::ICP::ComputeGivenAssociation(cuPcA, cuNA, cuPcB, cuNB, 
-              cuAssoc_ba, T_ab, 1, icpLoopCloseAngleThr_deg, icpLoopCloseDistThr,
-              err, count);
-          std::cout << T_ab.matrix3x4() << std::endl;
-          if (count < 3000) 
-            break;
-        }
+        tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
+            assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
+            icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
+            icpDownSample, gui.verbose, err, count);
+//        for (size_t it=0; it<icpLoopCloseIter0; ++it) {
+//          tdp::AssociateANN(kfA.pc_, kfB.pc_,
+//              T_ab.Inverse(), assoc_ba, icpDownSample);
+//          cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
+//
+//          tdp::ICP::ComputeGivenAssociation(cuPcA, cuNA, cuPcB, cuNB, 
+//              cuAssoc_ba, T_ab, 1, icpLoopCloseAngleThr_deg, icpLoopCloseDistThr,
+//              err, count);
+//          std::cout << T_ab.matrix3x4() << std::endl;
+//          if (count < 3000) 
+//            break;
+//        }
         if (err == err && count > 3000) {
           std::cout << "successfull loop closure "
             << T_ab.matrix3x4() << std::endl;

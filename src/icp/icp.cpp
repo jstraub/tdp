@@ -5,7 +5,48 @@
 #include <tdp/camera/camera_poly.h>
 #include <tdp/manifold/SE3.h>
 
+#ifdef ANN_FOUND
+# include <tdp/nn/ann.h>
+#endif
+
 namespace tdp {
+
+#ifdef ANN_FOUND
+void ICP::ComputeANN(
+    Image<Vector3fda>& pc_m,
+    Image<Vector3fda>& cuPc_m,
+    Image<Vector3fda>& n_m,
+    Image<Vector3fda>& pc_o,
+    Image<Vector3fda>& cuPc_o,
+    Image<Vector3fda>& n_o,
+    Image<int>& assoc_om,
+    Image<int>& cuAssoc_om,
+    SE3f& T_mo,
+    size_t maxIt, float angleThr_deg, float distThr,
+    int downSampleANN, bool verbose,
+    float& err, float& count
+    ) {
+  float errPrev = 0.f; 
+  for (size_t it=0; it<maxIt; ++it) {
+    tdp::AssociateANN(pc_m, pc_o, T_mo.Inverse(), assoc_om, downSampleANN);
+    cuAssoc_om.CopyFrom(assoc_om, cudaMemcpyHostToDevice);
+    tdp::ICP::ComputeGivenAssociation(cuPc_m, n_m, cuPc_o, n_o, 
+        cuAssoc_om, T_mo, 1, angleThr_deg, distThr, false,
+        err, count);
+    if (verbose) {
+      std::cout << " it " << it 
+        << ": err=" << err << "\tdErr/err=" << fabs(err-errPrev)/err
+        << " # inliers: " << count 
+        << " det(R): " << T_mo.rotation().matrix().determinant()
+        << std::endl;
+    }
+    //std::cout << dT.matrix() << std::endl;
+    //std::cout << T_mo.matrix() << std::endl;
+    if (it>0 && fabs(err-errPrev)/err < 1e-7) break;
+    errPrev = err;
+  }
+}
+#endif
 
 void ICP::ComputeGivenAssociation(
     Image<Vector3fda>& pc_m,
@@ -15,11 +56,12 @@ void ICP::ComputeGivenAssociation(
     Image<int>& assoc_om,
     SE3f& T_mo,
     size_t maxIt, float angleThr_deg, float distThr,
+    bool verbose,
     float& error, float& count
     ) {
   Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
   Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
-  float errPrev = 0.f; 
+  float errPrev = error; 
   count = 0.f; 
   error = 0.f; 
   for (size_t it=0; it<maxIt; ++it) {
@@ -46,14 +88,16 @@ void ICP::ComputeGivenAssociation(
     // apply x to the transformation
     SE3f dT = SE3f::Exp_(x);
     T_mo = dT * T_mo;
-    std::cout << " it " << it 
-      << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
-      << " # inliers: " << count 
-      << " rank(ATA): " << rank
-      << " det(R): " << T_mo.rotation().matrix().determinant()
-      << " |x|: " << x.topRows(3).norm()*180./M_PI 
-      << " " <<  x.bottomRows(3).norm()
-      << std::endl;
+    if (verbose) {
+      std::cout << " it " << it 
+        << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+        << " # inliers: " << count 
+        << " rank(ATA): " << rank
+        << " det(R): " << T_mo.rotation().matrix().determinant()
+        << " |x|: " << x.topRows(3).norm()*180./M_PI 
+        << " " <<  x.bottomRows(3).norm()
+        << std::endl;
+    }
     //std::cout << dT.matrix() << std::endl;
     //std::cout << T_mo.matrix() << std::endl;
     if (it>0 && fabs(error-errPrev)/error < 1e-7) break;

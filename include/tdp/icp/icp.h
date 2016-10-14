@@ -154,8 +154,26 @@ class ICP {
     Image<int>& assoc_om,
     SE3f& T_mo,
     size_t maxIt, float angleThr_deg, float distThr,
+    bool verbose,
     float& error, float& count
     );
+
+#ifdef ANN_FOUND
+  static void ComputeANN(
+      Image<Vector3fda>& pc_m,
+      Image<Vector3fda>& cuPc_m,
+      Image<Vector3fda>& n_m,
+      Image<Vector3fda>& pc_o,
+      Image<Vector3fda>& cuPc_o,
+      Image<Vector3fda>& n_o,
+      Image<int>& assoc_om,
+      Image<int>& cuAssoc_om,
+      SE3f& T_mo,
+      size_t maxIt, float angleThr_deg, float distThr,
+      int downSampleANN, bool verbose,
+      float& err, float& count
+      );
+#endif
 
   /// Compute relative rotation between two surface normal "images";
   /// uese projective data association
