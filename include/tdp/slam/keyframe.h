@@ -7,7 +7,8 @@ namespace tdp {
 
 struct KeyFrame {
   KeyFrame() {};
-  KeyFrame(const Image<Vector3fda>& pc, 
+  KeyFrame(
+      const Image<Vector3fda>& pc, 
       const Image<Vector3fda>& n,
       const Image<Vector3bda>& rgb,
       const SE3f& T_wk) :

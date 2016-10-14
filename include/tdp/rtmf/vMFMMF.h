@@ -92,6 +92,9 @@ float vMFMMF<K>::UpdateMF(const Image<Vector3fda>& cuN) {
       Rs_[k] = svd.matrixV()*Eigen::Vector3f(1.,1.,-1.).asDiagonal()*svd.matrixU().transpose();
     cs_[k] = (N*Rs_[k]).trace();
   }
+  float C = 0.;
+  for (auto& c : cs_) C += c;
+  return C;
 }
 
 template<int K>

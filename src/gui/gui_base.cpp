@@ -12,7 +12,7 @@ GuiBase::GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
   end_frame("ui.end_frame", std::numeric_limits<int>::max() ),
   video_wait("ui.wait", true),
   video_newest("ui.newest", false),
-  verbose("ui.verbose", true)
+  verbose("ui.verbose", true, false)
 {
     // Create OpenGL window - guess sensible dimensions
     int menue_w = 180;

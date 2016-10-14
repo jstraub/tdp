@@ -268,10 +268,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,1,10);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",30,1,100);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
-  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
@@ -326,6 +326,7 @@ int main( int argc, char* argv[] )
 //      << imuInterp.gravity0_.transpose() << std::endl
 //      << T_mr << std::endl;
   }
+  std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
   std::vector<tdp::KeyFrame> keyframes;
   tdp::SE3f T_mr = T_mr0;
   std::vector<tdp::SE3f> T_mrs;
@@ -497,17 +498,20 @@ int main( int argc, char* argv[] )
           << " dist: " << se3.tail<3>().norm() << std::endl;
         pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
         n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
+        kfSLAM.AddKeyframe(pc, n, rgb, T_mr);
         keyframes.emplace_back(pc, n, rgb, T_mr);
         tryLoopClose = true;
       }
     }
 
     if (pangolin::Pushed(tryLoopClose) && keyframes.size() > 1) {
-      tdp::KeyFrame& kfA = keyframes[keyframes.size()-1];
+      int idA = keyframes.size()-1;
+      tdp::KeyFrame& kfA = keyframes[idA];
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
-      for (int i=(int)keyframes.size()-2; i>(int)keyframes.size()-3; --i) {
-        tdp::KeyFrame& kfB = keyframes[i];
+      for (int idB=(int)keyframes.size()-2; 
+          idB>std::max(-1,(int)keyframes.size()-1-10); --idB) {
+        tdp::KeyFrame& kfB = keyframes[idB];
         cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
         cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
 
@@ -522,21 +526,11 @@ int main( int argc, char* argv[] )
             assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
             icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
             icpDownSample, gui.verbose, err, count);
-//        for (size_t it=0; it<icpLoopCloseIter0; ++it) {
-//          tdp::AssociateANN(kfA.pc_, kfB.pc_,
-//              T_ab.Inverse(), assoc_ba, icpDownSample);
-//          cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
-//
-//          tdp::ICP::ComputeGivenAssociation(cuPcA, cuNA, cuPcB, cuNB, 
-//              cuAssoc_ba, T_ab, 1, icpLoopCloseAngleThr_deg, icpLoopCloseDistThr,
-//              err, count);
-//          std::cout << T_ab.matrix3x4() << std::endl;
-//          if (count < 3000) 
-//            break;
-//        }
         if (err == err && count > 3000) {
           std::cout << "successfull loop closure "
             << T_ab.matrix3x4() << std::endl;
+          loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+          kfSLAM.AddLoopClosure(idA, idB, T_ab);
         }
       }
     }
@@ -593,18 +587,18 @@ int main( int argc, char* argv[] )
         for (size_t i=0; i<keyframes.size(); ++i) {
           tdp::SE3f& T_wk = keyframes[i].T_wk_;
           pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
-          glColor4f(1.,0.3,0.3,0.6);
-          if (i>0) {
-            tdp::SE3f& T_wk_prev = keyframes[i-1].T_wk_;
-            pangolin::glDrawLine(
-                T_wk.translation()(0), T_wk.translation()(1),
-                T_wk.translation()(2),
-                T_wk_prev.translation()(0), T_wk_prev.translation()(1),
-                T_wk_prev.translation()(2));
-          }
+        }
+        glColor4f(1.,0.3,0.3,0.6);
+        for (auto& it : loopClosures) {
+          tdp::SE3f& T_wk_A = keyframes[it.first.first].T_wk_;
+          tdp::SE3f& T_wk_B = keyframes[it.first.second].T_wk_;
+          pangolin::glDrawLine(
+              T_wk_A.translation()(0), T_wk_A.translation()(1),
+              T_wk_A.translation()(2),
+              T_wk_B.translation()(0), T_wk_B.translation()(1),
+              T_wk_B.translation()(2));
         }
       }
-
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
@@ -622,13 +616,6 @@ int main( int argc, char* argv[] )
         pangolin::RenderVboCbo(vbo,cbo,true);
       }
       pangolin::glUnsetFrameOfReference();
-
-//      vbo.Upload(pc_l.ptr_,pc_l.SizeBytes(), 0);
-//      pangolin::glSetFrameOfReference(T_ml.matrix());
-//      pangolin::glDrawAxis(0.1f);
-//      glColor3f(0,1,1);
-//      pangolin::RenderVbo(vbo);
-//      pangolin::glUnsetFrameOfReference();
 
       pc.CopyFrom(cuPcView,cudaMemcpyDeviceToHost);
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);

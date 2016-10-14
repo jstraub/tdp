@@ -32,19 +32,22 @@ void AssociateANN(
   Eigen::VectorXf dists(k);
 
   int Nassoc = 0;
-  for (size_t i=0; i<pc_m.Area(); ++i) {
-    if (i%stride == 0) {
-      Vector3fda p_m_in_o = T_om*pc_m[i];
-      if (IsValidData(p_m_in_o)) {
-        ann.Search(p_m_in_o, k, 0., nnIds, dists);
-        assoc_om[i] = nnIds(0);
-        ++Nassoc;
+#pragma omp parallel for
+  for (size_t j=0; j<pc_m.Area(); j+=100) {
+    for (size_t i=j; j<std::min(j+100,pc_m.Area()); ++j) {
+      if (i%stride == 0) {
+        Vector3fda p_m_in_o = T_om*pc_m[i];
+        if (IsValidData(p_m_in_o)) {
+          ann.Search(p_m_in_o, k, 0., nnIds, dists);
+          assoc_om[i] = nnIds(0);
+          ++Nassoc;
+        } else {
+          assoc_om[i] = std::numeric_limits<int>::max();
+        }
+        //      Progress(i,pc_m.w_);
       } else {
         assoc_om[i] = std::numeric_limits<int>::max();
       }
-      Progress(i,pc_m.w_);
-    } else {
-      assoc_om[i] = std::numeric_limits<int>::max();
     }
   }
   std::cout << "N assoc: " << Nassoc << " of " << pc_m.Area() << std::endl;
