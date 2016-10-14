@@ -55,9 +55,9 @@ void vMFMMF<K>::Reset() {
 template<int K>
 float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN, 
     size_t maxIt, bool verbose) {
-
+  float assocCost = 0;
   for (size_t it=0; it<maxIt; ++it) {
-    float assocCost = UpdateAssociation(cuN);
+    assocCost = UpdateAssociation(cuN);
     UpdateMF(cuN);
     if (verbose) {
       std::cout << "rtmf @" << it << ":\t" << assocCost
@@ -68,6 +68,7 @@ float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN,
       std::cout << std::endl;
     }
   }
+  return assocCost;
 }
 
 template<int K>

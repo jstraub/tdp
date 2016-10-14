@@ -316,10 +316,6 @@ int main( int argc, char* argv[] )
   NavState prop_state = prev_state;
   imuBias::ConstantBias prev_bias = prior_imu_bias;
 
-  // Keep track of the total error over the entire run for a simple performance metric.
-  double current_position_error = 0.0, current_orientation_error = 0.0;
-
-  double output_time = 0.0;
   double dt = 0.005;  // The real system has noise, but here, results are nearly 
                       // exactly the same, so keeping this for simplicity.
                       //
