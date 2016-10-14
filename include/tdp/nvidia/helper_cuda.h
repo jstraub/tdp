@@ -63,7 +63,7 @@ inline void EXIT_DELAY(int return_code)
 
 // CUDA Runtime error messages
 #ifdef __DRIVER_TYPES_H__
-static const char *_cudaGetErrorEnum(cudaError_t error)
+static inline const char *_cudaGetErrorEnum(cudaError_t error)
 {
     switch (error)
     {
@@ -311,7 +311,7 @@ static const char *_cudaGetErrorEnum(cudaError_t error)
 
 #ifdef __cuda_cuda_h__
 // CUDA Driver API errors
-static const char *_cudaGetErrorEnum(CUresult error)
+static inline const char *_cudaGetErrorEnum(CUresult error)
 {
     switch (error)
     {

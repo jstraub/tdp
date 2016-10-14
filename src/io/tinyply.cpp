@@ -196,7 +196,7 @@ PlyFile::PlyFile(std::istream & is)
 bool PlyFile::parse_header(std::istream& is)
 {
     std::string line;
-    bool gotMagic = false;
+//    bool gotMagic = false;
     while (std::getline(is, line))
     {
         std::istringstream ls(line);
@@ -204,7 +204,7 @@ bool PlyFile::parse_header(std::istream& is)
         ls >> token;
         if (token == "ply" || token == "PLY" || token == "")
         {
-            gotMagic = true;
+//            gotMagic = true;
             continue;
         }
         else if (token == "comment")    read_header_text(line, ls, comments, 7);
@@ -473,7 +473,7 @@ void PlyFile::read_internal(std::istream & is)
                                 cursor->realloc = true;
                                 resize_vector(property.propertyType, cursor->vector, listSize * element.size, cursor->data);
                             }
-                            for (auto i = 0; i < listSize; ++i)
+                            for (uint32_t i = 0; i < listSize; ++i)
                             {
                                 read(property.propertyType, (cursor->data + cursor->offset), cursor->offset, is);
                             }

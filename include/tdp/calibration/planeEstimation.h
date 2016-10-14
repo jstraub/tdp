@@ -26,10 +26,10 @@ class PlaneEstimation : public GD<float,3,Vector3fda> {
   void Reset(const Image<float>* cuD, float alpha);
   virtual void ComputeJacobian(const Vector3fda& theta, Eigen::Vector3f* J, float* f);
 
+  const Image<float>* cuD_;
   ManagedDeviceImage<float> cuF_;
   ManagedDeviceImage<Vector3fda> cuDeriv_;
  private:
-  const Image<float>* cuD_;
   const Camera<float>& cam_;
   float alpha_;
 };

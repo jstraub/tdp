@@ -327,8 +327,8 @@ int main( int argc, char* argv[] )
     [&]() {
       tdp::ImuObs imuObs;
       tdp::ImuObs imuObsPrev;
-      bool calibrated = false;
-      Eigen::Vector3f gyro_bias = Eigen::Vector3f::Zero();
+//      bool calibrated = false;
+//      Eigen::Vector3f gyro_bias = Eigen::Vector3f::Zero();
       while(receiveImu.Get()) {
         if (imu->GrabNext(imuObs)) {
           while(t_host_video.Get() < imuObs.t_host) {
