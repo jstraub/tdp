@@ -155,6 +155,7 @@ void ICP::ComputeProjective(
     const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
+    bool verbose,
     SE3f& T_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
@@ -219,6 +220,7 @@ void ICP::ComputeProjective(
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
       // apply x to the transformation
       T_mr = tdp::SE3f(tdp::SE3f::Exp_(x))*T_mr;
+      if (verbose) {
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error 
         << "\tdErr/err=" << fabs(error-errPrev)/error
@@ -226,6 +228,7 @@ void ICP::ComputeProjective(
         //<< " |ATA|=" << ATA.determinant()
         //<< " x=" << x.transpose()
         << std::endl;
+      }
       if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
       errPrev = error;
     }
@@ -243,6 +246,7 @@ template void ICP::ComputeProjective(
     const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
+    bool verbose,
     SE3f& T_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
@@ -257,6 +261,7 @@ template void ICP::ComputeProjective(
     const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
+    bool verbose,
     SE3f& T_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl

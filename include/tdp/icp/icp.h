@@ -140,6 +140,7 @@ class ICP {
     const std::vector<int32_t>& stream2cam,
     const std::vector<size_t>& maxIt, 
     float angleThr_deg, float distThr,
+    bool verbose,
     SE3f& T_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
