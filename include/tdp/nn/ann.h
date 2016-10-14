@@ -2,6 +2,7 @@
 #include <ANN/ANN.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
+#include <tdp/cuda/cuda.h>
 
 // ANN wrapper
 namespace tdp {
@@ -24,7 +25,13 @@ class ANN {
     N_ = pc.Area();
     pc_ = new ANNpoint[N_];
 //    std::cout << "building ann PC data structure " << N_ << std::endl;
-    for (size_t i=0; i<pc.Area(); ++i) pc_[i] = &pc[i](0);
+    size_t j=0;
+    for (size_t i=0; i<pc.Area(); ++i) {
+      if (IsValidData(pc[i])) {
+        pc_[j++] = &pc[i](0);
+      }
+    }
+    N_ = j;
     // build KD tree
     kdTree_ = new ANNkd_tree(pc_, N_, 3, 1, ANN_KD_SUGGEST);
   }
@@ -36,9 +43,9 @@ class ANN {
     kdTree_->annkSearch(&query(0), k, &nnIds(0), &dists(0), eps);
   }
 
+  int N_;
  private:
   ANNpointArray pc_;
-  int N_;
   ANNkd_tree* kdTree_;
 };
 

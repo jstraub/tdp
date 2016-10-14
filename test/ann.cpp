@@ -20,16 +20,17 @@ TEST(smallSearch, ann) {
         pcA[i](0) = NAN;
         pcA[i](1) = NAN;
         pcA[i](2) = NAN;
-//        pcB[i](0) = NAN;
-//        pcB[i](1) = NAN;
-//        pcB[i](2) = NAN;
+        pcB[i](0) = NAN;
+        pcB[i](1) = NAN;
+        pcB[i](2) = NAN;
       }
     }
-
-    std::cout << "running ANN with " << N << " points " << std::endl;
     tdp::Timer t0;
     ann.ComputeKDtree(pcA);
     t0.toctic("building KD tree");
+
+    std::cout << "running ANN with " << ann.N_ 
+      << " of " <<  N << " points " << std::endl;
 
     int k = 10;
     Eigen::VectorXi nnIds(k);
