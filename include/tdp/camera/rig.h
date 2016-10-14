@@ -105,7 +105,8 @@ struct Rig {
                   cuDepthScales_[cuDepthScales_.size()-1].CopyFrom(scaleWrap,
                       cudaMemcpyHostToDevice);
                   std::cout << "found and loaded depth scale file"
-                    << depthScales_[depthScales_.size()-1].ptr_ << std::endl;
+                    << depthScales_[depthScales_.size()-1].ptr_ 
+                    << " " <<  cuDepthScales_[cuDepthScales_.size()-1].ptr_ << std::endl;
 //                  ManagedDeviceImage<float> cuScale(w,h);
 //                  cuScale.CopyFrom(depthScales_[depthScales_.size()-1],
 //                      cudaMemcpyHostToDevice);
@@ -165,7 +166,7 @@ struct Rig {
 
   void CollectD(const GuiBase& gui,
     float dMin, float dMax, Image<uint16_t>& cuDraw,
-    Image<float>& cuD, int64_t& t_host_us_d) const;
+    Image<float>& cuD, int64_t& t_host_us_d) ;
 
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
@@ -247,7 +248,7 @@ void Rig<CamT>::CollectRGB(const GuiBase& gui,
 template<class CamT>
 void Rig<CamT>::CollectD(const GuiBase& gui,
     float dMin, float dMax, Image<uint16_t>& cuDraw,
-    Image<float>& cuD, int64_t& t_host_us_d) const {
+    Image<float>& cuD, int64_t& t_host_us_d) {
 
 //  tdp::ManagedDeviceImage<float> cuScale(wSingle, hSingle);
   int32_t numStreams = 0;
