@@ -164,7 +164,6 @@ void ComputeCurvature(
       const float dotAlpha = DotABC(xi,xl,xj);
       const float dotBeta = DotABC(xi,xr,xj);
       const float alpha = acos(dotAlpha);
-      const float beta = acos(dotBeta);
       const float gamma = acos(DotABC(xl,xi,xj));
 
 //      std::cout << int32_t(ids[k])-int32_t(i) 

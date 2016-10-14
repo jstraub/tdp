@@ -83,8 +83,8 @@ namespace tinyply
         
         Type listType, propertyType;
         bool isList;
-        int listCount = 0;
         std::string name;
+        int listCount = 0;
         
     private:
         
@@ -201,7 +201,7 @@ namespace tinyply
     
     inline int find_element(const std::string key, std::vector<PlyElement> & list)
     {
-        for (int i = 0; i < list.size(); ++i)
+        for (int i = 0; i < (int)list.size(); ++i)
             if (list[i].name == key) return i;
         return -1;
     }

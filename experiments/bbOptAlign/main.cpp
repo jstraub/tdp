@@ -160,8 +160,7 @@ int main( int argc, char* argv[] )
 
   tdp::SE3f T_ab;
 
-  float maxVal, minVal;
-  minVal = -1.f;
+  float maxVal;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -218,7 +217,6 @@ int main( int argc, char* argv[] )
 
 			std::list<tdp::NodeS3d> nodesS3;
 			Eigen::Quaterniond q_star;
-			double lb_star = 1e99;
 			double eps = 1e-8;
 
       std::cout << "Tesselating Sphere for initial nodes" << std::endl;
@@ -230,7 +228,6 @@ int main( int argc, char* argv[] )
         << " #nodes0 " << nodesS3.size() << std::endl;
 			tdp::NodeS3d node_star = bb.Compute(nodesS3, eps, maxLvlRot, maxItBB);
 			q_star = node_star.GetLbArgument();
-			lb_star = node_star.GetLB();
 
       std::cout << " optimal rotation: "
         << std::endl << q_star.matrix() << std::endl;

@@ -35,7 +35,7 @@ class GuiBase {
     fps_ = 1./((t_-t_prev_)*1e-6);
   }
 
-  void SeekFrames(size_t destFrame) {
+  void SeekFrames(int destFrame) {
     if (video_playback && destFrame < end_frame ) {
       std::cout << "SeekFrames seek " << video_playback->Seek(destFrame) << std::endl;
       GrabFrames();
@@ -70,7 +70,7 @@ class GuiBase {
     return pangolin::Display("container");
   }
 
-  bool pause() { 
+  void pause() { 
     end_frame = (frame < end_frame) ? frame : std::numeric_limits<int>::max(); 
   }
   bool paused() { return frame == end_frame; }

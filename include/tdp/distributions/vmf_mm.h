@@ -26,7 +26,7 @@ bool ComputevMFMM(
   // Run the clustering algorithm.
   dpvmfmeans.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
   z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
-  eigen_vector<Vector3fda>& centers = dpvmfmeans.centers_;
+//  eigen_vector<Vector3fda>& centers = dpvmfmeans.centers_;
   std::vector<size_t> Ns = dpvmfmeans.Ns_;
   uint32_t K = dpvmfmeans.K_;
 
