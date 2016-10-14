@@ -180,6 +180,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
+  // loop closure pc
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_l(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> n_l(w, h);
+
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
@@ -192,10 +196,15 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostPyramid<float,3> dPyrEst(w,h);
   tdp::ManagedDevicePyramid<float,3> cuDPyr(w,h);
   tdp::ManagedDevicePyramid<float,3> cuDPyrEst(w,h);
+  // model pc
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_o(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
+  // current pc
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_o(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_o(w,h);
+  // loop closure pc
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_l(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_l(w,h);
 
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
@@ -240,23 +249,27 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 10000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
+
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
+  pangolin::Var<int>  frameLoopClosure("ui.frame LoopCl",0,0,gui.end_frame);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,10,100);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-      int cId = rig.rgbdStream2cam_[sId];
-      std::stringstream ss;
-      ss << "capture_cam" << cId << ".png";
-      try{
-      pangolin::SaveImage(
-        gui.images[gui.iRGB[sId]], gui.video.Streams()[gui.iRGB[sId]].PixFormat(),
-        pangolin::MakeUniqueFilename(ss.str())
-        );
-      }catch(std::exception e){
-      pango_print_error("Unable to save frame: %s\n", e.what());
+        int cId = rig.rgbdStream2cam_[sId];
+        std::stringstream ss;
+        ss << "capture_cam" << cId << ".png";
+        try{
+          pangolin::SaveImage(
+            gui.images[gui.iRGB[sId]], 
+            gui.video.Streams()[gui.iRGB[sId]].PixFormat(),
+            pangolin::MakeUniqueFilename(ss.str())
+            );
+        }catch(std::exception e){
+          pango_print_error("Unable to save frame: %s\n", e.what());
+        }
       }
-      }
-      });
+    });
 
   pangolin::GlRenderBuffer glRenderBuf(w,h);
   pangolin::GlTexture tex(w,h,GL_RGBA8);
@@ -333,34 +346,11 @@ int main( int argc, char* argv[] )
     int64_t t_host_us_d = 0;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     TOCK("depth collection");
-    tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
     rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
     rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
-//    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
-//      int32_t cId;
-//      if (useRgbCamParasForDepth) {
-//        cId = rig.rgbStream2cam_[sId]; 
-//      } else {
-//        cId = rig.dStream2cam_[sId]; 
-//      }
-//      CameraT cam = rig.cams_[cId];
-//      tdp::SE3f T_rc = rig.T_rcs_[cId];
-//
-//      tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
-//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-//      tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
-//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-//      tdp::Image<float> cuD_i = cuD.GetRoi(0,
-//          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-//
-//      // compute point cloud from depth in rig coordinate system
-//      tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
-//      // compute normals from depth in rig coordinate system
-//      tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
-//    }
     TOCK("pc and normals");
-    if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
+//    if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
     TICK("Setup Pyramids");
     // TODO might want to use the pyramid construction with smoothing
     pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
@@ -368,13 +358,14 @@ int main( int argc, char* argv[] )
     ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
-    
+
+    tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     if (odomImu) {
 //      T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
       T_mr = T_wr_imu;
     } else if (odomFrame2Model || odomFrame2Frame) {
       if (runICP && numFused > 30) {
-        if (gui.verbose) std::cout << "icp" << std::endl;
+//        if (gui.verbose) std::cout << "icp" << std::endl;
         if (icpImu && imu) 
           T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
         TICK("ICP");
@@ -422,7 +413,7 @@ int main( int argc, char* argv[] )
     }
 
     if (fuseTSDF || numFused <= 30) {
-      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
+//      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
       for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
         int32_t cId;
@@ -472,8 +463,52 @@ int main( int argc, char* argv[] )
       TOCK("Ray Trace TSDF");
     }
 
-//    if (tryLoopClose) {
-//      gui.SeekFrames(0);
+//    tdp::SE3f T_ml = T_mrs[frameLoopClosure];
+//    if (false) {
+//      // For loop closure
+//      gui.SeekFrames(frameLoopClosure);
+//      rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
+//      int64_t t_host_us_l = 0;
+//      rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_l);
+//      rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
+//      rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+//      //      pcs_l.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
+//      //      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_l,cudaMemcpyDeviceToDevice);
+//      //      ns_l.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
+//      //      tdp::CompleteNormalPyramid<3>(ns_l,cudaMemcpyDeviceToDevice);
+//      pc_l.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
+//      n_l.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+//
+//      if (tryLoopClose) {
+//        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
+//        n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
+//
+//        tdp::ManagedHostImage<int> assoc_lo(pc.w_,pc.h_);
+//        tdp::ManagedDeviceImage<int> cuAssoc_lo(pc.w_,pc.h_);
+//
+//        tdp::SE3f T_ol = T_mr.Inverse() * T_ml;
+//        std::cout << "Initial transformation: " << std::endl 
+//          << T_ol.matrix3x4() << std::endl;
+//        size_t maxIt = icpIter0;
+//        for (size_t it=0; it<maxIt; ++it) {
+//          //    tdp::TransformPc(T_ab, cuPcB);
+//          //    tdp::TransformPc(T_ab.rotation(), cuNsB);
+//          tdp::AssociateANN(pc, pc_l, T_ol.Inverse(), assoc_lo, icpDownSample);
+//          cuAssoc_lo.CopyFrom(assoc_lo, cudaMemcpyHostToDevice);
+//
+//          float err;
+//          float count;
+//
+//          tdp::Image<tdp::Vector3fda> cuPcO = pcs_o.GetImage(0);
+//          tdp::Image<tdp::Vector3fda> cuNO = ns_o.GetImage(0);
+//          tdp::ICP::ComputeGivenAssociation(cuPcO, cuNO, cuPc, cuN, 
+//              cuAssoc_lo, T_ol, 1, icpAngleThr_deg, icpDistThr,
+//              err, count);
+//          std::cout << T_ol.matrix3x4() << std::endl;
+//          if (count < 3000) 
+//            break;
+//        }
+//      }
 //    }
 
     // Render point cloud from viewpoint of origin
@@ -539,6 +574,13 @@ int main( int argc, char* argv[] )
         pangolin::RenderVboCbo(vbo,cbo,true);
       }
       pangolin::glUnsetFrameOfReference();
+
+//      vbo.Upload(pc_l.ptr_,pc_l.SizeBytes(), 0);
+//      pangolin::glSetFrameOfReference(T_ml.matrix());
+//      pangolin::glDrawAxis(0.1f);
+//      glColor3f(0,1,1);
+//      pangolin::RenderVbo(vbo);
+//      pangolin::glUnsetFrameOfReference();
 
       pc.CopyFrom(cuPcView,cudaMemcpyDeviceToHost);
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);

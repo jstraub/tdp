@@ -23,11 +23,12 @@ class GuiBase {
     if(frame.GuiChanged()) {
       if(video_playback) {
         frame = video_playback->Seek(frame) -1;
+        std::cout << "NextFrames seek " << frame << std::endl;
       }
       end_frame = frame + 1;
     }
     if ( frame < end_frame ) {
-      GrabFrames();
+      if (GrabFrames()) frame = frame +1;
     }
     t_prev_ = t_;
     t_ = pangolin::Time_us(pangolin::TimeNow());
@@ -36,8 +37,9 @@ class GuiBase {
 
   void SeekFrames(size_t destFrame) {
     if (video_playback && destFrame < end_frame ) {
-      video_playback->Seek(frame);
+      std::cout << "SeekFrames seek " << video_playback->Seek(destFrame) << std::endl;
       GrabFrames();
+      //std::cout << "seek " << video_playback->Seek(frame) << std::endl;
     }
 //    end_frame = frame + 1;
   }
@@ -99,9 +101,8 @@ class GuiBase {
   int64_t t_prev_;
   int64_t t_;
 
-  void GrabFrames() {
+  bool GrabFrames() {
     if( video.Grab(&buffer[0], images, video_wait, video_newest) ) {
-      frame = frame +1;
 
       pangolin::json::value props = pangolin::GetVideoFrameProperties(&video);
       //        std::cout << props.serialize(true) << std::endl;
@@ -121,7 +122,9 @@ class GuiBase {
       }
     } else {
       finished_ = true;
+      return false;
     }
+    return true;
   }
 };
 
