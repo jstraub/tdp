@@ -42,6 +42,7 @@
 #include <tdp/geometry/cosy.h>
 
 #include <tdp/io/tinyply.h>
+#include <tdp/slam/keyframe.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -134,9 +135,17 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& d_cam = pangolin::CreateDisplay()
+  pangolin::View& viewMain3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(d_cam);
+  gui.container().AddDisplay(viewMain3D);
+
+  pangolin::OpenGlRenderState camLoopClose(
+      pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      );
+  pangolin::View& viewLoopClose = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(camLoopClose));
+  gui.container().AddDisplay(viewLoopClose);
 
   tdp::QuickView viewRgb(w,h);
   gui.container().AddDisplay(viewRgb);
@@ -181,8 +190,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // loop closure pc
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_l(w, h);
-  tdp::ManagedHostImage<tdp::Vector3fda> n_l(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNB(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -250,9 +261,14 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
 
+  pangolin::Var<bool> keyFrameSLAM("ui.keyframe SLAM", true, true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
-  pangolin::Var<int>  frameLoopClosure("ui.frame LoopCl",0,0,gui.end_frame);
+  pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
+  pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
   pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,10,100);
+  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icp angle thr",30,0.,90.);
+  pangolin::Var<float> icpLoopCloseDistThr("ui.icp dist thr",0.50,0.,1.);
+  pangolin::Var<int>   icpLoopCloseIter0("ui.ICP iter lvl 0",10,0,10);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
@@ -307,11 +323,13 @@ int main( int argc, char* argv[] )
 //      << imuInterp.gravity0_.transpose() << std::endl
 //      << T_mr << std::endl;
   }
+  std::vector<tdp::KeyFrame> keyframes;
   tdp::SE3f T_mr = T_mr0;
   std::vector<tdp::SE3f> T_mrs;
   std::vector<tdp::SE3f> T_wr_imus;
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
+  gui.verbose = false;
   // Stream and display video
   while(!pangolin::ShouldQuit() && (keepRunningWhilePaused || !gui.finished()))
   {
@@ -375,11 +393,11 @@ int main( int argc, char* argv[] )
         if (useRgbCamParasForDepth) {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              T_mr, errPerLvl, countPerLvl);
+              gui.verbose, T_mr, errPerLvl, countPerLvl);
         } else {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
               rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              T_mr, errPerLvl, countPerLvl);
+              gui.verbose, T_mr, errPerLvl, countPerLvl);
         }
         logInliers.Log(countPerLvl);
         logCost.Log(errPerLvl);
@@ -463,53 +481,59 @@ int main( int argc, char* argv[] )
       TOCK("Ray Trace TSDF");
     }
 
-//    tdp::SE3f T_ml = T_mrs[frameLoopClosure];
-//    if (false) {
-//      // For loop closure
-//      gui.SeekFrames(frameLoopClosure);
-//      rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
-//      int64_t t_host_us_l = 0;
-//      rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_l);
-//      rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
-//      rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
-//      //      pcs_l.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
-//      //      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_l,cudaMemcpyDeviceToDevice);
-//      //      ns_l.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
-//      //      tdp::CompleteNormalPyramid<3>(ns_l,cudaMemcpyDeviceToDevice);
-//      pc_l.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
-//      n_l.CopyFrom(cuN,cudaMemcpyDeviceToHost);
-//
-//      if (tryLoopClose) {
-//        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
-//        n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
-//
-//        tdp::ManagedHostImage<int> assoc_lo(pc.w_,pc.h_);
-//        tdp::ManagedDeviceImage<int> cuAssoc_lo(pc.w_,pc.h_);
-//
-//        tdp::SE3f T_ol = T_mr.Inverse() * T_ml;
-//        std::cout << "Initial transformation: " << std::endl 
-//          << T_ol.matrix3x4() << std::endl;
-//        size_t maxIt = icpIter0;
-//        for (size_t it=0; it<maxIt; ++it) {
-//          //    tdp::TransformPc(T_ab, cuPcB);
-//          //    tdp::TransformPc(T_ab.rotation(), cuNsB);
-//          tdp::AssociateANN(pc, pc_l, T_ol.Inverse(), assoc_lo, icpDownSample);
-//          cuAssoc_lo.CopyFrom(assoc_lo, cudaMemcpyHostToDevice);
-//
-//          float err;
-//          float count;
-//
-//          tdp::Image<tdp::Vector3fda> cuPcO = pcs_o.GetImage(0);
-//          tdp::Image<tdp::Vector3fda> cuNO = ns_o.GetImage(0);
-//          tdp::ICP::ComputeGivenAssociation(cuPcO, cuNO, cuPc, cuN, 
-//              cuAssoc_lo, T_ol, 1, icpAngleThr_deg, icpDistThr,
-//              err, count);
-//          std::cout << T_ol.matrix3x4() << std::endl;
-//          if (count < 3000) 
-//            break;
-//        }
-//      }
-//    }
+
+    if (keyFrameSLAM) {
+      Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
+      if (keyframes.size() > 0)
+        se3 = keyframes.back().T_wk_.Log(T_mr);
+      if (keyframes.size() == 0 
+          || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
+          || se3.tail<3>().norm() >  keyFrameDistThresh) {
+        std::cout << "adding keyframe " << keyframes.size() 
+          << " angle: " << se3.head<3>().norm()*180./M_PI 
+          << " dist: " << se3.tail<3>().norm() << std::endl;
+        keyframes.emplace_back(pc, n, rgb, T_mr);
+        tryLoopClose = true;
+      }
+    }
+
+    if (tryLoopClose && keyframes.size() > 1) {
+      tdp::KeyFrame& kfA = keyframes.back();
+      tdp::ManagedHostImage<int> assoc_ba(kfA.pc_.w_,kfA.pc_.h_);
+      tdp::ManagedDeviceImage<int> cuAssoc_ba(kfA.pc_.w_,kfA.pc_.h_);
+      cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
+      cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
+      for (int i=(int)keyframes.size()-2; i>(int)keyframes.size()-3; --i) {
+        tdp::KeyFrame& kfB = keyframes[i];
+        cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
+        cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+
+        tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+        std::cout << keyframes.size()-2 << " to " 
+          << keyframes.size()-1 
+          << " Initial transformation: " << std::endl 
+          << T_ab.matrix3x4() << std::endl;
+        size_t maxIt = icpLoopCloseIter0;
+        float err;
+        float count;
+        for (size_t it=0; it<maxIt; ++it) {
+          tdp::AssociateANN(kfA.pc_, kfB.pc_,
+              T_ab.Inverse(), assoc_ba, icpDownSample);
+          cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
+
+          tdp::ICP::ComputeGivenAssociation(cuPcA, cuNA, cuPcB, cuNB, 
+              cuAssoc_ba, T_ab, 1, icpLoopCloseAngleThr_deg, icpLoopCloseDistThr,
+              err, count);
+          std::cout << T_ab.matrix3x4() << std::endl;
+          if (count < 3000) 
+            break;
+        }
+        if (err == err && count > 3000) {
+          std::cout << "successfull loop closure "
+            << T_ab.matrix3x4() << std::endl;
+        }
+      }
+    }
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
@@ -519,44 +543,62 @@ int main( int argc, char* argv[] )
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 
     // Draw 3D stuff
-    if (d_cam.IsShown()) {
+    glEnable(GL_DEPTH_TEST);
+    if (viewMain3D.IsShown()) {
       if (dispEst) {
         pc.CopyFrom(pcs_m.GetImage(0),cudaMemcpyDeviceToHost);
       } else {
         pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
       }
-      glEnable(GL_DEPTH_TEST);
-      d_cam.Activate(s_cam);
+      viewMain3D.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
-      for (size_t i=0; i<T_mrs.size(); ++i) {
-        if (i%10==0) 
-          pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
-        glColor4f(1.,1.,0.,0.6);
-        if (i>0) {
-          pangolin::glDrawLine(
-              T_mrs[i].translation()(0),
-              T_mrs[i].translation()(1),
-              T_mrs[i].translation()(2),
-              T_mrs[i-1].translation()(0),
-              T_mrs[i-1].translation()(1),
-              T_mrs[i-1].translation()(2));
+      if (!keyFrameSLAM) {
+        for (size_t i=0; i<T_mrs.size(); ++i) {
+          if (i%10==0) 
+            pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
+          glColor4f(1.,1.,0.,0.6);
+          if (i>0) {
+            pangolin::glDrawLine(
+                T_mrs[i].translation()(0),
+                T_mrs[i].translation()(1),
+                T_mrs[i].translation()(2),
+                T_mrs[i-1].translation()(0),
+                T_mrs[i-1].translation()(1),
+                T_mrs[i-1].translation()(2));
+          }
+        }
+        for (size_t i=0; i<T_wr_imus.size(); ++i) {
+          if (i%10==0) 
+            pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
+          glColor4f(0.,1.,1.,0.6);
+        }
+      } else {
+        for (size_t i=0; i<T_mrs.size(); ++i) {
+          glColor4f(1.,1.,0.,0.6);
+          if (i>0) {
+            pangolin::glDrawLine(
+                T_mrs[i].translation()(0), T_mrs[i].translation()(1),
+                T_mrs[i].translation()(2),
+                T_mrs[i-1].translation()(0), T_mrs[i-1].translation()(1),
+                T_mrs[i-1].translation()(2));
+          }
+        }
+        for (size_t i=0; i<keyframes.size(); ++i) {
+          tdp::SE3f& T_wk = keyframes[i].T_wk_;
+          pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
+          glColor4f(1.,0.3,0.3,0.6);
+          if (i>0) {
+            tdp::SE3f& T_wk_prev = keyframes[i-1].T_wk_;
+            pangolin::glDrawLine(
+                T_wk.translation()(0), T_wk.translation()(1),
+                T_wk.translation()(2),
+                T_wk_prev.translation()(0), T_wk_prev.translation()(1),
+                T_wk_prev.translation()(2));
+          }
         }
       }
-      for (size_t i=0; i<T_wr_imus.size(); ++i) {
-        if (i%10==0) 
-          pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
-        glColor4f(0.,1.,1.,0.6);
-        if (i>0) {
-          pangolin::glDrawLine(
-              T_wr_imus[i].translation()(0),
-              T_wr_imus[i].translation()(1),
-              T_wr_imus[i].translation()(2),
-              T_wr_imus[i-1].translation()(0),
-              T_wr_imus[i-1].translation()(1),
-              T_wr_imus[i-1].translation()(2));
-        }
-      }
+
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
@@ -589,8 +631,27 @@ int main( int argc, char* argv[] )
       pangolin::glSetFrameOfReference(T_mv.matrix());
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
-      glDisable(GL_DEPTH_TEST);
     }
+
+    if (viewLoopClose.IsShown() && keyframes.size() > 1) {
+      viewLoopClose.Activate(camLoopClose);
+      tdp::KeyFrame& kfA = keyframes[keyframes.size()-1];
+      tdp::KeyFrame& kfB = keyframes[keyframes.size()-2];
+      tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+
+      vbo.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);
+      pangolin::glDrawAxis(0.1f);
+      glColor4f(1.f,0.f,0.f,0.5f);
+      pangolin::RenderVbo(vbo);
+
+      vbo.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
+      pangolin::glSetFrameOfReference(T_ab.matrix());
+      glColor4f(0.f,1.f,0.f,0.5f);
+      pangolin::glDrawAxis(0.1f);
+      pangolin::RenderVbo(vbo);
+      pangolin::glUnsetFrameOfReference();
+    }
+    glDisable(GL_DEPTH_TEST);
 
     // Draw 2D stuff
     if (viewRgb.IsShown()) {
