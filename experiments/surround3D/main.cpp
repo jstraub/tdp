@@ -90,12 +90,9 @@ int main( int argc, char* argv[] )
     pango_print_error("No video streams from device.\n");
     return 2;
   }
-  std::vector<int32_t> rgbStream2cam;
-  std::vector<int32_t> dStream2cam;
-  std::vector<int32_t> rgbdStream2cam;
+
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-  tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
-      dStream2cam, rgbdStream2cam);
+  rig.CorrespondOpenniStreams2Cams(streams);
 
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = nullptr; 
@@ -115,6 +112,7 @@ int main( int argc, char* argv[] )
   }
 
   tdp::GuiBase gui(1200,800,video);
+  Stopwatch::getInstance().setCustomSignature(1237249810);
 
   size_t wSingle = video.Streams()[0].Width();
   size_t hSingle = video.Streams()[0].Height();
@@ -205,7 +203,7 @@ int main( int argc, char* argv[] )
 
   // Add some variables to GUI
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+  pangolin::Var<float> dMax("ui.d max",8.,0.1,10.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
@@ -238,10 +236,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 10000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
+  pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
-      for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-      int cId = rgbdStream2cam[sId];
+      for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+      int cId = rig.rgbdStream2cam_[sId];
       std::stringstream ss;
       ss << "capture_cam" << cId << ".png";
       try{
@@ -325,66 +324,66 @@ int main( int argc, char* argv[] )
 
     TICK("rgb collection");
     // get rgb image
-    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-      tdp::Image<tdp::Vector3bda> rgbStream;
-      if (!gui.ImageRGB(rgbStream, sId)) continue;
-      int32_t cId = rgbdStream2cam[sId]; 
-      tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
-          wSingle, hSingle);
-      rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
-    }
+//    for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+//      tdp::Image<tdp::Vector3bda> rgbStream;
+//      if (!gui.ImageRGB(rgbStream, sId)) continue;
+//      int32_t cId = rig.rgbdStream2cam_[sId]; 
+//      tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle,
+//          wSingle, hSingle);
+//      rgb_i.CopyFrom(rgbStream,cudaMemcpyHostToHost);
+//    }
+    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
     TOCK("rgb collection");
     TICK("depth collection");
     // get depth image
+//    int64_t t_host_us_d = 0;
+//    int32_t numStreams = 0;
+//    for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+//      tdp::Image<uint16_t> dStream;
+//      int64_t t_host_us_di = 0;
+//      if (!gui.ImageD(dStream, sId, &t_host_us_di)) continue;
+//      t_host_us_d += t_host_us_di;
+//      numStreams ++;
+//      int32_t cId = rig.rgbdStream2cam_[sId]; 
+//      //std::cout << sId << " " << cId << std::endl;
+//      tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
+//          wSingle, hSingle);
+//      cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+//      // convert depth image from uint16_t to float [m]
+//      tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
+//          wSingle, hSingle);
+//      if (rig.depthScales_.size() > cId) {
+//        float a = rig.scaleVsDepths_[cId](0);
+//        float b = rig.scaleVsDepths_[cId](1);
+//        // TODO: dont need to load this every time
+//        cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
+//        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
+//      //} else {
+//      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+//      }
+//    }
+//    t_host_us_d /= numStreams;  
     int64_t t_host_us_d = 0;
-    int32_t numStreams = 0;
-    for (size_t sId=0; sId < rgbdStream2cam.size(); sId++) {
-      tdp::Image<uint16_t> dStream;
-      int64_t t_host_us_di = 0;
-      if (!gui.ImageD(dStream, sId, &t_host_us_di)) continue;
-      t_host_us_d += t_host_us_di;
-      numStreams ++;
-      int32_t cId = rgbdStream2cam[sId]; 
-      //std::cout << sId << " " << cId << std::endl;
-      tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-          wSingle, hSingle);
-      cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
-      // convert depth image from uint16_t to float [m]
-      tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, 
-          wSingle, hSingle);
-      //float depthSensorScale = depthSensor1Scale;
-      //if (cId==1) depthSensorScale = depthSensor2Scale;
-      //if (cId==2) depthSensorScale = depthSensor3Scale;
-      if (rig.depthScales_.size() > cId) {
-        float a = rig.scaleVsDepths_[cId](0);
-        float b = rig.scaleVsDepths_[cId](1);
-        // TODO: dont need to load this every time
-        cuScale.CopyFrom(rig.depthScales_[cId],cudaMemcpyHostToDevice);
-        tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuScale, a, b, dMin, dMax);
-      //} else {
-      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
-      }
-    }
+    rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     TOCK("depth collection");
-    t_host_us_d /= numStreams;  
     tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     TICK("pc and normals");
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
       int32_t cId;
       if (useRgbCamParasForDepth) {
-        cId = rgbStream2cam[sId]; 
+        cId = rig.rgbStream2cam_[sId]; 
       } else {
-        cId = dStream2cam[sId]; 
+        cId = rig.dStream2cam_[sId]; 
       }
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
       tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
       tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
       tdp::Image<float> cuD_i = cuD.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
 
       // compute point cloud from depth in rig coordinate system
       tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
@@ -418,11 +417,11 @@ int main( int argc, char* argv[] )
         std::vector<float> countPerLvl;
         if (useRgbCamParasForDepth) {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-              rig, rgbStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
+              rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
               T_mr, errPerLvl, countPerLvl);
         } else {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-              rig, dStream2cam, maxIt, icpAngleThr_deg, icpDistThr,
+              rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
               T_mr, errPerLvl, countPerLvl);
         }
         logInliers.Log(countPerLvl);
@@ -459,18 +458,18 @@ int main( int argc, char* argv[] )
     if (fuseTSDF || numFused <= 30) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
         int32_t cId;
         if (useRgbCamParasForDepth) {
-          cId = rgbStream2cam[sId]; 
+          cId = rig.rgbStream2cam_[sId]; 
         } else {
-          cId = dStream2cam[sId]; 
+          cId = rig.dStream2cam_[sId]; 
         }
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_rc = rig.T_rcs_[cId];
         tdp::SE3f T_mo = T_mr+T_rc;
         tdp::Image<float> cuD_i(wSingle, hSingle,
-            cuD.ptr_+rgbdStream2cam[sId]*wSingle*hSingle);
+            cuD.ptr_+rig.rgbdStream2cam_[sId]*wSingle*hSingle);
         AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu); 
       }
       numFused ++;
@@ -481,21 +480,21 @@ int main( int argc, char* argv[] )
       TICK("Ray Trace TSDF");
       tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
       tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
-      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
         int32_t cId;
         if (useRgbCamParasForDepth) {
-          cId = rgbStream2cam[sId]; 
+          cId = rig.rgbStream2cam_[sId]; 
         } else {
-          cId = dStream2cam[sId]; 
+          cId = rig.dStream2cam_[sId]; 
         }
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_rc = rig.T_rcs_[cId];
         tdp::SE3f T_mo = T_mr*T_rc;
 
         tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
-            rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
         tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
-            rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
 
         // ray trace the TSDF to get pc and normals in model cosy
         RayTraceTSDF(cuTSDF, cuPcEst_i, 
@@ -505,6 +504,10 @@ int main( int argc, char* argv[] )
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
       tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
       TOCK("Ray Trace TSDF");
+    }
+
+    if (tryLoopClose) {
+      gui.SeekFrames(0);
     }
 
     // Render point cloud from viewpoint of origin
@@ -526,7 +529,7 @@ int main( int argc, char* argv[] )
       // draw the axis
       pangolin::glDrawAxis(0.1);
       for (size_t i=0; i<T_mrs.size(); ++i) {
-        if (i%3==0) 
+        if (i%10==0) 
           pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
         glColor4f(1.,1.,0.,0.6);
         if (i>0) {
@@ -540,7 +543,7 @@ int main( int argc, char* argv[] )
         }
       }
       for (size_t i=0; i<T_wr_imus.size(); ++i) {
-        if (i%3==0) 
+        if (i%10==0) 
           pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
         glColor4f(0.,1.,1.,0.6);
         if (i>0) {

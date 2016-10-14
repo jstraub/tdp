@@ -72,12 +72,8 @@ int main( int argc, char* argv[] )
     return 2;
   }
 
-  std::vector<int32_t> rgbStream2cam;
-  std::vector<int32_t> dStream2cam;
-  std::vector<int32_t> rgbdStream2cam;
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-  tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
-      dStream2cam, rgbdStream2cam);
+  rig.CorrespondOpenniStreams2Cams(streams);
 
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = tdp::OpenImu(imu_input_uri);
@@ -181,42 +177,41 @@ int main( int argc, char* argv[] )
     if (collectStreams) {
       TICK("rgb collection");
       // get rgb image
-      tdp::CollectRGB(rgbdStream2cam, gui, wSingle, hSingle, rgb,
-          cudaMemcpyHostToHost);
+      rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
       TOCK("rgb collection");
       if (verbose) std::cout << "collecting depth frames" << std::endl;
       TICK("depth collection");
       // get depth image
-      tdp::CollectD<CameraT>(rgbdStream2cam, rig, gui, wSingle,
-          hSingle, dMin, dMax, cuDraw, cuD);
+      int64_t t_us;
+      rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_us);
       d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
       TOCK("depth collection");
     }
     TICK("pc and normals");
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
       int32_t cId;
-      cId = dStream2cam[sId]; 
+      cId = rig.dStream2cam_[sId]; 
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
       tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
       tdp::Image<float> cuD_i = cuD.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
       // compute point cloud from depth in rig coordinate system
       tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
     }
     pc.CopyFrom(cuPc,cudaMemcpyDeviceToHost);
     TOCK("pc and normals");
     TICK("rays");
-    for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+    for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
       int32_t cId;
-      cId = dStream2cam[sId]; 
+      cId = rig.dStream2cam_[sId]; 
       CameraT cam = rig.cams_[cId];
       tdp::SE3f T_rc = rig.T_rcs_[cId];
 
       tdp::Image<tdp::Vector3fda> cuRays_i = cuRays.GetRoi(0,
-          rgbdStream2cam[sId]*hSingle, wSingle, hSingle);
+          rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
       // compute point cloud from depth in rig coordinate system
       tdp::ComputeCameraRays(cam, cuRays_i);
       tdp::TransformPc(T_wr*T_rc, cuRays_i);
@@ -267,9 +262,9 @@ int main( int argc, char* argv[] )
       // plot some directions into the histogram to show where we are
       // currently collecting
       glPointSize(1);
-      for (size_t sId=0; sId < dStream2cam.size(); sId++) {
+      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
         int32_t cId;
-        cId = dStream2cam[sId]; 
+        cId = rig.dStream2cam_[sId]; 
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_wc = T_wr*rig.T_rcs_[cId];
         for (size_t u=0; u<wSingle; u += 20) {

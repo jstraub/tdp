@@ -38,6 +38,7 @@ GuiBase::GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
         }
         end_frame = 0;
     }
+    frame.Meta().range[1] = total_frames -1;
     end_frame = std::numeric_limits<int>::max();
 
     const size_t num_streams = video.Streams().size();

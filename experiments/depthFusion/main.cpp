@@ -95,15 +95,11 @@ int main( int argc, char* argv[] )
   if (calibPath.size() > 0) {
     tdp::Rig<CameraT> rig;
     rig.FromFile(calibPath,false);
-    std::vector<int32_t> rgbStream2cam;
-    std::vector<int32_t> dStream2cam;
-    std::vector<int32_t> rgbdStream2cam;
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-    tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
-        dStream2cam, rgbdStream2cam);
+    rig.CorrespondOpenniStreams2Cams(streams);
     // camera model for computing point cloud and normals
-    camR = rig.cams_[rgbStream2cam[0]];
-    camD = camR; //rig.cams_[dStream2cam[0]];
+    camR = rig.cams_[rig.rgbStream2cam_[0]];
+    camD = camR; //rig.cams_[rig.dStream2cam_[0]];
     if (rig.T_ris_.size() > 0) T_ir = rig.T_ris_[0];
   }
 
