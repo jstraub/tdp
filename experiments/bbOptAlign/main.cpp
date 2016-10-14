@@ -142,7 +142,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   maxLvlTrans("ui.max lvl trans",20,10,22);
   pangolin::Var<int>   maxItBB("ui.max Iter BB", 3000, 1000, 5000);
 
-  pangolin::Var<bool> computeProjectiveICP("ui.projtive ICP", false, false);
+  pangolin::Var<bool> computeICP("ui.ICP", false, false);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",1,0,10);
@@ -256,7 +256,7 @@ int main( int argc, char* argv[] )
 			T_ab = tdp::SE3f(q_star.matrix().cast<float>(), t.cast<float>());
     }
 
-    if (pangolin::Pushed(computeProjectiveICP)) {
+    if (pangolin::Pushed(computeICP)) {
         size_t maxIt = icpIter0;
       for (size_t it=0; it<maxIt; ++it) {
         //    tdp::TransformPc(T_ab, cuPcB);
