@@ -43,6 +43,7 @@
 
 #include <tdp/io/tinyply.h>
 #include <tdp/slam/keyframe.h>
+#include <tdp/slam/keyframe_slam.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -326,6 +327,7 @@ int main( int argc, char* argv[] )
 //      << imuInterp.gravity0_.transpose() << std::endl
 //      << T_mr << std::endl;
   }
+  tdp::KeyframeSLAM kfSLAM;
   std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
   std::vector<tdp::KeyFrame> keyframes;
   tdp::SE3f T_mr = T_mr0;
@@ -533,6 +535,7 @@ int main( int argc, char* argv[] )
           kfSLAM.AddLoopClosure(idA, idB, T_ab);
         }
       }
+      kfSLAM.Optimize(); 
     }
 
     // Render point cloud from viewpoint of origin
