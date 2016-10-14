@@ -195,6 +195,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNB(w, h);
 
+  tdp::ManagedHostImage<int> assoc_ba(w,h);
+  tdp::ManagedDeviceImage<int> cuAssoc_ba(w,h);
+
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
@@ -232,8 +235,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
   pangolin::Var<bool> odomImu("ui.odom IMU", false, true);
-  pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", false, true);
-  pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", true, true);
+  pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", true, true);
+  pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", false, true);
   pangolin::Var<bool> resetOdom("ui.reset odom",false,false);
 
   pangolin::Var<bool> savePC("ui.save current PC",false,false);
@@ -265,10 +268,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,10,100);
-  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icp angle thr",30,0.,90.);
-  pangolin::Var<float> icpLoopCloseDistThr("ui.icp dist thr",0.50,0.,1.);
-  pangolin::Var<int>   icpLoopCloseIter0("ui.ICP iter lvl 0",10,0,10);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",3,1,10);
+  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
+  pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
+  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",10,0,10);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
@@ -382,7 +385,7 @@ int main( int argc, char* argv[] )
 //      T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
       T_mr = T_wr_imu;
     } else if (odomFrame2Model || odomFrame2Frame) {
-      if (runICP && numFused > 30) {
+      if (runICP && numFused > 30 && !gui.paused()) {
 //        if (gui.verbose) std::cout << "icp" << std::endl;
         if (icpImu && imu) 
           T_mr = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mr;
@@ -430,7 +433,7 @@ int main( int argc, char* argv[] )
       T_mr.matrix() = Eigen::Matrix4f::Identity();
     }
 
-    if (fuseTSDF || numFused <= 30) {
+    if (!gui.paused() && (fuseTSDF || numFused <= 30)) {
 //      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
       for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
@@ -451,7 +454,7 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
-    if (odomImu || odomFrame2Model) {
+    if (!gui.paused() && (odomImu || odomFrame2Model)) {
       TICK("Ray Trace TSDF");
       tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
       tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
@@ -481,26 +484,25 @@ int main( int argc, char* argv[] )
       TOCK("Ray Trace TSDF");
     }
 
-
     if (keyFrameSLAM) {
       Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
       if (keyframes.size() > 0)
         se3 = keyframes.back().T_wk_.Log(T_mr);
-      if (keyframes.size() == 0 
+      if ((keyframes.size() == 0 && gui.frame > 10)
           || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
           || se3.tail<3>().norm() >  keyFrameDistThresh) {
         std::cout << "adding keyframe " << keyframes.size() 
           << " angle: " << se3.head<3>().norm()*180./M_PI 
           << " dist: " << se3.tail<3>().norm() << std::endl;
+        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
+        n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
         keyframes.emplace_back(pc, n, rgb, T_mr);
         tryLoopClose = true;
       }
     }
 
-    if (tryLoopClose && keyframes.size() > 1) {
-      tdp::KeyFrame& kfA = keyframes.back();
-      tdp::ManagedHostImage<int> assoc_ba(kfA.pc_.w_,kfA.pc_.h_);
-      tdp::ManagedDeviceImage<int> cuAssoc_ba(kfA.pc_.w_,kfA.pc_.h_);
+    if (pangolin::Pushed(tryLoopClose) && keyframes.size() > 1) {
+      tdp::KeyFrame& kfA = keyframes[keyframes.size()-1];
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
       for (int i=(int)keyframes.size()-2; i>(int)keyframes.size()-3; --i) {
@@ -513,10 +515,9 @@ int main( int argc, char* argv[] )
           << keyframes.size()-1 
           << " Initial transformation: " << std::endl 
           << T_ab.matrix3x4() << std::endl;
-        size_t maxIt = icpLoopCloseIter0;
         float err;
         float count;
-        for (size_t it=0; it<maxIt; ++it) {
+        for (size_t it=0; it<icpLoopCloseIter0; ++it) {
           tdp::AssociateANN(kfA.pc_, kfB.pc_,
               T_ab.Inverse(), assoc_ba, icpDownSample);
           cuAssoc_ba.CopyFrom(assoc_ba, cudaMemcpyHostToDevice);
@@ -646,10 +647,19 @@ int main( int argc, char* argv[] )
 
       vbo.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
       pangolin::glSetFrameOfReference(T_ab.matrix());
-      glColor4f(0.f,1.f,0.f,0.5f);
       pangolin::glDrawAxis(0.1f);
+      glColor4f(0.f,1.f,0.f,0.5f);
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
+
+      glColor4f(1.f,0.f,1.f,0.5f);
+      for (size_t i=0; i<assoc_ba.Area(); i+= 300) 
+        if (assoc_ba[i] < assoc_ba.Area()) {
+          tdp::Vector3fda pb_in_a = T_ab*kfB.pc_[assoc_ba[i]];
+          pangolin::glDrawLine(
+              kfA.pc_[i](0), kfA.pc_[i](1), kfA.pc_[i](2),
+              pb_in_a(0), pb_in_a(1), pb_in_a(2));
+        }
     }
     glDisable(GL_DEPTH_TEST);
 

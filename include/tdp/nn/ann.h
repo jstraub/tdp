@@ -26,7 +26,6 @@ class ANN {
     N_ = pc.Area();
     pc_ = new ANNpoint[N_];
     idMap_.reserve(N_);
-//    std::cout << "building ann PC data structure " << N_ << std::endl;
     size_t j=0;
     for (size_t i=0; i<pc.Area(); ++i) {
       if (IsValidData(pc[i])) {
@@ -35,6 +34,8 @@ class ANN {
       }
     }
     N_ = j;
+//    std::cout << "building ann PC data structure " << N_ 
+//      << " of " << pc.Area() << std::endl;
     // build KD tree
     kdTree_ = new ANNkd_tree(pc_, N_, 3, 1, ANN_KD_SUGGEST);
   }
