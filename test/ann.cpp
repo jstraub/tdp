@@ -37,6 +37,9 @@ TEST(smallSearch, ann) {
     Eigen::VectorXf dists(k);
     for (size_t i=0; i<pcB.w_; ++i) {
       ann.Search(pcB[i], k, 0., nnIds, dists);
+//      if (pcB[i](0) != pcB[i](0)) {
+//        std::cout << nnIds.transpose() << " " << dists.transpose() << std::endl;
+//      }
     }
 
     t0.toctic("search");

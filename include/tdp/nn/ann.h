@@ -10,7 +10,7 @@ namespace tdp {
 class ANN {
  public:
 
-  ANN() : pc_(nullptr), N_(0), kdTree_(nullptr) 
+  ANN() : N_(0), pc_(nullptr), kdTree_(nullptr) 
   {}
   ~ANN() {
     if (kdTree_) delete kdTree_;
@@ -20,15 +20,18 @@ class ANN {
   void ComputeKDtree(Image<Vector3fda>& pc) {
     if (kdTree_) delete kdTree_;
     if (pc_) delete[] pc_;
+    idMap_.clear();
     // build array of pointers to the data points because thats how ANN
     // wants the data
     N_ = pc.Area();
     pc_ = new ANNpoint[N_];
+    idMap_.reserve(N_);
 //    std::cout << "building ann PC data structure " << N_ << std::endl;
     size_t j=0;
     for (size_t i=0; i<pc.Area(); ++i) {
       if (IsValidData(pc[i])) {
         pc_[j++] = &pc[i](0);
+        idMap_.push_back(i);
       }
     }
     N_ = j;
@@ -41,10 +44,14 @@ class ANN {
     assert(nnIds.size() == k);
     assert(dists.size() == k);
     kdTree_->annkSearch(&query(0), k, &nnIds(0), &dists(0), eps);
+    for (int i=0; i<k; ++i) { 
+      nnIds(i) = nnIds(i) >= 0 ? idMap_[nnIds(i)] : nnIds(i);
+    }
   }
 
   int N_;
  private:
+  std::vector<int> idMap_;
   ANNpointArray pc_;
   ANNkd_tree* kdTree_;
 };
