@@ -170,7 +170,9 @@ std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::V
     tdp::Vector3fda mean = getMean(pc);
     tdp::Matrix3fda cov = getCovariance(pc);
 
-    Eigen::EigenSolver<tdp::Matrix3fda> es(cov);
+
+    Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
+    es.compute(cov);
     std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
     std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
 
