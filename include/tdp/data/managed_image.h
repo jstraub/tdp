@@ -21,6 +21,13 @@ class ManagedImage : public Image<T> {
   ManagedImage(size_t w, size_t h) 
     : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h))
   {}
+  ManagedImage(ManagedImage&& other)
+  : Image<T>(other.w_, other.h_, other.pitch_, other.ptr_) {
+    other.w_ = 0;
+    other.h_ = 0;
+    other.pitch_ = 0;
+    other.ptr_ = nullptr;
+  }
 
   void Reinitialise(size_t w, size_t h) {
     if (this->ptr_)  {
