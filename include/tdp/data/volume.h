@@ -80,6 +80,13 @@ void SaveVolume(const Volume<T>& V, std::ofstream& out) {
   out.write((const char*)&(V.d_),sizeof(size_t));
   for (size_t i=0; i < V.Vol(); ++i) {
     out.write((const char*)&(V.ptr_[i]),sizeof(T));
+
+    // printf("function value: %f\n", (float) V.ptr_[i].f);
+    // printf("weight: %f\n", (float) V.ptr_[i].w);
+
+    // printf("red: %d\n", (int) V.ptr_[i].r);
+    // printf("blue: %d\n", (int) V.ptr_[i].g);
+    // printf("green: %d\n", (int) V.ptr_[i].b);
   }
 }
 

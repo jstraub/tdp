@@ -13,12 +13,18 @@ struct TSDFval {
   float f; // function value
   float w; // weight
 
-  TSDFval() : f(-1.01f), w(0.f) 
-  {}
-  TSDFval(float f, float w) : f(f), w(w) 
-  {}
-};
+  // Vector3bda rgb; // color
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
 
+  TSDFval() : f(-1.01f), w(0.f), r(0), g(0), b(0) {
+    // rgb = Vector3bda::Zero();
+  }
+  TSDFval(float f, float w) : f(f), w(w), r(0), g(0), b(0) {
+    // rgb = Vector3bda::Zero();
+  }
+};
 
 struct TSDF {
 
@@ -29,6 +35,12 @@ struct TSDF {
         SE3<float> T_rd, CameraBase<float,D,Derived>camD,
         Vector3fda grid0, Vector3fda dGrid,
         float mu, float wMax);
+
+  template<int D, typename Derived>
+  static void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+        SE3<float> T_rd, CameraBase<float,D,Derived>camD,
+        Vector3fda grid0, Vector3fda dGrid,
+        float mu);
 
   // get depth image and surface normals from pose T_rd
   template<int D, typename Derived>

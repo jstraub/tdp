@@ -135,6 +135,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRGBraw(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRGB(w, h);
+
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
@@ -221,6 +224,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<bool> fuseRgb("ui.fuse RGB",false,true);
   pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
   pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
@@ -325,17 +329,30 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
+    // ERIC
     gui.NextFrames();
+
     tdp::Image<uint16_t> dRaw;
+    tdp::Image<tdp::Vector3bda> rgbRaw;
+
     int64_t t_host_us_d = 0;
-    if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
-    tdp::SE3f T_wr_imu = T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
+    int64_t t_host_us_rgb = 0;
+
+    if (!gui.ImageD(dRaw, 0, &t_host_us_d) ||
+        !gui.ImageRGB(rgbRaw, 0, &t_host_us_rgb)) {
+      continue;
+    }
+
+    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d * 1000] * T_ir;
     std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
+
+    cuRGBraw.CopyFrom(rgbRaw, cudaMemcpyHostToDevice);
+
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
         cudaMemcpyDeviceToDevice, 0.03);
@@ -413,8 +430,12 @@ int main( int argc, char* argv[] )
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      tdp::TSDF::AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid,
+      if (fuseRgb) {
+        tdp::TSDF::AddToTSDF(cuTSDF, cuD, cuRGBraw, T_mo, camD, grid0, dGrid, tsdfMu); 
+      } else {
+        tdp::TSDF::AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid,
           tsdfMu, tsdfWMax); 
+      }
       numFused ++;
       TOCK("Add To TSDF");
     }

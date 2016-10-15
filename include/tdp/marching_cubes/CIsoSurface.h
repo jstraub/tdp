@@ -17,10 +17,12 @@
 
 typedef float POINT3D[3];
 typedef float VECTOR3D[3];
+typedef uint8_t COLOR3D[3];
 
 struct POINT3DID {
     unsigned int newID;
 	float x, y, z;
+	uint8_t r, g, b;
 };
 
 typedef std::map<unsigned int, POINT3DID> ID2POINT3DID;
@@ -55,6 +57,7 @@ public:
     int numTriangles() const;
     void getVertices(float* vertexStore) const;
     void getIndices(unsigned int* indexStore) const;
+    void getColors(uint8_t* colorStore) const;
 
 protected:
 	// The number of vertices which make up the isosurface.
@@ -62,6 +65,8 @@ protected:
 
 	// The vertices which make up the isosurface.
 	POINT3D* m_ppt3dVertices;
+
+	COLOR3D* m_ppt3dColors; // Colors for the isosurface.
 
     // The number of triangles which make up the isosurface.
     unsigned int m_nTriangles;
@@ -93,7 +98,7 @@ protected:
 
 	// Interpolates between two grid points to produce the point at which
 	// the isosurface intersects an edge.
-    POINT3DID Interpolate(float fX1, float fY1, float fZ1, float fX2, float fY2, float fZ2, float tVal1, float tVal2);
+    POINT3DID Interpolate(size_t v1x, size_t v1y, size_t v1z, size_t v2x, size_t v2y, size_t v2z);
 
 	// Renames vertices and triangles so that they can be accessed more
 	// efficiently.

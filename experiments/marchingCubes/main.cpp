@@ -108,15 +108,15 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
 
   // load and compile shader
-  std::string shaderRoot = SHADER_DIR;
-  pangolin::GlSlProgram colorPc;
-  colorPc.AddShaderFromFile(pangolin::GlSlVertexShader, 
-      shaderRoot+std::string("normalShading.vert"));
-  colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
-      shaderRoot+std::string("normalShading.geom"));
-  colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
-      shaderRoot+std::string("normalShading.frag"));
-  colorPc.Link();
+  //std::string shaderRoot = SHADER_DIR;
+  //pangolin::GlSlProgram colorPc;
+  //colorPc.AddShaderFromFile(pangolin::GlSlVertexShader, 
+  //    shaderRoot+std::string("normalShading.vert"));
+  //colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
+  //    shaderRoot+std::string("normalShading.geom"));
+  //colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
+  //    shaderRoot+std::string("normalShading.frag"));
+  //colorPc.Link();
 
   tdp::ManagedHostImage<float> tsdfSlice(tsdf.w_, tsdf.h_);
 
@@ -148,9 +148,8 @@ int main( int argc, char* argv[] )
 
       surface.getVertices(vertexStore);
       surface.getIndices(indexStore);
-      for (size_t i = 0; i < nVertices * 3; i++) {
-        colorStore[i] = 128;
-      }
+      surface.getColors(colorStore);
+
       int64_t end = pangolin::Time_us(pangolin::TimeNow());
       std::cout << "GenerateSurface time: " << (mid - start) / 1e6 << std::endl;
       std::cout << "copy time: " << (end - mid) / 1e6 << std::endl;
@@ -209,28 +208,28 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
+    pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
+    // vbo.Bind();
+    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+    // cbo.Bind();
+    // glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
 
-    vbo.Bind();
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-    cbo.Bind();
-    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+    // glEnableVertexAttribArray(0);                                               
+    // glEnableVertexAttribArray(1);                                               
 
-    glEnableVertexAttribArray(0);                                               
-    glEnableVertexAttribArray(1);                                               
+    // //colorPc.Bind();
+    // //colorPc.SetUniform("P",P);
+    // //colorPc.SetUniform("MV",MV);
 
-    colorPc.Bind();
-    colorPc.SetUniform("P",P);
-    colorPc.SetUniform("MV",MV);
+    // ibo.Bind();
+    // glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
+    // ibo.Unbind();
 
-    ibo.Bind();
-    glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
-    ibo.Unbind();
-
-    colorPc.Unbind();
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(0);
-    cbo.Unbind();
-    vbo.Unbind();
+    // //colorPc.Unbind();
+    // glDisableVertexAttribArray(1);
+    // glDisableVertexAttribArray(0);
+    // cbo.Unbind();
+    // vbo.Unbind();
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff

@@ -10,6 +10,7 @@
 #include <tdp/marching_cubes/CIsoSurface.h>
 #include <tdp/tsdf/tsdf.h>
 #include <tdp/data/volume.h>
+#include <iostream>
 
 const int CIsoSurface::m_edgeTable[256] = {
 	0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
@@ -317,6 +318,7 @@ CIsoSurface::CIsoSurface()
 	m_nNormals = 0;
 	m_nVertices = 0;
 	m_ppt3dVertices = NULL;
+	m_ppt3dColors = NULL;
 	m_piTriangleIndices = NULL;
     m_pvec3dNormals = NULL;
     m_tsdf = NULL;
@@ -515,6 +517,10 @@ void CIsoSurface::DeleteSurface()
 		delete[] m_ppt3dVertices;
 		m_ppt3dVertices = NULL;
 	}
+	if (m_ppt3dColors != NULL) {
+		delete[] m_ppt3dColors;
+		m_ppt3dColors = NULL;
+	}
 	if (m_piTriangleIndices != NULL) {
 		delete[] m_piTriangleIndices;
 		m_piTriangleIndices = NULL;
@@ -568,7 +574,6 @@ unsigned int CIsoSurface::GetVertexID(unsigned int nX, unsigned int nY, unsigned
 
 POINT3DID CIsoSurface::CalculateIntersection(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo)
 {
-	float x1, y1, z1, x2, y2, z2;
     unsigned int v1x = nX, v1y = nY, v1z = nZ;
     unsigned int v2x = nX, v2y = nY, v2z = nZ;
 
@@ -636,20 +641,10 @@ POINT3DID CIsoSurface::CalculateIntersection(unsigned int nX, unsigned int nY, u
 		break;
 	}
 
-	x1 = v1x*m_fCellLengthX;
-	y1 = v1y*m_fCellLengthY;
-	z1 = v1z*m_fCellLengthZ;
-	x2 = v2x*m_fCellLengthX;
-	y2 = v2y*m_fCellLengthY;
-	z2 = v2z*m_fCellLengthZ;
-
-    float val1 = (*m_tsdf)(v1x, v1y, v1z).f;
-    float val2 = (*m_tsdf)(v2x, v2y, v2z).f;
-	POINT3DID intersection = Interpolate(x1, y1, z1, x2, y2, z2, val1, val2);
-
-	return intersection;
+	return Interpolate(v1x, v1y, v1z, v2x, v2y, v2z);
 }
 
+/*
 POINT3DID CIsoSurface::Interpolate(float fX1, float fY1, float fZ1, float fX2, float fY2, float fZ2, float tVal1, float tVal2)
 {
 	POINT3DID interpolation;
@@ -659,6 +654,39 @@ POINT3DID CIsoSurface::Interpolate(float fX1, float fY1, float fZ1, float fX2, f
 	interpolation.x = fX1 + mu*(fX2 - fX1);
 	interpolation.y = fY1 + mu*(fY2 - fY1);
 	interpolation.z = fZ1 + mu*(fZ2 - fZ1);
+
+	return interpolation;
+}
+*/
+
+POINT3DID CIsoSurface::Interpolate(size_t v1x, size_t v1y, size_t v1z, size_t v2x, size_t v2y, size_t v2z)
+{
+	float x1 = v1x*m_fCellLengthX;
+	float y1 = v1y*m_fCellLengthY;
+	float z1 = v1z*m_fCellLengthZ;
+	float x2 = v2x*m_fCellLengthX;
+	float y2 = v2y*m_fCellLengthY;
+	float z2 = v2z*m_fCellLengthZ;
+
+    float val1 = (*m_tsdf)(v1x, v1y, v1z).f;
+    float val2 = (*m_tsdf)(v2x, v2y, v2z).f;
+    float mu = (m_tIsoLevel - val1)/(val2 - val1);
+
+	POINT3DID interpolation;
+	interpolation.x = x1 + mu*(x2 - x1);
+	interpolation.y = y1 + mu*(y2 - y1);
+	interpolation.z = z1 + mu*(z2 - z1);
+
+	float r1 = (float) (*m_tsdf)(v1x, v1y, v1z).r;
+	float g1 = (float) (*m_tsdf)(v1x, v1y, v1z).g;
+	float b1 = (float) (*m_tsdf)(v1x, v1y, v1z).b;
+	float r2 = (float) (*m_tsdf)(v2x, v2y, v2z).r;
+	float g2 = (float) (*m_tsdf)(v2x, v2y, v2z).g;
+	float b2 = (float) (*m_tsdf)(v2x, v2y, v2z).b;
+
+	interpolation.r = (uint8_t) (r1 + mu * (r2 - r1));
+	interpolation.g = (uint8_t) (g1 + mu * (g2 - g1));
+	interpolation.b = (uint8_t) (b1 + mu * (b2 - b1));
 
 	return interpolation;
 }
@@ -691,10 +719,14 @@ void CIsoSurface::RenameVerticesAndTriangles()
 	mapIterator = m_i2pt3idVertices.begin();
 	m_nVertices = m_i2pt3idVertices.size();
 	m_ppt3dVertices = new POINT3D[m_nVertices];
+	m_ppt3dColors = new COLOR3D[m_nVertices];
     for (unsigned int i = 0; i < m_nVertices; i++, mapIterator++) {
 		m_ppt3dVertices[i][0] = (*mapIterator).second.x;
 		m_ppt3dVertices[i][1] = (*mapIterator).second.y;
 		m_ppt3dVertices[i][2] = (*mapIterator).second.z;
+		m_ppt3dColors[i][0] = (*mapIterator).second.r;
+		m_ppt3dColors[i][1] = (*mapIterator).second.g;
+		m_ppt3dColors[i][2] = (*mapIterator).second.b;
 	}
 	// Copy vertex indices which make triangles.
 	vecIterator = m_trivecTriangles.begin();
@@ -778,4 +810,13 @@ void CIsoSurface::getIndices(unsigned int* indexStore) const {
     for (size_t i = 0; i < m_nTriangles*3; i++) {
         indexStore[i] = m_piTriangleIndices[i];
     }
+}
+
+
+void CIsoSurface::getColors(uint8_t* colorStore) const {
+	for (size_t i = 0; i < m_nVertices; i++) {
+        colorStore[3*i    ] = m_ppt3dColors[i][0];
+        colorStore[3*i + 1] = m_ppt3dColors[i][1];
+        colorStore[3*i + 2] = m_ppt3dColors[i][2];
+	}
 }

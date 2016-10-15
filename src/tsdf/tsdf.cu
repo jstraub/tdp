@@ -12,17 +12,17 @@
 
 namespace tdp {
 
-__device__ 
+__device__
 inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal,
     const Volume<TSDFval>& tsdf, const Vector3fda& dGrid) {
   // surface normal: TODO might want to do better interpolation
   // of neighbors
-  Vector3fda ni ( 
-      (x+1 < tsdf.w_)? tsdf(x+1,y,z).f - tsdfVal 
+  Vector3fda ni (
+      (x+1 < tsdf.w_)? tsdf(x+1,y,z).f - tsdfVal
       : tsdfVal - tsdf(x-1,y,z).f,
-      (y+1 < tsdf.h_)? tsdf(x,y+1,z).f - tsdfVal 
+      (y+1 < tsdf.h_)? tsdf(x,y+1,z).f - tsdfVal
       : tsdfVal - tsdf(x,y-1,z).f,
-      (z+1 < tsdf.d_)? tsdf(x,y,z+1).f - tsdfVal 
+      (z+1 < tsdf.d_)? tsdf(x,y,z+1).f - tsdfVal
       : tsdfVal - tsdf(x,y,z-1).f);
   // apply weighting according to TSDF volume voxel side length
   // TODO: this is still not working: only nice results with d_==w_==h_
@@ -33,10 +33,10 @@ inline Vector3fda NormalFromTSDF(int x, int y, int z, float tsdfVal,
   return -ni/ni.norm();
 }
 
-__device__ 
+__device__
 inline bool RayTraceTSDFinZonly(
     const Rayfda& r_d_in_r,
-    const Vector3fda& grid0, 
+    const Vector3fda& grid0,
     const Vector3fda& dGrid,
     const Volume<TSDFval>& tsdf,
     float& d,
@@ -75,10 +75,10 @@ inline bool RayTraceTSDFinZonly(
   return false;
 }
 
-__device__ 
+__device__
 inline bool RayTraceTSDF(
     const Rayfda& r_d_in_r,
-    const Vector3fda& grid0, 
+    const Vector3fda& grid0,
     const Vector3fda& dGrid,
     const Volume<TSDFval>& tsdf,
     float& d,
@@ -127,7 +127,7 @@ inline bool RayTraceTSDF(
       if (0<=x&&x<tsdf.w_ && 0<=y&&y<tsdf.h_ && 0<=z&&z<tsdf.d_) {
         float tsdfVal = tsdf(x,y,z).f;
         float tsdfW = tsdf(x,y,z).w;
-        if (tsdfW > wThr && -1 < tsdfVal 
+        if (tsdfW > wThr && -1 < tsdfVal
             && tsdfVal <= 0. && tsdfValPrev >= 0.) {
           // detected 0 crossing -> interpolate
           d = di_Prev-((di-di_Prev)*tsdfValPrev)/(tsdfVal-tsdfValPrev);
@@ -137,7 +137,7 @@ inline bool RayTraceTSDF(
           return true;
         }
         tsdfValPrev = tsdfVal;
-        if (tsdfVal >= 1.f) { 
+        if (tsdfVal >= 1.f) {
           // if we are still far from the surface take larger steps
           idIt += dimInc*(floor(mu/dGrid(dimIt))-1);
         }
@@ -152,8 +152,8 @@ inline bool RayTraceTSDF(
 // ray trace and compute depth image as well as normals from pose T_rd
 template<int D, typename Derived>
 __global__
-void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
-    Image<Vector3fda> n, SE3<float> T_rd, 
+void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
+    Image<Vector3fda> n, SE3<float> T_rd,
     CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -164,7 +164,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
     n(idx,idy)(0) = NAN;
     n(idx,idy)(1) = NAN;
     n(idx,idy)(2) = NAN;
-    // ray of depth image d 
+    // ray of depth image d
     Rayfda r_d(Vector3fda::Zero(), camD.Unproject(idx, idy, 1.));
     // ray of depth image d in reference coordinates (TSDF)
     Rayfda r_d_in_r = r_d.Transform(T_rd);
@@ -172,23 +172,23 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
     float di = 0;
     Vector3ida idTSDF;
     if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF, mu, wThr)) {
-    
+
 //          idx==d.w_/2 && idy==d.h_/2)) {
       // depth
       d(idx,idy) = di;
-      // surface normal: 
+      // surface normal:
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
           tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
-      n(idx,idy) = T_rd.rotation().Inverse() * ni; 
+      n(idx,idy) = T_rd.rotation().Inverse() * ni;
     }
   }
 }
 
 
 template<int D, typename Derived>
-__global__ 
-void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+__global__
+void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     SE3<float> T_rd, SE3<float> T_dr, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wMax) {
   // kernel over all pixel locations and depth locations in the TSDF
@@ -230,7 +230,56 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
 }
 
 template<int D, typename Derived>
-void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+__global__
+void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    SE3<float> T_rd, SE3<float> T_dr, CameraBase<float,D,Derived>camD,
+    Vector3fda grid0, Vector3fda dGrid, float mu) {
+  // kernel over all pixel locations and depth locations in the TSDF
+  // volume
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  const int idz = threadIdx.z + blockDim.z * blockIdx.z;
+
+  if (idx < tsdf.w_ && idy < tsdf.h_ && idz < tsdf.d_) {
+    // unproject point in reference frame
+    Eigen::Vector4f p_r (grid0(0) + idx*dGrid(0),
+        grid0(1)+idy*dGrid(1),
+        grid0(2)+idz*dGrid(2),1);
+
+    // project the point into the depth frame
+    Eigen::Vector3f p_d = T_dr.matrix3x4()*p_r;
+    if (p_d(2) < 0.) return; // dont add to behind the camera.
+    Eigen::Vector2f u_d = camD.Project(p_d);
+    int x = floor(u_d(0)+0.5);
+    int y = floor(u_d(1)+0.5);
+
+    if (0 <= x && x < d.w_ && 0 <= y && y < d.h_) {
+      const float z_d = d(x, y);
+      const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
+      const float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
+      const float eta = z_d - z_tsdf;
+      if (eta >= -mu) {
+        const float etaOverMu = eta/mu;
+        const float psi = (etaOverMu>1.f?1.f:etaOverMu);
+        // TODO can use other weights as well (like incidence angle)
+        const float Wnew = 1.;
+        const float Wprev = tsdf(idx,idy,idz).w;
+
+        tsdf(idx, idy, idz).f = (Wprev*tsdf(idx,idy,idz).f
+            + Wnew*psi)/(Wprev+Wnew);
+        tsdf(idx, idy, idz).w = min(Wprev + Wnew, 100.f);
+
+        // tsdf(idx, idy, idz).rgb = rgb(x, y);
+        tsdf(idx, idy, idz).r = rgb(x, y)(0);
+        tsdf(idx, idy, idz).g = rgb(x, y)(1);
+        tsdf(idx, idy, idz).b = rgb(x, y)(2);
+      }
+    }
+  }
+}
+
+template<int D, typename Derived>
+void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax) {
@@ -241,20 +290,45 @@ void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
-    SE3<float> T_rd, 
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
+    SE3<float> T_rd,
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax);
-template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
-    SE3<float> T_rd, 
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
+    SE3<float> T_rd,
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax);
 
 template<int D, typename Derived>
-void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n, 
-    SE3<float> T_rd, 
+void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    SE3<float> T_rd, CameraBase<float,D,Derived>camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForVolume(blocks, threads, tsdf, 8, 8, 8);
+
+  KernelAddToTSDF<<<blocks,threads>>>(tsdf, d, rgb, T_rd, T_rd.Inverse(),
+      camD, grid0, dGrid, mu);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    SE3<float> T_rd,
+    CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    SE3<float> T_rd,
+    CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu);
+
+template<int D, typename Derived>
+void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n,
+    SE3<float> T_rd,
     CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wThr) {
@@ -265,21 +339,21 @@ void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> 
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
-    Image<Vector3fda> n, SE3<float> T_rd, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
+    Image<Vector3fda> n, SE3<float> T_rd,
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr);
-template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
-    Image<Vector3fda> n, SE3<float> T_rd, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
+    Image<Vector3fda> n, SE3<float> T_rd,
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr);
 
 // T_rd is transformation from depth/camera cosy to reference/TSDF cosy
 template<int D, typename Derived>
 __global__
-void KernelRayTraceTSDF(Volume<TSDFval> tsdf, 
-    Image<Vector3fda> pc_d, 
-    Image<Vector3fda> n_d, 
+void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
+    Image<Vector3fda> pc_d,
+    Image<Vector3fda> n_d,
     SE3<float> T_rd, CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -292,8 +366,8 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
     n_d(idx,idy)(0) = NAN;
     n_d(idx,idy)(1) = NAN;
     n_d(idx,idy)(2) = NAN;
-    
-    // ray of depth image d 
+
+    // ray of depth image d
     Rayfda r_d(Vector3fda::Zero(), camD.Unproject(idx, idy, 1.));
     // ray of depth image d in reference coordinates (TSDF)
     Rayfda r_d_in_r = r_d.Transform(T_rd);
@@ -301,28 +375,28 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
     float di = 0;
     Vector3ida idTSDF;
     if (RayTraceTSDF(r_d_in_r, grid0, dGrid, tsdf, di, idTSDF, mu, wThr
-//          (idx==pc_d.w_-1 && idy==pc_d.h_-1) || 
-//          (idx==0 && idy==pc_d.h_-1) || 
-//          (idx==pc_d.w_-1 && idy==0) || 
+//          (idx==pc_d.w_-1 && idy==pc_d.h_-1) ||
+//          (idx==0 && idy==pc_d.h_-1) ||
+//          (idx==pc_d.w_-1 && idy==0) ||
 //          (idx==0 && idy==0)
           )) {
-      // surface normal: 
+      // surface normal:
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
           tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
-//      n_d(idx,idy) = T_rd.rotation().Inverse() * ni; 
+//      n_d(idx,idy) = T_rd.rotation().Inverse() * ni;
 //      pc_d(idx,idy) = r_d.dir*di;
       // compute pc and normals in reference coordinates
-      n_d(idx,idy) = ni; 
+      n_d(idx,idy) = ni;
       pc_d(idx,idy) = r_d_in_r.PointAtDepth(di);
     }
   }
 }
 
 template<int D, typename Derived>
-void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
-    Image<Vector3fda> pc_d, 
-    Image<Vector3fda> n_d, 
+void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf,
+    Image<Vector3fda> pc_d,
+    Image<Vector3fda> n_d,
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wThr) {
@@ -334,17 +408,17 @@ void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf,
 }
 
 // explicit instantiations
-template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
-    Image<Vector3fda> pc_d, 
-    Image<Vector3fda> n_d, 
-    SE3<float> T_rd, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf,
+    Image<Vector3fda> pc_d,
+    Image<Vector3fda> n_d,
+    SE3<float> T_rd,
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wThr);
-template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
-    Image<Vector3fda> pc_d, 
-    Image<Vector3fda> n_d, 
-    SE3<float> T_rd, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf,
+    Image<Vector3fda> pc_d,
+    Image<Vector3fda> n_d,
+    SE3<float> T_rd,
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wThr);
