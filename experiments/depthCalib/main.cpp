@@ -95,16 +95,11 @@ int main( int argc, char* argv[] )
   tdp::Rig<tdp::CameraPoly3<float>> rig;
   rig.FromFile(calibPath,false);
 
-  std::vector<int32_t> rgbStream2cam;
-  std::vector<int32_t> dStream2cam;
-  std::vector<int32_t> rgbdStream2cam;
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-
-  tdp::CorrespondOpenniStreams2Cams(streams,rig,rgbStream2cam,
-      dStream2cam, rgbdStream2cam);
+  rig.CorrespondOpenniStreams2Cams(streams);
 
   // camera model for computing point cloud and normals
-  tdp::CameraPoly3<float> camRGB = rig.cams_[rgbStream2cam[0]];
+  tdp::CameraPoly3<float> camRGB = rig.cams_[rig.rgbStream2cam_[0]];
   tdp::CameraPoly3<float> camD = camRGB; //rig.cams_[dStream2cam[0]];
   
   // host image: image in CPU memory
@@ -158,8 +153,8 @@ int main( int argc, char* argv[] )
 
   std::vector<tdp::SE3f> T_hws;
   
-  if (rig.depthScales_.size() > rgbdStream2cam[0]) {
-    scale.CopyFrom(rig.depthScales_[rgbdStream2cam[0]], cudaMemcpyHostToHost);
+  if (rig.cuDepthScales_.size() > rig.rgbdStream2cam_[0]) {
+    scale.CopyFrom(rig.cuDepthScales_[rig.rgbdStream2cam_[0]], cudaMemcpyDeviceToHost);
     scaleN.Fill(100.f);
   } else {
     resetScale = true;
@@ -192,8 +187,8 @@ int main( int argc, char* argv[] )
     if (!applyScale) {
       tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     } else {
-      float a = rig.scaleVsDepths_[rgbdStream2cam[0]](0);
-      float b = rig.scaleVsDepths_[rgbdStream2cam[0]](1);
+      float a = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](0);
+      float b = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](1);
       std::cout << a << " " << b<< std::endl;
       cuScale.CopyFrom(scale,cudaMemcpyHostToDevice);
       tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, a, b, dMin, dMax);
@@ -275,7 +270,7 @@ int main( int argc, char* argv[] )
         << std::endl;
       if (logScaleVsDist.GuiChanged() && logScaleVsDist) {
         std::stringstream ss;
-        ss << "scaleVsDist_" << rig.serials_[rgbdStream2cam[0]] << ".csv";
+        ss << "scaleVsDist_" << rig.serials_[rig.rgbdStream2cam_[0]] << ".csv";
         log.open(ss.str());
       }
       if (logScaleVsDist) {
@@ -288,8 +283,8 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(saveScaleCalib)) {
       std::string path = "depthCalib.png";
-      if (rig.depthScalePaths_.size() > rgbdStream2cam[0]) {
-        path = rig.depthScalePaths_[rgbdStream2cam[0]];
+      if (rig.depthScalePaths_.size() > rig.rgbdStream2cam_[0]) {
+        path = rig.depthScalePaths_[rig.rgbdStream2cam_[0]];
       }
       pangolin::Image<uint8_t> scale8bit(w*sizeof(float),h,
           w*sizeof(float),(uint8_t*)scale.ptr_);
