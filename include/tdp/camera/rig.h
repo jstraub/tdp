@@ -206,12 +206,19 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
   
   pangolin::json::value devProps = pangolin::GetVideoDeviceProperties(streams[0]);
 
-  if (! devProps.contains("openni") ) 
+  std::string devType = "";
+  if (devProps.contains("openni")) {
+    devType = "openni"; 
+  } else if(devProps.contains("realsense"))  {
+    devType = "realsense"; 
+  } else {
     return false;
-  pangolin::json::value jsDevices = devProps["openni"]["devices"];
+  }
+  pangolin::json::value jsDevices = devProps[devType]["devices"];
 
   for (size_t i=0; i<jsDevices.size(); ++i) {
-    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+//    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+    std::string serial = jsDevices[i]["serial_number"].get<std::string>();
     std::cout << "Device " << i << " serial #: " << serial << std::endl;
     int32_t camId = -1;
     for (size_t j=0; j<cams_.size(); ++j) {

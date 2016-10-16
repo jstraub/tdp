@@ -26,10 +26,32 @@
 #include <tdp/preproc/normals.h>
 #endif
 
+#include <tdp/gui/gui_base.hpp>
+#include <tdp/camera/rig.h>
+#include <tdp/manifold/SE3.h>
 #include <tdp/gui/gui.hpp>
+#include <tdp/camera/camera_poly.h>
+#include <tdp/utils/Stopwatch.h>
 
-void VideoViewer(const std::string& input_uri, const std::string& output_uri)
+typedef tdp::CameraPoly3<float> CameraT;
+//typedef tdp::Camera<float> CameraT;
+
+int main( int argc, char* argv[] )
 {
+  const std::string dflt_output_uri = "pango://video.pango";
+  std::string input_uri = std::string(argv[1]);
+  std::string configPath = std::string(argv[2]);
+  std::string output_uri = (argc > 3) ? std::string(argv[3]) : dflt_output_uri;
+  std::string tsdfOutputPath = "tsdf.raw";
+
+  std::cout << input_uri << std::endl;
+
+  // Read rig file
+  tdp::Rig<CameraT> rig;
+  if (!rig.FromFile(configPath, false)) {
+    pango_print_error("No config file specified.\n");
+    return 1;
+  }
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -37,17 +59,27 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 2;
   }
 
-  tdp::GUI gui(1200,800,video);
+  std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+  rig.CorrespondOpenniStreams2Cams(streams);
 
-  size_t w = video.Streams()[0].Width();
-  size_t h = video.Streams()[0].Height();
+  tdp::GuiBase gui(1200,800,video);
+  Stopwatch::getInstance().setCustomSignature(1237249810);
+
+  size_t wSingle = video.Streams()[0].Width();
+  size_t hSingle = video.Streams()[0].Height();
   // width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
-  w += w%64;
-  h += h%64;
+  wSingle += wSingle%64;
+  hSingle += hSingle%64;
+  size_t w = wSingle;
+  size_t h = 3*hSingle;
+
+  size_t dTSDF = 512;
+  size_t wTSDF = 512;
+  size_t hTSDF = 512;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -59,15 +91,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(d_cam);
   // add a simple image viewer
+  tdp::QuickView viewRgb(w,h);
+  gui.container().AddDisplay(viewRgb);
+  tdp::QuickView viewD(w,h);
+  gui.container().AddDisplay(viewD);
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
 
-  // camera model for computing point cloud and normals
-  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
-  
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
   // device image: image in GPU memory
@@ -75,60 +110,104 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<float> cuD(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
+
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_o(w,h);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_o(w,h);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-4,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+
+  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> grid0x("ui.grid0 x",-5.0,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-5.0,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-5.0,-2,0);
+  pangolin::Var<float> gridEx("ui.gridE x",5.0,2,0);
+  pangolin::Var<float> gridEy("ui.gridE y",5.0,2,0);
+  pangolin::Var<float> gridEz("ui.gridE z",5.0,2,0);
+
+  pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+    tdp::Vector3fda dGrid = gridE - grid0;
+    dGrid(0) /= (wTSDF-1);
+    dGrid(1) /= (hTSDF-1);
+    dGrid(2) /= (dTSDF-1);
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
     gui.NextFrames();
 
-    // get rgb image
-    tdp::Image<tdp::Vector3bda> rgb;
-    if (!gui.ImageRGB(rgb)) continue;
-    // get depth image
-    tdp::Image<uint16_t> dRaw;
-    if (!gui.ImageD(dRaw)) continue;
-    // copy raw image to gpu
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    // convet depth image from uint16_t to float [m]
-    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    // compute point cloud (on CPU)
-    tdp::Depth2PC(d,cam,pc);
-    // compute normals
-    tdp::Depth2Normals(cuD, cam, cuN);
-    // convert normals to RGB image
-    tdp::Normals2Image(cuN, cuN2D);
-    // copy normals image to CPU memory
-    n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+    TICK("rgb collection");
+    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
+    TOCK("rgb collection");
+    TICK("depth collection");
+    int64_t t_host_us_d = 0;
+    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+    rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+    TOCK("depth collection");
+    TICK("pc and normals");
+    rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
+    rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+    TOCK("pc and normals");
+
+    TICK("Setup Pyramids");
+    // TODO might want to use the pyramid construction with smoothing
+    pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
+    ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
+    tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
+    TOCK("Setup Pyramids");
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
-    // draw the axis
-    pangolin::glDrawAxis(0.1);
-    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
-    // render point cloud
-    pangolin::RenderVboCbo(vbo,cbo,true);
+    if (d_cam.IsShown()) {
+      d_cam.Activate(s_cam);
+      // draw the axis
+      for (auto& T : rig.T_rcs_) {
+        pangolin::glDrawAxis(T.matrix(), 0.1f);
+      }
+      Eigen::AlignedBox3f box(grid0,gridE);
+      glColor4f(1,0,0,0.5f);
+      pangolin::glDrawAlignedBox(box);
+
+      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+      // render point cloud
+      pangolin::RenderVboCbo(vbo,cbo,true);
+    }
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
-    // SHowFrames renders the raw input streams (in our case RGB and D)
-    gui.ShowFrames();
-    // render normals image
-    viewN2D.SetImage(n2D);
+    if (viewRgb.IsShown()) {
+      viewRgb.SetImage(rgb);
+    }
+    if (viewD.IsShown()) {
+      d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      viewD.SetImage(d);
+    }
+    if (viewN2D.IsShown()) {
+      // convert normals to RGB image
+      tdp::Normals2Image(cuN, cuN2D);
+      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+      viewN2D.SetImage(n2D);
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -140,54 +219,4 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // finish this frame
     pangolin::FinishFrame();
   }
-}
-
-
-int main( int argc, char* argv[] )
-{
-  const std::string dflt_output_uri = "pango://video.pango";
-
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-    try{
-      VideoViewer(input_uri, output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
-    }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
-
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
-
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
-  }
-
-  return 0;
 }
