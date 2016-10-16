@@ -21,6 +21,41 @@ TEST(setup, KeyframeSLAM) {
   kfSLAM.Optimize();
 }
 
+TEST(setupRaw, KeyframeSLAM) {
+  model = gtsam::noiseModel::Diagonal::Variances(
+        (gtsam::Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+
+  gtsam::Values::shared_ptr initials(new gtsam::Values);
+  gtsam::NonlinearFactorGraph::shared_ptr graph(new gtsam::NonlinearFactorGraph);
+
+  SE3f T_wk0;
+  SE3f T_wk1 (SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1));
+  SE3f dT_01 (SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1.1));
+
+  gtsam::Pose3 poseA = gtsam::Pose3(T_wk0.matrix().cast<double>());
+  gtsam::Pose3 poseB = gtsam::Pose3(T_wk1.matrix().cast<double>());
+  gtsam::Pose3 poseAB = poseA.between(poseB);
+  gtsam::Pose3 poseAB_obs = gtsam::Pose3(dT_01.matrix().cast<double>());
+
+  initials->insert(0, poseA);
+  initials->insert(1, poseB);
+
+  graph->add(gtsam::PriorFactor<gtsam::Pose3>(0, poseA, model));
+  gtsam::NonlinearFactor::shared_ptr factor(
+      new gtsam::BetweenFactor<gtsam::Pose3>(0, 1, poseAB, model));
+  gtsam::NonlinearFactor::shared_ptr factor(
+      new gtsam::BetweenFactor<gtsam::Pose3>(0, 1, poseAB_obs, model));
+  graph->push_back(factor);
+
+  graph->print();
+
+  gtsam::GaussNewtonParams params;
+  params.setVerbosity("ERROR"); 
+  params.setMaxIterations(1);
+  gtsam::GaussNewtonOptimizer optimizer(*graph_, *initials_, params);
+  gtsam::Values results = optimizer.optimize();
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
