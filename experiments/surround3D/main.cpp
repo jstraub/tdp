@@ -96,6 +96,7 @@ int main( int argc, char* argv[] )
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
   rig.CorrespondOpenniStreams2Cams(streams);
 
+
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = nullptr; 
   if (imu_input_uri.size() > 0) 

@@ -8,5 +8,9 @@ file(GLOB SRCS
 add_executable(${ProjName}
   ${SRCS}
   )
+
 target_link_libraries(${ProjName}
-  tdp)
+  tdp 
+  ${GTSAM_LIBS}
+  ${Boost_LIBRARIES}
+  )
