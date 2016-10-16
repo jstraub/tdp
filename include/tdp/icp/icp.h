@@ -32,7 +32,7 @@ void AssociateANN(
   Eigen::VectorXf dists(k);
 
   int Nassoc = 0;
-#pragma omp parallel for
+//#pragma omp parallel for
   for (size_t j=0; j<pc_m.Area(); j+=100) {
     for (size_t i=j; j<std::min(j+100,pc_m.Area()); ++j) {
       if (i%stride == 0) {
