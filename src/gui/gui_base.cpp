@@ -72,6 +72,21 @@ GuiBase::GuiBase(size_t w, size_t h, pangolin::VideoRecordRepeat& video)
         } );
     }
 
+    pangolin::RegisterKeyPressCallback('`', [&](){
+        for(size_t v=0; v < images.size(); v++) {
+            std::stringstream ss;
+            ss << "capture_stream" << v << "_img.png";
+        try{
+            pangolin::SaveImage(
+                images[v], video.Streams()[v].PixFormat(),
+                pangolin::MakeUniqueFilename(ss.str())
+            );
+        }catch(std::exception e){
+            pango_print_error("Unable to save frame: %s\n", e.what());
+        }
+        }
+    });
+
     pangolin::RegisterKeyPressCallback('r', [&](){
         if(!video.IsRecording()) {
             video.SetTimelapse( static_cast<size_t>(record_timelapse_frame_skip) );
