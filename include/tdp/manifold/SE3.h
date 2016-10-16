@@ -24,7 +24,11 @@ class SE3 : Manifold<T,6> {
   SE3(const SO3<T>& R);
 
   TDP_HOST_DEVICE
+  SE3(const SO3<T>& R, const Eigen::Matrix<T,3,1>& t);
+
+  TDP_HOST_DEVICE
   SE3(const SE3<T>& other);
+
 
   TDP_HOST_DEVICE
   ~SE3() {};
