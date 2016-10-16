@@ -96,7 +96,6 @@ int main( int argc, char* argv[] )
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
   rig.CorrespondOpenniStreams2Cams(streams);
 
-
   // optionally connect to IMU if it is found.
   tdp::ImuInterface* imu = nullptr; 
   if (imu_input_uri.size() > 0) 
@@ -175,10 +174,6 @@ int main( int argc, char* argv[] )
   plotters.AddDisplay(plotCost);
   gui.container().AddDisplay(plotters);
 
-  viewRgb.Show(false);
-  viewD.Show(false);
-  viewN2D.Show(false);
-
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   tdp::ManagedDeviceImage<float> cuDView(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(w, h);
@@ -206,7 +201,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
-  tdp::ManagedDeviceImage<float> cuScale(w,h);
 
   tdp::ManagedHostPyramid<float,3> dPyr(w,h);
   tdp::ManagedHostPyramid<float,3> dPyrEst(w,h);
