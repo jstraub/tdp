@@ -374,7 +374,7 @@ int main( int argc, char* argv[] ){
       glColor3f(1.0f, 1.0f, 1.0f);
 
       std::cout << "Running skinning..." << std::endl;
-      int nSteps = 10;
+      int nSteps = 1;
       std::vector<tdp::Vector3fda> means = getMeans(pcA,nSteps);
       size_t nMeans= means.size();
       std::cout << "number of means (should be 2*nsteps + 1):" << nMeans << std::endl;
