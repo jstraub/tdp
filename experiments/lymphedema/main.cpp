@@ -66,7 +66,7 @@ int main( int argc, char* argv[] )
   rig.CorrespondOpenniStreams2Cams(streams);
 
   tdp::GuiBase gui(1200,800,video);
-  Stopwatch::getInstance().setCustomSignature(1237249810);
+  Stopwatch::getInstance().setCustomSignature(1237249817410);
 
   size_t wSingle = video.Streams()[0].Width();
   size_t hSingle = video.Streams()[0].Height();
