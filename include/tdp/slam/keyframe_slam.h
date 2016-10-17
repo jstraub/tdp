@@ -146,18 +146,18 @@ class KeyframeSLAM {
     std::cout << "SAM optimization" << std::endl;
     gtsam::GaussNewtonParams params;
     params.setVerbosity("ERROR"); 
-    params.setMaxIterations(1);
+    params.setMaxIterations(100);
     gtsam::GaussNewtonOptimizer optimizer(*graph_, *initials_, params);
     
 //    gtsam::DoglegParams params;
 //    params.setVerbosity("VERBOSE");
 //    gtsam::DoglegOptimizer optimizer(*graph_, *initials_, params);
 
-    std::cout << "one iteration" << std::endl;
-    gtsam::GaussianFactorGraph::shared_ptr graph1 =  optimizer.iterate();
-    std::cout << "one iteration done " << std::endl;
-    std::cout << "after one iteration " << std::endl;
-    graph1->print() ;
+//    std::cout << "one iteration" << std::endl;
+//    gtsam::GaussianFactorGraph::shared_ptr graph1 =  optimizer.iterate();
+//    std::cout << "one iteration done " << std::endl;
+//    std::cout << "after one iteration " << std::endl;
+//    graph1->print() ;
 
     gtsam::Values results = optimizer.optimize();
     std::cout << "after one iteration error=" <<graph_->error(results)<< std::endl;

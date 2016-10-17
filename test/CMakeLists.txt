@@ -26,7 +26,10 @@ if (GTEST_FOUND)
 
   if (GTSAM_FOUND)
     add_executable(testKfSLAM keyframe_slam.cpp)
-    target_link_libraries(testKfSLAM tdp ${GTEST_BOTH_LIBRARIES} pthread
+    target_link_libraries(testKfSLAM 
+      tdp 
+      ${GTEST_BOTH_LIBRARIES} 
+      pthread
       ${GTSAM_LIBS}
       ${Boost_LIBRARIES}
       )
@@ -37,7 +40,5 @@ if (GTEST_FOUND)
 
   add_executable(testSE3 SE3.cpp)
   target_link_libraries(testSE3 tdp)
-
-
 
 endif()
