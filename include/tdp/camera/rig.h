@@ -86,6 +86,7 @@ struct Rig {
               if (cam.FromJson(file_json[i]["camera"])) {
                 if (verbose) 
                   std::cout << "found camera model" << std::endl ;
+                std::cout << file_json[i]["camera"].serialize(true) << std::endl;
               }
               cams_.push_back(cam);
               if (file_json[i]["camera"].contains("depthScale")) {
@@ -110,6 +111,9 @@ struct Rig {
                 scaleVsDepths_.push_back(Eigen::Vector2f(
                   file_json[i]["camera"]["depthScaleVsDepthModel"][0].get<double>(),
                   file_json[i]["camera"]["depthScaleVsDepthModel"][1].get<double>()));
+              }
+              if (file_json[i]["camera"].contains("depthSensorUniformScale")) {
+                depthSensorUniformScale_.push_back(file_json[i]["camera"]["depthSensorUniformScale"].get<double>());
               }
               if (file_json[i]["camera"].contains("T_rc")) {
                 SE3f T_rc;
@@ -174,6 +178,8 @@ struct Rig {
   std::vector<SE3f> T_rcs_; 
   // cameras
   std::vector<Cam> cams_;
+
+  std::vector<float> depthSensorUniformScale_;
   // depth scale calibration images
   std::vector<std::string> depthScalePaths_;
 //  std::vector<Image<float>> depthScales_;
@@ -286,8 +292,10 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
       float b = scaleVsDepths_[cId](1);
       tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuDepthScales_[cId], 
           a, b, dMin, dMax);
-      //} else {
-      //  tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorScale, dMin, dMax);
+    } else if (depthSensorUniformScale_.size() > cId) {
+      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorUniformScale_[cId], dMin, dMax);
+    } else {
+       std::cout << "Warning no scale information found" << std::endl;
     }
   }
   t_host_us_d /= numStreams;  

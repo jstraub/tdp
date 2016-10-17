@@ -48,7 +48,7 @@ int main( int argc, char* argv[] )
 
   // Read rig file
   tdp::Rig<CameraT> rig;
-  if (!rig.FromFile(configPath, false)) {
+  if (!rig.FromFile(configPath, true)) {
     pango_print_error("No config file specified.\n");
     return 1;
   }
@@ -187,6 +187,7 @@ int main( int argc, char* argv[] )
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
 
+      pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
@@ -195,6 +196,7 @@ int main( int argc, char* argv[] )
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
+    //gui.ShowFrames();
     if (viewRgb.IsShown()) {
       viewRgb.SetImage(rgb);
     }

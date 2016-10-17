@@ -29,7 +29,8 @@
       "distortion" : [ 0.06097317, 0.2642427, -1.545947]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1402270118.png",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_552206000285.png",
     "depthScaleVsDepthModel" : [0.0, 0.0],
     "serialNumber" : "552206000285",
     "description" : "left position on the rig",
@@ -69,7 +70,8 @@
       "distortion" : [0.1316211,0.2146529, -0.2394307]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1504270177.png",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_552206001889.png",
     "depthScaleVsDepthModel" : [0.0, 0.0],
     "serialNumber" : "552206001889",
     "description" : "bottom position on the rig",
@@ -83,11 +85,11 @@
   "camera" : {
     "model":{
       "type" : "poly3",
-      "fu" : 586.7225,
-      "fv" : 189.6644,
-      "uc" : 336.3076,
-      "vc" : 522.9491,
-      "distortion" : [-0.04294802,0.002786513,-7.824937e-05]
+      "fu" : 603.2956,
+      "fv" : 604.563,
+      "uc" : 317.4311,
+      "vc" : 235.5336,
+      "distortion" : [-0.135445, -0.2637459, -0.01646956]
     },
     "type" : "rgb",
     "serialNumber" : "616203001754",
@@ -102,14 +104,15 @@
   "camera" : {
     "model":{
       "type" : "poly3",
-      "fu" : 586.7225,
-      "fv" : 189.6644,
-      "uc" : 336.3076,
-      "vc" : 522.9491,
-      "distortion" : [-0.04294802,0.002786513,-7.824937e-05]
+      "fu" : 603.2956,
+      "fv" : 604.563,
+      "uc" : 317.4311,
+      "vc" : 235.5336,
+      "distortion" : [-0.135445, -0.2637459, -0.01646956]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1402240016.png",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_616203001754.png",
     "depthScaleVsDepthModel" : [0.0, 0.0],
     "serialNumber" : "616203001754",
     "description" : "right position on the rig",
