@@ -224,8 +224,12 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
   pangolin::json::value jsDevices = devProps[devType]["devices"];
 
   for (size_t i=0; i<jsDevices.size(); ++i) {
-//    std::string serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
-    std::string serial = jsDevices[i]["serial_number"].get<std::string>();
+    std::string serial;
+    if (jsDevices[i].contains("ONI_DEVICE_PROPERTY_SERIAL_NUMBER")) {
+      serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+    } else if (jsDevices[i].contains("serial_number")) {
+      serial = jsDevices[i]["serial_number"].get<std::string>();
+    }
     std::cout << "Device " << i << " serial #: " << serial << std::endl;
     int32_t camId = -1;
     for (size_t j=0; j<cams_.size(); ++j) {
