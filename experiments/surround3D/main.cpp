@@ -506,6 +506,7 @@ int main( int argc, char* argv[] )
       tdp::KeyFrame& kfA = keyframes[idA];
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
+      size_t numLoopClosures = 0;
       for (int idB=(int)keyframes.size()-2; 
           idB>std::max(-1,(int)keyframes.size()-1-10); --idB) {
         tdp::KeyFrame& kfB = keyframes[idB];
@@ -527,10 +528,12 @@ int main( int argc, char* argv[] )
           std::cout << "successfull loop closure "
             << T_ab.matrix3x4() << std::endl;
           loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-          kfSLAM.AddLoopClosure(idA, idB, T_ab);
+          kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
+          numLoopClosures ++;
         }
       }
-      kfSLAM.Optimize(); 
+      if (numLoopClosures > 0) 
+        kfSLAM.Optimize(); 
     }
 
     // Render point cloud from viewpoint of origin
