@@ -180,8 +180,11 @@ int main( int argc, char* argv[] )
     if (d_cam.IsShown()) {
       d_cam.Activate(s_cam);
       // draw the axis
-      for (auto& T : rig.T_rcs_) {
+      for (size_t i=0; i<rig.cams_.size(); ++i) {
+        auto& T = rig.T_rcs_[i];
+        auto& cam = rig.cams_[i];
         pangolin::glDrawAxis(T.matrix(), 0.1f);
+        pangolin::glDrawFrustrum(cam.GetKinv(), wSingle, hSingle, T.matrix(), 0.1f);
       }
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);

@@ -21,6 +21,7 @@
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
 #include <tdp/preproc/normals.h>
+#include <tdp/config.h>
 
 namespace tdp {
 
@@ -90,7 +91,7 @@ struct Rig {
               }
               cams_.push_back(cam);
               if (file_json[i]["camera"].contains("depthScale")) {
-                std::string path = file_json[i]["camera"]["depthScale"].get<std::string>();
+                std::string path = CONFIG_DIR+file_json[i]["camera"]["depthScale"].get<std::string>();
                 depthScalePaths_.push_back(path);
                 if (pangolin::FileExists(path)) {
                   pangolin::TypedImage scale8bit = pangolin::LoadImage(path);

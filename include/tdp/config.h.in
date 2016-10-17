@@ -22,3 +22,5 @@
 #cmakedefine ANN_FOUND
 
 #define SHADER_DIR "${SHADER_DIR}"
+#define CONFIG_DIR "${CONFIG_DIR}"
+

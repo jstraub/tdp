@@ -308,7 +308,7 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(saveScaleCalib)) {
-      std::string path = "depthCalib.png";
+      std::string path = CONFIG_DIR+std::string("depthCalib.png");
       if (rig.depthScalePaths_.size() > rig.rgbdStream2cam_[0]) {
         path = rig.depthScalePaths_[rig.rgbdStream2cam_[0]];
       }

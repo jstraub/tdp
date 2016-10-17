@@ -30,8 +30,8 @@
     },
     "type" : "ir",
     "depthSensorUniformScale" : 0.0001,
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_552206000285.png",
-    "depthScaleVsDepthModel" : [0.0, 0.0],
+    "depthScale" : "depthCalib_552206000285.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
     "serialNumber" : "552206000285",
     "description" : "left position on the rig",
     "T_rc" : {
@@ -71,8 +71,8 @@
     },
     "type" : "ir",
     "depthSensorUniformScale" : 0.0001,
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_552206001889.png",
-    "depthScaleVsDepthModel" : [0.0, 0.0],
+    "depthScale" : "depthCalib_552206001889.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
     "serialNumber" : "552206001889",
     "description" : "bottom position on the rig",
     "T_rc" : {
@@ -112,8 +112,8 @@
     },
     "type" : "ir",
     "depthSensorUniformScale" : 0.0001,
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_616203001754.png",
-    "depthScaleVsDepthModel" : [0.0, 0.0],
+    "depthScale" : "depthCalib_616203001754.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
     "serialNumber" : "616203001754",
     "description" : "right position on the rig",
     "T_rc" : {
