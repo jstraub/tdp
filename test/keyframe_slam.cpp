@@ -28,16 +28,40 @@ TEST(setupRaw, KeyframeSLAM) {
   gtsam::Values::shared_ptr initials(new gtsam::Values);
   gtsam::NonlinearFactorGraph::shared_ptr graph(new gtsam::NonlinearFactorGraph);
 
-  // set the poses up using SE3 class 
-  SE3f T_wk0;
-  SE3f T_wk1(SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1));
-  SE3f dT_01(SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1.1));
+//  // set the poses up using SE3 class 
+//  SE3f T_wk0;
+//  SE3f T_wk1(SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1));
+//  SE3f dT_01(SO3f::Rx(5.*M_PI/180.), Eigen::Vector3f(0,0,1.1));
+//
+//  std::cout <<  SO3f::Rx(5.*M_PI/180.) << std::endl;
+//
+//  // setup Pose3s for GTSAM
+//  gtsam::Pose3 poseA = gtsam::Pose3(T_wk0.matrix().cast<double>());
+//  gtsam::Pose3 poseB = gtsam::Pose3(T_wk1.matrix().cast<double>());
+//  gtsam::Pose3 poseAB = poseA.between(poseB);
+//  gtsam::Pose3 poseAB_obs = gtsam::Pose3(dT_01.matrix().cast<double>());
+
+  float a = 5.*M_PI/180.;
+  Eigen::Matrix3d Ra;
+  Ra << 1, 0, 0,
+       0, cos(a), -sin(a),
+       0, sin(a), cos(a);
+  a = 6.*M_PI/180.;
+  Eigen::Matrix3d Rb;
+  Rb << 1, 0, 0,
+       0, cos(a), -sin(a),
+       0, sin(a), cos(a);
+  
+  Eigen::Vector3d ta(0,0,1);
+  Eigen::Vector3d tb(0,0,1.1);
+  Eigen::Vector3d tc(0.01,0,1.1);
 
   // setup Pose3s for GTSAM
-  gtsam::Pose3 poseA = gtsam::Pose3(T_wk0.matrix().cast<double>());
-  gtsam::Pose3 poseB = gtsam::Pose3(T_wk1.matrix().cast<double>());
+  gtsam::Pose3 poseA = gtsam::Pose3(gtsam::Rot3(Ra),ta);
+  gtsam::Pose3 poseB = gtsam::Pose3(gtsam::Rot3(Rb),tb);
+  gtsam::Pose3 poseC = gtsam::Pose3(gtsam::Rot3(Rb),tc);
   gtsam::Pose3 poseAB = poseA.between(poseB);
-  gtsam::Pose3 poseAB_obs = gtsam::Pose3(dT_01.matrix().cast<double>());
+  gtsam::Pose3 poseAB_obs = poseA.between(poseC);
 
   initials->insert(0, poseA);
   initials->insert(1, poseB);

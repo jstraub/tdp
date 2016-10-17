@@ -102,7 +102,7 @@ find_package (GTSAM QUIET)
 if (GTSAM_FOUND) 
   message("found GTSAM")
   message(${GTSAM_LIBS})
-  find_package(Boost REQUIRED system)
+  find_package(Boost REQUIRED serialization system filesystem thread program_options date_time timer chrono)
 
   include_directories(
     ${GTSAM_INCLUDE_DIR}
