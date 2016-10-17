@@ -48,6 +48,7 @@
 #include <tdp/preproc/grey.h>
 #include <tdp/calibration/PnP.h>
 #include <tdp/camera/rig.h>
+#include <tdp/utils/Stopwatch.h>
 
 int main( int argc, char* argv[] )
 {
@@ -70,6 +71,7 @@ int main( int argc, char* argv[] )
   }
 
   tdp::GUI gui(1200,800,video);
+  Stopwatch::getInstance().setCustomSignature(1237249810);
 
   size_t w = video.Streams()[gui.iD[0]].Width();
   size_t h = video.Streams()[gui.iD[0]].Height();
@@ -82,6 +84,18 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewScale);
   tdp::QuickView viewScaleN(w,h);
   gui.container().AddDisplay(viewScaleN);
+
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+  pangolin::DataLog logScale;
+  pangolin::Plotter plotScale(&logScale, -100.f,1.f, 0.7f, 1.3f, 
+      1.f, 0.1f);
+  plotters.AddDisplay(plotScale);
+  pangolin::DataLog logDepth;
+  pangolin::Plotter plotDepth(&logDepth, -100.f,1.f, 0.1f, 4.f, 1.f, 0.1f);
+  plotters.AddDisplay(plotDepth);
+  gui.container().AddDisplay(plotters);
+
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
@@ -93,7 +107,7 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(d_cam);
 
   tdp::Rig<tdp::CameraPoly3<float>> rig;
-  rig.FromFile(calibPath,false);
+  rig.FromFile(calibPath,true);
 
   std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
   rig.CorrespondOpenniStreams2Cams(streams);
@@ -123,21 +137,29 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
-  pangolin::Var<bool> estimateScale("ui.est scale",false,true);
-  pangolin::Var<bool> applyScale("ui.apply scale",false,true);
+  pangolin::Var<bool> estimateScale("ui.est scale",true,true);
+  pangolin::Var<bool> applyScale("ui.apply scale",true,true);
   pangolin::Var<bool> resetScale("ui.reset scale est",false,false);
-  pangolin::Var<int> patchBoundary("ui.patch boundary",7,0,10);
+  pangolin::Var<int> patchBoundary("ui.patch boundary",3,0,10);
   pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
   pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
   pangolin::Var<bool> logScaleVsDist("ui.log scale vs dist",false,true);
 
-  // Default number of grid rows.
   int grid_rows = 12;
-  // Default number of grid cols.
   int grid_cols = 24;
-  // Default number of grid cols.
   uint32_t grid_seed = 57;
   double grid_spacing = 0.077;
+
+  bool lymphedema = true;
+  if (lymphedema) {
+    std::cout << "running with lymphedema parameters!" << std::endl;
+    grid_rows = 12;
+    grid_cols = 16;
+    grid_seed = 76;
+    grid_spacing = 0.0165;
+    depthSensorScale = 1e-4;
+  }
+
   const Eigen::Vector2i grid_size(grid_rows, grid_cols);
   calibu::TargetGridDot target( grid_spacing, grid_size, grid_seed );
 
@@ -168,37 +190,30 @@ int main( int argc, char* argv[] )
       scale.Fill(depthSensorScale);
       scaleN.Fill(0.);
     }
-    if (estimateScale) applyScale = false;
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     // get next frames from the video source
     gui.NextFrames();
 
+    TICK("Get data");
     // get rgb image
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
+    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.0f);
     // get depth image
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
     // copy raw image to gpu
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    TOCK("Get data");
+    TICK("scale depth");
     // convet depth image from uint16_t to float [m]
-    if (!applyScale) {
-      tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    } else {
-      float a = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](0);
-      float b = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](1);
-      std::cout << a << " " << b<< std::endl;
-      cuScale.CopyFrom(scale,cudaMemcpyHostToDevice);
-      tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, a, b, dMin, dMax);
-    }
+    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    // compute point cloud (on CPU)
-    tdp::Depth2PC(d,camD,pc);
+    TOCK("scale depth");
 
-    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.0f);
-
+    TICK("conics");
     image_processing.Process(grey.ptr_, grey.w_, grey.h_, grey.pitch_);
     conic_finder.Find( image_processing );
     const std::vector<calibu::Conic,
@@ -208,6 +223,7 @@ int main( int argc, char* argv[] )
 
     bool tracking_good = target.FindTarget(image_processing,
         conic_finder.Conics(), ellipse_target_map);
+    TOCK("conics");
 
     tdp::SE3f T_hw;
     if(tracking_good) {
@@ -225,6 +241,7 @@ int main( int argc, char* argv[] )
           0, 0, T_hw);
       T_hws.push_back(T_hw);
 
+      TICK("generating mask");
       mask.Fill(0);
       for( size_t i=0; i < conics.size(); ++i ) {
         if (ellipse_target_map[i] > 0) {
@@ -237,12 +254,15 @@ int main( int argc, char* argv[] )
           }
         }
       }
+      TOCK("generating mask");
+
+      TICK("computing scale");
       tdp::SE3f T_wh = T_hw.Inverse();
       float avgScale = 0.f;
       float avgDepth = 0.f;
       float numScale = 0.f;
       for (size_t i=0; i<mask.Area(); ++i) {
-        if (mask[i] > 0 && !std::isnan(d[i])) {
+        if (mask[i] > 0 && !std::isnan(d[i]) && dMin <= d[i] && d[i] <= dMax) {
           tdp::Rayfda ray_d(tdp::Vector3fda::Zero(),
               camD.Unproject(i%w, i/w, 1.f));
           // ray of depth image d in world coordinates
@@ -266,6 +286,12 @@ int main( int argc, char* argv[] )
       }
       avgScale /= numScale;
       avgDepth /= numScale;
+      TOCK("computing scale");
+
+      logDepth.Log(avgDepth);
+      logScale.Log(avgScale);
+      plotDepth.ScrollView(1,0);
+      plotScale.ScrollView(1,0);
       std::cout << " avg scale: " << avgScale << "\tavg depth: " << avgDepth 
         << std::endl;
       if (logScaleVsDist.GuiChanged() && logScaleVsDist) {
@@ -295,21 +321,34 @@ int main( int argc, char* argv[] )
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
-    // draw the axis
-    pangolin::glDrawAxis(1.0);
-    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
-    // render point cloud
-    if(tracking_good) {
-      pangolin::glSetFrameOfReference(T_hws.back().Inverse().matrix());
-      pangolin::RenderVboCbo(vbo,cbo,true);
-      pangolin::glUnsetFrameOfReference();
-      pangolin::glDrawFrustrum(camD.GetKinv(),w,h,T_hw.Inverse().matrix(),0.05f);
-    }
-    calibu::glDrawTarget(target, Eigen::Vector2d(0,0), 1.0, 0.8, 1.0);
-    for (size_t i=0; i<T_hws.size(); ++i) {
-      pangolin::glDrawAxis(T_hws[i].Inverse().matrix(),0.1f);
+    if (d_cam.IsShown()) {
+      d_cam.Activate(s_cam);
+      // draw the axis
+      pangolin::glDrawAxis(1.0);
+
+      if (applyScale) {
+        float a = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](0);
+        float b = rig.scaleVsDepths_[rig.rgbdStream2cam_[0]](1);
+//        std::cout << a << " " << b<< std::endl;
+        cuScale.CopyFrom(scale,cudaMemcpyHostToDevice);
+        tdp::ConvertDepthGpu(cuDraw, cuD, cuScale, a, b, dMin, dMax);
+        d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      }
+      tdp::Depth2PC(d,camD,pc);
+
+      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+      // render point cloud
+      if(tracking_good) {
+        pangolin::glSetFrameOfReference(T_hws.back().Inverse().matrix());
+        pangolin::RenderVboCbo(vbo,cbo,true);
+        pangolin::glUnsetFrameOfReference();
+        pangolin::glDrawFrustrum(camD.GetKinv(),w,h,T_hw.Inverse().matrix(),0.05f);
+      }
+      calibu::glDrawTarget(target, Eigen::Vector2d(0,0), 1.0, 0.8, 1.0);
+      for (size_t i=0; i<T_hws.size(); ++i) {
+        pangolin::glDrawAxis(T_hws[i].Inverse().matrix(),100.f*depthSensorScale);
+      }
     }
 
     glDisable(GL_DEPTH_TEST);
@@ -329,6 +368,7 @@ int main( int argc, char* argv[] )
           pangolin::DisplayBase().v.h-14.0f, 7.0f);
     }
     // finish this frame
+    Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
 
