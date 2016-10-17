@@ -225,6 +225,7 @@ int main( int argc, char** argv)
         input_cameras.push_back( CameraAndPose(starting_cam, Sophus::SE3d() ) );
       }else{
         const std::shared_ptr<Rig<double>> rig = ReadXmlRig(filename);
+        std::cout << "found " << rig->cameras_.size() << " cameras" << std::endl;
         for(const std::shared_ptr<CameraInterface<double>> cop : rig->cameras_ ) {
           input_cameras.push_back( CameraAndPose(cop, cop->Pose().inverse()) );
         }
@@ -262,11 +263,11 @@ int main( int argc, char** argv)
 
   TargetGridDot target( grid_spacing, grid_size, grid_seed );
 
-  double rad0 = 0.003; // cm
-  double rad1 = 0.005; // cm
-  double pts_per_unit = 2834.64567;
-  int id = 213;
-  target.SaveEPS( "test.eps", Eigen::Vector2d(0,0), rad0, rad1, pts_per_unit, id );
+//  double rad0 = 0.003; // cm
+//  double rad1 = 0.005; // cm
+//  double pts_per_unit = 2834.64567;
+//  int id = 213;
+//  target.SaveEPS( "test.eps", Eigen::Vector2d(0,0), rad0, rad1, pts_per_unit, id );
 
   ////////////////////////////////////////////////////////////////////
   // Initialize Calibration object and tracking params
@@ -363,18 +364,23 @@ int main( int argc, char** argv)
 
     pangolin::Var<bool> add("ui.Add Frames", true, true);
 
-    pangolin::Var<bool> disp_thresh("ui.Display Thresh",false,false);
-    pangolin::Var<bool> disp_lines("ui.Display Lines",true,false);
-    pangolin::Var<bool> disp_cross("ui.Display crosses",true,false);
-    pangolin::Var<bool> disp_bbox("ui.Display bbox",true,false);
-    pangolin::Var<bool> disp_barcode("ui.Display barcode",false,false);
+    pangolin::Var<bool> disp_thresh("ui.Display Thresh",false,true);
+    pangolin::Var<bool> disp_lines("ui.Display Lines",true,true);
+    pangolin::Var<bool> disp_cross("ui.Display crosses",true,true);
+    pangolin::Var<bool> disp_bbox("ui.Display bbox",true,true);
+    pangolin::Var<bool> disp_barcode("ui.Display barcode",false,true);
 
-    pangolin::Var<bool> guiFixIntrinsics("ui.fix intrinsics",fix_intrinsics,false);
+    pangolin::Var<bool> guiFixIntrinsics("ui.fix intrinsics",fix_intrinsics,true);
     pangolin::Var<int> guiGridRows("ui.grid rows",grid_rows,0, 0);
     pangolin::Var<int> guiGridCols("ui.grid cols",grid_cols,0, 0);
     pangolin::Var<int> guiGridSeed("ui.grid cols",grid_seed,0, 0);
 
-    pangolin::Var<bool> calibrate("ui.calibrate",false,false);
+    pangolin::Var<bool> calibrate("ui.calibrate",false,true);
+
+    pangolin::Var<float> conic__("ui.conic:",0.,0.,0.);
+    pangolin::Var<float> conicMinArea("ui.min area",4.,1.,10.);
+    pangolin::Var<float> conicMinDensity("ui.min density",0.1,0.6,1.);
+    pangolin::Var<float> conicMinAspect("ui.min aspect",0.1,0.2,1.);
 
     ////////////////////////////////////////////////////////////////////
     // Key shortcuts
@@ -396,7 +402,11 @@ int main( int argc, char** argv)
     ////////////////////////////////////////////////////////////////////
     // Main event loop
 
-    for(int frame=0; !pangolin::ShouldQuit();)false{
+    for(int frame=0; !pangolin::ShouldQuit();) {
+
+      conic_finder.Params().conic_min_area = conicMinArea;
+      conic_finder.Params().conic_min_density = conicMinDensity;
+      conic_finder.Params().conic_min_aspect = conicMinAspect;
 
       if (calibrate.GuiChanged() && calibrate)
         calibrator.Start();
@@ -575,14 +585,14 @@ int main( int argc, char** argv)
           const Sophus::SE3d T_ck = cap.T_ck;
 
           // Draw keyframes
-          pangolin::glColorBin(c, 2, 0.2);
+          pangolin::glColorBin(c, calibrator.NumCameras(), 0.2);
           for(size_t k=0; k< calibrator.NumFrames(); ++k) {
             pangolin::glDrawAxis((T_ck * calibrator.GetFrame(k)).inverse().matrix(), 0.01);
           }
 
           // Draw current camera
           if(tracking_good[c]) {
-            pangolin::glColorBin(c, 2, 0.5);
+            pangolin::glColorBin(c, calibrator.NumCameras(), 0.5);
             pangolin::glDrawFrustrum(Kinv,w_i,h_i,T_hw[c].inverse().matrix(),0.05);
           }
         }

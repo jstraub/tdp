@@ -4,7 +4,7 @@ import os.path, re
 
 for root, dirs, files in os.walk("./"):
   for f in files:
-    if (re.search("capture_cam[_cam0-9]*.png",f)):
+    if (re.search("capture_stream[0-9]*_img_[0-9]*.png",f)):
       print root+f
       I = cv2.imread(os.path.join(root,f))
       Imin = I.min()
