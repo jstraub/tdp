@@ -29,7 +29,7 @@
       "distortion" : [-2.2402676580979382e-02, -1.3685306436847766e-01, 2.2972261889183682e-01]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1402270118.png",
+    "depthScale" : "depthCalib_1402270118.png",
     "depthScaleVsDepthModel" : [-2.49179026e-05, 9.98446275e-01],
     "serialNumber" : "1402270118",
     "description" : "upper position on the rig",
@@ -69,7 +69,7 @@
       "distortion" : [-4.1974011114144755e-02, -1.2303214579429905e-01, 3.5486807824237893e-01]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1504270177.png",
+    "depthScale" : "depthCalib_1504270177.png",
     "depthScaleVsDepthModel" : [0.04643019, 0.91754022],
     "serialNumber" : "1504270177",
     "description" : "middle position on the rig",
@@ -109,7 +109,7 @@
       "distortion" : [-5.6616880928243379e-02, -8.8300782564511932e-02, 2.7328651572815199e-01 ]
     },
     "type" : "ir",
-    "depthScale" : "/home/jstraub/data/surround3D/depthCalib_1402240016.png",
+    "depthScale" : "depthCalib_1402240016.png",
     "depthScaleVsDepthModel" : [-0.00404071, 1.00530972],
     "serialNumber" : "1402240016",
     "description" : "lower position on the rig",
