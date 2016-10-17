@@ -363,11 +363,18 @@ int main( int argc, char** argv)
 
     pangolin::Var<bool> add("ui.Add Frames", true, true);
 
-    pangolin::Var<bool> disp_thresh("ui.Display Thresh",false);
-    pangolin::Var<bool> disp_lines("ui.Display Lines",true);
-    pangolin::Var<bool> disp_cross("ui.Display crosses",true);
-    pangolin::Var<bool> disp_bbox("ui.Display bbox",true);
-    pangolin::Var<bool> disp_barcode("ui.Display barcode",false);
+    pangolin::Var<bool> disp_thresh("ui.Display Thresh",false,false);
+    pangolin::Var<bool> disp_lines("ui.Display Lines",true,false);
+    pangolin::Var<bool> disp_cross("ui.Display crosses",true,false);
+    pangolin::Var<bool> disp_bbox("ui.Display bbox",true,false);
+    pangolin::Var<bool> disp_barcode("ui.Display barcode",false,false);
+
+    pangolin::Var<bool> guiFixIntrinsics("ui.fix intrinsics",fix_intrinsics,false);
+    pangolin::Var<int> guiGridRows("ui.grid rows",grid_rows,0, 0);
+    pangolin::Var<int> guiGridCols("ui.grid cols",grid_cols,0, 0);
+    pangolin::Var<int> guiGridSeed("ui.grid cols",grid_seed,0, 0);
+
+    pangolin::Var<bool> calibrate("ui.calibrate",false,false);
 
     ////////////////////////////////////////////////////////////////////
     // Key shortcuts
@@ -389,7 +396,13 @@ int main( int argc, char** argv)
     ////////////////////////////////////////////////////////////////////
     // Main event loop
 
-    for(int frame=0; !pangolin::ShouldQuit();){
+    for(int frame=0; !pangolin::ShouldQuit();)false{
+
+      if (calibrate.GuiChanged() && calibrate)
+        calibrator.Start();
+      if (calibrate.GuiChanged() && !calibrate)
+        calibrator.Stop();
+
       const bool go = (frame==0) || run || pangolin::Pushed(step);
 
       int calib_frame = -1;
