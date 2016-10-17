@@ -34,7 +34,8 @@ void AssociateANN(
   int Nassoc = 0;
 //#pragma omp parallel for
   for (size_t j=0; j<pc_m.Area(); j+=100) {
-    for (size_t i=j; j<std::min(j+100,pc_m.Area()); ++j) {
+    for (size_t i=j; i<std::min(j+100,pc_m.Area()); ++i) {
+//    for (size_t i=0; i<pc_m.Area(); ++i) {
       if (i%stride == 0) {
         Vector3fda p_m_in_o = T_om*pc_m[i];
         if (IsValidData(p_m_in_o)) {
