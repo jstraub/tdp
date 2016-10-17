@@ -133,7 +133,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale("ui.depth scale",
+      rig.depthSensorUniformScale_[0],1e-4,1e-3);
+
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
@@ -144,6 +146,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
   pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
   pangolin::Var<bool> logScaleVsDist("ui.log scale vs dist",false,true);
+
 
   int grid_rows = 12;
   int grid_cols = 24;
@@ -156,7 +159,8 @@ int main( int argc, char* argv[] )
     grid_rows = 12;
     grid_cols = 16;
     grid_seed = 76;
-    grid_spacing = 0.0165;
+//    grid_spacing = 0.0165; // small target
+    grid_spacing = 0.03373; // large target
     depthSensorScale = 1e-4;
   }
 
@@ -280,6 +284,7 @@ int main( int argc, char* argv[] )
           }
           //avgDepth += scale[i]*d[i]/depthSensorScale;
           avgDepth += scale[i]*d[i]/depthSensorScale;
+          //avgScale += scale_i;
           avgScale += scale_i/scale[i];
           numScale ++;
         }

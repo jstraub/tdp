@@ -121,7 +121,12 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-4,1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale0("ui.depth scale0",
+      rig.depthSensorUniformScale_[0],1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale1("ui.depth scale1",
+      rig.depthSensorUniformScale_[1],1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale2("ui.depth scale2",
+      rig.depthSensorUniformScale_[2],1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
@@ -141,6 +146,9 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    rig.depthSensorUniformScale_[0] = depthSensorScale0;
+    rig.depthSensorUniformScale_[1] = depthSensorScale1;
+    rig.depthSensorUniformScale_[2] = depthSensorScale2;
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
     tdp::Vector3fda dGrid = gridE - grid0;
