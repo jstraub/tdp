@@ -33,6 +33,8 @@
 #include <tdp/camera/camera_poly.h>
 #include <tdp/utils/Stopwatch.h>
 
+#include <pangolin/video/drivers/realsense.h>
+
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
 
@@ -98,6 +100,11 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewN2D(w,h);
   gui.container().AddDisplay(viewN2D);
 
+  tdp::QuickView viewDebug1(640,480);
+  gui.container().AddDisplay(viewDebug1);
+  tdp::QuickView viewDebug2(640,480);
+  gui.container().AddDisplay(viewDebug2);
+
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
@@ -143,6 +150,15 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
+  pangolin::Var<int> ir0("ui.IR 0", 16,0,16);
+  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
+
+  pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
+  uint8_t buffer[640*480*(2+3)];
+
+  tdp::Image<uint16_t> _d(640,480,(uint16_t*)buffer);
+  tdp::Image<tdp::Vector3bda> _rgb(640,480,(tdp::Vector3bda*)&buffer[640*480*2]);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -156,10 +172,20 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
+    if (ir0.GuiChanged()) {
+      rs->SetPower(0,ir0);
+      std::cout << rs->GetCurrentPower(0) << std::endl;
+    }
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
-    // get next frames from the video source
+
+
+    if (pangolin::Pushed(grabOneFrame)) {
+      rs->GrabOne(0, buffer, 16);
+    } 
+      // get next frames from the video source
     gui.NextFrames();
 
     TICK("rgb collection");
@@ -221,6 +247,9 @@ int main( int argc, char* argv[] )
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
     }
+
+      viewDebug1.SetImage(_d);
+      viewDebug2.SetImage(_rgb);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
