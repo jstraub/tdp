@@ -11,8 +11,7 @@
 #include <gtsam/nonlinear/DoglegOptimizer.h>
 #include <gtsam/nonlinear/ISAM2.h>
 
-using namespace tdp;
-
+using namespace tdp; 
 TEST(setup, KeyframeSLAM) {
   ManagedHostImage<Vector3fda> dummyPc(1,1);
   ManagedHostImage<Vector3fda> dummyN(1,1);

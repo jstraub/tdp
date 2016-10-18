@@ -102,11 +102,24 @@ find_package (GTSAM QUIET)
 if (GTSAM_FOUND) 
   message("found GTSAM")
   message(${GTSAM_LIBS})
+  set(BOOST_LIBRARYDIR "/usr/lib/x86_64-linux-gnu")
   find_package(Boost REQUIRED serialization system filesystem thread program_options date_time timer chrono)
 
   include_directories(
     ${GTSAM_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
+    )
+endif()
+
+set(LIB_SEARCH_DIR "/home/jstraub/workspace/research/3rdparty/isam/")
+find_package (ISAM QUIET)
+if (ISAM_FOUND) 
+  message("found ISAM")
+  find_package(Cholmod REQUIRED)
+
+  include_directories(
+    ${ISAM_INCLUDE_DIR}
+    ${CHOLMOD_INCLUDES}
     )
 endif()
 

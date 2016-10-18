@@ -35,6 +35,19 @@ if (GTEST_FOUND)
       )
   endif()
 
+  if (ISAM_FOUND)
+    add_executable(testISAM isam.cpp)
+    target_link_libraries(testISAM
+      tdp 
+      ${ISAM_LIBRARY}
+      ${CHOLMOD_LIBRARIES}
+      ${GTEST_BOTH_LIBRARIES} 
+      pthread
+      ${ISAM_LIBRARIES}
+      )
+  endif()
+
+
   add_executable(testSO3 SO3.cpp)
   target_link_libraries(testSO3 tdp)
 
