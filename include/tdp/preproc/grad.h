@@ -17,6 +17,7 @@ void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     const Image<float>& cuD,
     const Image<Vector3fda>& cuN,
     const CameraBase<float,D,Derived>& cam,
+    float gradNormThr,
     Image<Vector3fda>& cuGrad3D);
 
 template<int D, typename Derived>
@@ -24,10 +25,11 @@ void Gradient3D(const Image<float>& cuI,
     const Image<float>& cuD,
     const Image<Vector3fda>& cuN,
     const CameraBase<float,D,Derived>& cam,
+    float gradNormThr,
     Image<float>& cuIu, Image<float>& cuIv,
     Image<Vector3fda>& cuGrad3D) {
   Gradient(cuI, cuIu, cuIv);
-  Gradient3D<D,Derived>(cuIu, cuIv, cuD, cuN, cam, cuGrad3D); 
+  Gradient3D<D,Derived>(cuIu, cuIv, cuD, cuN, cam, gradNormThr, cuGrad3D); 
 }
 
 }

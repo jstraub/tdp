@@ -34,6 +34,7 @@ void KernelGradient3D(Image<float> Iu, Image<float> Iv,
     Image<float> cuD,
     Image<Vector3fda> cuN,
     CameraBase<float,D,Derived> cam,
+    float gradNormThr,
     Image<Vector3fda> cuGrad3D) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -42,7 +43,9 @@ void KernelGradient3D(Image<float> Iu, Image<float> Iv,
     const float Ivi = Iv(idx,idy);
     const Vector3fda n = cuN(idx, idy);
     float d0 = cuD(idx,idy); 
-    if (!isNan(d0) && IsValidNormal(n)) {
+    float norm = sqrtf(Iui*Iui + Ivi*Ivi);
+    if (!isNan(d0) && IsValidNormal(n) && norm > gradNormThr) {
+
       //    const Vector3fda gradI(Iui, Ivi, 0.f);
       //    const Vector3fda grad3D = gradI - ((gradI.dot(n))/n.norm()) * n;
       //    cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
@@ -50,7 +53,7 @@ void KernelGradient3D(Image<float> Iu, Image<float> Iv,
       Vector3fda r1 = cam.Unproject(idx+Iui,idy+Ivi,1.f);
       float d1 = (r0.dot(n))/(r1.dot(n))*d0;
       const Vector3fda grad3D = r1*d1 - r0*d0;
-      cuGrad3D(idx, idy) = grad3D/grad3D.norm() * sqrtf(Iui*Iui + Ivi*Ivi);
+      cuGrad3D(idx, idy) = grad3D/grad3D.norm() * norm;
     } else {
       cuGrad3D(idx, idy)(0) = NAN;
       cuGrad3D(idx, idy)(1) = NAN;
@@ -64,11 +67,12 @@ void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     const Image<float>& cuD,
     const Image<Vector3fda>& cuN,
     const CameraBase<float,D,Derived>& cam,
+    float gradNormThr,
     Image<Vector3fda>& cuGrad3D) {
 
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,Iu,32,32);
-  KernelGradient3D<<<blocks,threads>>>(Iu,Iv,cuD,cuN,cam,cuGrad3D);
+  KernelGradient3D<<<blocks,threads>>>(Iu,Iv,cuD,cuN,cam,gradNormThr,cuGrad3D);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
@@ -77,6 +81,7 @@ void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     const Image<float>& cuD,
     const Image<Vector3fda>& cuN,
     const BaseCameraf& cam,
+    float gradNormThr,
     Image<Vector3fda>& cuGrad3D);
 
 template
@@ -84,6 +89,7 @@ void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     const Image<float>& cuD,
     const Image<Vector3fda>& cuN,
     const BaseCameraPoly3f& cam,
+    float gradNormThr,
     Image<Vector3fda>& cuGrad3D);
 
 }

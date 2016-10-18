@@ -229,7 +229,8 @@ int main( int argc, char* argv[] )
 
       cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
       tdp::Rgb2Grey(cuRgb,cuGrey);
-      tdp::Gradient3D(cuGrey, cuD, cuN, cam, cuGreydu, cuGreydv, cuGrad3D);
+      tdp::Gradient3D(cuGrey, cuD, cuN, cam, gradNormThr, cuGreydu,
+          cuGreydv, cuGrad3D);
       cuGrad3Ddir.CopyFrom(cuGrad3D, cudaMemcpyDeviceToDevice);
       tdp::RenormalizeSurfaceNormals(cuGrad3Ddir, gradNormThr);
       tdp::Normals2Image(cuGrad3Ddir, cuGrad3DdirImg);

@@ -73,6 +73,25 @@ void ICPStep (
     float& count
     );
 
+template<int D, typename Derived>
+void ICPStep (
+    Image<Vector3fda> pc_m,
+    Image<Vector3fda> n_m,
+    Image<Vector3fda> g_m,
+    Image<Vector3fda> pc_o,
+    Image<Vector3fda> n_o,
+    Image<Vector3fda> g_o,
+    const SE3f& T_mo, 
+    const SE3f& T_mc, 
+    const CameraBase<float,D,Derived>& cam,
+    float dotThr,
+    float distThr,
+    Eigen::Matrix<float,6,6,Eigen::DontAlign>& ATA,
+    Eigen::Matrix<float,6,1,Eigen::DontAlign>& ATb,
+    float& error,
+    float& count
+    );
+
 void ICPStep (
     Image<Vector3fda> pc_m,
     Image<Vector3fda> n_m,
@@ -127,6 +146,21 @@ class ICP {
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& pcs_o,
     Pyramid<Vector3fda,3>& ns_o,
+    SE3f& T_mo,
+    const SE3f& T_cm,
+    const CameraBase<float,D,Derived>& cam,
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    );
+
+  /// gs are the 3D gradients.
+  template<int D, typename Derived>
+  static void ComputeProjective(
+    Pyramid<Vector3fda,3>& pcs_m,
+    Pyramid<Vector3fda,3>& ns_m,
+    Pyramid<Vector3fda,3>& gs_m,
+    Pyramid<Vector3fda,3>& pcs_o,
+    Pyramid<Vector3fda,3>& ns_o,
+    Pyramid<Vector3fda,3>& gs_o,
     SE3f& T_mo,
     const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,

@@ -35,6 +35,8 @@
 #include <tdp/inertial/imu_factory.h>
 #include <tdp/inertial/imu_interpolator.h>
 #include <tdp/manifold/SO3.h>
+#include <tdp/preproc/grad.h>
+#include <tdp/preproc/grey.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -118,10 +120,17 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewN3D);
 
   tdp::ManagedHostImage<float> d(wc, hc);
-  tdp::ManagedHostImage<Eigen::Matrix<uint8_t,3,1>> n2D(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
-  tdp::ManagedHostImage<Eigen::Vector3f> n2Df(wc,hc);
-  tdp::ManagedHostImage<Eigen::Vector3f> n(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
+
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreydv(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreydu(wc,hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc,hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -147,6 +156,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_m(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_c(wc,hc);
   tdp::ManagedDeviceImage<float> cuICPassoc_m(wc, hc);
   tdp::ManagedDeviceImage<float> cuICPassoc_c(wc, hc);
   tdp::ManagedHostImage<float> ICPassoc_m(wc, hc);
@@ -179,6 +190,8 @@ int main( int argc, char* argv[] )
 
   tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewNormalsPyr);
+  tdp::QuickView viewGrad3DPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
+  gui.container().AddDisplay(viewGrad3DPyr);
 
   tdp::QuickView viewICPassocM(wc,hc);
   gui.container().AddDisplay(viewICPassocM);
@@ -223,6 +236,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
+
+  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
+  pangolin::Var<float> gradNormThr("ui.grad3d norm thr",1.,0.,10.);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
@@ -287,7 +303,16 @@ int main( int argc, char* argv[] )
       T_mo = T_mo_0;
       T_mo_prev = T_mo_0;
     }
+    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+    tdp::Vector3fda dGrid = gridE - grid0;
+    dGrid(0) /= (wTSDF-1);
+    dGrid(1) /= (hTSDF-1);
+    dGrid(2) /= (dTSDF-1);
 
+    if (icpGrad3D) {
+      runFusion = false; 
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -298,13 +323,6 @@ int main( int argc, char* argv[] )
     if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
     tdp::SE3f T_wr_imu = T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
-
-    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
-    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
-    tdp::Vector3fda dGrid = gridE - grid0;
-    dGrid(0) /= (wTSDF-1);
-    dGrid(1) /= (hTSDF-1);
-    dGrid(2) /= (dTSDF-1);
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
@@ -320,6 +338,15 @@ int main( int argc, char* argv[] )
     } else { 
       tdp::Depth2Normals(cuDPyr,camD,ns_c);
     }
+
+    if (!gui.ImageRGB(rgb,0)) continue;
+    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    tdp::Rgb2Grey(cuRgb,cuGrey);
+    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
+    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
+    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
+        cuGreydv, cuGs);
+    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
     if (icpImu && imu) 
@@ -336,8 +363,14 @@ int main( int argc, char* argv[] )
 //        std::cout << dTRot.matrix3x4() << std::endl;
 //      }
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-          camD, maxIt, icpAngleThr_deg, icpDistThr); 
+      if (!icpGrad3D) {
+        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
+            camD, maxIt, icpAngleThr_deg, icpDistThr); 
+      } else {
+        tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
+            gs_c, T_mo, tdp::SE3f(),
+            camD, maxIt, icpAngleThr_deg, icpDistThr); 
+      }
 //      if (icpRot && icpRotOverwrites) 
 //        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
       TOCK("ICP");
@@ -347,8 +380,8 @@ int main( int argc, char* argv[] )
       std::cout << "IMU : " << std::endl 
         << T_wr_imu * T_wr_imu_prev.Inverse() << std::endl;
     }
-      std::cout << "T_mo after ICP: " << std::endl 
-        << T_mo  << std::endl;
+    std::cout << "T_mo after ICP: " << std::endl 
+      << T_mo  << std::endl;
 
     if (showIcpError) {
       tdp::Image<tdp::Vector3fda> pc_m = pcs_m.GetImage(icpErrorLvl);
@@ -425,107 +458,113 @@ int main( int argc, char* argv[] )
 
     TICK("Draw 3D");
     // Render point cloud from viewpoint of origin
-    tdp::SE3f T_mv;
-    RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0, dGrid, tsdfMu); 
-    tdp::Depth2PCGpu(cuDView,camView,cuPcView);
+    if (showPcView) {
+      tdp::SE3f T_mv;
+      RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
+          dGrid, tsdfMu); 
+      tdp::Depth2PCGpu(cuDView,camView,cuPcView);
+    }
 
     glEnable(GL_DEPTH_TEST);
-    viewPc3D.Activate(s_cam);
+    if (viewPc3D.IsShown()) {
+      viewPc3D.Activate(s_cam);
 
-    Eigen::AlignedBox3f box(grid0,gridE);
-    glColor4f(1,0,0,0.5f);
-    pangolin::glDrawAlignedBox(box);
+      Eigen::AlignedBox3f box(grid0,gridE);
+      glColor4f(1,0,0,0.5f);
+      pangolin::glDrawAlignedBox(box);
 
-    // imu
-    pangolin::glSetFrameOfReference(T_wr_imu.matrix());
-    pangolin::glDrawAxis(0.2f);
-    pangolin::glUnsetFrameOfReference();
+      // imu
+      pangolin::glSetFrameOfReference(T_wr_imu.matrix());
+      pangolin::glDrawAxis(0.2f);
+      pangolin::glUnsetFrameOfReference();
 
-    // render global view of the model first
-    pangolin::glDrawAxis(0.1f);
-    if (showPcView) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+      // render global view of the model first
+      pangolin::glDrawAxis(0.1f);
+      if (showPcView) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(0,0,1);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(0,0,1);
-      pangolin::RenderVbo(cuPcbuf);
-    }
-    // render model and observed point cloud
-    if (showPcModel) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(icpErrorLvl);
-        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+      // render model and observed point cloud
+      if (showPcModel) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = pcs_m.GetImage(icpErrorLvl);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(0,1,0);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(0,1,0);
-      pangolin::RenderVbo(cuPcbuf);
-    }
-    pangolin::glSetFrameOfReference(T_mo.matrix());
-    // render current camera second in the propper frame of
-    // reference
-    pangolin::glDrawAxis(0.1f);
-    if (showPcCurrent) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(icpErrorLvl);
-        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+      pangolin::glSetFrameOfReference(T_mo.matrix());
+      // render current camera second in the propper frame of
+      // reference
+      pangolin::glDrawAxis(0.1f);
+      if (showPcCurrent) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(icpErrorLvl);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(1,0,0);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(1,0,0);
-      pangolin::RenderVbo(cuPcbuf);
+      pangolin::glUnsetFrameOfReference();
     }
-    pangolin::glUnsetFrameOfReference();
 
-
-    viewN3D.Activate(s_cam);
-    // render global view of the model first
-    pangolin::glDrawAxis(0.1f);
-    if (showPcView) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        cudaMemcpy(*cuPcbufp, nEstdummy.ptr_, nEstdummy.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+    if (viewN3D.IsShown()) {
+      viewN3D.Activate(s_cam);
+      // render global view of the model first
+      pangolin::glDrawAxis(0.1f);
+      if (showPcView) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          cudaMemcpy(*cuPcbufp, nEstdummy.ptr_, nEstdummy.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(0,0,1);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(0,0,1);
-      pangolin::RenderVbo(cuPcbuf);
-    }
-    // render model and observed point cloud
-    if (showPcModel) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        tdp::Image<tdp::Vector3fda> pc0 = ns_m.GetImage(icpErrorLvl);
-        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+      // render model and observed point cloud
+      if (showPcModel) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = ns_m.GetImage(icpErrorLvl);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(0,1,0);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(0,1,0);
-      pangolin::RenderVbo(cuPcbuf);
-    }
-    Eigen::Matrix4f R_mo = T_mo.matrix();
-    R_mo.topRightCorner(3,1).fill(0.);
-    pangolin::glSetFrameOfReference(R_mo);
-    // render current camera second in the propper frame of
-    // reference
-    pangolin::glDrawAxis(0.1f);
-    if (showPcCurrent) {
-      {
-        pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-        cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-        tdp::Image<tdp::Vector3fda> pc0 = ns_c.GetImage(icpErrorLvl);
-        cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-            cudaMemcpyDeviceToDevice);
+      Eigen::Matrix4f R_mo = T_mo.matrix();
+      R_mo.topRightCorner(3,1).fill(0.);
+      pangolin::glSetFrameOfReference(R_mo);
+      // render current camera second in the propper frame of
+      // reference
+      pangolin::glDrawAxis(0.1f);
+      if (showPcCurrent) {
+        {
+          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
+          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
+          tdp::Image<tdp::Vector3fda> pc0 = ns_c.GetImage(icpErrorLvl);
+          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
+              cudaMemcpyDeviceToDevice);
+        }
+        glColor3f(1,0,0);
+        pangolin::RenderVbo(cuPcbuf);
       }
-      glColor3f(1,0,0);
-      pangolin::RenderVbo(cuPcbuf);
+      pangolin::glUnsetFrameOfReference();
     }
-    pangolin::glUnsetFrameOfReference();
     TOCK("Draw 3D");
 
     TICK("Draw 2D");
@@ -533,43 +572,63 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
     gui.ShowFrames();
 
-    tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
-    viewTsdfDEst.SetImage(tsdfDEst);
-
-    tdp::Image<tdp::TSDFval> cuTsdfSlice =
-      cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
-    tdp::ManagedHostImage<tdp::TSDFval> tsdfSliceRaw(cuTsdfSlice.w_, 
-        cuTsdfSlice.h_);
-    tsdfSliceRaw.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
-    for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
-      tsdfSlice[i] = tsdfSliceRaw[i].f;
-    viewTsdfSliveView.SetImage(tsdfSlice);
-
-    if (dispDepthPyrEst) {
-      tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,
-          cudaMemcpyDeviceToHost);
-    } else {
-      tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
-          cudaMemcpyDeviceToHost);
+    if (viewTsdfDEst.IsShown()) {
+      tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
+      viewTsdfDEst.SetImage(tsdfDEst);
     }
-    viewDepthPyr.SetImage(dispDepthPyr);
 
-    if (dispNormalsPyrEst) {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
-    } else {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
+    if (viewTsdfSliveView.IsShown()) {
+      tdp::Image<tdp::TSDFval> cuTsdfSlice =
+        cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
+      tdp::ManagedHostImage<tdp::TSDFval> tsdfSliceRaw(cuTsdfSlice.w_, 
+          cuTsdfSlice.h_);
+      tsdfSliceRaw.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+      for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
+        tsdfSlice[i] = tsdfSliceRaw[i].f;
+      viewTsdfSliveView.SetImage(tsdfSlice);
     }
-    tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-    dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
-    viewNormalsPyr.SetImage(dispNormals2dPyr);
+
+    if (viewDepthPyr.IsShown()) {
+      if (dispDepthPyrEst) {
+        tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,
+            cudaMemcpyDeviceToHost);
+      } else {
+        tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
+            cudaMemcpyDeviceToHost);
+      }
+      viewDepthPyr.SetImage(dispDepthPyr);
+    }
+
+    if (viewNormalsPyr.IsShown()) {
+      if (dispNormalsPyrEst) {
+        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,
+            cudaMemcpyDeviceToDevice);
+      } else {
+        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,
+            cudaMemcpyDeviceToDevice);
+      }
+      tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
+      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+      viewNormalsPyr.SetImage(dispNormals2dPyr);
+    }
+    if (viewGrad3DPyr.IsShown()) {
+      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr,
+          cudaMemcpyDeviceToDevice);
+      tdp::RenormalizeSurfaceNormals(cuDispNormalsPyr, 1e-3);
+      tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
+      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+      viewGrad3DPyr.SetImage(dispNormals2dPyr);
+    }
 
     if (showIcpError) {
-      ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
-      ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
-      viewICPassocM.SetImage(ICPassoc_m);
-      viewICPassocC.SetImage(ICPassoc_c);
+      if (viewICPassocM.IsShown()) {
+        ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
+        viewICPassocM.SetImage(ICPassoc_m);
+      }
+      if (viewICPassocC.IsShown()) {
+        ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
+        viewICPassocC.SetImage(ICPassoc_c);
+      }
     }
 
     if (viewPcErr.IsShown()) {
@@ -583,7 +642,6 @@ int main( int argc, char* argv[] )
       angErr.CopyFrom(cuAngErr, cudaMemcpyDeviceToHost);
       viewAngErr.SetImage(angErr);
     }
-
     TOCK("Draw 2D");
 
     if (!runFusion) {
@@ -591,11 +649,14 @@ int main( int argc, char* argv[] )
       for (size_t lvl=0; lvl<3; ++lvl) {
         tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
         tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);
+        tdp::Image<tdp::Vector3fda> g = gs_c.GetImage(lvl);
         tdp::TransformPc(T_mo, pc);
         tdp::TransformPc(R_mo, n);
+        tdp::TransformPc(R_mo, g);
       }
       pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
       ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
+      gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
     }
     if (!gui.paused()) {
       T_wr_imu_prev = T_wr_imu;
