@@ -1,0 +1,126 @@
+[
+{
+  "camera":{
+    "model" : {
+      "type" : "poly3",
+      "fu" : 604.6687, 
+      "fv" : 605.6548,
+      "uc" : 311.413,
+      "vc" : 244.8874,
+      "distortion" : [0.1222235,-0.1980609, -0.1737873]
+    },
+    "type" : "rgb",
+    "serialNumber" : "552206000285",
+    "description" : "left position on the rig",
+    "T_rc" : {
+      "R_3x3" : [1, 0, 0, 0, 1, 0, 0, 0, 1], 
+      "t_xyz" : [0, 0, 0 ] 
+    }
+  }
+},
+{
+  "camera":{
+    "model" : {
+      "type" : "poly3",
+      "fu" : 604.6687, 
+      "fv" : 605.6548,
+      "uc" : 311.413,
+      "vc" : 244.8874,
+      "distortion" : [0.1222235,-0.1980609, -0.1737873]
+    },
+    "type" : "ir",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "depthCalib_552206000285.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
+    "serialNumber" : "552206000285",
+    "description" : "left position on the rig",
+    "T_rc" : {
+      "R_3x3" : [1, 0, 0, 0, 1, 0, 0, 0, 1], 
+      "t_xyz" : [0, 0, 0 ] 
+    }
+  }
+},
+{
+  "camera" : {
+    "model":{
+      "type" : "poly3",
+      "fu" : 607.8355,
+      "fv" : 607.1657,
+      "uc" : 311.2021,
+      "vc" : 233.0842,
+      "distortion" : [0.1408012,-0.2478766,-0.1354085]
+    },
+    "type" : "rgb",
+    "serialNumber" : "552206001889",
+    "description" : "bottom position on the rig",
+    "T_rc" : {
+      "R_3x3" : [ 0.01501238, -0.9970717, 0.0749845,-0.480686, 0.05856182, 0.8749351,-0.8767643, -0.04917886, -0.4783993],
+      "t_xyz" : [-0.02614841,-0.8813056,1.216582 ] 
+    }
+  }
+},
+{
+  "camera" : {
+    "model":{
+      "type" : "poly3",
+      "fu" : 607.8355,
+      "fv" : 607.1657,
+      "uc" : 311.2021,
+      "vc" : 233.0842,
+      "distortion" : [0.1408012,-0.2478766,-0.1354085]
+    },
+    "type" : "ir",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "depthCalib_552206001889.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
+    "serialNumber" : "552206001889",
+    "description" : "bottom position on the rig",
+    "T_rc" : {
+      "R_3x3" : [ 0.01501238, -0.9970717, 0.0749845,-0.480686, 0.05856182, 0.8749351,-0.8767643, -0.04917886, -0.4783993],
+      "t_xyz" : [-0.02614841,-0.8813056,1.216582 ] 
+    }
+  }
+},
+{
+  "camera" : {
+    "model":{
+      "type" : "poly3",
+      "fu" : 602.9402,
+      "fv" : 603.4058,
+      "uc" : 315.0801,
+      "vc" : 240.4757,
+      "distortion" : [0.1301081, -0.3398103, 0.1587851 ]
+    },
+    "type" : "rgb",
+    "serialNumber" : "616203001754",
+    "description" : "right position on the rig",
+    "T_rc" : {
+      "R_3x3" : [-0.998806, 0.01366255, 0.04690362,-0.03097754, 0.5652744, -0.8243211,  -0.03777574, -0.8247898, -0.5641762 ],
+      "t_xyz" : [-0.07548064,0.7018528, 1.192513]
+    }
+  }
+},
+{
+  "camera" : {
+    "model":{
+      "type" : "poly3",
+      "fu" : 602.9402,
+      "fv" : 603.4058,
+      "uc" : 315.0801,
+      "vc" : 240.4757,
+      "distortion" : [0.1301081, -0.3398103, 0.1587851 ]
+    },
+    "type" : "ir",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScale" : "depthCalib_616203001754.png",
+    "depthScaleVsDepthModel" : [0.0, 1.0],
+    "serialNumber" : "616203001754",
+    "description" : "right position on the rig",
+    "T_rc" : {
+      "R_3x3" : [-0.998806, 0.01366255, 0.04690362,-0.03097754, 0.5652744, -0.8243211,  -0.03777574, -0.8247898, -0.5641762 ],
+      "t_xyz" : [-0.07548064,0.7018528, 1.192513]
+    }
+  }
+},
+]
+
