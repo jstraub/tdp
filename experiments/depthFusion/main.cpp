@@ -294,6 +294,7 @@ int main( int argc, char* argv[] )
         }
       });
 
+  std::vector<tdp::SE3f> T_mos;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -382,6 +383,7 @@ int main( int argc, char* argv[] )
     }
     std::cout << "T_mo after ICP: " << std::endl 
       << T_mo  << std::endl;
+    T_mos.push_back(T_mo);
 
     if (showIcpError) {
       tdp::Image<tdp::Vector3fda> pc_m = pcs_m.GetImage(icpErrorLvl);
@@ -478,6 +480,9 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAxis(0.2f);
       pangolin::glUnsetFrameOfReference();
 
+      for (auto& T_moi : T_mos) 
+        pangolin::glDrawAxis(T_moi.matrix(),0.1f);
+
       // render global view of the model first
       pangolin::glDrawAxis(0.1f);
       if (showPcView) {
@@ -502,10 +507,9 @@ int main( int argc, char* argv[] )
         glColor3f(0,1,0);
         pangolin::RenderVbo(cuPcbuf);
       }
-      pangolin::glSetFrameOfReference(T_mo.matrix());
       // render current camera second in the propper frame of
       // reference
-      pangolin::glDrawAxis(0.1f);
+      pangolin::glSetFrameOfReference(T_mo.matrix());
       if (showPcCurrent) {
         {
           pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
