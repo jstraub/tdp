@@ -76,7 +76,7 @@ TEST(setup, isam) {
   slam.add_factor(odo2);
 
   // optimize
-  slam.batch_optimization();
+  slam.update();
   std::cout << "After optimization:" << std::endl;
   std::cout << pose0->value() << std::endl;
   std::cout << pose1->value() << std::endl;

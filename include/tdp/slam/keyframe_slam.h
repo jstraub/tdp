@@ -16,8 +16,8 @@ class KeyframeSLAM {
   { 
     isam::Properties props;
     props.verbose=true;
+    //props.method=isam::Method::LEVENBERG_MARQUARDT;
     props.method=isam::Method::GAUSS_NEWTON;
-    props.method=isam::Method::LEVENBERG_MARQUARDT;
     props.epsilon_rel = 1e-6;
     props.epsilon_abs = 1e-6;
     slam_.set_properties(props); 
@@ -87,6 +87,14 @@ class KeyframeSLAM {
     
     std::cout << "after iterations" << std::endl;
     PrintValues();
+  }
+
+  size_t size() { return T_wk_.size(); }
+  SE3f GetPose(size_t i) {
+    if (i<size()) {
+      return SE3f(T_wk_[i]->value().wTo().cast<float>());
+    } 
+    return SE3f(); 
   }
 
  private:

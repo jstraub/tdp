@@ -24,16 +24,16 @@ if (GTEST_FOUND)
     target_link_libraries(testANN tdp ${GTEST_BOTH_LIBRARIES} pthread)
   endif()
 
-  if (GTSAM_FOUND)
-    add_executable(testKfSLAM keyframe_slam.cpp)
-    target_link_libraries(testKfSLAM 
-      tdp 
-      ${GTEST_BOTH_LIBRARIES} 
-      pthread
-      ${GTSAM_LIBS}
-      ${Boost_LIBRARIES}
-      )
-  endif()
+#  if (GTSAM_FOUND)
+#    add_executable(testKfSLAM keyframe_slam.cpp)
+#    target_link_libraries(testKfSLAM 
+#      tdp 
+#      ${GTEST_BOTH_LIBRARIES} 
+#      pthread
+#      ${GTSAM_LIBS}
+#      ${Boost_LIBRARIES}
+#      )
+#  endif()
 
   if (ISAM_FOUND)
     add_executable(testISAM isam.cpp)

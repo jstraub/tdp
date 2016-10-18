@@ -599,6 +599,20 @@ int main( int argc, char* argv[] )
               T_wk_B.translation()(0), T_wk_B.translation()(1),
               T_wk_B.translation()(2));
         }
+        for (size_t i=0; i<kfSLAM.size(); ++i) {
+          tdp::SE3f T_wk = kfSLAM.GetPose(i);
+          pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
+        }
+        glColor4f(0.,1.0,1.0,0.6);
+        for (auto& it : loopClosures) {
+          tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first.first);
+          tdp::SE3f T_wk_B = kfSLAM.GetPose(it.first.second);
+          pangolin::glDrawLine(
+              T_wk_A.translation()(0), T_wk_A.translation()(1),
+              T_wk_A.translation()(2),
+              T_wk_B.translation()(0), T_wk_B.translation()(1),
+              T_wk_B.translation()(2));
+        }
       }
 
       Eigen::AlignedBox3f box(grid0,gridE);

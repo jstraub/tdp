@@ -11,6 +11,7 @@ add_executable(${ProjName}
 
 target_link_libraries(${ProjName}
   tdp 
-  ${GTSAM_LIBS}
+  ${ISAM_LIBRARY}
+  ${CHOLMOD_LIBRARIES}
   ${Boost_LIBRARIES}
   )
