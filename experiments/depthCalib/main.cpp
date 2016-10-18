@@ -142,6 +142,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> estimateScale("ui.est scale",true,true);
   pangolin::Var<bool> applyScale("ui.apply scale",true,true);
   pangolin::Var<bool> resetScale("ui.reset scale est",false,false);
+  pangolin::Var<bool> loadScale("ui.load scale est",false,false);
   pangolin::Var<int> patchBoundary("ui.patch boundary",3,0,10);
   pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
   pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
@@ -178,14 +179,8 @@ int main( int argc, char* argv[] )
   image_processing.Params().at_window_ratio = 30.0;
 
   std::vector<tdp::SE3f> T_hws;
-  
-  if (rig.cuDepthScales_.size() > rig.rgbdStream2cam_[0]) {
-    scale.CopyFrom(rig.cuDepthScales_[rig.rgbdStream2cam_[0]], cudaMemcpyDeviceToHost);
-    scaleN.Fill(100.f);
-  } else {
-    resetScale = true;
-  }
 
+  resetScale = true;
   std::ofstream log;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -193,6 +188,13 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(resetScale)) {
       scale.Fill(depthSensorScale);
       scaleN.Fill(0.);
+    }
+    if (pangolin::Pushed(loadScale)) {
+      if (rig.cuDepthScales_.size() > rig.rgbdStream2cam_[0]) {
+        scale.CopyFrom(rig.cuDepthScales_[rig.rgbdStream2cam_[0]], cudaMemcpyDeviceToHost);
+        scaleN.Fill(1.f);
+        std::cout << "loaded scale from file" << std::endl;
+      }
     }
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
