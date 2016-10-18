@@ -16,10 +16,17 @@ file(GLOB SRCS
   "./marching_cubes/*cpp"
   "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
-  "./bb/*cpp"
   "./gl/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
+
+file(GLOB BB_SRCS
+  "./bb/*cpp"
+  )
+
+if (BUILD_BB) 
+  list(APPEND BB_SRCS)
+endif()
 
 if (ASIO_FOUND)
   list(APPEND SRCS "./drivers/inertial/3dmgx3_45.cpp")

@@ -54,6 +54,7 @@ endif()
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
+option(BUILD_BB "Build Branch&Bound" OFF)
 
 find_package(Pangolin REQUIRED)
 message(${Pangolin_DIR}/include)
