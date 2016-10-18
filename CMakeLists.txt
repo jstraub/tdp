@@ -39,7 +39,7 @@ if (CUDA_FOUND)
 
   set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
 
-  list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__;-relaxed-constexpr")
+  list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__;")
 
   if (CUDA_DEBUG)
     list(APPEND CUDA_NVCC_FLAGS " -g -G ")
@@ -47,11 +47,14 @@ if (CUDA_FOUND)
 
   include_directories(${CUDA_TOOLKIT_INCLUDE})
   #add_definitions(-DCUDA_FOUND)
-  if (${CUDA_VERSION} LESS 8.0)
+  if (${CUDA_VERSION} LESS 7.0)
+    message("CUDA below 7.0")
+    list(APPEND CUDA_NVCC_FLAGS ";-std=c++11; -relaxed-constexpr")
+  elseif (${CUDA_VERSION} LESS 8.0)
     message("CUDA below 8.0")
-    list(APPEND CUDA_NVCC_FLAGS ";-std=c++11")
+    list(APPEND CUDA_NVCC_FLAGS ";-std=c++11; -expt-relaxed-constexpr")
   else()
-    list(APPEND CUDA_NVCC_FLAGS ";-gencode arch=compute_61,code=sm_61")
+    list(APPEND CUDA_NVCC_FLAGS ";-gencode arch=compute_61,code=sm_61; -expt-relaxed-constexpr")
   endif()
 endif()
 
