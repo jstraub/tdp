@@ -146,7 +146,7 @@ Eigen::Matrix<T,3,3> SO3<T>::G(uint32_t i) {
     return G2();
   else if (i==2)
     return G3();
-  std::cout << "not a valid Generator id" << std::endl;
+  std::cout << "not a valid Generator id " << i << std::endl;
   return Eigen::Matrix<T,3,3>::Zero();
 }
 
