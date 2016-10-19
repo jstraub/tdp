@@ -62,7 +62,7 @@ class Image {
   }
 
   TDP_HOST_DEVICE
-  T GetBilinear(float x, float y) {
+  T GetBilinear(float x, float y) const {
     int xl = std::max(0,(int)std::floor(x-0.5f));
     int xr = std::min((int)w_-1,(int)std::floor(x+0.5f));
     int yu = std::max(0,(int)std::floor(y-0.5f));

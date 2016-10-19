@@ -39,6 +39,14 @@ class Pyramid {
     : w_(w), h_(h), ptr_(ptr)
   {}
 
+  const Image<T> GetConstImage(int lvl) const {
+    if (lvl < LEVELS) {
+      return Image<T>(Width(lvl),Height(lvl),ptr_+NumElemsToLvl(lvl));
+    }
+    assert(false);
+    return Image<T>(0,0,nullptr);
+  }
+
   Image<T> GetImage(int lvl) {
     if (lvl < LEVELS) {
       return Image<T>(Width(lvl),Height(lvl),ptr_+NumElemsToLvl(lvl));
