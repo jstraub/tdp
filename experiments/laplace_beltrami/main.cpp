@@ -29,6 +29,7 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/gui/gui.hpp>
 #include <tdp/nn/ann.h>
+#include <tdp/manifold/S.h>
 
 #include <iostream>
 #include <cmath>
@@ -207,26 +208,30 @@ std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedHostImage<tdp::Vector3fd
 return means;
 }
 
-int main( int argc, char* argv[] ){
-  tdp::ANN ann();
- // ann.ComputeKDtree(getSimplePc());
-  std::cout << "good evening, maybe?" << std::endl;
-  if (argc < 2){
-      std::cout << "Must input two plyfile paths!" << std::endl;
-      return -1;
-  }
-  //todo: send the points to draw with opengl
-  const std::string inputA = std::string(argv[1]);
-  const std::string inputB = std::string(argv[2]);
-  test_with_pc(inputA, inputB);
-  std::cout << "inputA, B: " << inputA << ", " << inputB << std::endl;
-  std::cout << "argc: " << argc << std::endl;
-  const std::string option = (argc > 3) ? std::string(argv[3]) : "";
+void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
+{
+    for (size_t i=0; i<pc.w_; ++i) {
+       pc[i] = tdp::S3f::Random().vector();
+    }
+}
 
-  bool runOnce = false;
-  if (!option.compare("-1")) {
-    runOnce = true;
+int main( int argc, char* argv[] ){
+
+  // load pc and normal from the input paths
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns(1000,1);
+
+  if (argc > 1) {
+      //todo: send the points to draw with opengl
+      const std::string input = std::string(argv[1]);
+      std::cout << "input " << input << std::endl;
+      std::cout << "argc: " << argc << std::endl;
+      tdp::LoadPointCloud(input, pc, ns);
+  } else {
+      GetSphericalPc(pc);
   }
+
+  tdp::ANN ann;
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
@@ -255,38 +260,28 @@ int main( int argc, char* argv[] ){
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewN);
 
-  // load pc and normal from the input paths
-  tdp::ManagedHostImage<tdp::Vector3fda> pcA, pcB;
-  tdp::ManagedHostImage<tdp::Vector3fda> nsA, nsB;
-  tdp::LoadPointCloud(inputA, pcA, nsA);
-  tdp::LoadPointCloud(inputB, pcB, nsB);
-
   // use those OpenGL buffers
-  pangolin::GlBuffer vboA, vboB, vboM;
-  vboA.Reinitialise(pangolin::GlArrayBuffer, pcA.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
-  vboB.Reinitialise(pangolin::GlArrayBuffer, pcB.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
+  pangolin::GlBuffer vbo, vboM;
+  vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
-  std::cout << "Vboxa: " << vboA.num_elements << std::endl;
-  std::cout << "Vboxb: " << vboB.num_elements << std::endl;
   // Add variables to pangolin GUI
   pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
+  pangolin::Var<int> knn("ui.knn", 10,1,100);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (runOnce) break;
     if (pangolin::Pushed(runSkinning)) {
-      //  processing of PC for skinning
-      glColor3f(1.0f, 1.0f, 1.0f);
+        //  processing of PC for skinning
 
       std::cout << "Running skinning..." << std::endl;
       int nSteps = 10;
-      std::vector<tdp::Vector3fda> means = getMeans(pcA,nSteps);
+      std::vector<tdp::Vector3fda> means = getMeans(pc,nSteps);
       size_t nMeans= means.size();
       std::cout << "number of means (should be 2*nsteps + 1):" << nMeans << std::endl;
 
@@ -310,11 +305,7 @@ int main( int argc, char* argv[] ){
       glPointSize(1.);
       // draw the first arm pc
       glColor3f(1.0f, 0.0f, 0.0f);
-      pangolin::RenderVbo(vboA);
-
-      // draw the second arm pc
-      glColor3f(0., 1., 0.);
-      pangolin::RenderVbo(vboB);
+      pangolin::RenderVbo(vbo);
     }
 
     glDisable(GL_DEPTH_TEST);
