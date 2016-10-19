@@ -142,7 +142,12 @@ void ICP::ComputeProjective(
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
-      int rank = ATA.cast<double>().jacobiSvd().rank();
+
+      Eigen::JacobiSVD<Eigen::Matrix<float,6,6>> svd(ATA);
+      int rank = svd.rank();
+      Eigen::Matrix<float,6,1> e = svd.singularValues();
+      // condition number
+      float kappa = e.maxCoeff() / e.minCoeff();
       
       if (rank < 6) {
         std::cout << "ATA in ICP is rank deficient: " << rank << std::endl;
@@ -155,6 +160,8 @@ void ICP::ComputeProjective(
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
         << " rank(ATA): " << rank
+        << " kappa(ATA): " << kappa
+//        << " singulars(ATA): " << e.transpose()
         << " det(R): " << T_mo.rotation().matrix().determinant()
         << " |x|: " << x.topRows(3).norm()*180./M_PI 
         << " " <<  x.bottomRows(3).norm()
