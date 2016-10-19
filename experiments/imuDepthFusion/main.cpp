@@ -269,7 +269,7 @@ int main( int argc, char* argv[] )
   noiseModel::Diagonal::shared_ptr velocity_noise_model = 
     noiseModel::Isotropic::Sigma(3,0.1); // m/s
   noiseModel::Diagonal::shared_ptr bias_noise_model = 
-    noiseModel::Isotropic::Sigma(6,1e-3);
+    noiseModel::Isotropic::Sigma(6,1e-2);
 
   // Add all prior factors (pose, velocity, bias) to the graph.
   NonlinearFactorGraph *graph = new NonlinearFactorGraph();
