@@ -54,7 +54,7 @@ if (CUDA_FOUND)
     message("CUDA below 8.0")
     list(APPEND CUDA_NVCC_FLAGS ";-std=c++11; -expt-relaxed-constexpr")
   else()
-    list(APPEND CUDA_NVCC_FLAGS ";-gencode arch=compute_61,code=sm_61; -expt-relaxed-constexpr")
+    list(APPEND CUDA_NVCC_FLAGS ";-std=c++11; -gencode arch=compute_61,code=sm_61; -expt-relaxed-constexpr")
   endif()
 endif()
 
