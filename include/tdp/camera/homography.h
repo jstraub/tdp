@@ -24,6 +24,19 @@ class Homography : public SL3<T> {
 typedef Homography<float> Homographyf;
 typedef Homography<double> Homographyd;
 
+template <typename Ti, typename Th>
+void Transform(const Image<Ti>& in, const Homography<Th>& H, Image<Ti>& out) {
+  float x,y;
+  for (int u=0; u<out.w_; ++u) {
+    for (int v=0; v<out.h_; ++v) {
+      H.Transform(u,v,x,y);
+      if (in.Inside(x,y)) {
+        out(u,v) = in.GetBilinear(x,y);
+      }
+    }
+  }
+}
+
 template<typename T>
 Homography<T>::Homography() : SL3<T>()
 {}
