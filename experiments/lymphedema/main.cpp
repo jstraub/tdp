@@ -150,8 +150,10 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
-  pangolin::Var<int> ir0("ui.IR 0", 16,0,16);
-  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
+  pangolin::Var<int> ir("ui.IR", 16,0,16);
+//  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
+  pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
+  pangolin::Var<int> rotatingDepthScanIrPower("ui.IR power", 16,0,16);
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+3)];
@@ -172,30 +174,53 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
-    if (ir0.GuiChanged()) {
-      rs->SetPower(0,ir0);
-      std::cout << rs->GetCurrentPower(0) << std::endl;
+    if (rotatingDepthScan.GuiChanged() && rotatingDepthScan) {
+      ir = 0;
+    }
+    if (ir.GuiChanged()) {
+      rs->SetPowers(ir);
     }
 
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-
-    if (pangolin::Pushed(grabOneFrame)) {
-      rs->GrabOne(0, buffer, 16);
-    } 
+    if (rotatingDepthScan) {
+      TICK("rgbd collection");
+      cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+      for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+        // grab one frame 
+        rs->GrabOne(sId, buffer, rotatingDepthScanIrPower);
+        int32_t cId = rgbdStream2cam_[sId]; 
+        Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
+        tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
+            wSingle, hSingle);
+        rgb_i.CopyFrom(_rgb,type);
+        cuDraw_i.CopyFrom(_d,cudaMemcpyHostToDevice);
+        // convert depth image from uint16_t to float [m]
+        tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
+        if (rig.cuDepthScales_.size() > cId) {
+          tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.cuDepthScales_[cId], 
+              rig.scaleVsDepths_[cId](0), rig.scaleVsDepths_[cId](1), dMin, dMax);
+        } else if (depthSensorUniformScale_.size() > cId) {
+          tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.depthSensorUniformScale_[cId], dMin, dMax);
+        } else {
+          std::cout << "Warning no scale information found" << std::endl;
+        }
+      }
+      TOCK("rgbd collection");
+    } else {
       // get next frames from the video source
-    gui.NextFrames();
-
-    TICK("rgb collection");
-    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
-    TOCK("rgb collection");
-    TICK("depth collection");
-    int64_t t_host_us_d = 0;
-    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
-    rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
-    TOCK("depth collection");
+      gui.NextFrames();
+      TICK("rgb collection");
+      rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
+      TOCK("rgb collection");
+      TICK("depth collection");
+      int64_t t_host_us_d = 0;
+      cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+      rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+      TOCK("depth collection");
+    }
     TICK("pc and normals");
     rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
     rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
@@ -247,9 +272,6 @@ int main( int argc, char* argv[] )
       n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
     }
-
-      viewDebug1.SetImage(_d);
-      viewDebug2.SetImage(_rgb);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
