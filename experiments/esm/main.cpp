@@ -74,6 +74,8 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewGreyDu);
   tdp::QuickView viewGreyDv(3*w/2,h);
   gui.container().AddDisplay(viewGreyDv);
+  tdp::QuickView viewGrey_m(3*w/2,h);
+  gui.container().AddDisplay(viewGrey_m);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -85,6 +87,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> grey(3*w/2, h);
   tdp::ManagedHostImage<float> greydu(3*w/2, h);
   tdp::ManagedHostImage<float> greydv(3*w/2, h);
+  tdp::ManagedHostImage<float> grey_m(w, h);
+  tdp::ManagedHostImage<float> greyVis_m(3*w/2, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -117,9 +121,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
+  pangolin::Var<bool> randomH("ui.random H",false,true);
   pangolin::Var<bool> estimateH("ui.estimate H",false,false);
 
+  tdp::SL3<float> H_rand = tdp::SL3<float>::Random();
   tdp::SL3<float> H;
+  Eigen::Matrix3f Kinv = cam.GetKinv();
+  Eigen::Matrix3f K = cam.GetK();
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -152,17 +160,41 @@ int main( int argc, char* argv[] )
     pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
     pyrGreydu.CopyFrom(cuPyrGreydu, cudaMemcpyDeviceToHost);
     pyrGreydv.CopyFrom(cuPyrGreydv, cudaMemcpyDeviceToHost);
+    
+    if (randomH) {
+      H_rand = tdp::SL3<float>::Random();
+      tdp::Transform(grey_c, H_rand, grey_m);
+      tdp::ConstructPyramidFromImage(grey_m, cuPyrGrey_m,
+          cudaMemcpyHostToDevice);
+      tdp::Gradient(cuPyrGrey_m.GetImage(0), cuGreydu_m.GetImage(0),
+          cuGreydv_m.GetImage(0));
+      tdp::CompletePyramid(cuGreydu_m);
+      tdp::CompletePyramid(cuGreydv_m);
+    }
 
     if (gui.frame > 1 && pangolin::Pushed(estimateH)) {
-      H = tdp::SL3<float>();
+      tdp::SL3<float> G;
       tdp::ESM::EstimateHomography(
           pyrGrey_m, pyrGreydu_m, pyrGreydv_m,
           pyrGrey, pyrGreydu, pyrGreydv,
-          H);
-      tdp::SE3f dT;
-      Eigen::Vector3f n;
-      tdp::Homography<float>(H.matrix()).ToPoseAndNormal(dT, n);
+          G);
+
+      H = tdp::SL3<float>(Kinv * G.matrix() * K);
+      
+      Eigen::Vector3f m(0,0,1.);
+      Eigen::Vector3f dt = - (H.matrix() - Eigen::Matrix3f::Identity())*m;
+      Eigen::Vector3f omega = - tdp::SO3f::vee(H.matrix() - H.matrix().transpose());
+      Eigen::Matrix<float,6,1> dx;
+      dx << omega, dt;
+      tdp::SE3f dT(tdp::SE3f::Exp_(dx));
+      std::cout << dT << std::endl; 
+
+//      tdp::SE3f dT;
+//      Eigen::Vector3f n;
+//      tdp::Homography<float>(H.matrix()).ToPoseAndNormal(dT, n);
     }
+
+    tdp::PyramidToImage(cuPyrGrey_m, greyVis_m, cudaMemcpyDeviceToHost);
 
     pyrGrey_m.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
     pyrGreydu_m.CopyFrom(pyrGreydv, cudaMemcpyHostToHost);
@@ -201,7 +233,9 @@ int main( int argc, char* argv[] )
     // SHowFrames renders the raw input streams (in our case RGB and D)
     gui.ShowFrames();
     // render normals image
-    viewN2D.SetImage(n2D);
+    if (viewN2D.IsShown()) {
+      viewN2D.SetImage(n2D);
+    }
     if (viewGrey.IsShown()) {
       viewGrey.SetImage(grey);
     }
@@ -210,6 +244,9 @@ int main( int argc, char* argv[] )
     }
     if (viewGreyDv.IsShown()) {
       viewGreyDv.SetImage(greydv);
+    }
+    if (viewGrey_m.IsShown()) {
+      viewGrey_m.SetImage(greyVis_m);
     }
 
     // leave in pixel orthographic for slider to render.
