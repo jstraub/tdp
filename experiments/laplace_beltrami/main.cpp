@@ -39,173 +39,40 @@
 #include "laplace_beltrami.h"
 
 
-tdp::Vector3fda getMean(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
+tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds){
+  assert(pc.rows() == 1);
   tdp::Vector3fda mean;
   mean << 0,0,0;
-  int count = 0;
-  for (int i=0; i<pc.w_; ++i){
-    for (int j=0; j<pc.h_; ++j){
-      if (not std::isnan(pc(i,j)[0]*pc(i,j)[1]*pc(i,j)[2])){ //check for nan
-        mean +=  pc(i,j);
-        count += 1;
-      }
-    }
+
+  for (size_t i=0; i<nnIds.rows(); ++i){
+      mean +=  pc(nnIds(i),0);
   }
-  return mean/count;
+  mean /= (float)nnIds.rows();
+  return mean;
 }
 
-tdp::Matrix3fda getCovariance(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
-  // get covariance of the point cloud
+tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds){
+  // get covariance of the point cloud assuming no nan and pc of (nrows,1) size.
+  assert (pc.rows() == 1);
   tdp::Matrix3fda cov;
   cov.setZero(3,3);
 
-  tdp::Vector3fda mean = getMean(pc);
-  int count = 0;
-  for(int x=0; x<pc.w_; ++x){
-    for (int y=0; y<pc.h_; ++y){
-      if (not std::isnan(pc(x,y)[0]*pc(x,y)[1]*pc(x,y)[2])){ //check for nan 
-         cov += (pc(x,y)-mean)*(pc(x,y)-mean).transpose();
-         count += 1;
-        //std::cout << "x,y, and cov: " << x << ", " << y << ", " << cov << std::endl;
-      }
-    }
+  tdp::Vector3fda mean = getMean(pc, nnIds);
+  for(size_t i=0; i<nnIds.rows(); ++i){
+    cov += (pc(nnIds(i),0)-mean)*(pc(nnIds(i),0)-mean).transpose();
   }
-  cov /= (float)(count);
-  std::cout << "total number: " << (pc.w_*pc.h_) << std::endl;
-  std::cout << "count : " << count << std::endl;
+  cov /= (float)nnIds.rows();
   return cov;
 }
 
-////todo: call getMeanAndSpreadOfBVoxel with correct p1 and p2
-std::vector<tdp::Vector3fda> getMeanAndSpread(const tdp::ManagedHostImage<tdp::Vector3fda>& pc){
-    tdp::Vector3fda mean = getMean(pc);
-    //Eigen::MatrixXf mean = (Eigen::MatrixXf)getMean(pc);
-
-    tdp::Matrix3fda cov = getCovariance(pc);
-    std::cout << "mean: " << mean << std::endl;
-    std::cout << "cov: " << cov << std::endl;
-
-    Eigen::EigenSolver<tdp::Matrix3fda> es(cov);
-    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
-    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
-
-    std::complex<float> maxEval(-1,0);
-    int maxIdx(-1);
-    for (int i=0; i< cov.rows();++i ){
-        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
-            maxEval = es.eigenvalues().col(0)[i];
-            maxIdx = i;
-        }
+tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc(){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    for (size_t i=0; i<10; ++i){
+        tdp::Vector3fda pt;
+        pt << i,i,i;
+        pc(i,0) = pt;
     }
-    Eigen::VectorXcf spread = es.eigenvectors().col(maxIdx);
-    tdp::Vector3fda spread_real, spread_imag;
-    spread_real = (tdp::Vector3fda)spread.real();
-    spread_imag = (tdp::Vector3fda)spread.imag();
-
-    std::vector<tdp::Vector3fda> spec;
-    spec[0] = mean;
-    spec[1] = spread_real;
-    spec[2] = spread_imag;
-    return spec;
-}
-inline bool inBVoxel(const tdp::Vector3fda& p, const tdp::Vector3fda& topLeft, const tdp::Vector3fda& btmRight){
-    return topLeft[0]<=p[0] && p[0]<btmRight[0] && topLeft[1]<=p[1] && p[1]<btmRight[1] && topLeft[2]<=p[2] && p[2]<btmRight[2];
-}
-
-std::vector<tdp::Vector3fda> meanAndSpreadOfBVoxel(const tdp::ManagedHostImage<tdp::Vector3fda>& pc, const tdp::Vector3fda& p1, const tdp::Vector3fda& p2){
-    tdp::Vector3fda topLeft, btmRight;
-    tdp::Vector3fda mean; //todo: check this?
-    mean << 0,0,0;
-    // Find the correct bounding voxel's coordinates
-    for (int i=0; i<3; ++i){
-        topLeft[i] = std::min(p1[i],p2[i]);
-        btmRight[i] = std::max(p1[i],p2[i]);
-    }
-    //Calculate mean
-    //overhead
-    //Todo: implement BVoxelId (image of the same size as pc where each entry is BVoxel id)
-    int count = 0;
-    std::vector<tdp::Vector3fda> points;
-    for (int i=0; i<pc.w_; ++i){
-        for (int j=0; j<pc.h_; ++j){
-            if (inBVoxel(pc(i,j), topLeft, btmRight)){
-                mean += pc(i,j);
-                points.push_back(pc(i,j));
-                count += 1;
-            }
-        }
-    }
-    mean /= count;
-    // calculate covariance
-    tdp::Matrix3fda cov;
-    cov.setZero(3,3);
-    for (int i=0; i<count; ++i){
-      cov += (points[i]-mean)*(points[i]-mean).transpose();
-    }
-    cov /= count;
-    std::cout << "final: " << cov << std::endl;
-    
-    // eigenvector
-    Eigen::EigenSolver<tdp::Matrix3fda> es(cov);
-    std::cout << "eigenvalues: " << es.eigenvalues() << std::endl;
-    std::cout << "eigenvectors: " << es.eigenvectors() << std::endl << std::endl;
-
-    std::complex<float> maxEval(-1,0);
-    int maxIdx(-1);
-    for (int i=0; i< cov.rows();++i ){
-        if (abs(maxEval) < abs(es.eigenvalues().col(0)[i])){
-            maxEval = es.eigenvalues().col(0)[i];
-            maxIdx = i;
-        }
-    }
-    Eigen::VectorXcf spread = es.eigenvectors().col(maxIdx);
-    //Eigen::VectorXf spread_real, spread_imag;
-    tdp::Vector3fda spread_real, spread_imag;
-    spread_real = (tdp::Vector3fda)spread.real(); 
-    spread_imag = (tdp::Vector3fda)spread.imag();
-
-
-    std::vector<tdp::Vector3fda> spec;
-    spec[0] = mean;
-    spec[1] = spread_real;
-    spec[2] = spread_imag;
-
-    return spec;
-}
-
-std::vector<tdp::Vector3fda> getMeans(const tdp::ManagedHostImage<tdp::Vector3fda>& pc, int nsteps){
-  ///nsteps in the positive/negative direction. totalsteps is 2*nsteps.
-
-  // find the mean and eigenvector 
-  std::vector<tdp::Vector3fda> meanAndSpread = getMeanAndSpread(pc); 
-  tdp::Vector3fda mean, spread_real, spread_imag, stepVec; 
-  mean = meanAndSpread[0];
-  spread_real = meanAndSpread[1];
-  spread_imag = meanAndSpread[2];
-  float spread_size, step_size;
-  spread_size = spread_real.norm(); //todo: get the magnitude of complex //todo: eigen's norm?
-  step_size = spread_size/nsteps;
-  stepVec = step_size*(spread_real/spread_size);//todo: what to do with spread_imag?
-
-  tdp::Vector3fda start1 = mean;
-  tdp::Vector3fda end1 = mean+stepVec;
-  tdp::Vector3fda start2 = mean;
-  tdp::Vector3fda end2 = mean-stepVec;
-
-  std::vector<tdp::Vector3fda> means;
-  means.push_back(mean);
-  for (int i=1; i<=nsteps; ++i){
-    std::vector<tdp::Vector3fda> meanAndCov_pos = meanAndSpreadOfBVoxel(pc, start1, end1);
-    std::vector<tdp::Vector3fda> meanAndCov_neg = meanAndSpreadOfBVoxel(pc, start2, end2);
-    means.push_back(meanAndCov_pos[0]);
-    means.push_back(meanAndCov_neg[0]);
-
-    start1 = end1;
-    end1 += stepVec;
-    start2 = end2;
-    end2 -= stepVec;
-  }
-return means;
+    return pc;
 }
 
 void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
@@ -215,24 +82,57 @@ void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
     }
 }
 
-int main( int argc, char* argv[] ){
+void test1(){
+    //TEST OF getMean and getCovariance
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    Eigen::VectorXi nnIds(2);
+    nnIds<< 0,1;//,2;//,3,4,5,6,7,8,9;
+    tdp::Vector3fda mean = getMean(pc, nnIds);
+    tdp::Matrix3fda cov = getCovariance(pc,nnIds);
+    std::cout << "mean: \n" << mean << std::endl << std::endl;
+    std::cout << "cov: \n" << cov << std::endl << std::endl;
+}
 
+int main( int argc, char* argv[] ){
   // load pc and normal from the input paths
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10/*1000*/,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(1000,1);
 
   if (argc > 1) {
-      //todo: send the points to draw with opengl
       const std::string input = std::string(argv[1]);
       std::cout << "input " << input << std::endl;
-      std::cout << "argc: " << argc << std::endl;
       tdp::LoadPointCloud(input, pc, ns);
   } else {
-      GetSphericalPc(pc);
+      //GetSphericalPc(pc);
+      //todo: delete
+      for (size_t i=0; i<10; ++i){
+          tdp::Vector3fda pt;
+          pt << i,i,i;
+          pc(i,0) = pt;
+      }
   }
 
-  tdp::ANN ann;
+  int n = 5;
+  float eps = 1e-4;
 
+  tdp::ANN ann;
+  Eigen::VectorXi nnIds(n);
+  Eigen::VectorXf dists(n);
+  ann.ComputeKDtree(pc);
+  tdp::Vector3fda query;
+  tdp::Matrix3fda cov;
+  Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
+
+  for (size_t i=0; i<pc.Area(); ++i){
+      query = pc(i,0);
+      ann.Search(query, n, eps, nnIds, dists);
+      cov = getCovariance(pc,nnIds);
+      es.compute(cov);
+      std::cout << "eigenvalues: \n" << es.eigenvalues() << std::endl;
+      std::cout << "eigenvectors: \n" << es.eigenvectors() << std::endl << std::endl;
+  }
+
+/*
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -280,14 +180,10 @@ int main( int argc, char* argv[] ){
         //  processing of PC for skinning
 
       std::cout << "Running skinning..." << std::endl;
-      int nSteps = 10;
-      std::vector<tdp::Vector3fda> means = getMeans(pc,nSteps);
-      size_t nMeans= means.size();
-      std::cout << "number of means (should be 2*nsteps + 1):" << nMeans << std::endl;
 
       // put the mean points to GLBuffer vboM
-      vboM.Reinitialise(pangolin::GlArrayBuffer, nMeans, GL_FLOAT, 3, GL_DYNAMIC_DRAW );
-      vboM.Upload(&means[0], sizeof(float) * nMeans * 3, 0);
+      // vboM.Reinitialise(pangolin::GlArrayBuffer, nMeans, GL_FLOAT, 3, GL_DYNAMIC_DRAW );
+      // vboM.Upload(&means[0], sizeof(float) * nMeans * 3, 0);
 
     }
 
@@ -314,7 +210,7 @@ int main( int argc, char* argv[] ){
     // finish this frame
     pangolin::FinishFrame();
   }
-
+*/
   std::cout << "good morning!" << std::endl;
   return 0;
 }
