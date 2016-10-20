@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <thread>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -32,6 +33,8 @@
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/utils/Stopwatch.h>
+
+#include <tdp/utils/threadedValue.hpp>
 
 #include <pangolin/video/drivers/realsense.h>
 
@@ -154,12 +157,17 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
   pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
   pangolin::Var<int> rotatingDepthScanIrPower("ui.IR power", 16,0,16);
+  pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 1000, 1, 2000);
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+3)];
 
   tdp::Image<uint16_t> _d(640,480,(uint16_t*)buffer);
   tdp::Image<tdp::Vector3bda> _rgb(640,480,(tdp::Vector3bda*)&buffer[640*480*2]);
+
+  tdp::ThreadedValue<bool> received(true);
+  std::thread* threadCollect = nullptr;
+
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -174,9 +182,6 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
-    if (rotatingDepthScan.GuiChanged() && rotatingDepthScan) {
-      ir = 0;
-    }
     if (ir.GuiChanged()) {
       rs->SetPowers(ir);
     }
@@ -185,30 +190,51 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
+    if (rotatingDepthScan.GuiChanged()) {
+      rs->SetPowers(ir);
+    }
+
     if (rotatingDepthScan) {
-      TICK("rgbd collection");
-      cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
-      for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-        // grab one frame 
-        rs->GrabOne(sId, buffer, rotatingDepthScanIrPower);
-        int32_t cId = rgbdStream2cam_[sId]; 
-        Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
-        tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-            wSingle, hSingle);
-        rgb_i.CopyFrom(_rgb,type);
-        cuDraw_i.CopyFrom(_d,cudaMemcpyHostToDevice);
-        // convert depth image from uint16_t to float [m]
-        tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
-        if (rig.cuDepthScales_.size() > cId) {
-          tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.cuDepthScales_[cId], 
-              rig.scaleVsDepths_[cId](0), rig.scaleVsDepths_[cId](1), dMin, dMax);
-        } else if (depthSensorUniformScale_.size() > cId) {
-          tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.depthSensorUniformScale_[cId], dMin, dMax);
-        } else {
-          std::cout << "Warning no scale information found" << std::endl;
+      // start a collection thread to do the work so the rendering is
+      // smooth
+      if (received.Get()) {
+        if (threadCollect) {
+          threadCollect->join();
+          delete threadCollect;
+          threadCollect = nullptr;
         }
+        received.Set(false);
+        threadCollect = new std::thread([&](){
+//          TICK("rgbd collection");
+          cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+          for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+            rs->SetPowers(0);
+            // grab one frame 
+            rs->SetPower(sId, rotatingDepthScanIrPower);
+            std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
+            rs->GrabOne(sId, buffer, rotatingDepthScanIrPower);
+            int32_t cId = rig.rgbdStream2cam_[sId]; 
+            tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
+            tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
+                wSingle, hSingle);
+            rgb_i.CopyFrom(_rgb,cudaMemcpyHostToHost);
+            cuDraw_i.CopyFrom(_d,cudaMemcpyHostToDevice);
+            // convert depth image from uint16_t to float [m]
+            tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
+            if (rig.cuDepthScales_.size() > cId) {
+              tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.cuDepthScales_[cId], 
+                  rig.scaleVsDepths_[cId](0), rig.scaleVsDepths_[cId](1), dMin, dMax);
+            } else if (rig.depthSensorUniformScale_.size() > cId) {
+              tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.depthSensorUniformScale_[cId], dMin, dMax);
+            } else {
+              std::cout << "Warning no scale information found" << std::endl;
+            }
+          }
+//          TOCK("rgbd collection");
+          received.Set(true);
+        });
+        std::cout << "received" << std::endl;
       }
-      TOCK("rgbd collection");
     } else {
       // get next frames from the video source
       gui.NextFrames();
@@ -234,6 +260,10 @@ int main( int argc, char* argv[] )
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
+    pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
+    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
+
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     if (d_cam.IsShown()) {
@@ -249,14 +279,11 @@ int main( int argc, char* argv[] )
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
 
-      pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
-      vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-      cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
       // render point cloud
       pangolin::RenderVboCbo(vbo,cbo,true);
     }
-
     glDisable(GL_DEPTH_TEST);
+
     // Draw 2D stuff
     //gui.ShowFrames();
     if (viewRgb.IsShown()) {
