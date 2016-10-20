@@ -226,13 +226,13 @@ int main( int argc, char* argv[] )
 
   // Add some variables to GUI
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
+  pangolin::Var<float> dMax("ui.d max",8.,0.1,10.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
   pangolin::Var<bool> odomImu("ui.odom IMU", false, true);
-  pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", true, true);
-  pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", false, true);
+  pangolin::Var<bool> odomFrame2Frame("ui.odom frame2frame", false, true);
+  pangolin::Var<bool> odomFrame2Model("ui.odom frame2model", true, true);
   pangolin::Var<bool> resetOdom("ui.reset odom",false,false);
 
   pangolin::Var<bool> savePC("ui.save current PC",false,false);
@@ -251,16 +251,16 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
-  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
-  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",14,0,20);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",10,0,20);
 
   pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 10000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
 
-  pangolin::Var<bool> keyFrameSLAM("ui.keyframe SLAM", true, true);
+  pangolin::Var<bool> keyFrameSLAM("ui.keyframe SLAM", false, true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);

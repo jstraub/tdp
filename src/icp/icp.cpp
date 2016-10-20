@@ -143,15 +143,16 @@ void ICP::ComputeProjective(
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
 
-      Eigen::JacobiSVD<Eigen::Matrix<float,6,6>> svd(ATA);
-      int rank = svd.rank();
-      Eigen::Matrix<float,6,1> e = svd.singularValues();
+//      Eigen::JacobiSVD<Eigen::Matrix<float,6,6>> svd(ATA);
+//      int rank = svd.rank();
+//      Eigen::Matrix<float,6,1> e = svd.singularValues();
+//      // condition number
+//      float kappa = e.maxCoeff() / e.minCoeff();
+
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA);
+      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array().square();
       // condition number
-      float kappa = e.maxCoeff() / e.minCoeff();
-      
-      if (rank < 6) {
-        std::cout << "ATA in ICP is rank deficient: " << rank << std::endl;
-      }
+      float kappa = ev.maxCoeff() / ev.minCoeff();
 
       // apply x to the transformation
       SE3f dT = SE3f::Exp_(x);
@@ -159,9 +160,8 @@ void ICP::ComputeProjective(
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
-        << " rank(ATA): " << rank
         << " kappa(ATA): " << kappa
-//        << " singulars(ATA): " << e.transpose()
+        << " ev(ATA): " << ev.transpose()
         << " det(R): " << T_mo.rotation().matrix().determinant()
         << " |x|: " << x.topRows(3).norm()*180./M_PI 
         << " " <<  x.bottomRows(3).norm()
@@ -356,16 +356,30 @@ void ICP::ComputeProjective(
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
+      ATA /= count;
+      ATb /= count;
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
+
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA);
+      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array().square();
+      // condition number
+      float kappa = ev.maxCoeff() / ev.minCoeff();
+      float kappaR = ev.head<3>().maxCoeff() / ev.head<3>().minCoeff();
+      float kappat = ev.tail<3>().maxCoeff() / ev.tail<3>().minCoeff();
+
       // apply x to the transformation
       T_mr = tdp::SE3f(tdp::SE3f::Exp_(x))*T_mr;
       if (verbose) {
-      std::cout << "lvl " << lvl << " it " << it 
+      std::cout << std::setprecision(2) 
+        << std::scientific << "lvl " << lvl << " it " << it 
         << ": err=" << error 
         << "\tdErr/err=" << fabs(error-errPrev)/error
-        << " # inliers: " << count 
+        << "\t# inliers: " << count 
+        << "\t# kappa: " << kappa << ", " << kappaR << ", " << kappat
+        << "\t|x|=" << x.head<3>().norm() << ", " << x.tail<3>().norm()
+//        << "\t# evs: " << ev.transpose()
         //<< " |ATA|=" << ATA.determinant()
         //<< " x=" << x.transpose()
         << std::endl;
