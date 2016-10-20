@@ -63,14 +63,19 @@ class Image {
 
   TDP_HOST_DEVICE
   T GetBilinear(float x, float y) const {
-    int xl = std::max(0,(int)std::floor(x-0.5f));
-    int xr = std::min((int)w_-1,(int)std::floor(x+0.5f));
-    int yu = std::max(0,(int)std::floor(y-0.5f));
-    int yd = std::min((int)h_-1,(int)std::floor(y+0.5f));
+    int xl = std::max(0,(int)std::floor(x));
+    int xr = std::min((int)w_-1,(int)std::ceil(x));
+    int yu = std::max(0,(int)std::floor(y));
+    int yd = std::min((int)h_-1,(int)std::ceil(y));
     T valU = (xr-x)*RowPtr(yu)[xl] + (x-xl)*RowPtr(yu)[xr];
     T valD = (xr-x)*RowPtr(yd)[xl] + (x-xl)*RowPtr(yd)[xr];
     return (yd-y)*valU + (y-yu)*valD;
   }
+
+  TDP_HOST_DEVICE
+  bool Inside(int u, int v) { return 0 <= u && u < w_-1 && 0 <= v && v < h_-1; }
+  TDP_HOST_DEVICE
+  bool Inside(float u, float v) { return 0 <= u && u < w_-1 && 0 <= v && v < h_-1; }
 
   TDP_HOST_DEVICE
   size_t SizeBytes() const { return pitch_*h_; }
