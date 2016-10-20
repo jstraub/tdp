@@ -241,6 +241,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<float> grid0x("ui.grid0 x",-5.0,-2,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-5.0,-2,0);
   pangolin::Var<float> grid0z("ui.grid0 z",-5.0,-2,0);
@@ -447,7 +449,7 @@ int main( int argc, char* argv[] )
         tdp::SE3f T_mo = T_mr+T_rc;
         tdp::Image<float> cuD_i(wSingle, hSingle,
             cuD.ptr_+rig.rgbdStream2cam_[sId]*wSingle*hSingle);
-        AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+        AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
       }
       numFused ++;
       TOCK("Add To TSDF");
@@ -475,7 +477,7 @@ int main( int argc, char* argv[] )
 
         // ray trace the TSDF to get pc and normals in model cosy
         RayTraceTSDF(cuTSDF, cuPcEst_i, 
-            cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu); 
+            cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
       }
       // just complete the surface normals obtained from the TSDF
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
@@ -540,7 +542,7 @@ int main( int argc, char* argv[] )
     tdp::SE3f T_mv;
     T_mv.matrix()(2,3) = -3.;
     RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
-        dGrid, tsdfMu); 
+        dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 
     // Draw 3D stuff

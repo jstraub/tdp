@@ -21,7 +21,7 @@
 #include <tdp/data/managed_volume.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/data/volume.h>
-#include <tdp/gui/gui.hpp>
+#include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
 #include <tdp/icp/icp.h>
 #include <tdp/manifold/SE3.h>
@@ -78,7 +78,7 @@ int main( int argc, char* argv[] )
        -1, 0, 0;
   tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
 
-  tdp::GUI gui(1200,800,video);
+  tdp::GuiBase gui(1200,800,video);
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
   size_t wc = w+w%64; // for convolution
@@ -141,9 +141,9 @@ int main( int argc, char* argv[] )
   tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
 
   tdp::ManagedHostImage<float> dEst(wc, hc);
-  tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
-  dEst.Fill(0.);
-  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+//  tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
+//  dEst.Fill(0.);
+//  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
@@ -175,10 +175,8 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<float> tsdfDEst(wc, hc);
   tdp::ManagedHostImage<float> tsdfSlice(wTSDF, hTSDF);
-  tdp::QuickView viewTsdfDEst(wc,hc);
-  tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
-  gui.container().AddDisplay(viewTsdfDEst);
-  gui.container().AddDisplay(viewTsdfSliveView);
+//  tdp::QuickView viewTsdfDEst(wc,hc);
+//  gui.container().AddDisplay(viewTsdfDEst);
 
   tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1), hc);
   tdp::QuickView viewDepthPyr(dispDepthPyr.w_,dispDepthPyr.h_);
@@ -203,13 +201,20 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewPcErr(wc,hc);
   gui.container().AddDisplay(viewPcErr);
 
+  tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
+  gui.container().AddDisplay(viewTsdfSliveView);
+
+  viewICPassocC.Show(false);
+  viewICPassocM.Show(false);
+  viewAngErr.Show(false);
+  viewPcErr.Show(false);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> tsdfDmax("ui.d max",4.,0.1,4.);
 
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
-  pangolin::Var<bool> dispDepthPyrEst("ui.disp d pyr est", false,true);
+//  pangolin::Var<bool> dispDepthPyrEst("ui.disp d pyr est", false,true);
 
   pangolin::Var<bool> runFusion("ui.run Fusion",true,true);
 
@@ -221,6 +226,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
   pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
@@ -238,7 +245,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
-  pangolin::Var<float> gradNormThr("ui.grad3d norm thr",1.,0.,10.);
+  pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
@@ -369,8 +376,7 @@ int main( int argc, char* argv[] )
             camD, maxIt, icpAngleThr_deg, icpDistThr); 
       } else {
         tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
-            gs_c, T_mo, tdp::SE3f(),
-            camD, maxIt, icpAngleThr_deg, icpDistThr); 
+            gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr); 
       }
 //      if (icpRot && icpRotOverwrites) 
 //        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
@@ -406,7 +412,7 @@ int main( int argc, char* argv[] )
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
+      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
       numFused ++;
       TOCK("Add To TSDF");
     }
@@ -416,19 +422,19 @@ int main( int argc, char* argv[] )
       TICK("Ray Trace TSDF");
       //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
       // first one not needed anymore
-      if (pcFromTSDF && !dispDepthPyrEst) {
+//      if (pcFromTSDF && !dispDepthPyrEst) {
         RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-            ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
+            ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
         // get pc in model coordinate system
         tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
-      } else {
-        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
-            dGrid, tsdfMu); 
-        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-            cudaMemcpyDeviceToDevice, 0.03);
-        // compute point cloud from depth images in camera cosy
-        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
-      }
+//      } else {
+//        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
+//            dGrid, tsdfMu); 
+//        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
+//            cudaMemcpyDeviceToDevice, 0.03);
+//        // compute point cloud from depth images in camera cosy
+//        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
+//      }
       TOCK("Ray Trace TSDF");
       if (normalsFromTSDF) {
         tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
@@ -463,7 +469,7 @@ int main( int argc, char* argv[] )
     if (showPcView) {
       tdp::SE3f T_mv;
       RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
-          dGrid, tsdfMu); 
+          dGrid, tsdfMu, tsdfWThr); 
       tdp::Depth2PCGpu(cuDView,camView,cuPcView);
     }
 
@@ -574,12 +580,11 @@ int main( int argc, char* argv[] )
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
-    gui.ShowFrames();
 
-    if (viewTsdfDEst.IsShown()) {
-      tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
-      viewTsdfDEst.SetImage(tsdfDEst);
-    }
+//    if (viewTsdfDEst.IsShown()) {
+//      tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
+//      viewTsdfDEst.SetImage(tsdfDEst);
+//    }
 
     if (viewTsdfSliveView.IsShown()) {
       tdp::Image<tdp::TSDFval> cuTsdfSlice =
@@ -593,13 +598,13 @@ int main( int argc, char* argv[] )
     }
 
     if (viewDepthPyr.IsShown()) {
-      if (dispDepthPyrEst) {
-        tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,
-            cudaMemcpyDeviceToHost);
-      } else {
+//      if (dispDepthPyrEst) {
+//        tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,
+//            cudaMemcpyDeviceToHost);
+//      } else {
         tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
             cudaMemcpyDeviceToHost);
-      }
+//      }
       viewDepthPyr.SetImage(dispDepthPyr);
     }
 

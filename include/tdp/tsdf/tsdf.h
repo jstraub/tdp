@@ -24,7 +24,7 @@ template<int D, typename Derived>
 void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu);
+    float mu, float wMax);
 
 // get depth image and surface normals from pose T_rd
 template<int D, typename Derived>
@@ -32,7 +32,7 @@ void RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
     Image<Vector3fda> n, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu);
+    float mu, float wThr);
 // get point cloud and surface normals from T_rd in reference
 // coordiante frame
 template<int D, typename Derived>
@@ -41,6 +41,6 @@ void RayTraceTSDF(Volume<TSDFval> tsdf,
     Image<Vector3fda> n_r, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu);
+    float mu, float wThr);
 
 }

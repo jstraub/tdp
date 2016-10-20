@@ -200,6 +200,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
 
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
   pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
@@ -500,7 +502,7 @@ int main( int argc, char* argv[] )
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu); 
+      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
       numFused ++;
       TOCK("Add To TSDF");
     }
@@ -509,7 +511,7 @@ int main( int argc, char* argv[] )
       if (gui.verbose) std::cout << "ray trace" << std::endl;
       TICK("Ray Trace TSDF");
       RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu); 
+          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
       // get pc in model coordinate system
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
       TOCK("Ray Trace TSDF");
@@ -537,7 +539,7 @@ int main( int argc, char* argv[] )
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
     RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
-        dGrid, tsdfMu); 
+        dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 
     glEnable(GL_DEPTH_TEST);
