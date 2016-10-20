@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tdp/manifold/SL3.h>
+#include <tdp/manifold/S.h>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {
@@ -12,6 +13,10 @@ class Homography : public SL3<T> {
   Homography();
   TDP_HOST_DEVICE
   Homography(const Eigen::Matrix<T,3,3>& H);
+  TDP_HOST_DEVICE
+  Homography(const SL3<T>& H);
+
+  static Homography<T> Random();
 
   void Transform(float u, float v, float& x, float& y) const;
   Eigen::Vector2f Transform(float u, float v) const;
@@ -45,6 +50,34 @@ template<typename T>
 Homography<T>::Homography(const Eigen::Matrix<T,3,3>& H) 
   : SL3<T>(H) 
 {}
+
+template<typename T>
+Homography<T>::Homography(const SL3<T>& H) 
+  : SL3<T>(H)
+{}
+
+template<typename T>
+Homography<T> Homography<T>::Random() {
+
+  Eigen::Matrix<T,3,1> n(1,0,0);
+  Eigen::Matrix<T,3,1> negativeZ(0,0,-1);
+  T dotThr = cos(10.*M_PI/180.);
+  while (n.dot(negativeZ) < dotThr) {
+    n = S<T,3>::Random().vector();
+  }
+  Eigen::Matrix<T,3,1> t(0,0,.2);
+  T d = 3.;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+//  std::normal_distribution<T> normal(0,1);
+  std::uniform_real_distribution<T> unif(-M_PI/8., M_PI/8.);
+  T alpha = unif(gen);
+  SO3<T> R = SO3<T>::Rz(alpha);
+  Eigen::Matrix<T,3,3> H = R.matrix() - n*t.transpose()/d;
+  H /= cbrt(H.determinant()); // scale to unit determinant
+  return Homography<T>(H);
+}
 
 template<typename T>
 void Homography<T>::Transform(float u, float v, float& x, float& y) const {

@@ -17,6 +17,7 @@ class ESM {
     const Pyramid<float,LEVELS>& gray_c,
     const Pyramid<float,LEVELS>& gradDu_c,
     const Pyramid<float,LEVELS>& gradDv_c,
+    std::vector<size_t>& maxIt,
     SL3<float>& H);
 
   static void EstimateHomography(
@@ -55,6 +56,7 @@ void ESM::EstimateHomography(
     const Pyramid<float,LEVELS>& gray_c,
     const Pyramid<float,LEVELS>& gradDu_c,
     const Pyramid<float,LEVELS>& gradDv_c,
+    std::vector<size_t>& maxIt,
     SL3<float>& H
     ) {
   for (int lvl = LEVELS-1; lvl >= 0; --lvl) {
@@ -65,8 +67,8 @@ void ESM::EstimateHomography(
     const Image<float> gradDu_cl = gradDu_c.GetConstImage(lvl);
     const Image<float> gradDv_cl = gradDv_c.GetConstImage(lvl);
 
-    size_t maxIt = 10;
-    for (size_t it=0; it<maxIt; ++it) {
+    std::cout << "ESM lvl: " << lvl << " its: "<< maxIt[lvl] << std::endl;
+    for (size_t it=0; it<maxIt[lvl]; ++it) {
       std::cout << "@" <<it << std::endl;
       ESM::EstimateHomography(
           gray_ml,
@@ -114,7 +116,8 @@ void ESM::EstimateHomography(
 //        << x << " " << y 
 //        << " " << w << " " << h
 //        << std::endl;
-      if (x==x && y==y && 0.5 < x && x < w-1.5 && 0.5 < y && y < h-1.5) {
+//      if (x==x && y==y && 0.5 < x && x < w-1.5 && 0.5 < y && y < h-1.5) {
+      if (x==x && y==y && gray_c.Inside(x,y)) {
         Eigen::Matrix<float,1,3> J_c(gradDu_c.GetBilinear(x,y), 
             gradDv_c.GetBilinear(x,y), 0.);
         Eigen::Matrix<float,1,3> J_m(gradDu_m(u,v), gradDv_m(u,v), 0.);
@@ -122,13 +125,18 @@ void ESM::EstimateHomography(
         float f = gray_c.GetBilinear(x,y) - gray_m(u,v);
         JTJ += J_esm.transpose() * J_esm;
         JTy += J_esm.transpose() * f;
-        F += f;
-//        std::cout << f << ": " << J_esm << std::endl;
+        F += sqrt(f*f);
+//        if (u%20==0 && v%20==0)
+//          std::cout << f << ": " << u << "," << v
+//            << " Jc and Jm " << J_c << ", " << J_m 
+//            << " Jesm " << J_esm 
+////            << " Jw " << std::endl << J_w(u,v) 
+//            << std::endl;
       }
     }
   }
 
-  Eigen::Matrix<double,8,1> x = JTJ.cast<double>().ldlt().solve(JTy.cast<double>());
+  Eigen::Matrix<double,8,1> x =- JTJ.cast<double>().ldlt().solve(JTy.cast<double>());
   std::cout << F << ": " << x.transpose() << std::endl;
 //  std::cout << JTJ << std::endl << JTy.transpose() << std::endl;
 //  std::cout << H.matrix() << std::endl;

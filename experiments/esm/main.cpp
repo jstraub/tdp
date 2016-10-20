@@ -84,9 +84,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> d(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
-  tdp::ManagedHostImage<float> grey(3*w/2, h);
+  tdp::ManagedHostImage<float> greyVis(3*w/2, h);
   tdp::ManagedHostImage<float> greydu(3*w/2, h);
   tdp::ManagedHostImage<float> greydv(3*w/2, h);
+  tdp::ManagedHostImage<float> grey(w, h);
   tdp::ManagedHostImage<float> grey_m(w, h);
   tdp::ManagedHostImage<float> greyVis_m(3*w/2, h);
 
@@ -105,6 +106,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<float,5> cuPyrGreydv(w, h);
   tdp::ManagedDevicePyramid<float,5> cuPyrGreydu(w, h);
 
+  tdp::ManagedDevicePyramid<float,5> cuPyrGrey_m(w, h);
+  tdp::ManagedDevicePyramid<float,5> cuPyrGreydv_m(w, h);
+  tdp::ManagedDevicePyramid<float,5> cuPyrGreydu_m(w, h);
+
   tdp::ManagedHostPyramid<float,5> pyrGrey(w, h);
   tdp::ManagedHostPyramid<float,5> pyrGreydv(w, h);
   tdp::ManagedHostPyramid<float,5> pyrGreydu(w, h);
@@ -121,10 +126,18 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
-  pangolin::Var<bool> randomH("ui.random H",false,true);
+  pangolin::Var<bool> randomH("ui.random H",true,true);
+  pangolin::Var<bool> identityH("ui.unit H",false,true);
   pangolin::Var<bool> estimateH("ui.estimate H",false,false);
 
-  tdp::SL3<float> H_rand = tdp::SL3<float>::Random();
+  pangolin::Var<int>   esmIter0("ui.ESM iter lvl 0",2,0,10);
+  pangolin::Var<int>   esmIter1("ui.ESM iter lvl 1",0,0,10);
+  pangolin::Var<int>   esmIter2("ui.ESM iter lvl 2",0,0,10);
+  pangolin::Var<int>   esmIter3("ui.ESM iter lvl 3",0,0,10);
+  pangolin::Var<int>   esmIter4("ui.ESM iter lvl 4",0,0,10);
+
+  tdp::Homography<float> H_rand(tdp::SL3<float>::Random());
+  tdp::Homography<float> H_est;
   tdp::SL3<float> H;
   Eigen::Matrix3f Kinv = cam.GetKinv();
   Eigen::Matrix3f K = cam.GetK();
@@ -152,8 +165,7 @@ int main( int argc, char* argv[] )
     tdp::ConstructPyramidFromImage(cuGreydv, cuPyrGreydv,
         cudaMemcpyDeviceToDevice);
 
-//    grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
-    tdp::PyramidToImage(cuPyrGrey, grey, cudaMemcpyDeviceToHost);
+    tdp::PyramidToImage(cuPyrGrey, greyVis, cudaMemcpyDeviceToHost);
     tdp::PyramidToImage(cuPyrGreydu, greydu, cudaMemcpyDeviceToHost);
     tdp::PyramidToImage(cuPyrGreydv, greydv, cudaMemcpyDeviceToHost);
 
@@ -161,24 +173,38 @@ int main( int argc, char* argv[] )
     pyrGreydu.CopyFrom(cuPyrGreydu, cudaMemcpyDeviceToHost);
     pyrGreydv.CopyFrom(cuPyrGreydv, cudaMemcpyDeviceToHost);
     
-    if (randomH) {
-      H_rand = tdp::SL3<float>::Random();
-      tdp::Transform(grey_c, H_rand, grey_m);
+    if (randomH && !gui.paused()) {
+      H_rand = tdp::Homography<float>::Random();
+      if (identityH)
+        H_rand = tdp::Homography<float>();
+      std::cout << "true random homography" << std::endl 
+        << H_rand.matrix() << std::endl;
+
+      grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
+      tdp::Transform(grey, H_rand, grey_m);
       tdp::ConstructPyramidFromImage(grey_m, cuPyrGrey_m,
           cudaMemcpyHostToDevice);
-      tdp::Gradient(cuPyrGrey_m.GetImage(0), cuGreydu_m.GetImage(0),
-          cuGreydv_m.GetImage(0));
-      tdp::CompletePyramid(cuGreydu_m);
-      tdp::CompletePyramid(cuGreydv_m);
+      tdp::Image<float> greydv_m0 = cuPyrGreydv_m.GetImage(0);
+      tdp::Image<float> greydu_m0 = cuPyrGreydu_m.GetImage(0);
+      tdp::Gradient(cuPyrGrey_m.GetImage(0), greydu_m0, greydv_m0);
+      tdp::CompletePyramid(cuPyrGreydu_m, cudaMemcpyDeviceToDevice);
+      tdp::CompletePyramid(cuPyrGreydv_m, cudaMemcpyDeviceToDevice);
+
+      pyrGrey_m.CopyFrom(  cuPyrGrey_m,   cudaMemcpyDeviceToHost);
+      pyrGreydu_m.CopyFrom(cuPyrGreydv_m, cudaMemcpyDeviceToHost);
+      pyrGreydv_m.CopyFrom(cuPyrGreydu_m, cudaMemcpyDeviceToHost);
     }
 
     if (gui.frame > 1 && pangolin::Pushed(estimateH)) {
       tdp::SL3<float> G;
+      std::vector<size_t> maxIt{esmIter0,esmIter1,esmIter2,esmIter3,esmIter4};
       tdp::ESM::EstimateHomography(
           pyrGrey_m, pyrGreydu_m, pyrGreydv_m,
           pyrGrey, pyrGreydu, pyrGreydv,
+          maxIt,
           G);
 
+      H_est = G;
       H = tdp::SL3<float>(Kinv * G.matrix() * K);
       
       Eigen::Vector3f m(0,0,1.);
@@ -189,16 +215,28 @@ int main( int argc, char* argv[] )
       tdp::SE3f dT(tdp::SE3f::Exp_(dx));
       std::cout << dT << std::endl; 
 
+      float x,y;
+      int corners[10] = {0,0,640,0,640,480,0,480,0,0};
+      for (size_t i=0; i<10; i+=2) {
+        H_rand.Transform(corners[i],corners[i+1],x,y);
+        std::cout << "True H corners: " << x << ", " << y << std::endl;
+        H_est.Transform(corners[i],corners[i+1],x,y);
+        std::cout << "Est H corners: " << x << ", " << y << std::endl;
+      }
+
+
 //      tdp::SE3f dT;
 //      Eigen::Vector3f n;
 //      tdp::Homography<float>(H.matrix()).ToPoseAndNormal(dT, n);
+      gui.pause();
     }
 
-    tdp::PyramidToImage(cuPyrGrey_m, greyVis_m, cudaMemcpyDeviceToHost);
-
-    pyrGrey_m.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
-    pyrGreydu_m.CopyFrom(pyrGreydv, cudaMemcpyHostToHost);
-    pyrGreydv_m.CopyFrom(pyrGreydu, cudaMemcpyHostToHost);
+    if (!gui.paused()) {
+      tdp::PyramidToImage(pyrGrey_m, greyVis_m, cudaMemcpyHostToHost);
+      pyrGrey_m.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
+      pyrGreydu_m.CopyFrom(pyrGreydv, cudaMemcpyHostToHost);
+      pyrGreydv_m.CopyFrom(pyrGreydu, cudaMemcpyHostToHost);
+    }
 
     // get depth image
     tdp::Image<uint16_t> dRaw;
@@ -237,7 +275,27 @@ int main( int argc, char* argv[] )
       viewN2D.SetImage(n2D);
     }
     if (viewGrey.IsShown()) {
-      viewGrey.SetImage(grey);
+      viewGrey.SetImage(greyVis);
+      viewGrey.Activate();
+
+      glColor3f(0.,1.,0.);
+      glLineWidth(3);
+      float x,y,xPrev,yPrev;
+      int corners[10] = {0,0,640,0,640,480,0,480,0,0};
+      for (size_t i=0; i<10; i+=2) {
+        H_rand.Transform(corners[i],corners[i+1],x,y);
+        if (i>2)
+          pangolin::glDrawLine(xPrev,yPrev,x,y);
+       xPrev = x; yPrev = y;
+      }
+      glColor3f(1.,0.,0.);
+      glLineWidth(3);
+      for (size_t i=0; i<10; i+=2) {
+        H_est.Transform(corners[i],corners[i+1],x,y);
+        if (i>2)
+          pangolin::glDrawLine(xPrev,yPrev,x,y);
+       xPrev = x; yPrev = y;
+      }
     }
     if (viewGreyDu.IsShown()) {
       viewGreyDu.SetImage(greydu);
@@ -247,7 +305,9 @@ int main( int argc, char* argv[] )
     }
     if (viewGrey_m.IsShown()) {
       viewGrey_m.SetImage(greyVis_m);
+//      viewGrey_m.SetImage(grey_m);
     }
+
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

@@ -11,6 +11,11 @@ SL3<T>::SL3(const Eigen::Matrix<T,3,3>& H)
 {}
 
 template<typename T>
+SL3<T>::SL3(const SL3<T>& other) 
+  : H_(other.H_) 
+{}
+
+template<typename T>
 SL3<T>& SL3<T>::operator*=(const SL3<T>& other) {
   H_ = H_ * other.H_;
   return *this;

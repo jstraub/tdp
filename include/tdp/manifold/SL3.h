@@ -15,6 +15,8 @@ class SL3 : Manifold<T,8> {
   SL3();
   TDP_HOST_DEVICE
   SL3(const Eigen::Matrix<T,3,3>& H);
+  TDP_HOST_DEVICE
+  SL3(const SL3<T>& other);
 
   TDP_HOST_DEVICE
   const Eigen::Matrix<T,3,3>& matrix() const { return H_;}
