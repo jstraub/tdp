@@ -81,7 +81,7 @@ class Image {
     }
   }
   TDP_HOST_DEVICE
-  T GetBilinear(const Vector2f& x) const {
+  T GetBilinear(const Eigen::Vector2f& x) const {
     return GetBilinear(x(0),x(1));
   }
 
