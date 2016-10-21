@@ -11,6 +11,9 @@ namespace tdp {
 template<typename T, int LEVELS, class Alloc>
 class ManagedPyramid : public Pyramid<T,LEVELS> {
  public:
+  ManagedPyramid()
+    : Pyramid<T,LEVELS>()
+  {}
   ManagedPyramid(size_t w, size_t h)
     : Pyramid<T,LEVELS>(w,h,Alloc::construct(
           Pyramid<T,LEVELS>::NumElemsToLvl(w,h,LEVELS)))

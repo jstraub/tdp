@@ -67,6 +67,14 @@ class Pyramid {
     return w*h*((1<<lvl)-1)/(1<<(std::max(0,lvl-1))); 
   }
 
+  std::string Description() const {
+    std::stringstream ss;
+    ss << w_ << "x" << h_ << " lvls: " << LEVELS
+      << " " << SizeBytes() << "bytes " 
+      << " ptr: " << ptr_;
+    return ss.str();
+  }
+
 #ifdef CUDA_FOUND
   /// Perform copy from the given src pyramid to this pyramid.
   /// Use type to specify from which memory to which memory to copy.
