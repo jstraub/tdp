@@ -7,12 +7,12 @@ namespace tdp {
 __global__
 void KernelRgb2Grey(
   const Image<Vector3bda> rgb, 
-  Image<float> grey
+  Image<float> grey, float scale
     ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
   if (idx < rgb.w_ && idy < rgb.h_) {
-    grey(idx,idy) = Rgb2Grey(rgb(idx, idy));
+    grey(idx,idy) = Rgb2Grey(rgb(idx, idy))*scale;
   } else if (idx < grey.w_ && idy < grey.h_) {
     grey(idx, idy) = NAN;
   }
@@ -20,12 +20,12 @@ void KernelRgb2Grey(
 
 void Rgb2Grey(
   const Image<Vector3bda>& cuRgb, 
-  Image<float>& cuGrey
+  Image<float>& cuGrey, float scale
     ) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,cuGrey,32,32);
   //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
-  KernelRgb2Grey<<<blocks,threads>>>(cuRgb,cuGrey);
+  KernelRgb2Grey<<<blocks,threads>>>(cuRgb,cuGrey, scale);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
