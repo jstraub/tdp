@@ -491,7 +491,7 @@ int main( int argc, char* argv[] )
         se3 = keyframes.back().T_wk_.Log(T_mr);
       if ((keyframes.size() == 0 && gui.frame > 10)
           || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
-          || se3.tail<3>().norm() >  keyFrameDistThresh) {
+          || se3.tail<3>().norm() > keyFrameDistThresh) {
         std::cout << "adding keyframe " << keyframes.size() 
           << " angle: " << se3.head<3>().norm()*180./M_PI 
           << " dist: " << se3.tail<3>().norm() << std::endl;
@@ -499,6 +499,17 @@ int main( int argc, char* argv[] )
         n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
         kfSLAM.AddKeyframe(pc, n, rgb, T_mr);
         keyframes.emplace_back(pc, n, rgb, T_mr);
+
+        keyframes.back().pyrPc_.Reinitialise(pcs_o.w_, pcs_o.h_);
+        keyframes.back().pyrN_.Reinitialise(ns_o.w_, ns_o.h_);
+        keyframes.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
+        keyframes.back().pyrPc_.CopyFrom(pcs_o, cudaMemcpyDeviceToHost);
+        keyframes.back().pyrN_.CopyFrom(ns_o, cudaMemcpyDeviceToHost);
+
+        tdp::Image<float> grey0 = keyframes.back().pyrGrey_.GetImage(0);
+        tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
+        tdp::CompletePyramid(keyframes.back().pyrGrey_, cudaMemcpyHostToHost);
+
         tryLoopClose = true;
       }
     }
@@ -509,29 +520,37 @@ int main( int argc, char* argv[] )
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
       size_t numLoopClosures = 0;
-      for (int idB=(int)keyframes.size()-2; 
-          idB>std::max(-1,(int)keyframes.size()-1-10); --idB) {
+      for (int idB=(int)keyframes.size()-2; idB>-1; --idB) {
         tdp::KeyFrame& kfB = keyframes[idB];
-        cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
-        cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+        Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
+        if ( se3.head<3>().norm()*180./M_PI < 2.*keyFrameAngleThresh
+          && se3.tail<3>().norm()           < 2.*keyFrameDistThresh) {
 
-        tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-        std::cout << keyframes.size()-2 << " to " 
-          << keyframes.size()-1 
-          << " Initial transformation: " << std::endl 
-          << T_ab.matrix3x4() << std::endl;
-        float err;
-        float count;
-        tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
-            assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
-            icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
-            icpDownSample, gui.verbose, err, count);
-        if (err == err && count > 3000) {
-          std::cout << "successfull loop closure "
+          // TODO: check against all KFs
+          // TODO: check overlap
+
+
+          cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
+          cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+
+          tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+          std::cout << keyframes.size()-2 << " to " 
+            << keyframes.size()-1 
+            << " Initial transformation: " << std::endl 
             << T_ab.matrix3x4() << std::endl;
-          loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-          kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
-          numLoopClosures ++;
+          float err;
+          float count;
+          tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
+              assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
+              icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
+              icpDownSample, gui.verbose, err, count);
+          if (err == err && count > 3000) {
+            std::cout << "successfull loop closure "
+              << T_ab.matrix3x4() << std::endl;
+            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
+            numLoopClosures ++;
+          }
         }
       }
       if (numLoopClosures > 0) 
