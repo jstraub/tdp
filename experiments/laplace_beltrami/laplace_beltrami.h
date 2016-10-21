@@ -13,6 +13,6 @@ tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda> &pc, const Eigen::Vect
 tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds);
 tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc();
 void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc);
-
+void getSortIds(const std::vector<auto>& vec, std::vector<int>& sortIds);
 
 #endif // SKINNING_H

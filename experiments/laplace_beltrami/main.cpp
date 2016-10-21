@@ -93,6 +93,35 @@ void test1(){
     std::cout << "cov: \n" << cov << std::endl << std::endl;
 }
 
+void getSortIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
+    int hi(0), lo(0), mid;
+    for (int i=0; i<vec.size(); ++i){
+        if (vec[i] < vec[lo]){
+            lo = i;
+        }else if (vec[i] > vec[hi]){
+            hi = i;
+        }
+    }
+
+    for (int i=0; i<vec.size();++i){
+        if (i!=hi&&i!=lo){
+            mid=i;
+        }
+    }
+    sortIds.push_back(hi);
+    sortIds.push_back(mid);
+    sortIds.push_back(lo);
+}
+
+void test_getSortIds(){
+    std::vector<int> v = {1,5,3};
+    std::vector<int> ids;
+    getSortIds(v,ids);
+    for (int i =0; i<ids.size(); ++i){
+        std::cout << ids[i] << ": "<< v[ids[i]] << std::endl;
+    }
+}
+
 int main( int argc, char* argv[] ){
   // load pc and normal from the input paths
   tdp::ManagedHostImage<tdp::Vector3fda> pc(10/*1000*/,1);
@@ -123,13 +152,43 @@ int main( int argc, char* argv[] ){
   tdp::Matrix3fda cov;
   Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
 
+
   for (size_t i=0; i<pc.Area(); ++i){
       query = pc(i,0);
       ann.Search(query, n, eps, nnIds, dists);
       cov = getCovariance(pc,nnIds);
       es.compute(cov);
+
+      std::vector<float> evalues;//todo: reinitialize
+      std::vector<int> axesIds;//todo: reinitialize and move out of for loop
+      for (size_t i=0; i<cov.rows(); ++i){
+          float eval = std::real(es.eigenvalues().col(0)[i]);
+          evalues.push_back( (eval<1e-6? 0: eval));
+      }
+      getSortIds(evalues,axesIds);
+
+      Eigen::Matrix3f localBasis;
+      for (size_t i=0; i<3; ++i){
+          localBasis.col(i) = es.eigenvectors().col(axesIds[i]);
+      }
+
+      //change of basis
+      for (size_t i=0; i<nnIds.size(); ++i){
+        tdp::Vector3fda newPt = localBasis*pc(nnIds[i],0);
+        std::cout << "newPt: \n" << newPt << std::endl;
+      }
+
+
+      /*
+      //debug
+      for (size_t i=0; i<evalues.size(); ++i){
+        std::cout << sortIds[i] << ": "<< evalues[sortIds[i]] << std::endl;
+        std::cout << "evec: \n" << es.eigenvectors().col(sortIds[i]) << std::endl;
+      }
+
       std::cout << "eigenvalues: \n" << es.eigenvalues() << std::endl;
       std::cout << "eigenvectors: \n" << es.eigenvectors() << std::endl << std::endl;
+      */
   }
 
 /*
