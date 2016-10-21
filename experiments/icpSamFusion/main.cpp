@@ -227,10 +227,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",30,1,100);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,100);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
+  pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",2,0,2);
+  pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
@@ -379,27 +381,40 @@ int main( int argc, char* argv[] )
           // TODO: check against all KFs
           // TODO: check overlap
 
+          float overlapBefore, rmseBefore;
+          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, rmse);
 
-          cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
-          cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+          if (overlapBefore > icpLoopCloseOverlapThr) {
+            cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
+            cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
 
-          tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-          std::cout << keyframes.size()-2 << " to " 
-            << keyframes.size()-1 
-            << " Initial transformation: " << std::endl 
-            << T_ab.matrix3x4() << std::endl;
-          float err;
-          float count;
-          tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
-              assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
-              icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
-              icpDownSample, gui.verbose, err, count);
-          if (err == err && count > 3000) {
-            std::cout << "successfull loop closure "
+            tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+            std::cout << keyframes.size()-2 << " to " 
+              << keyframes.size()-1 
+              << " Initial transformation: " << std::endl 
               << T_ab.matrix3x4() << std::endl;
-            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
-            numLoopClosures ++;
+            float err;
+            float count;
+            tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
+                assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
+                icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
+                icpDownSample, gui.verbose, err, count);
+
+            float overlapAfter, rmseAfter;
+            Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapAfter, rmseAfter, &T_ab);
+
+            std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
+              << " RMSE " << rmseBefore << " -> " << rmseAfter << std::endl;
+
+            if (err == err && count*icpDownSample > 30000 
+                && overlapAfter > overlapBefore 
+                && rmseAfter > rmseBefore) {
+              std::cout << "successfull loop closure "
+                << T_ab.matrix3x4() << std::endl;
+              loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+              kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
+              numLoopClosures ++;
+            }
           }
         }
       }

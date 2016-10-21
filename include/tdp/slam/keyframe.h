@@ -35,13 +35,16 @@ struct KeyFrame {
 /// Compute overlap fraction between two KFs in a given pyramid level
 /// lvl
 void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
-    const CameraBase<D,Derived>& cam, int lvl, float& overlap, float& rmse) {
-  tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+    const CameraBase<D,Derived>& cam, int lvl, float& overlap, float& rmse, 
+    const SE3f* T_ab = nullptr) {
+  tdp::SE3f T_ab_ = kfA.T_wk_.Inverse() * kfB.T_wk_;
+  if (T_ab)
+    T_ab_ = *T_ab;
 
   Image<float> greyA = kfA.pyrGrey_.GetImage(lvl);
   Image<float> greyB = kfB.pyrGrey_.GetImage(lvl);
   Image<Vector3fda> pcB = kfB.pyrPc_.GetImage(lvl);
-  Overlap(greyA, grayB, pcB, T_ab, CameraBase<D,Derived>::Scale(cam,lvl), 
+  Overlap(greyA, grayB, pcB, T_ab_, CameraBase<D,Derived>::Scale(cam,lvl), 
       overlap, rmse);
 }
 
