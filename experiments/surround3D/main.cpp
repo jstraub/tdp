@@ -25,6 +25,7 @@
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
+#include <tdp/preproc/grey.h>
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/gui/quickView.h>

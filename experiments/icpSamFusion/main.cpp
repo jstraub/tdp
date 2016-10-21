@@ -37,6 +37,8 @@
 #include <tdp/manifold/SO3.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
+#include <tdp/slam/keyframe.h>
+#include <tdp/slam/keyframe_slam.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -134,12 +136,20 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
   tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreydv(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreydu(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc,hc);
+
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNB(wc, hc);
+  tdp::ManagedHostImage<int> assoc_ba(w,h);
+  tdp::ManagedDeviceImage<int> cuAssoc_ba(w,h);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -173,6 +183,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
+  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
+
   tdp::ManagedHostImage<float> tsdfDEst(wc, hc);
   tdp::ManagedHostImage<float> tsdfSlice(wTSDF, hTSDF);
 //  tdp::QuickView viewTsdfDEst(wc,hc);
@@ -198,19 +211,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
-  pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
-  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
-  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
-
-  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
-  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
-  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2.,0);
-  pangolin::Var<float> gridEx("ui.gridE x", 3.0,2,3);
-  pangolin::Var<float> gridEy("ui.gridE y", 3.0,2,3);
-  pangolin::Var<float> gridEz("ui.gridE z", 3.0,2,3);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
@@ -223,7 +223,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
-
   pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
   pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
   pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
@@ -231,8 +230,21 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
-  pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",2,0,2);
+  pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",1,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
+
+  pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
+  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
+  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
+  pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-3.0,-2.,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-3.0,-2.,0);
+  pangolin::Var<float> gridEx("ui.gridE x", 3.0,2,3);
+  pangolin::Var<float> gridEy("ui.gridE y", 3.0,2,3);
+  pangolin::Var<float> gridEz("ui.gridE z", 3.0,2,3);
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
@@ -350,16 +362,19 @@ int main( int argc, char* argv[] )
       std::cout << "adding keyframe " << keyframes.size() 
         << " angle: " << se3.head<3>().norm()*180./M_PI 
         << " dist: " << se3.tail<3>().norm() << std::endl;
-      pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
-      n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
+      pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
+      n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
       kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
       keyframes.emplace_back(pc, n, rgb, T_mo);
 
-      keyframes.back().pyrPc_.Reinitialise(pcs_o.w_, pcs_o.h_);
-      keyframes.back().pyrN_.Reinitialise(ns_o.w_, ns_o.h_);
+      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
+      keyframes.back().pyrPc_.Reinitialise(pcs_c.w_, pcs_c.h_);
+      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
+
+      keyframes.back().pyrN_.Reinitialise(ns_c.w_, ns_c.h_);
       keyframes.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
-      keyframes.back().pyrPc_.CopyFrom(pcs_o, cudaMemcpyDeviceToHost);
-      keyframes.back().pyrN_.CopyFrom(ns_o, cudaMemcpyDeviceToHost);
+      keyframes.back().pyrPc_.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+      keyframes.back().pyrN_.CopyFrom(ns_c, cudaMemcpyDeviceToHost);
 
       tdp::Image<float> grey0 = keyframes.back().pyrGrey_.GetImage(0);
       tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
@@ -384,7 +399,8 @@ int main( int argc, char* argv[] )
           // TODO: check overlap
 
           float overlapBefore, rmseBefore;
-          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, rmse);
+          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, 
+              rmseBefore);
 
           if (overlapBefore > icpLoopCloseOverlapThr) {
             cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
@@ -429,7 +445,7 @@ int main( int argc, char* argv[] )
       for (size_t i=0; i<keyframes.size(); ++i) {
         if (gui.verbose) std::cout << "add to tsdf" << std::endl;
         const auto& kfA = keyframes[i];
-        const SE3f& T_mo = kfA.T_wk_;
+        const tdp::SE3f& T_mo = kfA.T_wk_;
         cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
         TICK("Add To TSDF");
         AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
@@ -448,7 +464,6 @@ int main( int argc, char* argv[] )
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       dEst.Fill(0.);
       cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
-      numFused = 0;
       T_mo = T_mo_0;
       T_mo_prev = T_mo;
       std::cout << "resetting ICP and TSDF" << std::endl;

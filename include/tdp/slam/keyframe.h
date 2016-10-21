@@ -4,6 +4,7 @@
 #include <tdp/data/managed_pyramid.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/camera/camera_base.h>
 namespace tdp {
 
 struct KeyFrame {
@@ -35,33 +36,40 @@ struct KeyFrame {
 
 /// Compute overlap fraction between two KFs in a given pyramid level
 /// lvl
+template <int D, class Derived>
 void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
-    const CameraBase<D,Derived>& cam, int lvl, float& overlap, float& rmse, 
-    const SE3f* T_ab = nullptr) {
+    const CameraBase<float, D,Derived>& cam, int lvl, float& overlap,
+    float& rmse, const SE3f* T_ab = nullptr) {
   tdp::SE3f T_ab_ = kfA.T_wk_.Inverse() * kfB.T_wk_;
   if (T_ab)
     T_ab_ = *T_ab;
 
-  Image<float> greyA = kfA.pyrGrey_.GetImage(lvl);
-  Image<float> greyB = kfB.pyrGrey_.GetImage(lvl);
-  Image<Vector3fda> pcB = kfB.pyrPc_.GetImage(lvl);
-  Overlap(greyA, grayB, pcB, T_ab_, CameraBase<D,Derived>::Scale(cam,lvl), 
+  const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
+  const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
+  const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
+  Overlap(greyA, greyB, pcB, T_ab_, 
+      ScaleCamera<float,D,Derived>(cam,pow(0.5,lvl)), 
       overlap, rmse);
 }
 
+template <int D, class Derived>
 void Overlap(const Image<float>& greyA, const Image<float>& greyB,
     const Image<Vector3fda>& pcB, const SE3f& T_ab,
-    const CameraBase<D,Derived>& camA, float& overlap, float& rmse) {
+    const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse) {
 
   float N = 0.f;
   overlap = 0.f;
   rmse = 0.f;
+  std::cout << pcB.Description() << std::endl;
+  std::cout << greyA.Description() << std::endl;
+  std::cout << greyB.Description() << std::endl;
   for (size_t i=0; i<pcB.Area(); ++i) {
+    std::cout << i << std::endl;
     if (IsValidData(pcB[i])) {
-      Vector2f x = camA.Project(T_ab*pcB[i]);
-      if (grayA.Inside(x)) {
+      Eigen::Vector2f x = camA.Project(T_ab*pcB[i]);
+      if (greyA.Inside(x) && i < greyB.Area()) {
         ++overlap;
-        float y = grayA.GetBilinear(x)-grayB[i];
+        float y = greyA.GetBilinear(x)-greyB[i];
         rmse += y*y;
       }
       ++N;
