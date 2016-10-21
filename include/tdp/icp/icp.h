@@ -19,7 +19,7 @@
 namespace tdp {
 
 #ifdef ANN_FOUND
-void AssociateANN(
+int AssociateANN(
     Image<Vector3fda>& pc_m,
     Image<Vector3fda>& pc_o,
     const SE3f& T_om,
@@ -51,7 +51,8 @@ void AssociateANN(
       }
     }
   }
-  std::cout << "N assoc: " << Nassoc << " of " << pc_m.Area() << std::endl;
+  return Nassoc;
+//  std::cout << "N assoc: " << Nassoc << " of " << pc_m.Area() << std::endl;
 }
 #endif
 
@@ -194,6 +195,7 @@ class ICP {
     Image<int>& assoc_om,
     SE3f& T_mo,
     size_t maxIt, float angleThr_deg, float distThr,
+    int countThr,
     bool verbose,
     float& error, float& count
     );

@@ -27,11 +27,15 @@ void ICP::ComputeANN(
     float& err, float& count
     ) {
   float errPrev = 0.f; 
-  for (size_t it=0; it<maxIt; ++it) {
-    tdp::AssociateANN(pc_m, pc_o, T_mo.Inverse(), assoc_om, downSampleANN);
+  int countThr = 0;
+  size_t it;
+  for (it=0; it<maxIt; ++it) {
+    int Nassoc = tdp::AssociateANN(pc_m, pc_o, T_mo.Inverse(),
+        assoc_om, downSampleANN);
+    countThr = Nassoc / 10; 
     cuAssoc_om.CopyFrom(assoc_om, cudaMemcpyHostToDevice);
     tdp::ICP::ComputeGivenAssociation(cuPc_m, n_m, cuPc_o, n_o, 
-        cuAssoc_om, T_mo, 1, angleThr_deg, distThr, false,
+        cuAssoc_om, T_mo, 1, angleThr_deg, distThr, countThr, verbose,
         err, count);
     if (verbose) {
       std::cout << " it " << it 
@@ -45,6 +49,11 @@ void ICP::ComputeANN(
     if (it>0 && fabs(err-errPrev)/err < 1e-7) break;
     errPrev = err;
   }
+  std::cout << "it=" << it
+    << ": err=" << err << "\tdErr/err=" << fabs(err-errPrev)/err
+    << " # inliers: " << count  << " thr: " << countThr
+    << " det(R): " << T_mo.rotation().matrix().determinant()
+    << std::endl;
 }
 #endif
 
@@ -56,6 +65,7 @@ void ICP::ComputeGivenAssociation(
     Image<int>& assoc_om,
     SE3f& T_mo,
     size_t maxIt, float angleThr_deg, float distThr,
+    int countThr,
     bool verbose,
     float& error, float& count
     ) {
@@ -71,19 +81,13 @@ void ICP::ComputeGivenAssociation(
         T_mo, cos(angleThr_deg*M_PI/180.),
         distThr,ATA,ATb,error,count);
 #endif
-    if (count < 1000) {
-      std::cout << "# inliers " << count 
-        << " to small; skipping" << std::endl;
+    if (count < countThr) {
+//      std::cout << "# inliers " << count << " to small; skipping" << std::endl;
       break;
     }
     // solve for x using ldlt
     Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
       (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
-    int rank = ATA.cast<double>().jacobiSvd().rank();
-
-    if (rank < 6) {
-      std::cout << "ATA in ICP is rank deficient: " << rank << std::endl;
-    }
 
     // apply x to the transformation
     SE3f dT = SE3f::Exp_(x);
@@ -92,7 +96,7 @@ void ICP::ComputeGivenAssociation(
       std::cout << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
-        << " rank(ATA): " << rank
+//        << " rank(ATA): " << rank
         << " det(R): " << T_mo.rotation().matrix().determinant()
         << " |x|: " << x.topRows(3).norm()*180./M_PI 
         << " " <<  x.bottomRows(3).norm()

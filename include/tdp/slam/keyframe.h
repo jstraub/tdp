@@ -7,6 +7,11 @@
 #include <tdp/camera/camera_base.h>
 namespace tdp {
 
+/// KeyFrame
+///
+/// Use emplace_back in std::vector to not run into memory issues.
+/// Make sure that ManagedImage and ManagedPyramdid (and all additional
+/// containers) have a propper move constructor.
 struct KeyFrame {
   KeyFrame() {};
   KeyFrame(
@@ -41,9 +46,6 @@ struct KeyFrame {
     pyrN_.CopyFrom(n,       cudaMemcpyDeviceToHost);
     pyrGrey_.CopyFrom(grey, cudaMemcpyHostToHost);
   }
-
-//  KeyFrame(const KeyFrame& ) = delete;
-//  KeyFrame& operator=(const KeyFrame& ) = delete;
 
   ManagedHostImage<Vector3fda> pc_;
   ManagedHostImage<Vector3fda> n_;

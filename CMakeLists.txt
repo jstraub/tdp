@@ -27,12 +27,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "-g -Wall -Wno-deprecated -O2 -finline-functions -DN
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Wno-deprecated -std=c++11")
 
 # No OpenMP since it messes with GTSAM
-#find_package (OpenMP QUIET)
-#if (OPENMP_FOUND) 
-#  message("found OpenMP")
-#  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}")
-#  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${OpenMP_C_FLAGS}")
-#endif()
+find_package (OpenMP QUIET)
+if (OPENMP_FOUND) 
+  message("found OpenMP")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${OpenMP_C_FLAGS}")
+endif()
 
 find_package (CUDA QUIET)
 if (CUDA_FOUND)
