@@ -22,6 +22,26 @@ struct KeyFrame {
     rgb_.CopyFrom(rgb, cudaMemcpyHostToHost);
   }
 
+  KeyFrame(
+      const Pyramid<Vector3fda,3>& pc, 
+      const Pyramid<Vector3fda,3>& n,
+      const Pyramid<float,3>& grey,
+      const Image<Vector3bda>& rgb,
+      const SE3f& T_wk) :
+    pc_(pc.w_, pc.h_), n_(n.w_, n.h_), rgb_(rgb.w_, rgb.h_), 
+    d_(pc.w_, pc.h_), pyrPc_(pc.w_, pc.h_), pyrN_(n.w_, n.h_),
+    pyrGrey_(grey.w_, grey.h_),
+    T_wk_(T_wk)
+  {
+    pc_.CopyFrom(pc.GetConstImage(0),  cudaMemcpyDeviceToHost);
+    n_.CopyFrom(n.GetConstImage(0),    cudaMemcpyDeviceToHost);
+    rgb_.CopyFrom(rgb,            cudaMemcpyHostToHost);
+
+    pyrPc_.CopyFrom(pc,     cudaMemcpyDeviceToHost);
+    pyrN_.CopyFrom(n,       cudaMemcpyDeviceToHost);
+    pyrGrey_.CopyFrom(grey, cudaMemcpyHostToHost);
+  }
+
   ManagedHostImage<Vector3fda> pc_;
   ManagedHostImage<Vector3fda> n_;
   ManagedHostImage<Vector3bda> rgb_;
@@ -47,6 +67,9 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
   const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
   const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
   const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
+  std::cout << kfB.pyrPc_.Description() << std::endl;
+  std::cout << pcB.Description() << std::endl;
+  std::cout << kfB.pyrPc_.ptr_[0] << std::endl;
   Overlap(greyA, greyB, pcB, T_ab_, 
       ScaleCamera<float,D,Derived>(cam,pow(0.5,lvl)), 
       overlap, rmse);
@@ -60,11 +83,11 @@ void Overlap(const Image<float>& greyA, const Image<float>& greyB,
   float N = 0.f;
   overlap = 0.f;
   rmse = 0.f;
-  std::cout << pcB.Description() << std::endl;
-  std::cout << greyA.Description() << std::endl;
-  std::cout << greyB.Description() << std::endl;
+//  std::cout << greyA.Description() << std::endl;
+//  std::cout << greyB.Description() << std::endl;
   for (size_t i=0; i<pcB.Area(); ++i) {
     std::cout << i << std::endl;
+    std::cout << pcB[i] << std::endl;
     if (IsValidData(pcB[i])) {
       Eigen::Vector2f x = camA.Project(T_ab*pcB[i]);
       if (greyA.Inside(x) && i < greyB.Area()) {

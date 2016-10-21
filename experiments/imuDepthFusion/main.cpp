@@ -402,7 +402,7 @@ int main( int argc, char* argv[] )
       TICK("ICP");
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-          camD, maxIt, icpAngleThr_deg, icpDistThr); 
+          camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
       TOCK("ICP");
 
 //      std::cout << "T_mo update: " << std::endl 

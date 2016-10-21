@@ -114,7 +114,8 @@ void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     ) {
   Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
   Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
@@ -157,15 +158,17 @@ void ICP::ComputeProjective(
       // apply x to the transformation
       SE3f dT = SE3f::Exp_(x);
       T_mo = dT * T_mo;
-      std::cout << "lvl " << lvl << " it " << it 
-        << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
-        << " # inliers: " << count 
-        << " kappa(ATA): " << kappa
-        << " ev(ATA): " << ev.transpose()
-        << " det(R): " << T_mo.rotation().matrix().determinant()
-        << " |x|: " << x.topRows(3).norm()*180./M_PI 
-        << " " <<  x.bottomRows(3).norm()
-        << std::endl;
+      if (verbose) {
+        std::cout << "lvl " << lvl << " it " << it 
+          << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+          << " # inliers: " << count 
+          << " kappa(ATA): " << kappa
+          << " ev(ATA): " << ev.transpose()
+          << " det(R): " << T_mo.rotation().matrix().determinant()
+          << " |x|: " << x.topRows(3).norm()*180./M_PI 
+          << " " <<  x.bottomRows(3).norm()
+          << std::endl;
+      }
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;
       if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
@@ -183,7 +186,8 @@ template void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const BaseCameraf& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& pcs_m,
@@ -193,7 +197,8 @@ template void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const BaseCameraPoly3f& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 
 template<int D, typename Derived>
@@ -207,7 +212,8 @@ void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     ) {
   Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
   Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
@@ -244,14 +250,16 @@ void ICP::ComputeProjective(
       // apply x to the transformation
       SE3f dT = SE3f::Exp_(x);
       T_mo = dT * T_mo;
-      std::cout << "lvl " << lvl << " it " << it 
-        << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
-        << " # inliers: " << count 
-        << " rank(ATA): " << rank
-        << " det(R): " << T_mo.rotation().matrix().determinant()
-        << " |x|: " << x.topRows(3).norm()*180./M_PI 
-        << " " <<  x.bottomRows(3).norm()
-        << std::endl;
+      if (verbose) {
+        std::cout << "lvl " << lvl << " it " << it 
+          << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
+          << " # inliers: " << count 
+          << " rank(ATA): " << rank
+          << " det(R): " << T_mo.rotation().matrix().determinant()
+          << " |x|: " << x.topRows(3).norm()*180./M_PI 
+          << " " <<  x.bottomRows(3).norm()
+          << std::endl;
+      }
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;
       if (it>0 && fabs(error-errPrev)/error < 1e-7) break;
@@ -271,7 +279,8 @@ template void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const BaseCameraf& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 template void ICP::ComputeProjective(
     Pyramid<Vector3fda,3>& pcs_m,
@@ -283,7 +292,8 @@ template void ICP::ComputeProjective(
     SE3f& T_mo,
     const SE3f& T_cm,
     const BaseCameraPoly3f& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 
 template<typename CameraT>

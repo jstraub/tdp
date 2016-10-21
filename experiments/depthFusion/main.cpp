@@ -373,10 +373,11 @@ int main( int argc, char* argv[] )
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       if (!icpGrad3D) {
         tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-            camD, maxIt, icpAngleThr_deg, icpDistThr); 
+            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
       } else {
         tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
-            gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr); 
+            gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
+            icpDistThr, gui.verbose); 
       }
 //      if (icpRot && icpRotOverwrites) 
 //        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);

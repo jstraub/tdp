@@ -165,6 +165,8 @@ int main( int argc, char* argv[] )
 //  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
+  
+  tdp::ManagedHostPyramid<float,3> pyrGrey(wc,hc);
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -230,7 +232,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
-  pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",1,0,2);
+  pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
 
   pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
@@ -283,6 +285,8 @@ int main( int argc, char* argv[] )
   std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
   std::vector<tdp::KeyFrame> keyframes;
 
+  gui.verbose = false;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -301,7 +305,7 @@ int main( int argc, char* argv[] )
     int64_t t_host_us_d = 0;
     if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
     tdp::SE3f T_wr_imu = T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
-    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
+//    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
@@ -341,10 +345,11 @@ int main( int argc, char* argv[] )
     std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
     if (!icpGrad3D) {
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-          camD, maxIt, icpAngleThr_deg, icpDistThr); 
+          camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
     } else {
       tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
-          gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr); 
+          gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
+          icpDistThr, gui.verbose); 
     }
     TOCK("ICP");
 
@@ -365,20 +370,26 @@ int main( int argc, char* argv[] )
       pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
       n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
       kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
-      keyframes.emplace_back(pc, n, rgb, T_mo);
 
-      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
-      keyframes.back().pyrPc_.Reinitialise(pcs_c.w_, pcs_c.h_);
-      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
-
-      keyframes.back().pyrN_.Reinitialise(ns_c.w_, ns_c.h_);
-      keyframes.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
-      keyframes.back().pyrPc_.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-      keyframes.back().pyrN_.CopyFrom(ns_c, cudaMemcpyDeviceToHost);
-
-      tdp::Image<float> grey0 = keyframes.back().pyrGrey_.GetImage(0);
+      tdp::Image<float> grey0 = pyrGrey.GetImage(0);
       tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
-      tdp::CompletePyramid(keyframes.back().pyrGrey_, cudaMemcpyHostToHost);
+      tdp::CompletePyramid(pyrGrey, cudaMemcpyHostToHost);
+
+      keyframes.emplace_back(pcs_c, ns_c, pyrGrey, rgb, T_mo);
+
+//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
+//      keyframes.back().pyrPc_.Reinitialise(wc, hc);
+//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
+//      keyframes.back().pyrPc_.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
+//      const tdp::Image<tdp::Vector3fda> pcBc_ = keyframes.back().pyrPc_.GetConstImage(1);
+//      std::cout << pcBc_.Description() << std::endl;
+//      tdp::Image<tdp::Vector3fda> pcB_ = keyframes.back().pyrPc_.GetImage(1);
+//      std::cout << pcB_.Description() << std::endl;
+//      keyframes.back().pyrN_.Reinitialise(wc, hc);
+//      keyframes.back().pyrGrey_.Reinitialise(wc, hc);
+//      keyframes.back().pyrN_.CopyFrom(ns_c, cudaMemcpyDeviceToHost);
+
 
       tryLoopClose = true;
     }

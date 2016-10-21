@@ -149,7 +149,8 @@ class ICP {
     SE3f& T_mo,
     const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 
   /// gs are the 3D gradients.
@@ -164,7 +165,8 @@ class ICP {
     SE3f& T_mo,
     const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
-    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr
+    const std::vector<size_t>& maxIt, float angleThr_deg, float distThr,
+    bool verbose
     );
 
   /// Same as above but for multi-camera rigs
