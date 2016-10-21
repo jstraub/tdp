@@ -80,6 +80,10 @@ class Image {
       return (yd-y)*valU + (y-yu)*valD;
     }
   }
+  TDP_HOST_DEVICE
+  T GetBilinear(const Vector2f& x) const {
+    return GetBilinear(x(0),x(1));
+  }
 
   TDP_HOST_DEVICE
   bool Inside(int u, int v) const { 
@@ -88,6 +92,10 @@ class Image {
   TDP_HOST_DEVICE
   bool Inside(float u, float v) const { 
     return 0 <= u && u < w_-1 && 0 <= v && v < h_-1; 
+  }
+  TDP_HOST_DEVICE
+  bool Inside(const Eigen::Vector2f& x) const { 
+    return Inside(x(0), x(1));
   }
 
   TDP_HOST_DEVICE

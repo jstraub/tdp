@@ -18,6 +18,16 @@ class ManagedPyramid : public Pyramid<T,LEVELS> {
    ~ManagedPyramid() {
      Alloc::destroy(this->ptr_);
    }
+
+  void Reinitialise(size_t w, size_t h) {
+    if (this->ptr_)  {
+      Alloc::destroy(this->ptr_);
+    }
+    this->ptr_ = Alloc::construct(Pyramid<T,LEVELS>::NumElemsToLvl(w,h,LEVELS));
+    this->w_ = w;
+    this->h_ = h;
+  }
+
 };
 
 template <class T, int LEVELS>
