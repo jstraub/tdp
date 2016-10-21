@@ -312,6 +312,8 @@ int main( int argc, char* argv[] )
     tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
+    // TODO: track against closest KeyFrame to limit drift and to use
+    // SAM optimization of KF poses
     if (icpImu && imu) 
       T_mo = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mo;
     if (gui.verbose) std::cout << "icp" << std::endl;
@@ -424,17 +426,22 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(runFusion)) {
       // TODO: iterate over keyframes and fuse them into TSDF
-      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
-      TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
-      TOCK("Add To TSDF");
-      if (gui.verbose) std::cout << "ray trace" << std::endl;
-      TICK("Ray Trace TSDF");
-      RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
-          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
-      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
-      tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
-      TOCK("Ray Trace TSDF");
+      for (size_t i=0; i<keyframes.size(); ++i) {
+        if (gui.verbose) std::cout << "add to tsdf" << std::endl;
+        const auto& kfA = keyframes[i];
+        const SE3f& T_mo = kfA.T_wk_;
+        cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
+        TICK("Add To TSDF");
+        AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+        TOCK("Add To TSDF");
+      }
+//      if (gui.verbose) std::cout << "ray trace" << std::endl;
+//      TICK("Ray Trace TSDF");
+//      RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+//          ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
+//      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+//      tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
+//      TOCK("Ray Trace TSDF");
     }
 
     if (pangolin::Pushed(resetTSDF)) {

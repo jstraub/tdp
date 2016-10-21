@@ -24,6 +24,7 @@ struct KeyFrame {
   ManagedHostImage<Vector3fda> pc_;
   ManagedHostImage<Vector3fda> n_;
   ManagedHostImage<Vector3bda> rgb_;
+  ManagedHostImage<float> d_;
 
   ManagedHostPyramid<Vector3fda,3> pyrPc_;
   ManagedHostPyramid<Vector3fda,3> pyrN_;
