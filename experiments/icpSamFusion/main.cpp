@@ -377,20 +377,6 @@ int main( int argc, char* argv[] )
 
       keyframes.emplace_back(pcs_c, ns_c, pyrGrey, rgb, T_mo);
 
-//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
-//      keyframes.back().pyrPc_.Reinitialise(wc, hc);
-//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
-//      keyframes.back().pyrPc_.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-//      std::cout << keyframes.back().pyrPc_.Description() << std::endl;
-//      const tdp::Image<tdp::Vector3fda> pcBc_ = keyframes.back().pyrPc_.GetConstImage(1);
-//      std::cout << pcBc_.Description() << std::endl;
-//      tdp::Image<tdp::Vector3fda> pcB_ = keyframes.back().pyrPc_.GetImage(1);
-//      std::cout << pcB_.Description() << std::endl;
-//      keyframes.back().pyrN_.Reinitialise(wc, hc);
-//      keyframes.back().pyrGrey_.Reinitialise(wc, hc);
-//      keyframes.back().pyrN_.CopyFrom(ns_c, cudaMemcpyDeviceToHost);
-
-
       tryLoopClose = true;
     }
 

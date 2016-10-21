@@ -18,6 +18,13 @@ class ManagedPyramid : public Pyramid<T,LEVELS> {
     : Pyramid<T,LEVELS>(w,h,Alloc::construct(
           Pyramid<T,LEVELS>::NumElemsToLvl(w,h,LEVELS)))
   {}
+  /// important for propper emplace_back in factors
+  ManagedPyramid(ManagedPyramid&& other)
+  : Pyramid<T,LEVELS>(other.w_, other.h_, other.ptr_) {
+    other.w_ = 0;
+    other.h_ = 0;
+    other.ptr_ = nullptr;
+  }
    ~ManagedPyramid() {
      Alloc::destroy(this->ptr_);
    }

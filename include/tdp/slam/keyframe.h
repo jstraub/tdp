@@ -42,6 +42,9 @@ struct KeyFrame {
     pyrGrey_.CopyFrom(grey, cudaMemcpyHostToHost);
   }
 
+//  KeyFrame(const KeyFrame& ) = delete;
+//  KeyFrame& operator=(const KeyFrame& ) = delete;
+
   ManagedHostImage<Vector3fda> pc_;
   ManagedHostImage<Vector3fda> n_;
   ManagedHostImage<Vector3bda> rgb_;
@@ -52,6 +55,7 @@ struct KeyFrame {
   ManagedHostPyramid<float,3> pyrGrey_;
 
   SE3f T_wk_; // Transformation from keyframe to world
+
 };
 
 /// Compute overlap fraction between two KFs in a given pyramid level
@@ -67,9 +71,6 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
   const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
   const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
   const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
-  std::cout << kfB.pyrPc_.Description() << std::endl;
-  std::cout << pcB.Description() << std::endl;
-  std::cout << kfB.pyrPc_.ptr_[0] << std::endl;
   Overlap(greyA, greyB, pcB, T_ab_, 
       ScaleCamera<float,D,Derived>(cam,pow(0.5,lvl)), 
       overlap, rmse);
@@ -83,11 +84,7 @@ void Overlap(const Image<float>& greyA, const Image<float>& greyB,
   float N = 0.f;
   overlap = 0.f;
   rmse = 0.f;
-//  std::cout << greyA.Description() << std::endl;
-//  std::cout << greyB.Description() << std::endl;
   for (size_t i=0; i<pcB.Area(); ++i) {
-    std::cout << i << std::endl;
-    std::cout << pcB[i] << std::endl;
     if (IsValidData(pcB[i])) {
       Eigen::Vector2f x = camA.Project(T_ab*pcB[i]);
       if (greyA.Inside(x) && i < greyB.Area()) {
