@@ -97,7 +97,6 @@ class KeyframeSLAM {
 
  private:
   std::vector<KeyFrame> kfs_;
-
   std::vector<isam::Pose3d_Node*> T_wk_;
 
   isam::Slam slam_;

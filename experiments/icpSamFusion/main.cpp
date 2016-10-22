@@ -146,6 +146,12 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> photoErrBefore(wc, hc);
   tdp::ManagedHostImage<float> photoErrAfter(wc, hc);
 
+  tdp::SE3f T_abSuccess;
+  tdp::ManagedHostImage<float> photoErrBeforeSuccess(wc, hc);
+  tdp::ManagedHostImage<float> photoErrAfterSuccess(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pcASuccess(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pcBSuccess(wc, hc);
+
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(wc, hc);
@@ -245,12 +251,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
+  pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
   pangolin::Var<bool> useANN("ui.use ANN", true,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
   pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",300,1,100);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
@@ -319,21 +326,24 @@ int main( int argc, char* argv[] )
   std::mutex mut;
 
   auto computeLoopClosures = [&]() {
-    int idA =-1;
-    int idB =-1;
     size_t numLoopClosures = 0;
-    {
-      std::lock_guard<std::mutex> lock(mut);
-      if (loopClose.size() > 0) {
-        std::pair<int,int> ids = loopClose.front();
-        loopClose.pop_front();
-        idA = ids.first;
-        idB = ids.second;
+    while (42) {
+      int idA =-1;
+      int idB =-1;
+      {
+        std::lock_guard<std::mutex> lock(mut);
+        if (loopClose.size() > 0) {
+          std::pair<int,int> ids = loopClose.front();
+          loopClose.pop_front();
+          idA = ids.first;
+          idB = ids.second;
+        }
+  //      std::cout << "In thread: # loop closure hypotheses " 
+  //        << loopClose.size() << " " << idA << " " << idB << std::endl;
       }
-//      std::cout << "In thread: # loop closure hypotheses " 
-//        << loopClose.size() << " " << idA << " " << idB << std::endl;
-    }
-    if (idA > 0 && idB > 0) {
+      if (idA < 0 && idB < 0) {
+        break;
+      }
       tdp::KeyFrame& kfA = kfs[idA];
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
@@ -388,8 +398,6 @@ int main( int argc, char* argv[] )
           Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl,
               overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
 
-          greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
-          greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
 
           std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
             << " RMSE " << rmseBefore << " -> " << rmseAfter << std::endl;
@@ -404,8 +412,17 @@ int main( int argc, char* argv[] )
             kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
             loopClosures.emplace(std::make_pair(idA, idB), T_ab);
             numLoopClosures ++;
+
+            greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+            greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+            photoErrAfterSuccess.CopyFrom(photoErrAfter, cudaMemcpyHostToHost);
+            photoErrBeforeSuccess.CopyFrom(photoErrBefore, cudaMemcpyHostToHost);
+            pcASuccess.CopyFrom(kfA.pc_, cudaMemcpyHostToHost);
+            pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
+            T_abSuccess = T_ab;
           }
         }
+        break;
       } else {
         std::cout << " skipping " << idA << " -> " << idB  
           << ": "
@@ -415,6 +432,12 @@ int main( int argc, char* argv[] )
       }
       if (numLoopClosures > 0) {
         kfSLAM.Optimize(); 
+        if (useOptimizedPoses) {
+          T_ac = kfSLAM.GetPose(idActive).Inverse()*kfs[idActive].T_wk_*T_ac;
+          for (size_t i=0; i < kfs.size(); ++i) {
+            kfs[i].T_wk_ = kfSLAM.GetPose(i);
+          }
+        }
       }
     }
   };
@@ -510,7 +533,6 @@ int main( int argc, char* argv[] )
       TOCK("ICP");
       T_mo = kfs[idActive].T_wk_*T_ac;
       T_mos.push_back(T_mo);
-
     }
 
     Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
@@ -547,6 +569,7 @@ int main( int argc, char* argv[] )
       }
       idActive = kfs.size()-1;
       T_ac = tdp::SE3f();
+      T_mo = kfs[idActive].T_wk_*T_ac;
     } else {
       std::cout << "NOT adding keyframe " << kfs.size() 
         << " angle: " << se3.head<3>().norm()*180./M_PI 
@@ -679,35 +702,19 @@ int main( int argc, char* argv[] )
 
     if (viewLoopClose.IsShown() && kfs.size() > 1) {
       viewLoopClose.Activate(camLoopClose);
-      tdp::KeyFrame& kfA = kfs[kfs.size()-1];
-      tdp::KeyFrame& kfB = kfs[kfs.size()-2];
 
-      tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-      if (showAfterOpt) {
-        std::pair<int,int> idAB(kfs.size()-1, kfs.size()-2);
-        T_ab = loopClosures[idAB];
-      }
-
-      vbo.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);
+      vbo.Upload(pcASuccess.ptr_,pcASuccess.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
       glColor4f(1.f,0.f,0.f,0.5f);
       pangolin::RenderVbo(vbo);
 
-      vbo.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
-      pangolin::glSetFrameOfReference(T_ab.matrix());
+      vbo.Upload(pcBSuccess.ptr_,pcBSuccess.SizeBytes(), 0);
+      pangolin::glSetFrameOfReference(T_abSuccess.matrix());
       pangolin::glDrawAxis(0.1f);
       glColor4f(0.f,1.f,0.f,0.5f);
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
 
-      glColor4f(1.f,0.f,1.f,0.5f);
-      for (size_t i=0; i<assoc_ba.Area(); i+= 300) 
-        if (assoc_ba[i] < assoc_ba.Area()) {
-          tdp::Vector3fda pb_in_a = T_ab*kfB.pc_[assoc_ba[i]];
-          pangolin::glDrawLine(
-              kfA.pc_[i](0), kfA.pc_[i](1), kfA.pc_[i](2),
-              pb_in_a(0), pb_in_a(1), pb_in_a(2));
-        }
     }
 
     TOCK("Draw 3D");
@@ -718,12 +725,12 @@ int main( int argc, char* argv[] )
 
     if (viewDebugA.IsShown()) {
 //      viewDebugA.SetImage(pyrGrey.GetImage(0));
-      viewDebugA.SetImage(photoErrBefore);
+      viewDebugA.SetImage(photoErrBeforeSuccess);
     }
     if (viewDebugB.IsShown()) {
 //      if (kfs.size() > 0)
 //        viewDebugB.SetImage(kfs.back().pyrGrey_.GetImage(0));
-      viewDebugB.SetImage(photoErrAfter);
+      viewDebugB.SetImage(photoErrAfterSuccess);
     }
     if (viewDebugC.IsShown()) {
       viewDebugC.SetImage(greyA);
