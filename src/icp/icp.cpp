@@ -85,6 +85,10 @@ void ICP::ComputeGivenAssociation(
 //      std::cout << "# inliers " << count << " to small; skipping" << std::endl;
       break;
     }
+    error /= count;
+    ATA /= count;
+    ATb /= count;
+
     // solve for x using ldlt
     Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
       (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 

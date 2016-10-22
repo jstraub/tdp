@@ -12,12 +12,13 @@ class KeyframeSLAM {
   KeyframeSLAM() :
     noisePrior_(isam::Information(10000. * isam::eye(6))),
     noiseOdom_(isam::Information(1000. * isam::eye(6))),
-    noiseLoopClosure_(isam::Information(1000. * isam::eye(6)))
+    noiseLoopClosure_(isam::Information(100. * isam::eye(6)))
   { 
     isam::Properties props;
     props.verbose=true;
-    //props.method=isam::Method::LEVENBERG_MARQUARDT;
-    props.method=isam::Method::GAUSS_NEWTON;
+    props.quiet=false;
+    props.method=isam::Method::LEVENBERG_MARQUARDT;
+    //props.method=isam::Method::GAUSS_NEWTON;
     props.epsilon_rel = 1e-6;
     props.epsilon_abs = 1e-6;
     slam_.set_properties(props); 
@@ -74,19 +75,16 @@ class KeyframeSLAM {
   }
 
   void Optimize() {
-    std::cout << "initial"<< std::endl;
-    PrintValues();
-
+//    std::cout << "initial"<< std::endl;
+//    PrintValues();
     std::cout << "SAM optimization" << std::endl;
-//    slam_.batch_optimization();
-    slam_.update();
-    slam_.print_stats();
-
+    slam_.batch_optimization();
+//    slam_.update();
+//    slam_.print_stats();
     slam_.save("isam.csv");
-    slam_.print_graph();
-    
-    std::cout << "after iterations" << std::endl;
-    PrintValues();
+//    slam_.print_graph();
+//    std::cout << "after iterations" << std::endl;
+//    PrintValues();
   }
 
   size_t size() { return T_wk_.size(); }

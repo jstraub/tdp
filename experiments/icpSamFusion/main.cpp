@@ -118,9 +118,6 @@ int main( int argc, char* argv[] )
   pangolin::View& viewPc3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
-  pangolin::View& viewN3D = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(viewN3D);
 
   pangolin::OpenGlRenderState camLoopClose(
       pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
@@ -220,10 +217,14 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewDebugD(wc, hc);
   gui.container().AddDisplay(viewDebugD);
 
+  viewDebugA.Show(false);
+  viewDebugB.Show(false);
+  viewDebugC.Show(false);
+  viewDebugD.Show(false);
+
   viewDepthPyr.Show(false);
   viewNormalsPyr.Show(false);
   viewGrad3DPyr.Show(false);
-  viewN3D.Show(false);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
@@ -244,15 +245,18 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
-  pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
-  pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
-  pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",10,1,100);
-  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
-  pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
-  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
+  pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
+  pangolin::Var<bool> useANN("ui.use ANN", true,true);
+  pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
+  pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
+  pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
+  pangolin::Var<int>  icpDownSample("ui.ICP downsample",300,1,100);
+  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
+  pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
+  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
+  pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
   pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
@@ -269,7 +273,6 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
-  pangolin::Var<bool> showPcView("ui.show overview",true,true);
 
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
@@ -278,9 +281,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
   pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",5,0,10);
 
-  tdp::ThreadedValue<bool> runWorker(true);
+  tdp::ThreadedValue<bool> runSave(true);
   std::thread workThread([&]() {
-        while(runWorker.Get()) {
+        while(runSave.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
             tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
             tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
@@ -294,20 +297,134 @@ int main( int argc, char* argv[] )
 
   gui.verbose = true;
 
-  tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
-  T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
-  tdp::SE3f T_mo_0 = T_mo;
+  tdp::SE3f T_mo_0;
+  tdp::SE3f T_mo = T_mo_0;
   tdp::SE3f T_mo_prev = T_mo_0;
-  tdp::SE3f T_wr_imu_prev;
+
+  tdp::SE3f T_ac; // current to active KF
 
   tdp::KeyframeSLAM kfSLAM;
   std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
-  std::vector<tdp::KeyFrame> keyframes;
+  std::vector<tdp::KeyFrame> kfs;
   std::vector<tdp::SE3f> T_mos;
 
   std::list<std::pair<int,int>> loopClose;
 
   gui.verbose = false;
+
+  int idActive = 0;
+
+
+  tdp::ThreadedValue<bool> runLoopClosure(true);
+  std::mutex mut;
+
+  auto computeLoopClosures = [&]() {
+    int idA =-1;
+    int idB =-1;
+    size_t numLoopClosures = 0;
+    {
+      std::lock_guard<std::mutex> lock(mut);
+      if (loopClose.size() > 0) {
+        std::pair<int,int> ids = loopClose.front();
+        loopClose.pop_front();
+        idA = ids.first;
+        idB = ids.second;
+      }
+//      std::cout << "In thread: # loop closure hypotheses " 
+//        << loopClose.size() << " " << idA << " " << idB << std::endl;
+    }
+    if (idA > 0 && idB > 0) {
+      tdp::KeyFrame& kfA = kfs[idA];
+      cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
+      cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
+      tdp::KeyFrame& kfB = kfs[idB];
+      Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
+      if ( se3.head<3>().norm()*180./M_PI < 1.5*keyFrameAngleThresh
+        && se3.tail<3>().norm()           < 1.5*keyFrameDistThresh) {
+
+        tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+        std::cout << " checking " << idA << " -> " << idB 
+          << ": " << se3.head<3>().norm()*180./M_PI << " "
+          << se3.tail<3>().norm()          
+          << std::endl;
+
+        photoErrBefore.Fill(0.);
+        float overlapBefore, rmseBefore;
+        Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, 
+            rmseBefore, nullptr, &photoErrBefore);
+
+        if (overlapBefore > icpLoopCloseOverlapThr) {
+          cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
+          cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+
+          float err=0.;
+          float count=10000;
+          if (useANN) {
+            tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
+              assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
+              icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
+              icpDownSample, gui.verbose, err, count);
+          } else {
+
+            tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
+            tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
+            tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
+            tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
+
+            pcs_m.CopyFrom(kfA.pyrPc_, cudaMemcpyHostToDevice);
+            ns_m.CopyFrom(kfA.pyrN_, cudaMemcpyHostToDevice);
+            pcs_m.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
+            ns_m.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
+
+            std::vector<size_t> maxIt = {2*icpIter0, 2*icpIter1, 2*icpIter2};
+            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
+                ns_c, T_ab, tdp::SE3f(),
+              camD, maxIt, icpLoopCloseAngleThr_deg,
+              icpLoopCloseDistThr, true | gui.verbose); 
+          }
+
+          photoErrAfter.Fill(0.);
+          float overlapAfter, rmseAfter;
+          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl,
+              overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
+
+          greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+          greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+
+          std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
+            << " RMSE " << rmseBefore << " -> " << rmseAfter << std::endl;
+
+          if (err == err 
+              && err < icpLoopCloseErrThr
+              && count*icpDownSample > 30000 
+              && overlapAfter > icpLoopCloseOverlapThr
+              && rmseAfter <= rmseBefore) {
+            std::cout << "successfull loop closure "  << std::endl
+              << T_ab.matrix3x4() << std::endl;
+            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
+            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+            numLoopClosures ++;
+          }
+        }
+      } else {
+        std::cout << " skipping " << idA << " -> " << idB  
+          << ": "
+          << se3.head<3>().norm()*180./M_PI << " "
+          << se3.tail<3>().norm()          
+          << std::endl;
+      }
+      if (numLoopClosures > 0) {
+        kfSLAM.Optimize(); 
+      }
+    }
+  };
+
+  std::thread loopClosureThread([&]() {
+      while (runLoopClosure.Get()) {
+//        computeLoopClosures();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+      });
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -326,9 +443,6 @@ int main( int argc, char* argv[] )
     tdp::Image<uint16_t> dRaw;
     int64_t t_host_us_d = 0;
     if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
-    tdp::SE3f T_wr_imu = T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
-//    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
-
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
@@ -351,159 +465,106 @@ int main( int argc, char* argv[] )
     tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
-    // TODO: track against closest KeyFrame to limit drift and to use
-    // SAM optimization of KF poses
-    if (icpImu && imu) 
-      T_mo = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mo;
-    if (gui.verbose) std::cout << "icp" << std::endl;
-    TICK("ICP");
-    //T_mo.matrix() = Eigen::Matrix4f::Identity();
-//      tdp::SE3f dTRot;
-//      if (icpRot) {
-//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-//            camD, maxItRot, icpAngleThr_deg); 
-//        std::cout << dTRot.matrix3x4() << std::endl;
-//      }
-    std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-    if (!icpGrad3D) {
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-          camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
-    } else {
-      tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
-          gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
-          icpDistThr, gui.verbose); 
-    }
-    TOCK("ICP");
-    T_mos.push_back(T_mo);
+    if(kfs.size() > 0) {
+      // Find closest KF
+      int iMin = 0;
+      float distMin = 1e9;
+      float angMin = 1e9;
+      float valMin = 1e9;
+      for (int i=0; i<kfs.size(); ++i) {
+        Eigen::Matrix<float,6,1> se3 = kfs[i].T_wk_.Log(T_mo);
+        float dist = se3.tail<3>().norm();
+        float ang = se3.head<3>().norm();
+//        if (ang < angMin && dist < distMin) {
+//          distMin = dist;
+//          angMin = ang;
+        if (2*ang+dist < valMin) {
+          valMin = 2*ang+dist;
+          iMin = i;
+        }
+      }
+      if (iMin != idActive) {
+        std::cout << "switching to tracking against KF " << iMin << std::endl;
+        T_ac = kfs[iMin].T_wk_.Inverse()*kfs[idActive].T_wk_*T_ac;
+        idActive = iMin;
+      } 
 
-    if (gui.verbose) {
-      std::cout << "T_mo update: " << std::endl << T_mo * T_mo_prev.Inverse() << std::endl;
-      std::cout << "IMU : " << std::endl << T_wr_imu * T_wr_imu_prev.Inverse() << std::endl;
+      tdp::KeyFrame& kf = kfs[idActive];
+      pcs_m.CopyFrom(kf.pyrPc_,cudaMemcpyHostToDevice);
+      ns_m.CopyFrom(kf.pyrN_,cudaMemcpyHostToDevice);
+      // TODO:
+      //      gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
+
+      if (gui.verbose) std::cout << "icp" << std::endl;
+      TICK("ICP");
+      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+      if (!icpGrad3D) {
+        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
+            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
+      } else {
+        tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
+            gs_c, T_ac, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
+            icpDistThr, gui.verbose); 
+      }
+      TOCK("ICP");
+      T_mo = kfs[idActive].T_wk_*T_ac;
+      T_mos.push_back(T_mo);
+
     }
 
     Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-    if (keyframes.size() > 0)
-      se3 = keyframes.back().T_wk_.Log(T_mo);
-    if ((keyframes.size() == 0 && gui.frame > 10)
+    if (kfs.size() > 0) 
+      se3 = kfs[idActive].T_wk_.Log(T_mo);
+    if ((kfs.size() == 0)
         || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
         || se3.tail<3>().norm() > keyFrameDistThresh) {
-      std::cout << "adding keyframe " << keyframes.size() 
+      std::cout << "adding keyframe " << kfs.size() 
         << " angle: " << se3.head<3>().norm()*180./M_PI 
-        << " dist: " << se3.tail<3>().norm() << std::endl;
+        << " dist: " << se3.tail<3>().norm() 
+        << " T_mk: " << std::endl << T_mo
+        << std::endl;
       pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
       n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
       kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
 
       tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
-//      tdp::Image<float> grey0 = pyrGrey.GetImage(0);
-////      tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
-//      tdp::CompletePyramid(pyrGrey, cudaMemcpyHostToHost);
+      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, T_mo);
 
-      keyframes.emplace_back(pcs_c, ns_c, pyrGrey, rgb, T_mo);
-
-      if (keyframes.size() > 1) {
-        int idA = (int)keyframes.size()-1;
-        int idB = (int)keyframes.size()-2;
-        tdp::SE3f T_ab = keyframes[idA].T_wk_.Inverse()*keyframes[idB].T_wk_;
+      if (kfs.size() > 1) {
+        int idA = (int)kfs.size()-1;
+        int idB = (int)kfs.size()-2;
+        tdp::SE3f T_ab = kfs[idA].T_wk_.Inverse()*kfs[idB].T_wk_;
         loopClosures.emplace(std::make_pair(idA, idB), T_ab);
       }
-      for (int i=0; i<keyframes.size()-1; ++i) {
-        loopClose.emplace_back(keyframes.size()-1,i);
+      {
+        std::lock_guard<std::mutex> lock(mut);
+        for (int i=0; i<kfs.size()-1; ++i) {
+          loopClose.emplace_back(kfs.size()-1,i);
+        }
+        std::cout << "# loop closure hypotheses " 
+          << loopClose.size()<< std::endl;
       }
-//      tryLoopClose = true;
+    } else {
+      std::cout << "NOT adding keyframe " << kfs.size() 
+        << " angle: " << se3.head<3>().norm()*180./M_PI 
+        << " dist: " << se3.tail<3>().norm() 
+        << " active: " << idActive << "/" << kfs.size()
+        << std::endl;
     }
 
-    tdp::SE3f T_ab_disp;
-    if (
-//        pangolin::Pushed(tryLoopClose) 
-//        && 
-        loopClose.size() > 0) {
-//        && keyframes.size() > 1) {
-      std::pair<int,int> ids = loopClose.front();
-      loopClose.pop_front();
-      int idA = ids.first;
-      int idB = ids.second;
-//      int idA = keyframes.size()-1;
-      tdp::KeyFrame& kfA = keyframes[idA];
-      cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
-      cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
-      size_t numLoopClosures = 0;
-//      for (int idB=(int)keyframes.size()-2; idB>-1; --idB) {
-        tdp::KeyFrame& kfB = keyframes[idB];
-        Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
-        if ( se3.head<3>().norm()*180./M_PI < 3.*keyFrameAngleThresh
-          && se3.tail<3>().norm()           < 3.*keyFrameDistThresh) {
-
-          tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-          std::cout << " checking " << idA << " -> " << idB 
-            << ": "
-            << se3.head<3>().norm()*180./M_PI << " "
-            << se3.tail<3>().norm()          
-//            << " Initial transformation: " << std::endl << T_ab.matrix3x4() 
-            << std::endl;
-
-          photoErrBefore.Fill(0.);
-          float overlapBefore, rmseBefore;
-          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, 
-              rmseBefore, nullptr, &photoErrBefore);
-
-          if (overlapBefore > icpLoopCloseOverlapThr) {
-            cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
-            cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
-
-            float err;
-            float count;
-            tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
-                assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
-                icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
-                icpDownSample, gui.verbose, err, count);
-
-            photoErrAfter.Fill(0.);
-            float overlapAfter, rmseAfter;
-            Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl,
-                overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
-
-            greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
-            greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
-
-            std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
-              << " RMSE " << rmseBefore << " -> " << rmseAfter << std::endl;
-
-            if (err == err && count*icpDownSample > 30000 
-                && overlapAfter > icpLoopCloseOverlapThr
-                && rmseAfter <= rmseBefore) {
-              std::cout << "successfull loop closure "
-                << T_ab.matrix3x4() << std::endl;
-              kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
-              loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-              numLoopClosures ++;
-              T_ab_disp = T_ab;
-            }
-          }
-        } else {
-          std::cout << " skipping " << idA << " -> " << idB  
-            << ": "
-            << se3.head<3>().norm()*180./M_PI << " "
-            << se3.tail<3>().norm()          
-            << std::endl;
-        }
-//      }
-      if (numLoopClosures > 0) {
-        kfSLAM.Optimize(); 
-        gui.pause();
-      }
+    if (tryLoopClose) {
+      computeLoopClosures();
     }
 
     if (pangolin::Pushed(runFusion)) {
-      // TODO: iterate over keyframes and fuse them into TSDF
-      for (size_t i=0; i<keyframes.size(); ++i) {
+      // TODO: iterate over kfs and fuse them into TSDF
+      for (size_t i=0; i<kfs.size(); ++i) {
         if (gui.verbose) std::cout << "add to tsdf" << std::endl;
-        const auto& kfA = keyframes[i];
-        const tdp::SE3f& T_mo = kfA.T_wk_;
+        const auto& kfA = kfs[i];
+        const tdp::SE3f& T_mk = kfA.T_wk_;
         cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
         TICK("Add To TSDF");
-        AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
         TOCK("Add To TSDF");
       }
 //      if (gui.verbose) std::cout << "ray trace" << std::endl;
@@ -532,13 +593,6 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
 
     TICK("Draw 3D");
-    // Render point cloud from viewpoint of origin
-    if (showPcView) {
-      tdp::SE3f T_mv;
-      RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
-          dGrid, tsdfMu, tsdfWThr); 
-      tdp::Depth2PCGpu(cuDView,camView,cuPcView);
-    }
 
     glEnable(GL_DEPTH_TEST);
     if (viewPc3D.IsShown()) {
@@ -548,10 +602,8 @@ int main( int argc, char* argv[] )
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
 
-      // imu
-      pangolin::glDrawAxis(T_wr_imu.matrix(),0.2f);
-      pangolin::glDrawAxis(T_mo.matrix(), 0.2f);
-
+      pangolin::glDrawAxis(kfs[idActive].T_wk_.matrix(),0.08f);
+      pangolin::glDrawAxis(T_mo.matrix(), 0.05f);
       for (size_t i=0; i<T_mos.size(); ++i) {
         glColor4f(1.,1.,0.,0.6);
         if (i>0) {
@@ -562,14 +614,14 @@ int main( int argc, char* argv[] )
               T_mos[i-1].translation()(2));
         }
       }
-      for (size_t i=0; i<keyframes.size(); ++i) {
-        tdp::SE3f& T_wk = keyframes[i].T_wk_;
-        pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
+      for (size_t i=0; i<kfs.size(); ++i) {
+        tdp::SE3f& T_wk = kfs[i].T_wk_;
+        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
       }
       glColor4f(1.,0.3,0.3,0.6);
       for (auto& it : loopClosures) {
-        tdp::SE3f& T_wk_A = keyframes[it.first.first].T_wk_;
-        tdp::SE3f& T_wk_B = keyframes[it.first.second].T_wk_;
+        tdp::SE3f& T_wk_A = kfs[it.first.first].T_wk_;
+        tdp::SE3f& T_wk_B = kfs[it.first.second].T_wk_;
         pangolin::glDrawLine(
             T_wk_A.translation()(0), T_wk_A.translation()(1),
             T_wk_A.translation()(2),
@@ -578,7 +630,7 @@ int main( int argc, char* argv[] )
       }
       for (size_t i=0; i<kfSLAM.size(); ++i) {
         tdp::SE3f T_wk = kfSLAM.GetPose(i);
-        pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
+        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
       }
       glColor4f(0.,1.0,1.0,0.6);
       for (auto& it : loopClosures) {
@@ -590,21 +642,9 @@ int main( int argc, char* argv[] )
             T_wk_B.translation()(0), T_wk_B.translation()(1),
             T_wk_B.translation()(2));
       }
-
-      // render global view of the model first
-      pangolin::glDrawAxis(0.1f);
-      if (showPcView) {
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-          cudaMemcpy(*cuPcbufp, cuPcView.ptr_, cuPcView.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        glColor3f(0,0,1);
-        pangolin::RenderVbo(cuPcbuf);
-      }
       // render model and observed point cloud
-      if (showPcModel) {
+      if (showPcModel && kfs.size() > 0) {
+        pangolin::glSetFrameOfReference(kfs[idActive].T_wk_.matrix());
         {
           pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
           cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
@@ -614,11 +654,12 @@ int main( int argc, char* argv[] )
         }
         glColor3f(0,1,0);
         pangolin::RenderVbo(cuPcbuf);
+        pangolin::glUnsetFrameOfReference();
       }
       // render current camera second in the propper frame of
       // reference
-      pangolin::glSetFrameOfReference(T_mo.matrix());
       if (showPcCurrent) {
+        pangolin::glSetFrameOfReference(T_mo.matrix());
         {
           pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
           cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
@@ -628,15 +669,20 @@ int main( int argc, char* argv[] )
         }
         glColor3f(1,0,0);
         pangolin::RenderVbo(cuPcbuf);
+        pangolin::glUnsetFrameOfReference();
       }
-      pangolin::glUnsetFrameOfReference();
     }
 
-    if (viewLoopClose.IsShown() && keyframes.size() > 1) {
+    if (viewLoopClose.IsShown() && kfs.size() > 1) {
       viewLoopClose.Activate(camLoopClose);
-      tdp::KeyFrame& kfA = keyframes[keyframes.size()-1];
-      tdp::KeyFrame& kfB = keyframes[keyframes.size()-2];
+      tdp::KeyFrame& kfA = kfs[kfs.size()-1];
+      tdp::KeyFrame& kfB = kfs[kfs.size()-2];
 
+      tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+      if (showAfterOpt) {
+        std::pair<int,int> idAB(kfs.size()-1, kfs.size()-2);
+        T_ab = loopClosures[idAB];
+      }
 
       vbo.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
@@ -644,7 +690,7 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(vbo);
 
       vbo.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
-      pangolin::glSetFrameOfReference(T_ab_disp.matrix());
+      pangolin::glSetFrameOfReference(T_ab.matrix());
       pangolin::glDrawAxis(0.1f);
       glColor4f(0.f,1.f,0.f,0.5f);
       pangolin::RenderVbo(vbo);
@@ -653,58 +699,13 @@ int main( int argc, char* argv[] )
       glColor4f(1.f,0.f,1.f,0.5f);
       for (size_t i=0; i<assoc_ba.Area(); i+= 300) 
         if (assoc_ba[i] < assoc_ba.Area()) {
-          tdp::Vector3fda pb_in_a = T_ab_disp*kfB.pc_[assoc_ba[i]];
+          tdp::Vector3fda pb_in_a = T_ab*kfB.pc_[assoc_ba[i]];
           pangolin::glDrawLine(
               kfA.pc_[i](0), kfA.pc_[i](1), kfA.pc_[i](2),
               pb_in_a(0), pb_in_a(1), pb_in_a(2));
         }
     }
 
-    if (viewN3D.IsShown()) {
-      viewN3D.Activate(s_cam);
-      // render global view of the model first
-      pangolin::glDrawAxis(0.1f);
-      if (showPcView) {
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-          cudaMemcpy(*cuPcbufp, nEstdummy.ptr_, nEstdummy.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        glColor3f(0,0,1);
-        pangolin::RenderVbo(cuPcbuf);
-      }
-      // render model and observed point cloud
-      if (showPcModel) {
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-          tdp::Image<tdp::Vector3fda> pc0 = ns_m.GetImage(dispLvl);
-          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        glColor3f(0,1,0);
-        pangolin::RenderVbo(cuPcbuf);
-      }
-      Eigen::Matrix4f R_mo = T_mo.matrix();
-      R_mo.topRightCorner(3,1).fill(0.);
-      pangolin::glSetFrameOfReference(R_mo);
-      // render current camera second in the propper frame of
-      // reference
-      pangolin::glDrawAxis(0.1f);
-      if (showPcCurrent) {
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-          tdp::Image<tdp::Vector3fda> pc0 = ns_c.GetImage(dispLvl);
-          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        glColor3f(1,0,0);
-        pangolin::RenderVbo(cuPcbuf);
-      }
-      pangolin::glUnsetFrameOfReference();
-    }
     TOCK("Draw 3D");
 
     TICK("Draw 2D");
@@ -716,8 +717,8 @@ int main( int argc, char* argv[] )
       viewDebugA.SetImage(photoErrBefore);
     }
     if (viewDebugB.IsShown()) {
-//      if (keyframes.size() > 0)
-//        viewDebugB.SetImage(keyframes.back().pyrGrey_.GetImage(0));
+//      if (kfs.size() > 0)
+//        viewDebugB.SetImage(kfs.back().pyrGrey_.GetImage(0));
       viewDebugB.SetImage(photoErrAfter);
     }
     if (viewDebugC.IsShown()) {
@@ -756,22 +757,7 @@ int main( int argc, char* argv[] )
 
     TOCK("Draw 2D");
 
-    // propagate for next frame for ICP
-    tdp::SO3f R_mo = T_mo.rotation();
-    for (size_t lvl=0; lvl<3; ++lvl) {
-      tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
-      tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);
-      tdp::Image<tdp::Vector3fda> g = gs_c.GetImage(lvl);
-      tdp::TransformPc(T_mo, pc);
-      tdp::TransformPc(R_mo, n);
-      tdp::TransformPc(R_mo, g);
-    }
-    pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
-    ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
-    gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
-
     if (!gui.paused()) {
-      T_wr_imu_prev = T_wr_imu;
       T_mo_prev = T_mo;
     }
 
@@ -784,8 +770,10 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
-  runWorker.Set(false);
+  runSave.Set(false);
   workThread.join();
+  runLoopClosure.Set(false);
+  loopClosureThread.join();
   imuInterp.Stop();
   if (imu) imu->Stop();
   delete imu;
