@@ -1,8 +1,10 @@
 #pragma once
 #include <iostream>
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
+#include <tdp/manifold/S.h>
 
 namespace tdp {
 
@@ -16,7 +18,7 @@ class S3 : Manifold<T,3> {
   TDP_HOST_DEVICE
   S3(const S3<T,Options>& other);
   TDP_HOST_DEVICE
-  S3(const Eigen::Quaternion<T>& q);
+  S3(const Eigen::Quaternion<T,Options>& q);
   TDP_HOST_DEVICE
   S3(const Eigen::Matrix<T,3,1>& axis, T angle);
   TDP_HOST_DEVICE
@@ -50,9 +52,9 @@ class S3 : Manifold<T,3> {
   TDP_HOST_DEVICE
   S3<T,Options> Inverse() const ;
   TDP_HOST_DEVICE
-  S3<T,Options> Exp (const Eigen::Matrix<T,3,1,Options>& w) const ;
+  S3<T,Options> Exp (const Eigen::Matrix<T,3,1>& w) const ;
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1,Options> Log (const S3<T,Options>& other) const;
+  Eigen::Matrix<T,3,1> Log (const S3<T,Options>& other) const;
 
   TDP_HOST_DEVICE
   S3<T,Options>& operator*=(const S3<T,Options>& other);
@@ -61,11 +63,11 @@ class S3 : Manifold<T,3> {
 
   /// transform 3D data point
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1,Options> operator*(
-      const Eigen::Matrix<T,3,1,Options>& x) const;
+  Eigen::Matrix<T,3,1> operator*(
+      const Eigen::Matrix<T,3,1>& x) const;
 
-  static Eigen::Matrix<T,3,3> Exp_(const Eigen::Matrix<T,3,1>& w);
-  static Eigen::Matrix<T,3,1> Log_(const Eigen::Matrix<T,3,3>& R);
+  static S3<T,Options> Exp_(const Eigen::Matrix<T,3,1>& w);
+  static Eigen::Matrix<T,3,1> Log_(const S3<T,Options>& R);
 
   static S3<T,Options> Random();
 
@@ -84,12 +86,12 @@ class S3 : Manifold<T,3> {
   Eigen::Quaternion<T,Options> q_;
 };
 
-typedef S3<double> S3d;
-typedef S3<float> S3f;
-typedef S3<double,Eigen::DontAligne> S3dda;
-typedef S3<float,Eigen::DontAligne> S3fda;
+//typedef S3<double> S3d;
+//typedef S3<float> S3f;
+typedef S3<double,Eigen::DontAlign> S3dda;
+typedef S3<float,Eigen::DontAlign> S3fda;
 
-template<typename T>
+template<typename T, int Options>
 std::ostream& operator<<(std::ostream& out, const S3<T,Options>& s3) {
   out << s3.vector().transpose() << std::endl;
   return out;

@@ -327,7 +327,7 @@ int main( int argc, char* argv[] )
   }
   tdp::KeyframeSLAM kfSLAM;
   std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
-  std::vector<tdp::KeyFrame> keyframes;
+  std::vector<tdp::KeyFrame> kfs;
   tdp::SE3f T_mr = T_mr0;
   std::vector<tdp::SE3f> T_mrs;
   std::vector<tdp::SE3f> T_wr_imus;
@@ -488,41 +488,48 @@ int main( int argc, char* argv[] )
 
     if (keyFrameSLAM) {
       Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-      if (keyframes.size() > 0)
-        se3 = keyframes.back().T_wk_.Log(T_mr);
-      if ((keyframes.size() == 0 && gui.frame > 10)
+      if (kfs.size() > 0)
+        se3 = kfs.back().T_wk_.Log(T_mr);
+      if ((kfs.size() == 0 && gui.frame > 10)
           || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
           || se3.tail<3>().norm() > keyFrameDistThresh) {
-        std::cout << "adding keyframe " << keyframes.size() 
+        std::cout << "adding keyframe " << kfs.size() 
           << " angle: " << se3.head<3>().norm()*180./M_PI 
           << " dist: " << se3.tail<3>().norm() << std::endl;
+
+        if (kfs.size() == 0) {
+          kfSLAM.AddOrigin(T_mr);
+        } else {
+          // TODO:
+//          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
+        }
         pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
         n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
-        kfSLAM.AddKeyframe(pc, n, rgb, T_mr);
-        keyframes.emplace_back(pc, n, rgb, T_mr);
+//        kfSLAM.AddKeyframe(pc, n, rgb, T_mr);
+        kfs.emplace_back(pc, n, rgb, T_mr);
 
-        keyframes.back().pyrPc_.Reinitialise(pcs_o.w_, pcs_o.h_);
-        keyframes.back().pyrN_.Reinitialise(ns_o.w_, ns_o.h_);
-        keyframes.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
-        keyframes.back().pyrPc_.CopyFrom(pcs_o, cudaMemcpyDeviceToHost);
-        keyframes.back().pyrN_.CopyFrom(ns_o, cudaMemcpyDeviceToHost);
+        kfs.back().pyrPc_.Reinitialise(pcs_o.w_, pcs_o.h_);
+        kfs.back().pyrN_.Reinitialise(ns_o.w_, ns_o.h_);
+        kfs.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
+        kfs.back().pyrPc_.CopyFrom(pcs_o, cudaMemcpyDeviceToHost);
+        kfs.back().pyrN_.CopyFrom(ns_o, cudaMemcpyDeviceToHost);
 
-        tdp::Image<float> grey0 = keyframes.back().pyrGrey_.GetImage(0);
+        tdp::Image<float> grey0 = kfs.back().pyrGrey_.GetImage(0);
         tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
-        tdp::CompletePyramid(keyframes.back().pyrGrey_, cudaMemcpyHostToHost);
+        tdp::CompletePyramid(kfs.back().pyrGrey_, cudaMemcpyHostToHost);
 
         tryLoopClose = true;
       }
     }
 
-    if (pangolin::Pushed(tryLoopClose) && keyframes.size() > 1) {
-      int idA = keyframes.size()-1;
-      tdp::KeyFrame& kfA = keyframes[idA];
+    if (pangolin::Pushed(tryLoopClose) && kfs.size() > 1) {
+      int idA = kfs.size()-1;
+      tdp::KeyFrame& kfA = kfs[idA];
       cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
       size_t numLoopClosures = 0;
-      for (int idB=(int)keyframes.size()-2; idB>-1; --idB) {
-        tdp::KeyFrame& kfB = keyframes[idB];
+      for (int idB=(int)kfs.size()-2; idB>-1; --idB) {
+        tdp::KeyFrame& kfB = kfs[idB];
         Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
         if ( se3.head<3>().norm()*180./M_PI < 2.*keyFrameAngleThresh
           && se3.tail<3>().norm()           < 2.*keyFrameDistThresh) {
@@ -535,8 +542,8 @@ int main( int argc, char* argv[] )
           cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
 
           tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-          std::cout << keyframes.size()-2 << " to " 
-            << keyframes.size()-1 
+          std::cout << kfs.size()-2 << " to " 
+            << kfs.size()-1 
             << " Initial transformation: " << std::endl 
             << T_ab.matrix3x4() << std::endl;
           float err;
@@ -607,14 +614,14 @@ int main( int argc, char* argv[] )
                 T_mrs[i-1].translation()(2));
           }
         }
-        for (size_t i=0; i<keyframes.size(); ++i) {
-          tdp::SE3f& T_wk = keyframes[i].T_wk_;
+        for (size_t i=0; i<kfs.size(); ++i) {
+          tdp::SE3f& T_wk = kfs[i].T_wk_;
           pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
         }
         glColor4f(1.,0.3,0.3,0.6);
         for (auto& it : loopClosures) {
-          tdp::SE3f& T_wk_A = keyframes[it.first.first].T_wk_;
-          tdp::SE3f& T_wk_B = keyframes[it.first.second].T_wk_;
+          tdp::SE3f& T_wk_A = kfs[it.first.first].T_wk_;
+          tdp::SE3f& T_wk_B = kfs[it.first.second].T_wk_;
           pangolin::glDrawLine(
               T_wk_A.translation()(0), T_wk_A.translation()(1),
               T_wk_A.translation()(2),
@@ -663,10 +670,10 @@ int main( int argc, char* argv[] )
       pangolin::glUnsetFrameOfReference();
     }
 
-    if (viewLoopClose.IsShown() && keyframes.size() > 1) {
+    if (viewLoopClose.IsShown() && kfs.size() > 1) {
       viewLoopClose.Activate(camLoopClose);
-      tdp::KeyFrame& kfA = keyframes[keyframes.size()-1];
-      tdp::KeyFrame& kfB = keyframes[keyframes.size()-2];
+      tdp::KeyFrame& kfA = kfs[kfs.size()-1];
+      tdp::KeyFrame& kfB = kfs[kfs.size()-2];
       tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
 
       vbo.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);

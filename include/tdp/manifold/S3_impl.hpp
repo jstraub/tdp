@@ -4,7 +4,7 @@ namespace tdp {
 
 template<typename T, int Options>
 S3<T,Options>::S3() 
-  : q_(Quaternion<T,Options>::Identity())
+  : q_(Eigen::Quaternion<T,Options>::Identity())
 {}
 
 template<typename T, int Options>
@@ -85,15 +85,15 @@ S3<T,Options> S3<T,Options>::Random() {
 
 template<typename T, int Options>
 S3<T,Options> S3<T,Options>::Rx(T alpha) { 
-  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(1.,0.,0.), angle);
+  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(1.,0.,0.), alpha);
 }
 template<typename T, int Options>
 S3<T,Options> S3<T,Options>::Ry(T alpha) {
-  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(0.,1.,0.), angle);
+  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(0.,1.,0.), alpha);
 }
 template<typename T, int Options>
 S3<T,Options> S3<T,Options>::Rz(T alpha) {
-  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(0.,0.,1.), angle);
+  return S3<T,Options>(Eigen::Matrix<T,3,1,Options>(0.,0.,1.), alpha);
 }
 
 }
