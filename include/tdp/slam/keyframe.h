@@ -32,14 +32,16 @@ struct KeyFrame {
       const Pyramid<Vector3fda,3>& n,
       const Pyramid<float,3>& grey,
       const Image<Vector3bda>& rgb,
+      const Image<float>& d,
       const SE3f& T_wk) :
     pc_(pc.w_, pc.h_), n_(n.w_, n.h_), rgb_(rgb.w_, rgb.h_), 
-    d_(pc.w_, pc.h_), pyrPc_(pc.w_, pc.h_), pyrN_(n.w_, n.h_),
+    d_(d.w_, d.h_), pyrPc_(pc.w_, pc.h_), pyrN_(n.w_, n.h_),
     pyrGrey_(grey.w_, grey.h_),
     T_wk_(T_wk)
   {
     pc_.CopyFrom(pc.GetConstImage(0),  cudaMemcpyDeviceToHost);
     n_.CopyFrom(n.GetConstImage(0),    cudaMemcpyDeviceToHost);
+    d_.CopyFrom(d,                cudaMemcpyDeviceToHost);
     rgb_.CopyFrom(rgb,            cudaMemcpyHostToHost);
 
     pyrPc_.CopyFrom(pc,     cudaMemcpyDeviceToHost);

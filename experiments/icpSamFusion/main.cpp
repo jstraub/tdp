@@ -529,7 +529,7 @@ int main( int argc, char* argv[] )
       kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
 
       tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
-      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, T_mo);
+      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
 
       if (kfs.size() > 1) {
         int idA = (int)kfs.size()-1;
@@ -562,7 +562,8 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(runFusion)) {
       // TODO: iterate over kfs and fuse them into TSDF
       for (size_t i=0; i<kfs.size(); ++i) {
-        if (gui.verbose) std::cout << "add to tsdf" << std::endl;
+        if (true || gui.verbose)
+          std::cout << "add KF " << i << " to tsdf" << std::endl;
         const auto& kfA = kfs[i];
         const tdp::SE3f& T_mk = kfA.T_wk_;
         cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
