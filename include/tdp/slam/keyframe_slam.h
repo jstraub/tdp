@@ -27,25 +27,22 @@ class KeyframeSLAM {
   ~KeyframeSLAM()
   {};
 
-  void AddKeyframe(const Image<Vector3fda>& pc, 
-      const Image<Vector3fda>& n,
-      const Image<Vector3bda>& rgb,
-      const SE3f& T_wk) {
-    kfs_.emplace_back(pc, n, rgb, T_wk);
-    if (kfs_.size() == 1) {
-      isam::Pose3d origin = isam::Pose3d(T_wk.matrix().cast<double>());
+  void AddOrigin(const SE3f& T_wk) {
+    isam::Pose3d origin = isam::Pose3d(T_wk.matrix().cast<double>());
 
-      isam::Pose3d_Node* pose0 = new isam::Pose3d_Node();
-      slam_.add_node(pose0);
-      T_wk_.push_back(pose0);
+    isam::Pose3d_Node* pose0 = new isam::Pose3d_Node();
+    slam_.add_node(pose0);
+    T_wk_.push_back(pose0);
 
-      isam::Pose3d_Factor* prior = new isam::Pose3d_Factor(pose0,
-          origin, noisePrior_);
-      slam_.add_factor(prior);
-    } else {
-      int idA = kfs_.size() - 2;
-      int idB = kfs_.size() - 1;
-      tdp::SE3f T_ab = kfs_[idA].T_wk_.Inverse() * kfs_[idB].T_wk_;
+    isam::Pose3d_Factor* prior = new isam::Pose3d_Factor(pose0,
+        origin, noisePrior_);
+    slam_.add_factor(prior);
+  }
+
+  void AddIcpOdometry(int idA, int idB, const SE3f& T_ab) {
+//      int idA = kfs_.size() - 2;
+//      int idB = kfs_.size() - 1;
+//      tdp::SE3f T_ab = kfs_[idA].T_wk_.Inverse() * kfs_[idB].T_wk_;
 
       isam::Pose3d poseAB(T_ab.matrix().cast<double>());
 
@@ -56,8 +53,39 @@ class KeyframeSLAM {
       isam::Pose3d_Pose3d_Factor* odo = new isam::Pose3d_Pose3d_Factor(
           T_wk_[idA], T_wk_[idB], poseAB, noiseOdom_);
       slam_.add_factor(odo);
-    }
   }
+
+//  void AddKeyframe(const Image<Vector3fda>& pc, 
+//      const Image<Vector3fda>& n,
+//      const Image<Vector3bda>& rgb,
+//      const SE3f& T_wk) {
+//    kfs_.emplace_back(pc, n, rgb, T_wk);
+//    if (kfs_.size() == 1) {
+//      isam::Pose3d origin = isam::Pose3d(T_wk.matrix().cast<double>());
+//
+//      isam::Pose3d_Node* pose0 = new isam::Pose3d_Node();
+//      slam_.add_node(pose0);
+//      T_wk_.push_back(pose0);
+//
+//      isam::Pose3d_Factor* prior = new isam::Pose3d_Factor(pose0,
+//          origin, noisePrior_);
+//      slam_.add_factor(prior);
+//    } else {
+//      int idA = kfs_.size() - 2;
+//      int idB = kfs_.size() - 1;
+//      tdp::SE3f T_ab = kfs_[idA].T_wk_.Inverse() * kfs_[idB].T_wk_;
+//
+//      isam::Pose3d poseAB(T_ab.matrix().cast<double>());
+//
+//      isam::Pose3d_Node* poseNext = new isam::Pose3d_Node();
+//      slam_.add_node(poseNext);
+//      T_wk_.push_back(poseNext);
+//
+//      isam::Pose3d_Pose3d_Factor* odo = new isam::Pose3d_Pose3d_Factor(
+//          T_wk_[idA], T_wk_[idB], poseAB, noiseOdom_);
+//      slam_.add_factor(odo);
+//    }
+//  }
 
   void AddLoopClosure(int idA, int idB, const SE3f& T_ab) {
 
@@ -96,7 +124,6 @@ class KeyframeSLAM {
   }
 
  private:
-  std::vector<KeyFrame> kfs_;
   std::vector<isam::Pose3d_Node*> T_wk_;
 
   isam::Slam slam_;
