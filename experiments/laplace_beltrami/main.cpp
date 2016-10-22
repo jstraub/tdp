@@ -82,18 +82,7 @@ void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
     }
 }
 
-void test1(){
-    //TEST OF getMean and getCovariance
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
-    Eigen::VectorXi nnIds(2);
-    nnIds<< 0,1;//,2;//,3,4,5,6,7,8,9;
-    tdp::Vector3fda mean = getMean(pc, nnIds);
-    tdp::Matrix3fda cov = getCovariance(pc,nnIds);
-    std::cout << "mean: \n" << mean << std::endl << std::endl;
-    std::cout << "cov: \n" << cov << std::endl << std::endl;
-}
-
-void getSortIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
+inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
     int hi(0), lo(0), mid;
     for (int i=0; i<vec.size(); ++i){
         if (vec[i] < vec[lo]){
@@ -113,14 +102,86 @@ void getSortIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
     sortIds.push_back(lo);
 }
 
-void test_getSortIds(){
+Eigen::Matrix3f getLocalBasis(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es){
+    std::vector<float> evalues;
+    std::vector<int> axesIds;
+    for (size_t i=0; i<cov.rows(); ++i){
+        float eval = std::real(es.eigenvalues().col(0)[i]);
+        evalues.push_back( (eval<1e-6? 0: eval));
+    }
+
+    getAxesIds(evalues,axesIds);
+
+    Eigen::Matrix3f localBasis;
+    for (size_t i=0; i<3; ++i){
+        localBasis.col(i) = es.eigenvectors().col(axesIds[i]);
+    }
+    return localBasis;
+}
+
+void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::Matrix3fda>& locals, tdp::ANN& ann, int knn, float eps){
+    //assumes ANN has complete computing kd tree
+    //query `knn` number of neighbors
+    assert( (pc.w_==locals.w_)&&(pc.h_ == locals.h_) );
+
+    tdp::Vector3fda query;
+    tdp::Matrix3fda cov;
+    Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
+    Eigen::VectorXi nnIds(knn);
+    Eigen::VectorXf dists(knn);
+    for (size_t i = 0; i<pc.Area(); ++i){
+        query = pc(i,0);
+        ann.Search(query, knn, eps, nnIds, dists);
+        cov = getCovariance(pc,nnIds);
+        es.compute(cov);
+        locals(i,0) = getLocalBasis(cov, es);
+    }
+}
+
+inline float w(float d, int knn){
+    return d==0? 1: 1/(float)knn;
+}
+
+
+//tests
+void test0(){
+        //TEST OF getMean and getCovariance
+        tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+        Eigen::VectorXi nnIds(2);
+        nnIds<< 0,1;//,2;//,3,4,5,6,7,8,9;
+        tdp::Vector3fda mean = getMean(pc, nnIds);
+        tdp::Matrix3fda cov = getCovariance(pc,nnIds);
+        std::cout << "mean: \n" << mean << std::endl << std::endl;
+        std::cout << "cov: \n" << cov << std::endl << std::endl;
+}
+
+void test1(){
+    //test getAllLocalBasis
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    tdp::ManagedHostImage<tdp::Matrix3fda> locals(pc.w_,1);
+
+    tdp::ANN ann;
+    ann.ComputeKDtree(pc);
+
+    int knn = 5;
+    float eps = 1e-4;
+    getAllLocalBasis(pc, locals, ann,knn, eps);
+
+    for (size_t i=0; i<locals.Area(); ++i){
+        std::cout << "point: \n " << pc(i,0) << std::endl;
+        std::cout << "localbasis: \n"<<locals(i,0) << std::endl << std::endl;
+    }
+}
+
+void test_getAxesIds(){
     std::vector<int> v = {1,5,3};
     std::vector<int> ids;
-    getSortIds(v,ids);
+    getAxesIds(v,ids);
     for (int i =0; i<ids.size(); ++i){
         std::cout << ids[i] << ": "<< v[ids[i]] << std::endl;
     }
 }
+//end of test
 
 int main( int argc, char* argv[] ){
   // load pc and normal from the input paths
@@ -141,43 +202,60 @@ int main( int argc, char* argv[] ){
       }
   }
 
-  int n = 5;
+  int knn = 5;
   float eps = 1e-4;
-
+  // build kd tree
   tdp::ANN ann;
-  Eigen::VectorXi nnIds(n);
-  Eigen::VectorXf dists(n);
+  Eigen::VectorXi nnIds(knn);
+  Eigen::VectorXf dists(knn);
   ann.ComputeKDtree(pc);
-  tdp::Vector3fda query;
-  tdp::Matrix3fda cov;
-  Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
+
+  // Gt all local basis for each point in the pc
+  tdp::ManagedHostImage locals(pc.w_,1);
+  getAllLocalBasis(pc, locals, ann, knn, eps );
 
 
-  for (size_t i=0; i<pc.Area(); ++i){
-      query = pc(i,0);
-      ann.Search(query, n, eps, nnIds, dists);
-      cov = getCovariance(pc,nnIds);
-      es.compute(cov);
+  tdp::ManagedHostImage<tdp::VectorXfda> thetas(pc.w_,1);
+  //Put all below into a forloop of pc
+  //for (int i=0; i<pc.w_; ++i){
+  //---start here--//
+  int pid =0;
+  tdp::Vector3fda pt = pc(pid,0);
+  tdp::Matrix3fda localBasis = locals(pid,0);
 
-      std::vector<float> evalues;//todo: reinitialize
-      std::vector<int> axesIds;//todo: reinitialize and move out of for loop
-      for (size_t i=0; i<cov.rows(); ++i){
-          float eval = std::real(es.eigenvalues().col(0)[i]);
-          evalues.push_back( (eval<1e-6? 0: eval));
-      }
-      getSortIds(evalues,axesIds);
+  // Get the neighbor ids and dists
+  ann.Search(pt, knn, eps, nnIds, dists);
 
-      Eigen::Matrix3f localBasis;
-      for (size_t i=0; i<3; ++i){
-          localBasis.col(i) = es.eigenvectors().col(axesIds[i]);
-      }
+  tdp::MatrixXfda X, W;
+  tdp::VectorXfda Y;
+  tdp::Vector6fda theta;
+  for (size_t k=0; k<knn; ++k){
+      tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
+      //Take the first two dimensions
+      tdp::Vector2fda npt_2d;
+      npt_2d(0) = npt_(0);
+      npt_2d(1) = npt_(1);
+      //z is the third dim coordinate
+      float npt_z = npt_(2);
 
-      //change of basis
-      for (size_t i=0; i<nnIds.size(); ++i){
-        tdp::Vector3fda newPt = localBasis*pc(nnIds[i],0);
-        std::cout << "newPt: \n" << newPt << std::endl;
-      }
+      tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
+      //Construct data matrix X
+      X.row(k) = phi_npt;
 
+      //Construct target vector Y
+      Y.row(k) = npt_z;
+
+      //Get weight matrix W
+      W(k,k) = dists(k); //check if I need to scale this when in local coordinate system
+  }
+
+  //Solve weighted least square
+  Eigen::FullPivLU<tdp::MatrixXfda> X_lu;
+  X_lu = X.transpose()*W*X;
+  theta = X_lu.inverse()*X_lu;
+  //thetas(i, 0) = theta;
+   //--end here--//
+  //};
 
       /*
       //debug

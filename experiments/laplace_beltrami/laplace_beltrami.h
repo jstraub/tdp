@@ -13,6 +13,15 @@ tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda> &pc, const Eigen::Vect
 tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds);
 tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc();
 void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc);
-void getSortIds(const std::vector<auto>& vec, std::vector<int>& sortIds);
+inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& axesIds);
+Eigen::Matrix3f getLocalBasis(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es);
+void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::Matrix3fda>& locals, tdp::ANN& ann, int knn, float eps);
+inline float w(float d, int knn);
+
+
+//tests
+void test0();
+void test1();
+void test_getAxesIds();
 
 #endif // SKINNING_H
