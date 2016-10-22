@@ -4,7 +4,7 @@
 #include <Eigen/Geometry>
 #include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
-#include <tdp/manifold/S.h>
+#include <tdp/manifold/SO3mat.h>
 
 namespace tdp {
 
@@ -82,15 +82,20 @@ class SO3 : Manifold<T,3> {
     return Rz(rpy(0))*Ry(rpy(1))*Rz(rpy(2)); 
   }
 
+  static Eigen::Matrix<T,3,3> invVee(const Eigen::Matrix<T,3,1>& w) {
+    return SO3mat<T>::invVee(w);
+  }
+  static Eigen::Matrix<T,3,1> vee(const Eigen::Matrix<T,3,3>& W) {
+    return SO3mat<T>::vee(W);
+  }
+  static Eigen::Matrix<T,3,3> skew(const Eigen::Matrix<T,3,3>& W) {
+    return SO3mat<T>::skew(W);
+  }
+
  private:
   Eigen::Quaternion<T,Options> q_;
 };
 
-typedef SO3<double> SO3d;
-typedef SO3<float> SO3f;
-typedef SO3<double,Eigen::DontAlign> SO3dda;
-typedef SO3<float,Eigen::DontAlign> SO3fda;
-template <typename T> using SO3da = SO3<T,Eigen::DontAlign>;
 
 template<typename T, int Options>
 std::ostream& operator<<(std::ostream& out, const SO3<T,Options>& s3) {
@@ -103,4 +108,11 @@ std::ostream& operator<<(std::ostream& out, const SO3<T,Options>& s3) {
 }
 #include <tdp/manifold/SO3_impl.hpp>
 
+namespace tdp {
 
+typedef SO3<double> SO3d;
+typedef SO3<float> SO3f;
+typedef SO3<double,Eigen::DontAlign> SO3dda;
+typedef SO3<float,Eigen::DontAlign> SO3fda;
+template <typename T> using SO3da = SO3<T,Eigen::DontAlign>;
+}

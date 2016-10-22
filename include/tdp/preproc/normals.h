@@ -24,7 +24,7 @@ void ComputeNormals(
     const Image<float>& ddu,
     const Image<float>& ddv,
     const Image<Vector3fda>& n,
-    const SO3<float>& R_rc,
+    const SO3f& R_rc,
     float f, float uc, float vc);
 
 void ComputeNormals(
@@ -60,7 +60,7 @@ template<int D, typename Derived>
 void Depth2Normals(
     const Image<float>& cuD,
     const CameraBase<float,D,Derived>& cam,
-    const SO3<float>& R_rc,
+    const SO3f& R_rc,
     Image<Vector3fda> cuN) {
   size_t wc = cuD.w_;
   size_t hc = cuD.h_;

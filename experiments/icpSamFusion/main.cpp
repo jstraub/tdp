@@ -628,10 +628,10 @@ int main( int argc, char* argv[] )
         tdp::SE3f& T_wk = kfs[i].T_wk_;
         pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
       }
-      for (size_t i=0; i<kfSLAM.size(); ++i) {
-        tdp::SE3f T_wk = kfSLAM.GetPose(i);
-        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
-      }
+//      for (size_t i=0; i<kfSLAM.size(); ++i) {
+//        tdp::SE3f T_wk = kfSLAM.GetPose(i);
+//        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
+//      }
 //      glColor4f(1.,0.3,0.3,0.6);
 //      for (auto& it : loopClosures) {
 //        tdp::SE3f& T_wk_A = kfs[it.first.first].T_wk_;

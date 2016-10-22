@@ -252,7 +252,7 @@ int main( int argc, char* argv[] )
 
     tdp::SE3f T_wc;
     if (runRtmf) {
-      T_wc.matrix().topLeftCorner(3,3) = rtmf.Rs_[0];
+      T_wc.rotation() = tdp::SO3f(rtmf.Rs_[0]);
     }
 
     TICK("Render 3D");

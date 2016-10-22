@@ -32,7 +32,7 @@ SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axis, T angle)
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axisAngle) 
-  : q_(axisAngle.normalized(), axisAngle.norm())
+  : SO3<T,Options>(axisAngle.normalized(), axisAngle.norm())
 { }
 
 template<typename T, int Options>
@@ -42,7 +42,7 @@ SO3<T,Options> SO3<T,Options>::Inverse() const {
 
 template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::Exp(const Eigen::Matrix<T,3,1>& w) const {
-  return SO3<T,Options>(q_*Exp_(w));
+  return SO3<T,Options>(*this*Exp_(w));
 }
 
 template<typename T, int Options>
@@ -79,8 +79,9 @@ Eigen::Matrix<T,3,1> SO3<T,Options>::operator*(const Eigen::Matrix<T,3,1>& x) co
 
 template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::Random() {
-  Eigen::Matrix<T,3,1> w = S<T,3>::Random().vector();
-  return SO3<T,Options>(Exp_(w));
+  //TODO
+  Eigen::Matrix<T,4,1> w; // = S<T,4>::Random().vector();
+  return SO3<T,Options>(Eigen::Quaternion<T,Options>(w(0),w(1),w(2),w(3)));
 }
 
 template<typename T, int Options>

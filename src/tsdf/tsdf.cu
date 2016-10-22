@@ -199,11 +199,11 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
 
   if (idx < tsdf.w_ && idy < tsdf.h_ && idz < tsdf.d_) {
     // unproject point in reference frame
-    Eigen::Vector4f p_r (grid0(0) + idx*dGrid(0),
+    Eigen::Vector3f p_r (grid0(0) + idx*dGrid(0),
         grid0(1)+idy*dGrid(1),
-        grid0(2)+idz*dGrid(2),1);
+        grid0(2)+idz*dGrid(2));
     // project the point into the depth frame
-    Eigen::Vector3f p_d = T_dr.matrix3x4()*p_r;
+    Eigen::Vector3f p_d = T_dr*p_r;
     if (p_d(2) < 0.) return; // dont add to behind the camera.
     Eigen::Vector2f u_d = camD.Project(p_d);
     int x = floor(u_d(0)+0.5);
@@ -211,7 +211,7 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     if (0<=x&&x<d.w_ && 0<=y&&y<d.h_) {
       const float z_d = d(x, y);
       const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
-      const float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
+      const float z_tsdf = (T_rd.translation()-p_r).norm()/lambda;
       const float eta = z_d - z_tsdf;
       if (eta >= -mu) {
         const float etaOverMu = eta/mu;

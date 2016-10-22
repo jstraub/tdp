@@ -68,8 +68,7 @@ T S<T,D>::invSincDot(T dot) {
 
 template<typename T, int D>
 Eigen::Matrix<T,D,1> S<T,D>::Log(const S<T,D>& q) const {
-  T dot = std::max(static_cast<T>(-1.0), std::min(static_cast<T>(1.0),
-        this->dot(q)));
+  T dot = std::max(static_cast<T>(-1.0), std::min(static_cast<T>(1.0), this->dot(q)));
   return (q.vector()-p_*dot)*invSincDot(dot);
 }
 

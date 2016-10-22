@@ -281,7 +281,7 @@ int main( int argc, char* argv[] )
   }
 
   tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
-  T_mo.matrix().topLeftCorner(3,3) = tdp::SO3f::Rz(M_PI/2.f).matrix();
+  T_mo.rotation() = tdp::SO3f::Rz(M_PI/2.f);
   tdp::SE3f T_mo_0 = T_mo;
   tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;

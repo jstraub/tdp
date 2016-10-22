@@ -116,9 +116,12 @@ class KeyframeSLAM {
   }
 
   size_t size() { return T_wk_.size(); }
+
   SE3f GetPose(size_t i) {
     if (i<size()) {
-      return SE3f(T_wk_[i]->value().wTo().cast<float>());
+      std::cout << i << " " << size() << std::endl;
+      Eigen::Matrix<float,4,4> T = T_wk_[i]->value().wTo().cast<float>();
+      return SE3f(T);
     } 
     return SE3f(); 
   }

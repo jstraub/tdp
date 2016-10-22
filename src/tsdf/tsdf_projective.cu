@@ -59,16 +59,15 @@ void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W,
   if (idx < tsdf.w_ && idy < tsdf.h_ && idz < tsdf.d_) {
     // unproject point in reference frame
     float rho_r = rho0+drho*idz;
-    Eigen::Vector4f p_r (0,0,0,1);
-    p_r.topRows<3>() = camR.Unproject(idx,idy,1./rho_r);
+    Eigen::Vector3f p_r = camR.Unproject(idx,idy,1./rho_r);
     // project the point into the depth frame
-    Eigen::Vector2f u_d = camD.Project(T_dr.matrix3x4()*p_r);
+    Eigen::Vector2f u_d = camD.Project(T_dr*p_r);
     int x = floor(u_d(0)+0.5);
     int y = floor(u_d(1)+0.5);
     if (0<=x&&x<d.w_ && 0<=y&&y<d.h_) {
       const float z_d = d(x, y);
       const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
-      const float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
+      const float z_tsdf = (T_rd.translation()-p_r).norm()/lambda;
       const float eta = z_d - z_tsdf;
       if (eta >= -mu) {
         const float etaOverMu = eta/mu;

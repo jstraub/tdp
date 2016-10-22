@@ -54,7 +54,7 @@ __global__
 void KernelSurfaceNormals(Image<float> d,
     Image<float> ddu, Image<float> ddv,
     Image<Vector3fda> n, 
-    SO3<float> R_rc,
+    SO3f R_rc,
     float f, float uc, float vc) {
   //const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -87,7 +87,7 @@ void ComputeNormals(
     const Image<float>& ddu,
     const Image<float>& ddv,
     const Image<Vector3fda>& n,
-    const SO3<float>& R_rc,
+    const SO3f& R_rc,
     float f, float uc, float vc) {
   
   dim3 threads, blocks;

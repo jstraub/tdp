@@ -388,7 +388,7 @@ void ICP::ComputeProjective(
       float kappat = ev.tail<3>().maxCoeff() / ev.tail<3>().minCoeff();
 
       // apply x to the transformation
-      T_mr = tdp::SE3f(tdp::SE3f::Exp_(x))*T_mr;
+      T_mr = SE3f::Exp_(x)*T_mr;
       if (verbose) {
       std::cout << std::setprecision(2) 
         << std::scientific << "lvl " << lvl << " it " << it 
@@ -479,7 +479,7 @@ void ICP::ComputeProjectiveRotation(
       std::cout << N <<  std::endl;
       std::cout << dR <<  std::endl;
       // apply x to the transformation
-      T_mo.matrix().topLeftCorner(3,3) = dR * T_mo.matrix().topLeftCorner(3,3);
+      T_mo.rotation() = SO3f(dR) * T_mo.rotation();
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 

@@ -422,17 +422,17 @@ int main( int argc, char* argv[] )
     }
     T_mrs.push_back(T_mr);
     // Get translation from T_mr
-    T_wr_imu.matrix().topRightCorner(3,1) = T_mr.translation();
+    T_wr_imu.translation() = T_mr.translation();
     T_wr_imus.push_back(T_wr_imu);
 
     if (pangolin::Pushed(resetTSDF)) {
-      T_mr.matrix() = Eigen::Matrix4f::Identity();
+      T_mr = SE3f(); 
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       numFused = 0;
     }
     if (pangolin::Pushed(resetOdom)) {
-      T_mr.matrix() = Eigen::Matrix4f::Identity();
+      T_mr = SE3f(); 
     }
 
     if (!gui.paused() && (fuseTSDF || numFused <= 30)) {
@@ -447,7 +447,7 @@ int main( int argc, char* argv[] )
         }
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_rc = rig.T_rcs_[cId];
-        tdp::SE3f T_mo = T_mr+T_rc;
+        tdp::SE3f T_mo = T_mr*T_rc;
         tdp::Image<float> cuD_i(wSingle, hSingle,
             cuD.ptr_+rig.rgbdStream2cam_[sId]*wSingle*hSingle);
         AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
@@ -567,7 +567,7 @@ int main( int argc, char* argv[] )
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
-    T_mv.matrix()(2,3) = -3.;
+    T_mv.translation(2) = -3.;
     RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
         dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);

@@ -7,7 +7,7 @@
 
 namespace tdp {
 
-template<typename T>
+template<typename T, int Options=Eigen::ColMajor>
 class SE3 : Manifold<T,6> {
  //friend class tdp::SO3<T>;
  public:
@@ -21,54 +21,55 @@ class SE3 : Manifold<T,6> {
   SE3(const Eigen::Matrix<T,3,3>& Rmat, const Eigen::Matrix<T,3,1>& tmat);
 
   TDP_HOST_DEVICE
-  SE3(const SO3<T>& R);
+  SE3(const SO3<T,Options>& R);
 
   TDP_HOST_DEVICE
-  SE3(const SO3<T>& R, const Eigen::Matrix<T,3,1>& t);
+  SE3(const SO3<T,Options>& R, const Eigen::Matrix<T,3,1>& t);
 
   TDP_HOST_DEVICE
-  SE3(const SE3<T>& other);
+  SE3(const SE3<T,Options>& other);
 
 
   TDP_HOST_DEVICE
   ~SE3() {};
 
   TDP_HOST_DEVICE
-  const Eigen::Matrix<T,4,4>& matrix() const { return T_;};
+  Eigen::Matrix<T,4,4> matrix() const;
 
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,4,4>& matrix() { return T_;};
+  Eigen::Matrix<T,3,4> matrix3x4() const;
 
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,4> matrix3x4() const { return T_.topRows(3);};
+  const Eigen::Matrix<T,3,1>& translation() const { return t_;};
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,1>& translation() { return t_;};
 
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1> translation() const { return T_.topRightCorner(3,1);};
+  const SO3<T,Options>& rotation() const { return R_;};
+  TDP_HOST_DEVICE
+  SO3<T,Options>& rotation() { return R_;};
 
   TDP_HOST_DEVICE
-  SO3<T> rotation() const { return SO3<T>(T_.topLeftCorner(3,3));};
+  SE3<T,Options> Inverse() const ;
 
   TDP_HOST_DEVICE
-  SE3<T> Inverse() const ;
+  SE3<T,Options> Exp(const Eigen::Matrix<T,6,1>& w) const ;
 
   TDP_HOST_DEVICE
-  SE3<T> Exp(const Eigen::Matrix<T,6,1>& w) const ;
-
-  TDP_HOST_DEVICE
-  Eigen::Matrix<T,6,1> Log(const SE3<T>& other) const ;
+  Eigen::Matrix<T,6,1> Log(const SE3<T,Options>& other) const ;
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> vee() const;
 
-  Eigen::Matrix<T,6,1> operator-(const SE3<T>& other);
-  SE3<T>& operator+=(const SE3<T>& other);
-  const SE3<T> operator+(const SE3<T>& other) const;
+//  Eigen::Matrix<T,6,1> operator-(const SE3<T,Options>& other);
+//  SE3<T,Options>& operator+=(const SE3<T,Options>& other);
+//  const SE3<T,Options> operator+(const SE3<T,Options>& other) const;
 
-  SE3<T>& operator*=(const SE3<T>& other);
-  const SE3<T> operator*(const SE3<T>& other) const;
+  SE3<T,Options>& operator*=(const SE3<T,Options>& other);
+  const SE3<T,Options> operator*(const SE3<T,Options>& other) const;
 
-  SE3<T>& operator+=(const Eigen::Matrix<T,6,1>& w);
-  const SE3<T> operator+(const Eigen::Matrix<T,6,1>& w);
+//  SE3<T,Options>& operator+=(const Eigen::Matrix<T,6,1>& w);
+//  const SE3<T,Options> operator+(const Eigen::Matrix<T,6,1>& w);
 
   // transform 3D data point
   TDP_HOST_DEVICE
@@ -80,19 +81,30 @@ class SE3 : Manifold<T,6> {
 //  static Eigen::Matrix<T,3,3> G3();
 //  static Eigen::Matrix<T,3,3> G(uint32_t i);
 
-  static Eigen::Matrix<T,4,4> Exp_(const Eigen::Matrix<T,6,1>& w);
-  static Eigen::Matrix<T,6,1> Log_(const Eigen::Matrix<T,4,4>& Tmat);
+  static SE3<T,Options> Exp_(const Eigen::Matrix<T,6,1>& w);
+  static Eigen::Matrix<T,6,1> Log_(const SE3<T,Options>& _T);
 
  private:
-  Eigen::Matrix<T,4,4> T_;
+  SO3<T,Options> R_;
+  Eigen::Matrix<T,3,1,Options> t_;
 };
 
-typedef SE3<double> SE3d;
-typedef SE3<float> SE3f;
 
-template<typename T>
-std::ostream& operator<<(std::ostream& out, const SE3<T>& se3);
+template<typename T, int Options>
+std::ostream& operator<<(std::ostream& out, const SE3<T,Options>& se3);
 
 }
 
 #include <tdp/manifold/SE3_impl.hpp>
+
+namespace tdp {
+
+typedef SE3<double> SE3d;
+typedef SE3<float> SE3f;
+
+typedef SE3<double,Eigen::DontAlign> SE3dda;
+typedef SE3<float,Eigen::DontAlign> SE3fda;
+
+template <typename T> using SE3da = SE3<T,Eigen::DontAlign>;
+
+}
