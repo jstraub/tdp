@@ -17,7 +17,7 @@ class ANN {
     if (pc_) delete[] pc_;
   };
 
-  void ComputeKDtree(Image<Vector3fda>& pc) {
+  void ComputeKDtree(Image<Vector3fda>& pc, int stride=1) {
     if (kdTree_) delete kdTree_;
     if (pc_) delete[] pc_;
     idMap_.clear();
@@ -27,7 +27,7 @@ class ANN {
     pc_ = new ANNpoint[N_];
     idMap_.reserve(N_);
     size_t j=0;
-    for (size_t i=0; i<pc.Area(); ++i) {
+    for (size_t i=0; i<pc.Area(); i+=stride) {
       if (IsValidData(pc[i])) {
         pc_[j++] = &pc[i](0);
         idMap_.push_back(i);

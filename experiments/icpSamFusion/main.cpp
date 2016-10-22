@@ -217,10 +217,10 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewDebugD(wc, hc);
   gui.container().AddDisplay(viewDebugD);
 
-  viewDebugA.Show(false);
-  viewDebugB.Show(false);
-  viewDebugC.Show(false);
-  viewDebugD.Show(false);
+//  viewDebugA.Show(false);
+//  viewDebugB.Show(false);
+//  viewDebugC.Show(false);
+//  viewDebugD.Show(false);
 
   viewDepthPyr.Show(false);
   viewNormalsPyr.Show(false);
@@ -339,8 +339,8 @@ int main( int argc, char* argv[] )
       cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
       tdp::KeyFrame& kfB = kfs[idB];
       Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
-      if ( se3.head<3>().norm()*180./M_PI < 1.5*keyFrameAngleThresh
-        && se3.tail<3>().norm()           < 1.5*keyFrameDistThresh) {
+      if ( se3.head<3>().norm()*180./M_PI < 2.5*keyFrameAngleThresh
+        && se3.tail<3>().norm()           < 2.5*keyFrameDistThresh) {
 
         tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
         std::cout << " checking " << idA << " -> " << idB 
@@ -396,7 +396,7 @@ int main( int argc, char* argv[] )
 
           if (err == err 
               && err < icpLoopCloseErrThr
-              && count*icpDownSample > 30000 
+              && count*icpDownSample > 3000 
               && overlapAfter > icpLoopCloseOverlapThr
               && rmseAfter <= rmseBefore) {
             std::cout << "successfull loop closure "  << std::endl
@@ -486,6 +486,7 @@ int main( int argc, char* argv[] )
       if (iMin != idActive) {
         std::cout << "switching to tracking against KF " << iMin << std::endl;
         T_ac = kfs[iMin].T_wk_.Inverse()*kfs[idActive].T_wk_*T_ac;
+        std::cout << T_ac << std::endl;
         idActive = iMin;
       } 
 
@@ -544,6 +545,8 @@ int main( int argc, char* argv[] )
         std::cout << "# loop closure hypotheses " 
           << loopClose.size()<< std::endl;
       }
+      idActive = kfs.size()-1;
+      T_ac = tdp::SE3f();
     } else {
       std::cout << "NOT adding keyframe " << kfs.size() 
         << " angle: " << se3.head<3>().norm()*180./M_PI 

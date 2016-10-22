@@ -26,7 +26,7 @@ int AssociateANN(
     Image<int>& assoc_om, 
     size_t stride = 1) {
   tdp::ANN ann;
-  ann.ComputeKDtree(pc_o);
+  ann.ComputeKDtree(pc_o, stride);
   int k = 1;
   Eigen::VectorXi nnIds(k);
   Eigen::VectorXf dists(k);
