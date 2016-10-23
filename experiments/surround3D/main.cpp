@@ -426,13 +426,13 @@ int main( int argc, char* argv[] )
     T_wr_imus.push_back(T_wr_imu);
 
     if (pangolin::Pushed(resetTSDF)) {
-      T_mr = SE3f(); 
+      T_mr = tdp::SE3f(); 
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
       numFused = 0;
     }
     if (pangolin::Pushed(resetOdom)) {
-      T_mr = SE3f(); 
+      T_mr = tdp::SE3f(); 
     }
 
     if (!gui.paused() && (fuseTSDF || numFused <= 30)) {
@@ -567,7 +567,7 @@ int main( int argc, char* argv[] )
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
-    T_mv.translation(2) = -3.;
+    T_mv.translation()(2) = -3.;
     RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
         dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);

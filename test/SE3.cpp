@@ -5,6 +5,10 @@
 #include <tdp/manifold/rotation.h>
 #include <tdp/manifold/SE3.h>
 
+#include <tdp/data/managed_image.h>
+#include <tdp/eigen/dense.h>
+#include <tdp/preproc/pc.h>
+
 using namespace tdp;
 
 
@@ -41,6 +45,106 @@ TEST(SE3, setup) {
 //  std::cout << Tmu-T << std::endl;
 
 }
+
+TEST(SE3, inverse) {
+
+  const float eps = 1e-6;
+  for (size_t i=0; i<10000; ++i) {
+    Eigen::Matrix<float,6,1> x0 = Eigen::Matrix<float,6,1>::Random();
+    SE3f T = SE3f::Exp_(x0);
+    Eigen::Matrix4f Tmat = T.matrix();
+    
+    Eigen::Matrix4f TmatInv = Tmat.inverse();
+    Eigen::Matrix4f Tinv = T.Inverse().matrix();
+
+    for (size_t i=0; i<16; ++i)
+      ASSERT_NEAR(TmatInv(i), Tinv(i), eps);
+
+    SE3f Tse3Inv = T.Inverse();
+    
+    Eigen::Matrix4f Tinvinvmat = Tse3Inv.Inverse().matrix();
+
+    for (size_t i=0; i<16; ++i)
+      ASSERT_NEAR(Tmat(i), Tinvinvmat(i), eps);
+
+  }
+}
+
+TEST(SE3, exp) {
+
+  const float eps = 1e-5;
+
+  Eigen::Matrix<float,6,1> x0;
+  x0 << 0,0,ToRad(10.),0,0.1,0.1;
+  SE3f T0 = SE3f::Exp_(x0);
+  Eigen::Matrix<float,6,1> x1 = SE3f::Log_(T0);
+  std::cout << x0.transpose() << std::endl;
+  std::cout << x1.transpose() << std::endl;
+
+  ASSERT_NEAR(x0(0), x1(0), eps);
+  ASSERT_NEAR(x0(1), x1(1), eps);
+  ASSERT_NEAR(x0(2), x1(2), eps);
+  ASSERT_NEAR(x0(3), x1(3), eps);
+  ASSERT_NEAR(x0(4), x1(4), eps);
+  ASSERT_NEAR(x0(5), x1(5), eps);
+
+  x0 << 0,0,0.,0,0.1,0.1;
+  T0 = SE3f::Exp_(x0);
+  x1 = SE3f::Log_(T0);
+  std::cout << x0.transpose() << std::endl;
+  std::cout << x1.transpose() << std::endl;
+
+  ASSERT_NEAR(x0(0), x1(0), eps);
+  ASSERT_NEAR(x0(1), x1(1), eps);
+  ASSERT_NEAR(x0(2), x1(2), eps);
+  ASSERT_NEAR(x0(3), x1(3), eps);
+  ASSERT_NEAR(x0(4), x1(4), eps);
+  ASSERT_NEAR(x0(5), x1(5), eps);
+
+  for (size_t i=0; i<10000; ++i) {
+    x0 = Eigen::Matrix<float,6,1>::Random();
+    T0 = SE3f::Exp_(x0);
+    x1 = SE3f::Log_(T0);
+
+    ASSERT_NEAR(x0(0), x1(0), eps);
+    ASSERT_NEAR(x0(1), x1(1), eps);
+    ASSERT_NEAR(x0(2), x1(2), eps);
+    ASSERT_NEAR(x0(3), x1(3), eps);
+    ASSERT_NEAR(x0(4), x1(4), eps);
+    ASSERT_NEAR(x0(5), x1(5), eps);
+
+  }
+
+}
+
+#ifdef CUDA_FOUND
+TEST(SE3, gpu) {
+
+  const float eps = 1e-6;
+
+  for (size_t it=0; it<100; ++it) {
+    SE3f T(SO3f::R_rpy(Eigen::Vector3f::Random()), Eigen::Vector3f::Random());
+
+    ManagedHostImage<Vector3fda> x(1000,1);
+    ManagedHostImage<Vector3fda> xAfter(1000,1);
+    ManagedDeviceImage<Vector3fda> cuX(1000,1);
+
+    for (size_t i=0; i<1000; ++i) {
+      x[i] = Vector3fda::Random();
+      xAfter[i] = T*x[i];
+    }
+    cuX.CopyFrom(x, cudaMemcpyHostToDevice);
+    TransformPc(T, cuX);
+    x.CopyFrom(cuX, cudaMemcpyDeviceToHost);
+
+    for (size_t i=0; i<1000; ++i) {
+      ASSERT_NEAR(x[i](0), xAfter[i](0), eps);
+      ASSERT_NEAR(x[i](1), xAfter[i](1), eps);
+      ASSERT_NEAR(x[i](2), xAfter[i](2), eps);
+    }
+  }
+}
+#endif
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

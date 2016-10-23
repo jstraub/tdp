@@ -32,7 +32,8 @@ SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axis, T angle)
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axisAngle) 
-  : SO3<T,Options>(axisAngle.normalized(), axisAngle.norm())
+  : SO3<T,Options>(axisAngle.norm() > 1e-6 ? axisAngle.normalized() :
+      Eigen::Matrix<T,3,1>(0,0,1), axisAngle.norm())
 { }
 
 template<typename T, int Options>

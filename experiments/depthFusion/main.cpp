@@ -204,8 +204,8 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
   gui.container().AddDisplay(viewTsdfSliveView);
 
-  viewICPassocC.Show(false);
-  viewICPassocM.Show(false);
+  viewICPassocC.Show(true);
+  viewICPassocM.Show(true);
   viewAngErr.Show(false);
   viewPcErr.Show(false);
 

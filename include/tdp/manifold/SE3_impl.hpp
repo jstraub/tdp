@@ -2,7 +2,7 @@ namespace tdp {
 
 template<typename T, int Options>
 SE3<T,Options>::SE3() 
-  : t_(Eigen::Matrix<T,3,1,Options>::Zero())
+   : t_(Eigen::Matrix<T,3,1,Options>::Zero())
 {}
 
 template<typename T, int Options>
