@@ -50,12 +50,20 @@ TEST(SE3, inverse) {
 
   const float eps = 1e-6;
   for (size_t i=0; i<10000; ++i) {
+    Eigen::Matrix<float,3,1> p0 = Eigen::Matrix<float,3,1>::Random();
     Eigen::Matrix<float,6,1> x0 = Eigen::Matrix<float,6,1>::Random();
     SE3f T = SE3f::Exp_(x0);
     Eigen::Matrix4f Tmat = T.matrix();
     
     Eigen::Matrix4f TmatInv = Tmat.inverse();
     Eigen::Matrix4f Tinv = T.Inverse().matrix();
+
+    Eigen::Vector3f p1 = TmatInv.topLeftCorner(3,3)*p0 + TmatInv.topRightCorner(3,1);
+    Eigen::Vector3f p2 = T.Inverse()*p0;
+
+    ASSERT_NEAR(p2(0), p1(0), eps);
+    ASSERT_NEAR(p2(1), p1(1), eps);
+    ASSERT_NEAR(p2(2), p1(2), eps);
 
     for (size_t i=0; i<16; ++i)
       ASSERT_NEAR(TmatInv(i), Tinv(i), eps);
