@@ -10,6 +10,9 @@ if (GTEST_FOUND)
 add_executable(SE3 SE3.cpp)
 target_link_libraries(SE3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+add_executable(SO3 SO3.cpp)
+target_link_libraries(SO3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
   add_executable(sl3 SL3.cpp)
   target_link_libraries(sl3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
@@ -57,7 +60,5 @@ target_link_libraries(SE3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
   endif()
 
 
-  add_executable(testSO3 SO3.cpp)
-  target_link_libraries(testSO3 tdp)
 
 endif()

@@ -45,8 +45,18 @@ class SO3 : Manifold<T,3> {
   }
   TDP_HOST_DEVICE
   void ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) const {
+    if (q_.vec().squaredNorm() < 1e-9) {
+      axis = Eigen::Matrix<T,3,1,Options>::Zero();
+      angle = 0.;
+      return;
+    }
+    if (q_.w() < 1e-9) {
+      axis = q_.vec().normalized();
+      angle = M_PI*0.5;
+      return;
+    }
     axis = q_.vec().normalized();
-    angle = 2.*acos(q_.w());
+    angle = atan(q_.vec().norm() / q_.w());
   }
 
   TDP_HOST_DEVICE

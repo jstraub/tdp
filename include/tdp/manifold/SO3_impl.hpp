@@ -14,12 +14,12 @@ SO3<T,Options>::SO3(const Eigen::Matrix<T,3,3>& R)
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const SO3<T,Options>& other)
-  : q_(other.q_.normalized())
+  : q_(other.q_)
 {}
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Quaternion<T,Options>& q)
-  : q_(q.normalized())
+  : q_(q)
 {}
 
 template<typename T, int Options>
@@ -32,7 +32,7 @@ SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axis, T angle)
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axisAngle) 
-  : SO3<T,Options>(axisAngle.norm() > 1e-6 ? axisAngle.normalized() :
+  : SO3<T,Options>(axisAngle.norm() > 1e-9 ? axisAngle.normalized() :
       Eigen::Matrix<T,3,1>(0,0,1), axisAngle.norm())
 { }
 
@@ -54,17 +54,21 @@ Eigen::Matrix<T,3,1> SO3<T,Options>::Log(const SO3<T,Options>& other) const {
 template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::Exp_(const Eigen::Matrix<T,3,1>& w) {
   return SO3<T,Options>(w);
+//  return SO3<T,Options>(SO3mat<T>::Exp_(w));
 }
 
 template<typename T, int Options>
 Eigen::Matrix<T,3,1> SO3<T,Options>::Log_(const SO3<T,Options>& R) {
-  return R.ToAxisAngle();
+  return 2.*R.ToAxisAngle();
 }
 
 template<typename T, int Options>
 SO3<T,Options>& SO3<T,Options>::operator*=(const SO3<T,Options>& other) {
-  q_ = q_ * other.q_;
-  q_.normalize();
+  q_ *= other.q_;
+  T norm = q_.squaredNorm();
+  if (norm != 1.) {
+    q_.normalize();
+  }
   return *this;
 }
 

@@ -1,11 +1,38 @@
+#include <tdp/testing/testing.h>
 
 #include <iostream>
 #include <Eigen/Dense>
 #include <tdp/manifold/SO3.h>
+#include <tdp/manifold/SO3mat.h>
 
 using namespace tdp;
+TEST(SO3, exp) {
 
-int main (int argc, char** argv) {
+  const float eps = 1e-5;
+  for (size_t i=0; i<1000; ++i) {
+    Eigen::Vector3f x = 1e-3*Eigen::Vector3f::Random();
+    Eigen::Matrix3f R0 = SO3f::Exp_(x).matrix();
+    Eigen::Matrix3f R1 = SO3mat<float>::Exp_(x).matrix();
+
+    for (size_t i=0; i<9; ++i)
+      ASSERT_NEAR(R0(i), R1(i), eps);
+
+    Eigen::Vector3f x0 = SO3f::Log_(R0);
+    Eigen::Vector3f x1 = SO3mat<float>::Log_(R1);
+
+    for (size_t i=0; i<3; ++i)
+      ASSERT_NEAR(x0(i), x1(i), eps);
+    for (size_t i=0; i<3; ++i)
+      ASSERT_NEAR(x0(i), x(i), eps);
+    for (size_t i=0; i<3; ++i)
+      ASSERT_NEAR(x(i), x1(i), eps);
+
+
+  }
+}
+
+TEST(SO3, opt) {
+
   
   SO3d R;
   std::cout << R << std::endl;
@@ -27,7 +54,6 @@ int main (int argc, char** argv) {
 //  std::cout << Rmu.Exp(w) << std::endl;
 
 //  std::cout << Rmu-R << std::endl;
-
   
   double delta = 0.1;
   double f_prev = 1e99;
@@ -41,12 +67,15 @@ int main (int argc, char** argv) {
 //    std::cout << Jw << std::endl;
     f_prev = f;
     f = (Rmu.Inverse() * R).matrix().trace();
-//    if ((f_prev - f)/f < 1e-3) 
-//      break;
-    std::cout << "f=" << f << " df/f=" << (f_prev - f)/f 
-      << std::endl;
-//      << std::endl << R << std::endl;
+//    std::cout << "f=" << f << " df/f=" << (f_prev - f)/f 
+//      << std::endl;
   }
-  std::cout << std::endl << Rmu << std::endl;
-  std::cout << std::endl << R << std::endl;
+  std::cout << Rmu << std::endl;
+  std::cout << R << std::endl;
 }
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
