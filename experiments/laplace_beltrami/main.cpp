@@ -148,6 +148,60 @@ inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec){
     return newVec;
 }
 
+void getThetas(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps){
+    assert(pc.w_ == locals.w_&&pc.w_==thetas.w_);
+    Eigen::VectorXi nnIds(knn);
+    Eigen::VectorXf dists(knn);
+    for (int i=0; i<pc.w_; ++i){
+        tdp::Vector3fda pt = pc(i,0);
+        tdp::Matrix3fda localBasis = locals(i,0);
+
+        // Get the neighbor ids and dists for this point
+        ann.Search(pt, knn, eps, nnIds, dists);
+
+        tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
+        tdp::VectorXfda Y(knn);
+        tdp::Vector6fda theta;
+        for (size_t k=0; k<knn; ++k){
+            //std::cout << "iter: " << k << std::endl;
+            //std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
+            tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
+            //Take the first two dimensions
+            tdp::Vector2fda npt_2d(npt_(0), npt_(1));
+            //target is the third dim coordinate
+            float npt_z = npt_(2);
+            //project to higher dimension using poly2 basis
+            tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
+            //Construct data matrix X
+            X.row(k) = phi_npt;
+            //Construct target vector Y
+            Y(k) = npt_z;
+            //Get weight matrix W
+            W(k,k) = dists(k); //check if I need to scale this when in local coordinate system
+        }
+
+        //Solve weighted least square
+        Eigen::FullPivLU<tdp::Matrix6fda> X_lu;
+        X_lu.compute(X.transpose()*W*X);
+        theta = X_lu.inverse()*(X.transpose()*W*Y);
+        thetas(i, 0) = theta;
+    }
+}
+void getZEstimates(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, const tdp::Image<tdp::Vector6fda>& thetas, tdp::Image<tdp::Vector3fda>& estimates){
+    tdp::Vector3fda pt, wc_estimated;
+    tdp::Vector6fda phi_npt, theta;
+    float z_estimated;
+    for (size_t i=0; i<pc.w_; ++i){
+        pt = pc(i,0);
+        theta = thetas(i,0);
+        //Estimate normals
+        phi_npt = poly2Basis(tdp::Vector2fda(pt(0), pt(1)));
+        z_estimated = theta.transpose()*phi_npt;
+        wc_estimated = locals(i,0).inverse()*(tdp::Vector3fda(pt(0),pt(1),z_estimated));
+        estimates(i,0) = tdp::Vector3fda(pt(0), pt(1), wc_estimated(2));
+   }
+}
+
 //tests
 void test0(){
         //TEST OF getMean and getCovariance
@@ -219,93 +273,6 @@ int main( int argc, char* argv[] ){
 
   }
 
-  int knn = 5;
-  float eps = 1e-4;
-  // build kd tree
-  tdp::ANN ann;
-  Eigen::VectorXi nnIds(knn);
-  Eigen::VectorXf dists(knn);
-  ann.ComputeKDtree(pc);
-
-  // Gt all local basis for each point in the pc
-  tdp::ManagedHostImage<tdp::Matrix3fda> locals(pc.w_,1);
-  getAllLocalBasis(pc, locals, ann, knn, eps );
-
-
-  tdp::ManagedHostImage<tdp::VectorXfda> thetas(pc.w_,1);
-  //Put all below into a forloop of pc
-  //for (int i=0; i<pc.w_; ++i){
-  //---start here--//
-  int pid =0;
-  tdp::Vector3fda pt = pc(pid,0);
-  tdp::Matrix3fda localBasis = locals(pid,0);
-
-  // Get the neighbor ids and dists
-  ann.Search(pt, knn, eps, nnIds, dists);
-
-  tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
-  tdp::VectorXfda Y(knn);
-  tdp::Vector6fda theta;
-
-  for (size_t k=0; k<knn; ++k){
-      std::cout << "iter: " << k << std::endl;
-      std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
-      tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
-      //Take the first two dimensions
-      tdp::Vector2fda npt_2d(npt_(0), npt_(1));
-      //target is the third dim coordinate
-      float npt_z = npt_(2);
-      //project to higher dimension using poly2 basis
-      tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
-      //Construct data matrix X
-      X.row(k) = phi_npt;
-      //Construct target vector Y
-      Y(k) = npt_z;
-      //Get weight matrix W
-      W(k,k) = dists(k); //check if I need to scale this when in local coordinate system
-  }
-
-  //Solve weighted least square
-  Eigen::FullPivLU<tdp::Matrix6fda> X_lu;
-  X_lu.compute(X.transpose()*W*X);
-  theta = X_lu.inverse()*(X.transpose()*W*Y);
-  std::cout << "theta: \n " << theta << std::endl;
-  //thetas(i, 0) = theta;
-   //--end here--//
-  //};
-
-  //Given theta and point p
-  //Use theta to get the prediction height of neighbor points
-  //Then project the prediction to the world coordinate to plot
-  std::vector<tdp::Vector3fda> wc_estimateds;
-  for (size_t k=0; k < knn; ++k){
-      tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
-      tdp::Vector6fda phi_npt = poly2Basis(tdp::Vector2fda(npt_(0), npt_(1)));
-      float npt_z_estimated = theta.transpose()*phi_npt;
-      //to plot, project it back to the world coordinate
-      tdp::Vector3fda npt_estimated(npt_(0), npt_(1), npt_z_estimated);
-      tdp::Vector3fda wc_npt_estimated = localBasis.inverse()*npt_estimated;
-
-      wc_estimateds.push_back(wc_npt_estimated);
-      std::cout << "\norigianl pt in wc: \n " << pc(nnIds[k],0) << std::endl;
-      std::cout << "wc estiimated: (x,y should be const):\n " << wc_npt_estimated << std::endl;
-  }
-
-
-
-      /*
-      //debug
-      for (size_t i=0; i<evalues.size(); ++i){
-        std::cout << sortIds[i] << ": "<< evalues[sortIds[i]] << std::endl;
-        std::cout << "evec: \n" << es.eigenvectors().col(sortIds[i]) << std::endl;
-      }
-
-      std::cout << "eigenvalues: \n" << es.eigenvalues() << std::endl;
-      std::cout << "eigenvectors: \n" << es.eigenvectors() << std::endl << std::endl;
-      */
-  //}
-
-
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -334,13 +301,14 @@ int main( int argc, char* argv[] ){
   container.AddDisplay(viewN);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vboM, vboP;
+  pangolin::GlBuffer vbo, vboM;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
-  //pangolin::Var<int> knn("ui.knn", 10,1,100);
+  pangolin::Var<int> knn("ui.knn", 10 ,1,100);
+  pangolin::Var<float> eps("ui.eps", 1e-4 ,1e-5,1e-3);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -351,15 +319,23 @@ int main( int argc, char* argv[] ){
 
     if (pangolin::Pushed(runSkinning)) {
         //  processing of PC for skinning
-
       std::cout << "Running skinning..." << std::endl;
+      // build kd tree
+      tdp::ANN ann;
+      ann.ComputeKDtree(pc);
 
-      // put the mean points to GLBuffer vboM
-      vboP.Reinitialise(pangolin::GlArrayBuffer, 1 , GL_FLOAT, 3, GL_DYNAMIC_DRAW );
-      vboP.Upload(&pt, sizeof(float) * 3, 0);
+      tdp::ManagedHostImage<tdp::Matrix3fda> locals(pc.w_,1);
+      getAllLocalBasis(pc, locals, ann, knn, eps);
 
-      vboM.Reinitialise(pangolin::GlArrayBuffer, knn , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-      vboM.Upload(&wc_estimateds[0], sizeof(float) * knn * 3, 0);
+      tdp::ManagedHostImage<tdp::Vector6fda> thetas(pc.w_,1);
+      getThetas(pc,locals,thetas,ann,knn,eps);
+
+      tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1);
+      getZEstimates(pc,locals,thetas,zEstimates);
+
+      // put the estimated points to GLBuffer vboM
+      vboM.Reinitialise(pangolin::GlArrayBuffer, pc.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+      vboM.Upload(&zEstimates[0], sizeof(float) * pc.Area() * 3, 0);
 
     }
 
@@ -369,10 +345,6 @@ int main( int argc, char* argv[] ){
     if (viewPc.IsShown()) {
       viewPc.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
-
-      glPointSize(5.);
-      glColor3f(0.0f, 0.0f, 1.0f);
-      pangolin::RenderVbo(vboP);
 
       glPointSize(10.);
       glColor3f(1.0f, 0.0f, 1.0f);

@@ -18,7 +18,8 @@ Eigen::Matrix3f getLocalBasis(const tdp::Matrix3fda& cov, const Eigen::SelfAdjoi
 void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::Matrix3fda>& locals, tdp::ANN& ann, int knn, float eps);
 inline float w(float d, int knn);
 inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec);
-
+void getThetas(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps);
+void getZEstimates(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, const tdp::Image<tdp::Vector6fda>& thetas, tdp::Image<tdp::Vector3fda>& estimates);
 
 //tests
 void test0();
