@@ -54,6 +54,7 @@ class KeyframeSLAM {
       isam::Pose3d_Pose3d_Factor* odo = new isam::Pose3d_Pose3d_Factor(
           T_wk_[idA], T_wk_[idB], poseAB, noiseOdom_);
       slam_.add_factor(odo);
+    loopClosures_.emplace_back(idA, idB);
   }
 
 //  void AddKeyframe(const Image<Vector3fda>& pc, 
@@ -95,6 +96,8 @@ class KeyframeSLAM {
     isam::Pose3d_Pose3d_Factor* loop = new isam::Pose3d_Pose3d_Factor(
         T_wk_[idA], T_wk_[idB], poseAB, noiseLoopClosure_);
     slam_.add_factor(loop);
+
+    loopClosures_.emplace_back(idA, idB);
   }
 
   void PrintValues() {
@@ -124,13 +127,13 @@ class KeyframeSLAM {
 
   SE3f GetPose(size_t i) {
     if (i<size()) {
-      std::cout << i << " " << size() << std::endl;
       Eigen::Matrix<float,4,4> T = T_wk_[i]->value().wTo().cast<float>();
       return SE3f(T);
     } 
     return SE3f(); 
   }
 
+  std::vector<std::pair<int,int>> loopClosures_;
  private:
   std::vector<isam::Pose3d_Node*> T_wk_;
 

@@ -542,20 +542,17 @@ int main( int argc, char* argv[] )
 //      pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
 //      n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
 //      kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
-      kfSLAM.PrintValues();
-      kfSLAM.PrintGraph();
-      if (kfs.size() == 0) {
+      tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
+      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
+      if (kfs.size() == 1) {
         std::cout << "first KF -> adding origin" << std::endl;
         kfSLAM.AddOrigin(T_mo);
       } else {
         std::cout << "not first KF -> adding ICP odom "
-          << kfs.size() << " to " << idActive 
+          << kfs.size()-1 << " to " << idActive 
           << std::endl;
-        kfSLAM.AddIcpOdometry(idActive, kfs.size(), T_ac);
+        kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
       }
-
-      tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
-      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
 
 //      if (kfs.size() > 1) {
 //        int idA = (int)kfs.size()-1;
@@ -574,6 +571,7 @@ int main( int argc, char* argv[] )
       idActive = kfs.size()-1;
       T_ac = tdp::SE3f();
       T_mo = kfs[idActive].T_wk_*T_ac;
+
     } else {
       std::cout << "NOT adding keyframe " << kfs.size() 
         << " angle: " << se3.head<3>().norm()*180./M_PI 
@@ -634,32 +632,37 @@ int main( int argc, char* argv[] )
         tdp::SE3f& T_wk = kfs[i].T_wk_;
         pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
       }
-//      for (size_t i=0; i<kfSLAM.size(); ++i) {
-//        tdp::SE3f T_wk = kfSLAM.GetPose(i);
-//        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
-//      }
-//      glColor4f(1.,0.3,0.3,0.6);
-//      for (auto& it : loopClosures) {
-//        tdp::SE3f& T_wk_A = kfs[it.first.first].T_wk_;
-//        tdp::SE3f& T_wk_B = kfs[it.first.second].T_wk_;
-//        pangolin::glDrawLine(
-//            T_wk_A.translation()(0), T_wk_A.translation()(1),
-//            T_wk_A.translation()(2),
-//            T_wk_B.translation()(0), T_wk_B.translation()(1),
-//            T_wk_B.translation()(2));
-//      }
-//      glColor4f(0.,1.0,1.0,0.6);
-//      for (auto& it : loopClosures) {
-//        tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first.first);
-//        tdp::SE3f T_wk_B = kfSLAM.GetPose(it.first.second);
-//        pangolin::glDrawLine(
-//            T_wk_A.translation()(0), T_wk_A.translation()(1),
-//            T_wk_A.translation()(2),
-//            T_wk_B.translation()(0), T_wk_B.translation()(1),
-//            T_wk_B.translation()(2));
-//      }
+      for (size_t i=0; i<kfSLAM.size(); ++i) {
+        tdp::SE3f T_wk = kfSLAM.GetPose(i);
+        pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
+      }
+
+      glColor4f(1.,0.3,0.3,0.6);
+      for (auto& it : kfSLAM.loopClosures_) {
+        tdp::SE3f& T_wk_A = kfs[it.first].T_wk_;
+        tdp::SE3f& T_wk_B = kfs[it.second].T_wk_;
+        pangolin::glDrawLine(
+            T_wk_A.translation()(0), T_wk_A.translation()(1),
+            T_wk_A.translation()(2),
+            T_wk_B.translation()(0), T_wk_B.translation()(1),
+            T_wk_B.translation()(2));
+      }
+      glColor4f(0.,1.0,1.0,0.6);
+      for (auto& it : kfSLAM.loopClosures_) {
+        tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first);
+        tdp::SE3f T_wk_B = kfSLAM.GetPose(it.second);
+        pangolin::glDrawLine(
+            T_wk_A.translation()(0), T_wk_A.translation()(1),
+            T_wk_A.translation()(2),
+            T_wk_B.translation()(0), T_wk_B.translation()(1),
+            T_wk_B.translation()(2));
+      }
       // render model and observed point cloud
       if (showPcModel && kfs.size() > 0) {
+        tdp::KeyFrame& kf = kfs[idActive];
+        pcs_m.CopyFrom(kf.pyrPc_,cudaMemcpyHostToDevice);
+        ns_m.CopyFrom(kf.pyrN_,cudaMemcpyHostToDevice);
+
         pangolin::glSetFrameOfReference(kfs[idActive].T_wk_.matrix());
         {
           pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
