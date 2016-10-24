@@ -6,9 +6,43 @@
 
 using namespace tdp;
 
+TEST(SO3, log) {
+  const float eps = 1e-4;
+
+  for (size_t i=0; i<1000; ++i) {
+    Eigen::Vector2f rand = Eigen::Vector2f::Random();
+    SO3f Rx0 = SO3f::Rx(ToRad(rand(0)));
+    SO3matf Rx0_ = SO3matf::Rx(ToRad(rand(0)));
+
+    ASSERT_TRUE(IsAppox(Rx0.matrix(), Rx0_.matrix(), eps));
+    ASSERT_NEAR(fabs(rand(0)), ToDeg(SO3f::Log_(Rx0).norm()), eps);
+    ASSERT_TRUE(rand(0)<0.? SO3f::Log_(Rx0)(0) < 0. : SO3f::Log_(Rx0)(0) >= 0. );
+
+  }
+
+  for (size_t i=0; i<1000; ++i) {
+    SO3f R0 = SO3f::Random();
+    Eigen::Vector3f x0 = SO3f::Log_(R0);
+    Eigen::Vector3f x1 = SO3mat<float>::Log_(R0.matrix());
+
+    if (!IsAppox(x0,x1,eps)) {
+      std::cout << R0.matrix() << std::endl;
+      Eigen::Vector3f axis;
+      float angle;
+      R0.ToAxisAngle(axis, angle);
+      std::cout << axis.transpose() << " angle " << angle 
+        << " " << ToDeg(angle) << std::endl;
+      std::cout << ToDeg(x0.norm()) << " " << ToDeg(x1.norm()) << std::endl;
+      std::cout << R0 << std::endl;
+    }
+    EXPECT_TRUE(IsAppox(x0,x1,eps));
+//    ASSERT_NEAR(x0.norm(),x1.norm(),eps);
+  }
+}
+
 TEST(SO3, exp) {
 
-  const float eps = 1e-6;
+  const float eps = 1e-5;
   for (size_t i=0; i<1000; ++i) {
     Eigen::Vector3f x = 1e-3*Eigen::Vector3f::Random();
     Eigen::Matrix3f R0 = SO3f::Exp_(x).matrix();

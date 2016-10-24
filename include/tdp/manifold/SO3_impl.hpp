@@ -88,13 +88,14 @@ void SO3<T,Options>::ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) c
     angle = 0.;
     return;
   }
-  if (q_.w() < 1e-9) {
+  if (fabs(q_.w()) < 1e-9) {
     axis = q_.vec().normalized();
     angle = M_PI*0.5;
     return;
   }
   axis = q_.vec().normalized();
   angle = atan(q_.vec().norm() / q_.w());
+//  angle = acos( q_.w());
 }
 
 template<typename T, int Options>

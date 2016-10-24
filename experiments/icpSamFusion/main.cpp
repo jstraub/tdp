@@ -259,6 +259,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
+  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,0.,1.);
+  pangolin::Var<float> rmseThr("ui.RMSE thr", 0.15,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
   pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
@@ -342,8 +344,8 @@ int main( int argc, char* argv[] )
       tdp::KeyFrame& kfA = kfs[idA];
       tdp::KeyFrame& kfB = kfs[idB];
       Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
-      if ( se3.head<3>().norm()*180./M_PI < 2.5*keyFrameAngleThresh
-        && se3.tail<3>().norm()           < 2.5*keyFrameDistThresh) {
+      if ( se3.head<3>().norm()*180./M_PI < 3.5*keyFrameAngleThresh
+        && se3.tail<3>().norm()           < 3.5*keyFrameDistThresh) {
 
         tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
         std::cout << " checking " << idA << " -> " << idB 
@@ -394,13 +396,16 @@ int main( int argc, char* argv[] )
               overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
 
           std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
-            << " RMSE " << rmseBefore << " -> " << rmseAfter << std::endl;
+            << " RMSE " << rmseBefore << " -> " << rmseAfter 
+            << " dRMSE " << (rmseBefore-rmseAfter)/rmseBefore
+            << std::endl;
 
           if (err == err 
               && err < icpLoopCloseErrThr
               && count*icpDownSample > 3000 
               && overlapAfter > icpLoopCloseOverlapThr
-              && rmseAfter <= rmseBefore) {
+              && (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr
+              && rmseAfter < rmseThr) {
             std::cout << "successfull loop closure "  << std::endl
               << T_ab.matrix3x4() << std::endl;
             kfSLAM.AddLoopClosure(idA, idB, T_ab);
@@ -415,6 +420,8 @@ int main( int argc, char* argv[] )
             pcASuccess.CopyFrom(kfA.pc_, cudaMemcpyHostToHost);
             pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
             T_abSuccess = T_ab;
+          } else {
+            std::cout << "unsuccessfull loop closure" << std::endl;
           }
         }
         break;
