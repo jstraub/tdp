@@ -28,6 +28,7 @@ class KeyframeSLAM {
   {};
 
   void AddOrigin(const SE3f& T_wk) {
+
     isam::Pose3d origin = isam::Pose3d(T_wk.matrix().cast<double>());
 
     isam::Pose3d_Node* pose0 = new isam::Pose3d_Node();
@@ -100,6 +101,10 @@ class KeyframeSLAM {
     for (auto& T_wk : T_wk_) {
       std::cout << T_wk->value() << std::endl;
     }
+  }
+
+  void PrintGraph() {
+    slam_.print_graph();
   }
 
   void Optimize() {

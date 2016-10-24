@@ -542,10 +542,16 @@ int main( int argc, char* argv[] )
 //      pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
 //      n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
 //      kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
+      kfSLAM.PrintValues();
+      kfSLAM.PrintGraph();
       if (kfs.size() == 0) {
+        std::cout << "first KF -> adding origin" << std::endl;
         kfSLAM.AddOrigin(T_mo);
       } else {
-        kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
+        std::cout << "not first KF -> adding ICP odom "
+          << kfs.size() << " to " << idActive 
+          << std::endl;
+        kfSLAM.AddIcpOdometry(idActive, kfs.size(), T_ac);
       }
 
       tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
