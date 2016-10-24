@@ -79,8 +79,8 @@ Eigen::Matrix<T,6,1> SE3<T,Options>::Log_(const SE3<T,Options>& _T) {
 
 template<typename T, int Options>
 SE3<T,Options>& SE3<T,Options>::operator*=(const SE3<T,Options>& other) {
-  R_ = R_ * other.R_;
   t_ += R_ * other.t_;
+  R_ *= other.R_;
   return *this;
 }
 
