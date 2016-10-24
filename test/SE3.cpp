@@ -46,34 +46,63 @@ TEST(SE3, setup) {
 
 }
 
-TEST(SE3, inverse) {
+TEST(SE3, transform) {
 
-  const float eps = 1e-6;
+  const float eps = 1e-5;
   for (size_t i=0; i<10000; ++i) {
     Eigen::Matrix<float,3,1> p0 = Eigen::Matrix<float,3,1>::Random();
+    SE3f T = SE3f::Random();
+    Eigen::Matrix4f Tmat = T.matrix();
+    Eigen::Matrix4f TmatInv = Tmat.inverse();
+
+    Eigen::Vector3f p1 = TmatInv.topLeftCorner(3,3)*p0 + TmatInv.topRightCorner(3,1);
+    Eigen::Vector3f p2 = T.Inverse()*p0;
+    ASSERT_TRUE(IsAppox(p1, p2, eps));
+
+    p1 = Tmat.topLeftCorner(3,3)*p0 + Tmat.topRightCorner(3,1);
+    p2 = T*p0;
+    ASSERT_TRUE(IsAppox(p1, p2, eps));
+
+  }
+}
+
+TEST(SE3, inverse) {
+
+  const float eps = 1e-5;
+  for (size_t i=0; i<10000; ++i) {
     Eigen::Matrix<float,6,1> x0 = Eigen::Matrix<float,6,1>::Random();
     SE3f T = SE3f::Exp_(x0);
     Eigen::Matrix4f Tmat = T.matrix();
     
     Eigen::Matrix4f TmatInv = Tmat.inverse();
     Eigen::Matrix4f Tinv = T.Inverse().matrix();
-
-    Eigen::Vector3f p1 = TmatInv.topLeftCorner(3,3)*p0 + TmatInv.topRightCorner(3,1);
-    Eigen::Vector3f p2 = T.Inverse()*p0;
-
-    ASSERT_NEAR(p2(0), p1(0), eps);
-    ASSERT_NEAR(p2(1), p1(1), eps);
-    ASSERT_NEAR(p2(2), p1(2), eps);
-
-    for (size_t i=0; i<16; ++i)
-      ASSERT_NEAR(TmatInv(i), Tinv(i), eps);
+    ASSERT_TRUE(IsAppox(TmatInv, Tinv, eps));
 
     SE3f Tse3Inv = T.Inverse();
-    
     Eigen::Matrix4f Tinvinvmat = Tse3Inv.Inverse().matrix();
+    ASSERT_TRUE(IsAppox(Tinvinvmat, Tmat, eps));
 
-    for (size_t i=0; i<16; ++i)
-      ASSERT_NEAR(Tmat(i), Tinvinvmat(i), eps);
+  }
+}
+
+TEST(SE3, expLog) {
+
+  const float eps = 1e-5;
+  for (size_t i=0; i<10000; ++i) {
+    Eigen::Matrix<float,6,1> x0 = Eigen::Matrix<float,6,1>::Random();
+    SE3f T = SE3f::Exp_(x0);
+    Eigen::Matrix<float,6,1> x1 = SE3f::Log_(T);
+    ASSERT_TRUE(IsAppox(x0, x1, eps));
+
+//    Eigen::Matrix4f Tmat = T.matrix();
+//    
+//    Eigen::Matrix4f TmatInv = Tmat.inverse();
+//    Eigen::Matrix4f Tinv = T.Inverse().matrix();
+//    ASSERT_TRUE(IsAppox(TmatInv, Tinv, eps));
+//
+//    SE3f Tse3Inv = T.Inverse();
+//    Eigen::Matrix4f Tinvinvmat = Tse3Inv.Inverse().matrix();
+//    ASSERT_TRUE(IsAppox(Tinvinvmat, Tmat, eps));
 
   }
 }
@@ -96,15 +125,23 @@ TEST(SE3, composition) {
     SE3f Tw0w1 = Tw0 * Tw1;
     Eigen::Matrix4f Tw0w1mat = Tw0mat*Tw1mat;
     ASSERT_TRUE(Tw0w1mat.isApprox(Tw0w1.matrix(),eps));
+
+
   }
 
   SE3f Tw0;
   Eigen::Matrix4f Tw0mat = Eigen::Matrix4f::Identity();
+  SE3f Tw1;
+  Eigen::Matrix4f Tw1mat = Eigen::Matrix4f::Identity();
   for (size_t i=0; i<1000; ++i) {
     Eigen::Matrix<float,6,1> x0 = 1e-3*Eigen::Matrix<float,6,1>::Random();
     Tw0 = Tw0 * SE3f::Exp_(x0);
     Tw0mat = Tw0mat * SE3<float>::Exp_(x0).matrix();
     ASSERT_TRUE(Tw0mat.isApprox(Tw0.matrix(),eps));
+
+    Tw1 = SE3f::Exp_(x0) * Tw1;
+    Tw1mat = SE3<float>::Exp_(x0).matrix() * Tw1mat;
+    ASSERT_TRUE(Tw1mat.isApprox(Tw1.matrix(),eps));
   }
 
 }
@@ -159,27 +196,33 @@ TEST(SE3, exp) {
 #ifdef CUDA_FOUND
 TEST(SE3, gpu) {
 
-  const float eps = 1e-6;
+  const float eps = 1e-5;
 
   for (size_t it=0; it<100; ++it) {
     SE3f T(SO3f::R_rpy(Eigen::Vector3f::Random()), Eigen::Vector3f::Random());
 
     ManagedHostImage<Vector3fda> x(1000,1);
     ManagedHostImage<Vector3fda> xAfter(1000,1);
+    ManagedHostImage<Vector3fda> xAfterRot(1000,1);
     ManagedDeviceImage<Vector3fda> cuX(1000,1);
+    ManagedDeviceImage<Vector3fda> cuXrot(1000,1);
 
     for (size_t i=0; i<1000; ++i) {
       x[i] = Vector3fda::Random();
       xAfter[i] = T*x[i];
+      xAfterRot[i] = T.rotation()*x[i];
     }
     cuX.CopyFrom(x, cudaMemcpyHostToDevice);
+    cuXrot.CopyFrom(x, cudaMemcpyHostToDevice);
     TransformPc(T, cuX);
+    TransformPc(T.rotation(), cuXrot);
     x.CopyFrom(cuX, cudaMemcpyDeviceToHost);
-
     for (size_t i=0; i<1000; ++i) {
-      ASSERT_NEAR(x[i](0), xAfter[i](0), eps);
-      ASSERT_NEAR(x[i](1), xAfter[i](1), eps);
-      ASSERT_NEAR(x[i](2), xAfter[i](2), eps);
+      ASSERT_TRUE(IsAppox(x[i],xAfter[i], eps));
+    }
+    x.CopyFrom(cuXrot, cudaMemcpyDeviceToHost);
+    for (size_t i=0; i<1000; ++i) {
+      ASSERT_TRUE(IsAppox(x[i],xAfterRot[i], eps));
     }
   }
 }

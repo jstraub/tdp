@@ -32,6 +32,74 @@ TEST(SO3, exp) {
   }
 }
 
+TEST(SO3, Rz) {
+  const float eps = 1e-4;
+  Eigen::Matrix3f R0t = Eigen::Matrix3f::Identity();
+  SO3f R0 = SO3f::Rz(0.);
+  ASSERT_TRUE(IsAppox(R0.matrix(), R0t, eps));
+
+  SO3f R0_1;
+  for (size_t i=0; i<36; ++i)
+    R0_1 = SO3f::Rz(ToRad(10.)) * R0_1;
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<360; ++i)
+    R0_1 = SO3f::Rz(ToRad(1.)) * R0_1;
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<3600; ++i)
+    R0_1 = SO3f::Rz(ToRad(0.1)) * R0_1;
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+}
+
+TEST(SO3, Ry) {
+  const float eps = 1e-4;
+  Eigen::Matrix3f R0t = Eigen::Matrix3f::Identity();
+  SO3f R0 = SO3f::Ry(0.);
+  ASSERT_TRUE(IsAppox(R0.matrix(), R0t, eps));
+
+  SO3f R0_1;
+  for (size_t i=0; i<36; ++i)
+    R0_1 *= SO3f::Ry(ToRad(10.));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<360; ++i)
+    R0_1 *= SO3f::Ry(ToRad(1.));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<3600; ++i)
+    R0_1 *= SO3f::Ry(ToRad(0.1));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+}
+
+TEST(SO3, Rx) {
+  const float eps = 1e-4;
+  Eigen::Matrix3f R0t = Eigen::Matrix3f::Identity();
+  SO3f R0 = SO3f::Rx(0.);
+  ASSERT_TRUE(IsAppox(R0.matrix(), R0t, eps));
+
+  ASSERT_TRUE(IsAppox(SO3f::Rx(ToRad(10.)).matrix(), 
+        SO3mat<float>::Rx(ToRad(10.)).matrix(),eps));
+  SO3f R0_1;
+  for (size_t i=0; i<36; ++i) {
+    R0_1 *= SO3f::Rx(ToRad(10.));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<360; ++i)
+    R0_1 *= SO3f::Rx(ToRad(1.));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+
+  R0_1 = SO3f();
+  for (size_t i=0; i<3600; ++i)
+    R0_1 *= SO3f::Rx(ToRad(0.1));
+  ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
+}
+
 TEST(SO3, composition) {
 
   const float eps = 1e-5;
@@ -62,7 +130,6 @@ TEST(SO3, composition) {
 }
 
 TEST(SO3, opt) {
-
   
   SO3d R;
   std::cout << R << std::endl;
