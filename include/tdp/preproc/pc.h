@@ -13,9 +13,23 @@ void TransformPc(
     const SE3f& T_rc,
     Image<Vector3fda>& pc_c
     );
+/// For testing purposes - more efficient to call above with
+/// inverse transformation.
+void InverseTransformPc(
+    const SE3f& T_rc,
+    Image<Vector3fda>& pc_c
+    );
 /// Rotate a PC by R_rc in place. (on GPU)
 void TransformPc(
     const SO3f& R_rc,
+    Image<Vector3fda>& pc_c
+    );
+void TransformPc(
+    const SO3fda& R_rc,
+    Image<Vector3fda>& pc_c
+    );
+void InverseTransformPc(
+    const SO3fda& R_rc,
     Image<Vector3fda>& pc_c
     );
 

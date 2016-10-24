@@ -164,10 +164,11 @@ void ICP::ComputeProjective(
       float kappa = ev.maxCoeff() / ev.minCoeff();
 
       // apply x to the transformation
-      std::cout << T_mo << std::endl;
+//      std::cout << T_mo << std::endl;
       T_mo = SE3f::Exp_(x) * T_mo;
-      std::cout << SE3f::Exp_(x) << std::endl;
-      std::cout << T_mo << std::endl;
+//      T_mo = SE3f(SE3f::Exp_(x).matrix() * T_mo.matrix());
+//      std::cout << SE3f::Exp_(x) << std::endl;
+//      std::cout << T_mo << std::endl;
       if (verbose) {
         std::cout << "lvl " << lvl << " it " << it 
           << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error

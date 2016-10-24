@@ -159,6 +159,79 @@ void TransformPc(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ void KernelInverseTransformPc(
+    SE3f T_rc,
+    Image<Vector3fda> pc_c
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < pc_c.w_ && idy < pc_c.h_) {
+    pc_c(idx,idy) = T_rc.Inverse()*pc_c(idx,idy);
+  }
+}
+
+void InverseTransformPc(
+    const SE3f& T_rc,
+    Image<Vector3fda>& pc_c
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_c,32,32);
+  KernelInverseTransformPc<<<blocks,threads>>>(T_rc,pc_c);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__global__ void KernelTransformPc(
+    SO3fda R_rc,
+    Image<Vector3fda> pc_c
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < pc_c.w_ && idy < pc_c.h_) {
+    pc_c(idx,idy) = R_rc*pc_c(idx,idy);
+  }
+}
+
+void TransformPc(
+    const SO3fda& R_rc,
+    Image<Vector3fda>& pc_c
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_c,32,32);
+  KernelTransformPc<<<blocks,threads>>>(R_rc,pc_c);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__global__ void KernelInverseTransformPc(
+    SO3fda R_rc,
+    Image<Vector3fda> pc_c
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+//  Eigen::Matrix<float,3,3,Eigen::DontAlign> R = R_rc.Inverse().matrix();
+  if (idx < pc_c.w_ && idy < pc_c.h_) {
+//    if (idx == 0 && idy == 0) {
+//      Eigen::Quaternion<float,Eigen::DontAlign> q(R_rc.vector());
+//      printf("q: %f %f %f %f", q.w(), q.x(), q.y(), q.z());
+//      q = Eigen::Quaternion<float,Eigen::DontAlign>(R_rc.Inverse().vector());
+//      printf("q: %f %f %f %f", q.w(), q.x(), q.y(), q.z());
+//    }
+//    pc_c(idx,idy) = R*pc_c(idx,idy);
+    pc_c(idx,idy) = R_rc.Inverse()*pc_c(idx,idy);
+//    Vector3fda p = R_rc.Inverse()*pc_c(idx,idy);
+//    pc_c(idx,idy) = p;
+  }
+}
+
+void InverseTransformPc(
+    const SO3fda& R_rc,
+    Image<Vector3fda>& pc_c
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc_c,32,32);
+  KernelInverseTransformPc<<<blocks,threads>>>(R_rc,pc_c);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 __global__ 
 void KernelL2Distance(Image<Vector3fda> pcA, Image<Vector3fda> pcB,
     SE3f T_ab,

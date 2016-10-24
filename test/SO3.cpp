@@ -85,8 +85,8 @@ TEST(SO3, Rx) {
   ASSERT_TRUE(IsAppox(SO3f::Rx(ToRad(10.)).matrix(), 
         SO3mat<float>::Rx(ToRad(10.)).matrix(),eps));
   SO3f R0_1;
-  for (size_t i=0; i<36; ++i) {
-    R0_1 *= SO3f::Rx(ToRad(10.));
+  for (size_t i=0; i<36; ++i) 
+    R0_1 *= SO3f::Rx(ToRad(10));
   ASSERT_TRUE(IsAppox(R0_1.matrix(), R0t, eps));
 
   R0_1 = SO3f();

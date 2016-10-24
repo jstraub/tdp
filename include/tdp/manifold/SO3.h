@@ -54,13 +54,16 @@ class SO3 : Manifold<T,3> {
 
   TDP_HOST_DEVICE
   SO3<T,Options> Inverse() const ;
+
   TDP_HOST_DEVICE
   SO3<T,Options> Exp (const Eigen::Matrix<T,3,1,Options>& w) const ;
+
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1,Options> Log (const SO3<T,Options>& other) const;
 
   TDP_HOST_DEVICE
   SO3<T,Options>& operator*=(const SO3<T,Options>& other);
+
   TDP_HOST_DEVICE
   const SO3<T,Options> operator*(const SO3<T,Options>& other) const;
 

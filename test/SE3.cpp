@@ -199,23 +199,51 @@ TEST(SE3, gpu) {
   const float eps = 1e-5;
 
   for (size_t it=0; it<100; ++it) {
-    SE3f T(SO3f::R_rpy(Eigen::Vector3f::Random()), Eigen::Vector3f::Random());
+    SE3f T = SE3f::Random();
+    SO3fda R (Eigen::Quaternion<float,Eigen::DontAlign>(T.rotation().vector()));
+//    std::cout << T << std::endl;
+//    std::cout << T.rotation() << std::endl;
+//    std::cout << R << std::endl;
 
     ManagedHostImage<Vector3fda> x(1000,1);
+    ManagedHostImage<Vector3fda> xBefore(1000,1);
     ManagedHostImage<Vector3fda> xAfter(1000,1);
+    ManagedHostImage<Vector3fda> xAfterInv(1000,1);
+    ManagedHostImage<Vector3fda> xAfterInvRot(1000,1);
     ManagedHostImage<Vector3fda> xAfterRot(1000,1);
+    xAfter.Fill(Vector3fda::Zero());
+    xAfterInv.Fill(Vector3fda::Zero());
+    xAfterInvRot.Fill(Vector3fda::Zero());
+    xAfterRot.Fill(Vector3fda::Zero());
+
     ManagedDeviceImage<Vector3fda> cuX(1000,1);
+    ManagedDeviceImage<Vector3fda> cuXinv(1000,1);
+    ManagedDeviceImage<Vector3fda> cuXinvRot(1000,1);
     ManagedDeviceImage<Vector3fda> cuXrot(1000,1);
+
+    cudaMemset(cuX.ptr_, 0, cuX.SizeBytes());
+    cudaMemset(cuXinv.ptr_, 0, cuXinv.SizeBytes());
+    cudaMemset(cuXinvRot.ptr_, 0, cuXinvRot.SizeBytes());
+    cudaMemset(cuXrot.ptr_, 0, cuXrot.SizeBytes());
 
     for (size_t i=0; i<1000; ++i) {
       x[i] = Vector3fda::Random();
+      xBefore[i] = x[i];
       xAfter[i] = T*x[i];
+      xAfterInv[i] = T.Inverse()*x[i];
       xAfterRot[i] = T.rotation()*x[i];
+      xAfterInvRot[i] = T.rotation().Inverse()*x[i];
     }
     cuX.CopyFrom(x, cudaMemcpyHostToDevice);
+    cuXinv.CopyFrom(x, cudaMemcpyHostToDevice);
+    cuXinvRot.CopyFrom(x, cudaMemcpyHostToDevice);
     cuXrot.CopyFrom(x, cudaMemcpyHostToDevice);
+
     TransformPc(T, cuX);
-    TransformPc(T.rotation(), cuXrot);
+    InverseTransformPc(T, cuXinv);
+    InverseTransformPc(R, cuXinvRot);
+    TransformPc(R, cuXrot);
+
     x.CopyFrom(cuX, cudaMemcpyDeviceToHost);
     for (size_t i=0; i<1000; ++i) {
       ASSERT_TRUE(IsAppox(x[i],xAfter[i], eps));
@@ -223,6 +251,17 @@ TEST(SE3, gpu) {
     x.CopyFrom(cuXrot, cudaMemcpyDeviceToHost);
     for (size_t i=0; i<1000; ++i) {
       ASSERT_TRUE(IsAppox(x[i],xAfterRot[i], eps));
+    }
+    x.CopyFrom(cuXinvRot, cudaMemcpyDeviceToHost);
+    for (size_t i=0; i<1000; ++i) {
+      ASSERT_TRUE(IsAppox(x[i],xAfterInvRot[i], eps));
+    }
+    x.CopyFrom(cuXinv, cudaMemcpyDeviceToHost);
+    for (size_t i=0; i<1000; ++i) {
+      if(!IsAppox(x[i],xAfterInv[i], eps)) {
+        std::cout << xBefore[i].transpose() << std::endl;    
+      }
+      ASSERT_TRUE(IsAppox(x[i],xAfterInv[i], eps));
     }
   }
 }
