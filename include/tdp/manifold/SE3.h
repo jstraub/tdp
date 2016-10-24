@@ -84,6 +84,11 @@ class SE3 : Manifold<T,6> {
   static SE3<T,Options> Exp_(const Eigen::Matrix<T,6,1>& w);
   static Eigen::Matrix<T,6,1> Log_(const SE3<T,Options>& _T);
 
+  static SE3<T,Options> Random() { 
+    return SE3<T,Options>(SO3<T,Options>::Random(),
+      Eigen::Matrix<T,3,1,Options>::Random());
+  }
+
  private:
   SO3<T,Options> R_;
   Eigen::Matrix<T,3,1,Options> t_;

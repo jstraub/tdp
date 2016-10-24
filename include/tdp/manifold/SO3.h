@@ -4,6 +4,7 @@
 #include <Eigen/Geometry>
 #include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
+#include <tdp/manifold/rotation.h>
 #include <tdp/manifold/SO3mat.h>
 
 namespace tdp {
@@ -19,10 +20,10 @@ class SO3 : Manifold<T,3> {
   SO3(const SO3<T,Options>& other);
   TDP_HOST_DEVICE
   SO3(const Eigen::Quaternion<T,Options>& q);
-  TDP_HOST_DEVICE
-  SO3(const Eigen::Matrix<T,3,1>& axis, T angle);
-  TDP_HOST_DEVICE
-  SO3(const Eigen::Matrix<T,3,1>& axisAngle);
+//  TDP_HOST_DEVICE
+//  SO3(const Eigen::Matrix<T,3,1>& axis, T angle);
+//  TDP_HOST_DEVICE
+//  SO3(const Eigen::Matrix<T,3,1>& axisAngle);
 
   TDP_HOST_DEVICE
   ~SO3() {}
@@ -44,27 +45,19 @@ class SO3 : Manifold<T,3> {
     return aa*angle;
   }
   TDP_HOST_DEVICE
-  void ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) const {
-    if (q_.vec().squaredNorm() < 1e-9) {
-      axis = Eigen::Matrix<T,3,1,Options>::Zero();
-      angle = 0.;
-      return;
-    }
-    if (q_.w() < 1e-9) {
-      axis = q_.vec().normalized();
-      angle = M_PI*0.5;
-      return;
-    }
-    axis = q_.vec().normalized();
-    angle = atan(q_.vec().norm() / q_.w());
-  }
+  void ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) const;
+  TDP_HOST_DEVICE
+  static SO3<T,Options> FromAxisAngle(const Eigen::Matrix<T,3,1,Options>& axis,
+      T angle);
+  TDP_HOST_DEVICE
+  static SO3<T,Options> FromAxisAngle(const Eigen::Matrix<T,3,1,Options>& axisAngle);
 
   TDP_HOST_DEVICE
   SO3<T,Options> Inverse() const ;
   TDP_HOST_DEVICE
-  SO3<T,Options> Exp (const Eigen::Matrix<T,3,1>& w) const ;
+  SO3<T,Options> Exp (const Eigen::Matrix<T,3,1,Options>& w) const ;
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1> Log (const SO3<T,Options>& other) const;
+  Eigen::Matrix<T,3,1,Options> Log (const SO3<T,Options>& other) const;
 
   TDP_HOST_DEVICE
   SO3<T,Options>& operator*=(const SO3<T,Options>& other);
@@ -76,8 +69,8 @@ class SO3 : Manifold<T,3> {
   Eigen::Matrix<T,3,1> operator*(
       const Eigen::Matrix<T,3,1>& x) const;
 
-  static SO3<T,Options> Exp_(const Eigen::Matrix<T,3,1>& w);
-  static Eigen::Matrix<T,3,1> Log_(const SO3<T,Options>& R);
+  static SO3<T,Options> Exp_(const Eigen::Matrix<T,3,1,Options>& w);
+  static Eigen::Matrix<T,3,1,Options> Log_(const SO3<T,Options>& R);
 
   static SO3<T,Options> Random();
 

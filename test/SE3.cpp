@@ -78,6 +78,37 @@ TEST(SE3, inverse) {
   }
 }
 
+TEST(SE3, composition) {
+
+  const float eps = 1e-5;
+  for (size_t i=0; i<1000; ++i) {
+    SE3f Tw0 = SE3f::Random();
+    SE3f Tw1 = SE3f::Random();
+    Eigen::Matrix4f Tw0mat = Tw0.matrix();
+    Eigen::Matrix4f Tw1mat = Tw1.matrix();
+
+    SE3f T01 = Tw0.Inverse() * Tw1;
+    Eigen::Matrix4f T01mat = Tw0mat.inverse()*Tw1mat;
+
+    Eigen::Matrix4f T01_mat = T01.matrix();
+    ASSERT_TRUE(IsAppox(T01mat,T01_mat,eps));
+
+    SE3f Tw0w1 = Tw0 * Tw1;
+    Eigen::Matrix4f Tw0w1mat = Tw0mat*Tw1mat;
+    ASSERT_TRUE(Tw0w1mat.isApprox(Tw0w1.matrix(),eps));
+  }
+
+  SE3f Tw0;
+  Eigen::Matrix4f Tw0mat = Eigen::Matrix4f::Identity();
+  for (size_t i=0; i<1000; ++i) {
+    Eigen::Matrix<float,6,1> x0 = 1e-3*Eigen::Matrix<float,6,1>::Random();
+    Tw0 = Tw0 * SE3f::Exp_(x0);
+    Tw0mat = Tw0mat * SE3<float>::Exp_(x0).matrix();
+    ASSERT_TRUE(Tw0mat.isApprox(Tw0.matrix(),eps));
+  }
+
+}
+
 TEST(SE3, exp) {
 
   const float eps = 1e-5;

@@ -1,34 +1,64 @@
-#include <tdp/testing/testing.h>
-
+#include <tdp/testing/testing.h> 
 #include <iostream>
 #include <Eigen/Dense>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SO3mat.h>
 
 using namespace tdp;
+
 TEST(SO3, exp) {
 
-  const float eps = 1e-5;
+  const float eps = 1e-6;
   for (size_t i=0; i<1000; ++i) {
     Eigen::Vector3f x = 1e-3*Eigen::Vector3f::Random();
     Eigen::Matrix3f R0 = SO3f::Exp_(x).matrix();
     Eigen::Matrix3f R1 = SO3mat<float>::Exp_(x).matrix();
 
-    for (size_t i=0; i<9; ++i)
-      ASSERT_NEAR(R0(i), R1(i), eps);
+    ASSERT_TRUE(IsAppox(R0,R1,eps));
 
     Eigen::Vector3f x0 = SO3f::Log_(R0);
     Eigen::Vector3f x1 = SO3mat<float>::Log_(R1);
+    
+    if (!IsAppox(x0,x1,eps)) {
+      std::cout << R0 << std::endl << R1 << std::endl;
+      std::cout << "so3:  " << x.transpose() << std::endl;
+      std::cout << "Quat: " << SO3f::Exp_(x) << std::endl;
+    }
 
-    for (size_t i=0; i<3; ++i)
-      ASSERT_NEAR(x0(i), x1(i), eps);
-    for (size_t i=0; i<3; ++i)
-      ASSERT_NEAR(x0(i), x(i), eps);
-    for (size_t i=0; i<3; ++i)
-      ASSERT_NEAR(x(i), x1(i), eps);
-
+    ASSERT_TRUE(IsAppox(x0,x1,eps));
+    ASSERT_TRUE(IsAppox(x,x1,eps));
+    ASSERT_TRUE(IsAppox(x0,x,eps));
 
   }
+}
+
+TEST(SO3, composition) {
+
+  const float eps = 1e-5;
+  for (size_t i=0; i<1000; ++i) {
+    SO3f Rw0 = SO3f::Random();
+    SO3f Rw1 = SO3f::Random();
+    Eigen::Matrix3f Rw0mat = Rw0.matrix();
+    Eigen::Matrix3f Rw1mat = Rw1.matrix();
+
+    SO3f R01 = Rw0.Inverse() * Rw1;
+    Eigen::Matrix3f R01mat = Rw0mat.transpose()*Rw1mat;
+    ASSERT_TRUE(R01mat.isApprox(R01.matrix(),eps));
+
+    SO3f Rw0w1 = Rw0 * Rw1;
+    Eigen::Matrix3f Rw0w1mat = Rw0mat*Rw1mat;
+    ASSERT_TRUE(Rw0w1mat.isApprox(Rw0w1.matrix(),eps));
+  }
+
+  SO3f Rw0;
+  Eigen::Matrix3f Rw0mat = Eigen::Matrix3f::Identity();
+  for (size_t i=0; i<1000; ++i) {
+    Eigen::Vector3f x0 = 1e-3*Eigen::Vector3f::Random();
+    Rw0 = Rw0 * SO3f::Exp_(x0);
+    Rw0mat = Rw0mat * SO3mat<float>::Exp_(x0).matrix();
+    ASSERT_TRUE(Rw0mat.isApprox(Rw0.matrix(),eps));
+  }
+
 }
 
 TEST(SO3, opt) {

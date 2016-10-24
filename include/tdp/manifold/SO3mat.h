@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include <tdp/config.h>
 #include <tdp/manifold/manifold.h>
+#include <tdp/manifold/rotation.h>
 
 namespace tdp {
 

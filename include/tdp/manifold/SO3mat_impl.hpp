@@ -70,7 +70,7 @@ template<typename T>
 Eigen::Matrix<T,3,3> SO3mat<T>::Exp_(const Eigen::Matrix<T,3,1>& w) {
   const T theta = sqrt(w.array().square().matrix().sum());
   const Eigen::Matrix<T,3,3> W = invVee(w);
-  T a = sin(theta)/theta;
+  T a = sinc(theta);
   if(a!=a) a = 0.0;
   T b = (1.-cos(theta))/(theta*theta);
   if(b!=b) b = 0.0;
@@ -80,7 +80,8 @@ Eigen::Matrix<T,3,3> SO3mat<T>::Exp_(const Eigen::Matrix<T,3,1>& w) {
 template<typename T>
 Eigen::Matrix<T,3,1> SO3mat<T>::Log_(const Eigen::Matrix<T,3,3>& R) {
   const T theta = acos((R.trace()-1.)*0.5);
-  T a = theta/(2.*sin(theta));
+//  T a = theta/(2.*sin(theta));
+  T a = 0.5/sinc(theta);
   if(a!=a) a = 0.0;
   Eigen::Matrix<T,3,3> W = a*(R-R.transpose());
   return vee(W);
