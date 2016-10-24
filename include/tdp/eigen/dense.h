@@ -20,9 +20,10 @@ typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vector3fda;
 typedef Eigen::Matrix<float,2,1,Eigen::DontAlign> Vector2fda;
 typedef Eigen::Matrix<float, Eigen::Dynamic, 1, Eigen::DontAlign> VectorXfda;
 
+typedef Eigen::Matrix<float,6,6,Eigen::DontAlign> Matrix6fda;
 typedef Eigen::Matrix<float,3,3,Eigen::DontAlign> Matrix3fda;
 typedef Eigen::Matrix<float,2,2,Eigen::DontAlign> Matrix2fda;
-typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::DontAlign> MatrixXfda;
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic/*, Eigen::DontAlign*/> MatrixXfda;
 
 typedef Eigen::Matrix<int32_t,3,1,Eigen::DontAlign> Vector3ida;
 typedef Eigen::Matrix<int32_t,2,1,Eigen::DontAlign> Vector2ida;

@@ -17,6 +17,7 @@ inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& axesIds);
 Eigen::Matrix3f getLocalBasis(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es);
 void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::Matrix3fda>& locals, tdp::ANN& ann, int knn, float eps);
 inline float w(float d, int knn);
+inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec);
 
 
 //tests

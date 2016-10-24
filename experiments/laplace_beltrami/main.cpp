@@ -142,6 +142,11 @@ inline float w(float d, int knn){
     return d==0? 1: 1/(float)knn;
 }
 
+inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec){
+    tdp::Vector6fda newVec;
+    newVec << 1, vec[0], vec[1], vec[0]*vec[0], vec[0]*vec[1], vec[1]*vec[1];
+    return newVec;
+}
 
 //tests
 void test0(){
@@ -181,11 +186,20 @@ void test_getAxesIds(){
         std::cout << ids[i] << ": "<< v[ids[i]] << std::endl;
     }
 }
+
+void test_poly2Basis(){
+    tdp::Vector2fda vec1(10.,10.);
+    tdp::Vector2fda vec2(0,0);
+    std::cout << poly2Basis(vec1) << std::endl;
+    std::cout << poly2Basis(vec2) << std::endl;
+
+}
+
 //end of test
 
 int main( int argc, char* argv[] ){
   // load pc and normal from the input paths
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10/*1000*/,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(1000,1);
 
   if (argc > 1) {
@@ -193,13 +207,16 @@ int main( int argc, char* argv[] ){
       std::cout << "input " << input << std::endl;
       tdp::LoadPointCloud(input, pc, ns);
   } else {
-      //GetSphericalPc(pc);
+      GetSphericalPc(pc);
+      /*
       //todo: delete
       for (size_t i=0; i<10; ++i){
           tdp::Vector3fda pt;
           pt << i,i,i;
           pc(i,0) = pt;
       }
+      */
+
   }
 
   int knn = 5;
@@ -211,7 +228,7 @@ int main( int argc, char* argv[] ){
   ann.ComputeKDtree(pc);
 
   // Gt all local basis for each point in the pc
-  tdp::ManagedHostImage locals(pc.w_,1);
+  tdp::ManagedHostImage<tdp::Matrix3fda> locals(pc.w_,1);
   getAllLocalBasis(pc, locals, ann, knn, eps );
 
 
@@ -226,36 +243,55 @@ int main( int argc, char* argv[] ){
   // Get the neighbor ids and dists
   ann.Search(pt, knn, eps, nnIds, dists);
 
-  tdp::MatrixXfda X, W;
-  tdp::VectorXfda Y;
+  tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
+  tdp::VectorXfda Y(knn);
   tdp::Vector6fda theta;
+
   for (size_t k=0; k<knn; ++k){
+      std::cout << "iter: " << k << std::endl;
+      std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
       tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
       //Take the first two dimensions
-      tdp::Vector2fda npt_2d;
-      npt_2d(0) = npt_(0);
-      npt_2d(1) = npt_(1);
-      //z is the third dim coordinate
+      tdp::Vector2fda npt_2d(npt_(0), npt_(1));
+      //target is the third dim coordinate
       float npt_z = npt_(2);
-
+      //project to higher dimension using poly2 basis
       tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
       //Construct data matrix X
       X.row(k) = phi_npt;
-
       //Construct target vector Y
-      Y.row(k) = npt_z;
-
+      Y(k) = npt_z;
       //Get weight matrix W
       W(k,k) = dists(k); //check if I need to scale this when in local coordinate system
   }
 
   //Solve weighted least square
-  Eigen::FullPivLU<tdp::MatrixXfda> X_lu;
-  X_lu = X.transpose()*W*X;
-  theta = X_lu.inverse()*X_lu;
+  Eigen::FullPivLU<tdp::Matrix6fda> X_lu;
+  X_lu.compute(X.transpose()*W*X);
+  theta = X_lu.inverse()*(X.transpose()*W*Y);
+  std::cout << "theta: \n " << theta << std::endl;
   //thetas(i, 0) = theta;
    //--end here--//
   //};
+
+  //Given theta and point p
+  //Use theta to get the prediction height of neighbor points
+  //Then project the prediction to the world coordinate to plot
+  std::vector<tdp::Vector3fda> wc_estimateds;
+  for (size_t k=0; k < knn; ++k){
+      tdp::Vector3fda npt_ = localBasis*pc(nnIds[k],0);
+      tdp::Vector6fda phi_npt = poly2Basis(tdp::Vector2fda(npt_(0), npt_(1)));
+      float npt_z_estimated = theta.transpose()*phi_npt;
+      //to plot, project it back to the world coordinate
+      tdp::Vector3fda npt_estimated(npt_(0), npt_(1), npt_z_estimated);
+      tdp::Vector3fda wc_npt_estimated = localBasis.inverse()*npt_estimated;
+
+      wc_estimateds.push_back(wc_npt_estimated);
+      std::cout << "\norigianl pt in wc: \n " << pc(nnIds[k],0) << std::endl;
+      std::cout << "wc estiimated: (x,y should be const):\n " << wc_npt_estimated << std::endl;
+  }
+
+
 
       /*
       //debug
@@ -267,9 +303,9 @@ int main( int argc, char* argv[] ){
       std::cout << "eigenvalues: \n" << es.eigenvalues() << std::endl;
       std::cout << "eigenvectors: \n" << es.eigenvectors() << std::endl << std::endl;
       */
-  }
+  //}
 
-/*
+
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -298,13 +334,13 @@ int main( int argc, char* argv[] ){
   container.AddDisplay(viewN);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vboM;
+  pangolin::GlBuffer vbo, vboM, vboP;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> runSkinning("ui.run skinning", false, false);
-  pangolin::Var<int> knn("ui.knn", 10,1,100);
+  //pangolin::Var<int> knn("ui.knn", 10,1,100);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -319,8 +355,11 @@ int main( int argc, char* argv[] ){
       std::cout << "Running skinning..." << std::endl;
 
       // put the mean points to GLBuffer vboM
-      // vboM.Reinitialise(pangolin::GlArrayBuffer, nMeans, GL_FLOAT, 3, GL_DYNAMIC_DRAW );
-      // vboM.Upload(&means[0], sizeof(float) * nMeans * 3, 0);
+      vboP.Reinitialise(pangolin::GlArrayBuffer, 1 , GL_FLOAT, 3, GL_DYNAMIC_DRAW );
+      vboP.Upload(&pt, sizeof(float) * 3, 0);
+
+      vboM.Reinitialise(pangolin::GlArrayBuffer, knn , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+      vboM.Upload(&wc_estimateds[0], sizeof(float) * knn * 3, 0);
 
     }
 
@@ -330,6 +369,10 @@ int main( int argc, char* argv[] ){
     if (viewPc.IsShown()) {
       viewPc.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
+
+      glPointSize(5.);
+      glColor3f(0.0f, 0.0f, 1.0f);
+      pangolin::RenderVbo(vboP);
 
       glPointSize(10.);
       glColor3f(1.0f, 0.0f, 1.0f);
@@ -347,7 +390,7 @@ int main( int argc, char* argv[] ){
     // finish this frame
     pangolin::FinishFrame();
   }
-*/
+
   std::cout << "good morning!" << std::endl;
   return 0;
 }
