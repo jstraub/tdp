@@ -95,7 +95,7 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer ibo;
 
   // Add some variables to GUI
-  pangolin::Var<float> wThr("ui.weight thr",10,1,100);
+  pangolin::Var<float> wThr("ui.weight thr",1,1,100);
   pangolin::Var<float> fThr("ui.tsdf value thr",0.2,0.01,0.5);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);

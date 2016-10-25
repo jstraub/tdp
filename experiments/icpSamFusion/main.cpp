@@ -99,7 +99,7 @@ int main( int argc, char* argv[] )
 
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
-  size_t wc = rig.NumCams()*(w+w%64); // for convolution
+  size_t wc = (w+w%64); // for convolution
   size_t hc = rig.NumCams()*(h+h%64);
   wc += wc%64;
   hc += hc%64;
@@ -247,13 +247,15 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
   pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
   pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,200);
+  pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
+  pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 90, 1, 180);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
-  pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.50,0.,1.);
-  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,0.,1.);
-  pangolin::Var<float> rmseThr("ui.RMSE thr", 0.15,0.,1.);
+  pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.20,0.,1.);
+  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,-1.,1.);
+  pangolin::Var<float> rmseThr("ui.RMSE thr", 0.18,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
@@ -293,8 +295,6 @@ int main( int argc, char* argv[] )
         }
       });
 
-  gui.verbose = true;
-
   tdp::SE3f T_mo_0;
   tdp::SE3f T_mo = T_mo_0;
 
@@ -317,30 +317,27 @@ int main( int argc, char* argv[] )
   auto computeLoopClosures = [&]() {
     size_t numLoopClosures = 0;
     while (42) {
-      int idA =-1;
-      int idB =-1;
+      std::pair<int,int> ids(-1,-1);
       {
         std::lock_guard<std::mutex> lock(mut);
         if (loopClose.size() > 0) {
-          std::pair<int,int> ids = loopClose.front();
+          ids = loopClose.front();
           loopClose.pop_front();
-          idA = ids.first;
-          idB = ids.second;
         }
   //      std::cout << "In thread: # loop closure hypotheses " 
-  //        << loopClose.size() << " " << idA << " " << idB << std::endl;
+  //        << loopClose.size() << " " << ids.first << " " << ids.second << std::endl;
       }
-      if (idA < 0 && idB < 0) {
+      if (ids.first < 0 && ids.second < 0) {
         break;
       }
-      tdp::KeyFrame& kfA = kfs[idA];
-      tdp::KeyFrame& kfB = kfs[idB];
+      tdp::KeyFrame& kfA = kfs[ids.first];
+      tdp::KeyFrame& kfB = kfs[ids.second];
       Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
-      if ( se3.head<3>().norm()*180./M_PI < 3.5*keyFrameAngleThresh
-        && se3.tail<3>().norm()           < 3.5*keyFrameDistThresh) {
+      if ( se3.head<3>().norm()*180./M_PI < loopCloseAngleThresh
+        && se3.tail<3>().norm()           < loopCloseDistThresh) {
 
         tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-        std::cout << " checking " << idA << " -> " << idB 
+        std::cout << " checking " << ids.first << " -> " << ids.second 
           << ": " << se3.head<3>().norm()*180./M_PI << " "
           << se3.tail<3>().norm()          
           << std::endl;
@@ -411,16 +408,13 @@ int main( int argc, char* argv[] )
               && overlapAfter > icpLoopCloseOverlapThr
               && (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr
               && rmseAfter < rmseThr) {
-            std::cout << "successfull loop closure "  << std::endl
+            std::cout << GREEN << "successfull loop closure " 
+              << NORMAL << std::endl
               << T_ab.matrix3x4() << std::endl;
-            kfSLAM.AddLoopClosure(idA, idB, T_ab);
-//            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
-//            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+            kfSLAM.AddLoopClosure(ids.first, ids.second, T_ab);
+//            kfSLAM.AddLoopClosure(ids.second, ids.first, T_ab.Inverse());
+//            loopClosures.emplace(std::make_pair(ids.first, ids.second), T_ab);
             numLoopClosures ++;
-
-          } else {
-            std::cout << "unsuccessfull loop closure" << std::endl;
-          }
 
             greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
             greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
@@ -430,14 +424,21 @@ int main( int argc, char* argv[] )
             pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
             T_abSuccess = T_ab;
 
+          } else {
+            std::cout << "unsuccessfull loop closure" << std::endl;
+          }
+        } else {
+          std::cout << "aborting loop closure because overlap " << overlapBefore
+            << " is to small" << std::endl;
+          break;
         }
-        break;
       } else {
-        std::cout << " skipping " << idA << " -> " << idB  
+        std::cout << " skipping " << ids.first << " -> " << ids.second  
           << ": " << se3.head<3>().norm()*180./M_PI << " "
           << se3.tail<3>().norm()          << std::endl;
       }
       if (numLoopClosures > 0) {
+        std::cout << "optimizing graph" << std::endl;
         kfSLAM.Optimize(); 
         if (useOptimizedPoses) {
           T_ac = kfSLAM.GetPose(idActive).Inverse()*kfs[idActive].T_wk_*T_ac;
@@ -456,7 +457,6 @@ int main( int argc, char* argv[] )
       }
       });
 
-  gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
   // Stream and display video

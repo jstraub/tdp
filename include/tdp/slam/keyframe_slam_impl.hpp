@@ -8,12 +8,14 @@ KeyframeSLAM::KeyframeSLAM() :
   noiseLoopClosure_(isam::Information(100. * isam::eye(6)))
 { 
   isam::Properties props;
-  props.verbose=true;
-  props.quiet=false;
-  props.method=isam::Method::LEVENBERG_MARQUARDT;
+  props.verbose=false;
+  props.quiet=true;
+  props.method=isam::Method::DOG_LEG;
+//  props.method=isam::Method::LEVENBERG_MARQUARDT;
   //props.method=isam::Method::GAUSS_NEWTON;
-  props.epsilon_rel = 1e-6;
+  props.epsilon_rel = 1e-8;
   props.epsilon_abs = 1e-6;
+  props.mod_batch = 10;
   slam_.set_properties(props); 
 };
 
@@ -72,8 +74,18 @@ void KeyframeSLAM::Optimize() {
 //    std::cout << "initial"<< std::endl;
 //    PrintValues();
   std::cout << "SAM optimization" << std::endl;
-  slam_.batch_optimization();
-//    slam_.update();
+//  slam_.batch_optimization();
+  std::cout 
+    << slam_.weighted_errors().sum()
+    << " " << slam_.chi2()
+    << std::endl;
+  slam_.update();
+  std::cout 
+    << slam_.weighted_errors().sum()
+    << " " << slam_.chi2()
+    << std::endl;
+
+
 //    slam_.print_stats();
   slam_.save("isam.csv");
 //    slam_.print_graph();

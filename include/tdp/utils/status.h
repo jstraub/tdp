@@ -15,4 +15,7 @@ void Progress(size_t i, size_t I) {
   } 
 }
 
+#define GREEN "\033[32m"
+#define NORMAL "\033[0;39m"
+
 }

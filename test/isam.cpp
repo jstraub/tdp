@@ -18,7 +18,12 @@ TEST(setup, KeyframeSLAM) {
   kfSLAM.AddIcpOdometry(0,1,T_wk0.Inverse()*T_wk1);
   kfSLAM.AddLoopClosure(0,1,dT_01);
 
+  kfSLAM.PrintGraph();
+  kfSLAM.PrintValues();
   kfSLAM.Optimize();
+  kfSLAM.PrintValues();
+  kfSLAM.Optimize();
+  kfSLAM.PrintValues();
 }
 
 TEST(setup, isam) {

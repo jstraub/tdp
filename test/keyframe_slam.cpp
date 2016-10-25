@@ -25,7 +25,11 @@ TEST(setup, KeyframeSLAM) {
   kfSLAM.AddKeyframe(dummyPc, dummyN, dummyRgb, T_wk1);
   kfSLAM.AddLoopClosure(0,1,dT_01);
 
+  kfSLAM.PrintGraph();
+  kfSLAM.PrintValues();
   kfSLAM.Optimize();
+  kfSLAM.PrintValues();
+
 }
 
 TEST(setupRaw, KeyframeSLAM) {
