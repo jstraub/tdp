@@ -198,15 +198,11 @@ int main( int argc, char* argv[] )
 //  gui.container().AddDisplay(viewTsdfDEst);
 
   tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1), hc);
-  tdp::QuickView viewDepthPyr(dispDepthPyr.w_,dispDepthPyr.h_);
-  gui.container().AddDisplay(viewDepthPyr);
   
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuDispNormalsPyr(ns_m.Width(0)+ns_m.Width(1), hc);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuDispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
   tdp::ManagedHostImage<tdp::Vector3bda> dispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
 
-  tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
-  gui.container().AddDisplay(viewNormalsPyr);
   tdp::QuickView viewGrad3DPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewGrad3DPyr);
 
@@ -224,8 +220,6 @@ int main( int argc, char* argv[] )
 //  viewDebugC.Show(false);
 //  viewDebugD.Show(false);
 
-  viewDepthPyr.Show(false);
-  viewNormalsPyr.Show(false);
   viewGrad3DPyr.Show(false);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
@@ -247,6 +241,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
+  pangolin::Var<bool> runSlamFusion("ui.run SLAM fusion", false,true);
+
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
   pangolin::Var<bool> useANN("ui.use ANN", true,true);
@@ -263,7 +259,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.15,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
-  pangolin::Var<bool> runFusion("ui.run Fusion",true,false);
+  pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
@@ -459,6 +455,33 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
+    if (runSlamFusion.GuiChanged() && runSlamFusion) {
+      T_mos.clear();
+      T_mo = T_mo_0;
+      idActive = -1;
+      frame = 0;
+      resetTSDF = true;
+    }
+
+    if (pangolin::Pushed(resetTSDF)) {
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
+      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
+      std::cout << "resetting TSDF" << std::endl;
+    }
+
+    if (pangolin::Pushed(runKfOnlyFusion)) {
+      for (size_t i=0; i<kfs.size(); ++i) {
+        if (true || gui.verbose)
+          std::cout << "add KF " << i << " to tsdf" << std::endl;
+        const auto& kfA = kfs[i];
+        const tdp::SE3f& T_mk = kfA.T_wk_;
+        cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
+        TICK("Add To TSDF");
+        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+        TOCK("Add To TSDF");
+      }
+    }
+
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -535,80 +558,60 @@ int main( int argc, char* argv[] )
       T_mos.push_back(T_mo);
     }
 
-    Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-    if (kfs.size() > 0) 
-      se3 = kfs[idActive].T_wk_.Log(T_mo);
-    if ((kfs.size() == 0)
-        || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
-        || se3.tail<3>().norm() > keyFrameDistThresh) {
-      std::cout << "adding keyframe " << kfs.size() 
-        << " angle: " << se3.head<3>().norm()*180./M_PI 
-        << " dist: " << se3.tail<3>().norm() 
-        << " T_mk: " << std::endl << T_mo
-        << std::endl;
-//      pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
-//      n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
-//      kfSLAM.AddKeyframe(pc, n, rgb, T_mo);
-      tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
-      kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
-      if (kfs.size() == 1) {
-        std::cout << "first KF -> adding origin" << std::endl;
-        kfSLAM.AddOrigin(T_mo);
-      } else {
-        std::cout << "not first KF -> adding ICP odom "
-          << kfs.size()-1 << " to " << idActive 
+    if (!runSlamFusion) {
+      Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
+      if (kfs.size() > 0) 
+        se3 = kfs[idActive].T_wk_.Log(T_mo);
+      if ( (kfs.size() == 0)
+          || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
+          || se3.tail<3>().norm() > keyFrameDistThresh) {
+        std::cout << "adding keyframe " << kfs.size() 
+          << " angle: " << se3.head<3>().norm()*180./M_PI 
+          << " dist: " << se3.tail<3>().norm() 
+          << " T_mk: " << std::endl << T_mo
           << std::endl;
-        kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
-      }
 
-//      if (kfs.size() > 1) {
-//        int idA = (int)kfs.size()-1;
-//        int idB = (int)kfs.size()-2;
-//        tdp::SE3f T_ab = kfs[idA].T_wk_.Inverse()*kfs[idB].T_wk_;
-//        loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-//      }
-      {
-        std::lock_guard<std::mutex> lock(mut);
-        for (int i=0; i<kfs.size()-1; ++i) {
-          loopClose.emplace_back(kfs.size()-1,i);
+        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
+        kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
+        if (kfs.size() == 1) {
+          std::cout << "first KF -> adding origin" << std::endl;
+          kfSLAM.AddOrigin(T_mo);
+        } else {
+          std::cout << "not first KF -> adding ICP odom "
+            << kfs.size()-1 << " to " << idActive 
+            << std::endl;
+          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
         }
-        std::cout << "# loop closure hypotheses " 
-          << loopClose.size()<< std::endl;
-      }
-      idActive = kfs.size()-1;
-      T_ac = tdp::SE3f();
-      T_mo = kfs[idActive].T_wk_*T_ac;
 
+        {
+          std::lock_guard<std::mutex> lock(mut);
+          for (int i=0; i<kfs.size()-1; ++i) {
+            loopClose.emplace_back(kfs.size()-1,i);
+          }
+          std::cout << "# loop closure hypotheses " 
+            << loopClose.size()<< std::endl;
+        }
+        idActive = kfs.size()-1;
+        T_ac = tdp::SE3f();
+        T_mo = kfs[idActive].T_wk_*T_ac;
+
+      } else {
+        std::cout << "NOT adding keyframe " << kfs.size() 
+          << " angle: " << se3.head<3>().norm()*180./M_PI 
+          << " dist: " << se3.tail<3>().norm() 
+          << " active: " << idActive << "/" << kfs.size()
+          << std::endl;
+      }
+
+      if (tryLoopClose) {
+        computeLoopClosures();
+      }
     } else {
-      std::cout << "NOT adding keyframe " << kfs.size() 
-        << " angle: " << se3.head<3>().norm()*180./M_PI 
-        << " dist: " << se3.tail<3>().norm() 
-        << " active: " << idActive << "/" << kfs.size()
-        << std::endl;
-    }
-
-    if (tryLoopClose) {
-      computeLoopClosures();
-    }
-
-    if (pangolin::Pushed(runFusion)) {
-      // TODO: iterate over kfs and fuse them into TSDF
-      for (size_t i=0; i<kfs.size(); ++i) {
-        if (true || gui.verbose)
-          std::cout << "add KF " << i << " to tsdf" << std::endl;
-        const auto& kfA = kfs[i];
-        const tdp::SE3f& T_mk = kfA.T_wk_;
-        cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
-        TICK("Add To TSDF");
-        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
-        TOCK("Add To TSDF");
-      }
-    }
-
-    if (pangolin::Pushed(resetTSDF)) {
-      TSDF.Fill(tdp::TSDFval(-1.01,0.));
-      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
-      std::cout << "resetting ICP and TSDF" << std::endl;
+      // track from already existing key frames and accumulate depth in
+      // TSDF
+      TICK("Add To TSDF");
+      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+      TOCK("Add To TSDF");
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
@@ -738,24 +741,6 @@ int main( int argc, char* argv[] )
       viewDebugD.SetImage(greyB);
     }
 
-    if (viewDepthPyr.IsShown()) {
-      tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
-          cudaMemcpyDeviceToHost);
-      viewDepthPyr.SetImage(dispDepthPyr);
-    }
-
-    if (viewNormalsPyr.IsShown()) {
-      if (dispNormalsPyrEst) {
-        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,
-            cudaMemcpyDeviceToDevice);
-      } else {
-        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,
-            cudaMemcpyDeviceToDevice);
-      }
-      tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
-      viewNormalsPyr.SetImage(dispNormals2dPyr);
-    }
     if (viewGrad3DPyr.IsShown()) {
       tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr,
           cudaMemcpyDeviceToDevice);
