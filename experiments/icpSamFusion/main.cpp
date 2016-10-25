@@ -97,10 +97,12 @@ int main( int argc, char* argv[] )
     return 2;
   }
 
-  size_t w = rig.NumCams()*video.Streams()[gui.iRGB[0]].Width();
-  size_t h = rig.NumCams()*video.Streams()[gui.iRGB[0]].Height();
-  size_t wc = w+w%64; // for convolution
-  size_t hc = h+h%64;
+  size_t w = video.Streams()[gui.iRGB[0]].Width();
+  size_t h = video.Streams()[gui.iRGB[0]].Height();
+  size_t wc = rig.NumCams()*(w+w%64); // for convolution
+  size_t hc = rig.NumCams()*(h+h%64);
+  wc += wc%64;
+  hc += hc%64;
 
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   // Define Camera Render Object (for view / scene browsing)
@@ -150,10 +152,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNB(wc, hc);
-  tdp::ManagedHostImage<int> assoc_ba(w,h);
-  tdp::ManagedDeviceImage<int> cuAssoc_ba(w,h);
+  tdp::ManagedHostImage<int> assoc_ba(wc,hc);
+  tdp::ManagedDeviceImage<int> cuAssoc_ba(wc,hc);
 
-  tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
+  tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
@@ -164,7 +166,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
   
-  tdp::ManagedHostPyramid<float,3> pyrGrey(w,h);
+  tdp::ManagedHostPyramid<float,3> pyrGrey(wc,hc);
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -279,16 +281,16 @@ int main( int argc, char* argv[] )
 
   tdp::ThreadedValue<bool> runSave(true);
   std::thread workThread([&]() {
-        while(runSave.Get()) {
-          if (pangolin::Pushed(saveTSDF)) {
-            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
-            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
-            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
-            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
-          }
-          std::this_thread::sleep_for(std::chrono::microseconds(100));
-        }
+//        while(runSave.Get()) {
+//          if (pangolin::Pushed(saveTSDF)) {
+//            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
+//            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+//            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+//            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+//            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+//          }
+//          std::this_thread::sleep_for(std::chrono::microseconds(100));
+//        }
       });
 
   gui.verbose = true;
@@ -452,6 +454,9 @@ int main( int argc, char* argv[] )
       }
       });
 
+  gui.verbose = true;
+  if (gui.verbose) std::cout << "starting main loop" << std::endl;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -498,10 +503,13 @@ int main( int argc, char* argv[] )
     int64_t t_host_us_d = 0;
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
+    if (gui.verbose) std::cout << "collect d" << std::endl;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+    if (gui.verbose) std::cout << "compute pc" << std::endl;
     rig.ComputePc(cuD, true, pcs_c);
+    if (gui.verbose) std::cout << "compute n" << std::endl;
     rig.ComputeNormals(cuD, true, ns_c);
-
+    if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);

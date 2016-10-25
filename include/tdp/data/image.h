@@ -121,6 +121,9 @@ class Image {
   /// Perform pitched copy from the given src image to this image.
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Image<T>& src, cudaMemcpyKind type) {
+//    std::cout << pitch_ << " " << src.pitch_ << ", " <<
+//          std::min(w_,src.w_)*sizeof(T) << " " << 
+//          std::min(h_,src.h_) << std::endl;
     checkCudaErrors(cudaMemcpy2D(ptr_, pitch_, 
           src.ptr_, src.pitch_, 
           std::min(w_,src.w_)*sizeof(T), 

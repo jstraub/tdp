@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <algorithm>
 
 #include <pangolin/utils/picojson.h>
 #include <pangolin/image/image_io.h>
@@ -197,14 +198,17 @@ struct Rig {
       Pyramid<Vector3fda,LEVELS>& cuPyrPc,
       Pyramid<Vector3fda,LEVELS>& cuPyrN);
 
-  size_t NumStreams() { return rgbdStream2cam_.size(); }
-  size_t NumCams() { return rgbdStream2cam_.size()/2; }
+  size_t NumStreams() { return rgbdStream2cam_.size()*2; }
+  size_t NumCams() { return rgbdStream2cam_.size(); }
 
   void Render3D(const SE3f& T_mr, float scale=1.);
 
   template <typename T>
   Image<T> GetStreamRoi(const Image<T>& I, size_t streamId) const {
-    return I.GetRoi(0, rgbdStream2cam_[streamId]*hSingle, wSingle, hSingle);
+    size_t camMin = *std::min_element(rgbdStream2cam_.begin(),
+        rgbdStream2cam_.end());
+    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hSingle,
+      wSingle, hSingle);
   };
 
   // imu to rig transformations
@@ -260,7 +264,8 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
   for (size_t i=0; i<jsDevices.size(); ++i) {
     std::string serial;
     if (jsDevices[i].contains("ONI_DEVICE_PROPERTY_SERIAL_NUMBER")) {
-      serial = jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
+      serial = 
+        jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
     } else if (jsDevices[i].contains("serial_number")) {
       serial = jsDevices[i]["serial_number"].get<std::string>();
     }
@@ -283,6 +288,9 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
     dStream2cam_.push_back(camId+1); // ir/depth
     rgbdStream2cam_.push_back(camId/2); // rgbd
   }
+  std::cout << "Found " << NumStreams() 
+    << " stream paired them with " << NumCams()
+    << " cams" << std::endl;
   return true;
 }
 
@@ -294,10 +302,9 @@ void Rig<CamT>::CollectRGB(const GuiBase& gui,
     if (!gui.ImageRGB(rgbStream, sId)) continue;
     // TODO: this is a bit hackie; should get the w and h somehow else
     // beforehand
-    int32_t cId = rgbdStream2cam_[sId]; 
     wSingle = rgbStream.w_+rgbStream.w_%64;
     hSingle = rgbStream.h_+rgbStream.h_%64;
-    Image<Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
+    Image<Vector3bda> rgb_i = GetStreamRoi(rgb, sId);
     rgb_i.CopyFrom(rgbStream,type);
   }
 }
@@ -306,7 +313,6 @@ template<class CamT>
 void Rig<CamT>::CollectD(const GuiBase& gui,
     float dMin, float dMax, Image<uint16_t>& cuDraw,
     Image<float>& cuD, int64_t& t_host_us_d) {
-
 //  tdp::ManagedDeviceImage<float> cuScale(wSingle, hSingle);
   int32_t numStreams = 0;
   t_host_us_d = 0;
@@ -321,23 +327,25 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     int32_t cId = rgbdStream2cam_[sId]; 
     wSingle = dStream.w_+dStream.w_%64;
     hSingle = dStream.h_+dStream.h_%64;
-    tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-        wSingle, hSingle);
+    tdp::Image<uint16_t> cuDraw_i = GetStreamRoi(cuDraw, sId);
+    cudaMemset(cuDraw_i.ptr_, 0, cuDraw_i.SizeBytes());
     cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
     // convert depth image from uint16_t to float [m]
-    tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
+    tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     if (cuDepthScales_.size() > cId) {
       float a = scaleVsDepths_[cId](0);
       float b = scaleVsDepths_[cId](1);
       tdp::ConvertDepthGpu(cuDraw_i, cuD_i, cuDepthScales_[cId], 
           a, b, dMin, dMax);
     } else if (depthSensorUniformScale_.size() > cId) {
-      tdp::ConvertDepthGpu(cuDraw_i, cuD_i, depthSensorUniformScale_[cId], dMin, dMax);
+      tdp::ConvertDepthGpu(cuDraw_i, cuD_i,
+          depthSensorUniformScale_[cId], dMin, dMax);
     } else {
        std::cout << "Warning no scale information found" << std::endl;
     }
   }
   t_host_us_d /= numStreams;  
+
 }
 
 template<class CamT>
@@ -354,10 +362,8 @@ void Rig<CamT>::ComputeNormals(Image<float>& cuD,
     CamT cam = cams_[cId];
     tdp::SE3f T_rc = T_rcs_[cId];
 
-    tdp::Image<tdp::Vector3fda> cuN_i = cuN.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-    tdp::Image<float> cuD_i = cuD.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    tdp::Image<tdp::Vector3fda> cuN_i = GetStreamRoi(cuN, sId);
+    tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     // compute normals from depth in rig coordinate system
     tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
   }
@@ -388,11 +394,8 @@ void Rig<CamT>::ComputePc(Image<float>& cuD,
     CamT cam = cams_[cId];
     tdp::SE3f T_rc = T_rcs_[cId];
 
-    tdp::Image<tdp::Vector3fda> cuPc_i = cuPc.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-    tdp::Image<float> cuD_i = cuD.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-
+    tdp::Image<tdp::Vector3fda> cuPc_i = GetStreamRoi(cuPc, sId);
+    tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     // compute point cloud from depth in rig coordinate system
     tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
   }
@@ -460,13 +463,11 @@ void Rig<CamT>::RayTraceTSDF(
     tdp::SE3f T_rc = T_rcs_[cId];
     tdp::SE3f T_mo = T_mr*T_rc;
 
-    tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-    tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
-        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    tdp::Image<tdp::Vector3fda> cuNEst_i = GetStreamRoi(cuNEst, sId);
+    tdp::Image<tdp::Vector3fda> cuPcEst_i = GetStreamRoi(cuPcEst, sId);
 
     // ray trace the TSDF to get pc and normals in model cosy
-    TSDF::RayTraceTSDF<CamT::NumParams,CamT>(cuTSDF, cuPcEst_i, 
+    tdp::TSDF::RayTraceTSDF<CamT::NumParams,CamT>(cuTSDF, cuPcEst_i, 
         cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
   }
   // just complete the surface normals obtained from the TSDF

@@ -341,22 +341,21 @@ void ICP::ComputeProjective(
       tdp::Image<tdp::Vector3fda> n_ml = ns_m.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> pc_ol = pcs_o.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> n_ol = ns_o.GetImage(lvl);
-      size_t w_l = pc_ml.w_;
-      size_t h_l = pc_ml.h_/stream2cam.size();
+//      size_t w_l = pc_ml.w_;
+//      size_t h_l = pc_ml.h_/stream2cam.size();
       for (size_t sId=0; sId < stream2cam.size(); sId++) {
         int32_t cId = stream2cam[sId]; 
         CameraT cam = rig.cams_[cId];
         tdp::SE3f T_cr = rig.T_rcs_[cId].Inverse();
 
         // all PC and normals are in rig coordinates
-        tdp::Image<tdp::Vector3fda> pc_mli = pc_ml.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
-        tdp::Image<tdp::Vector3fda> pc_oli = pc_ol.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
-        tdp::Image<tdp::Vector3fda> n_mli = n_ml.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
-        tdp::Image<tdp::Vector3fda> n_oli = n_ol.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+        tdp::Image<tdp::Vector3fda> pc_mli = rig.GetStreamRoi(pc_ml, sId);
+        tdp::Image<tdp::Vector3fda> pc_oli = rig.GetStreamRoi(pc_ol, sId); 
+//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+        tdp::Image<tdp::Vector3fda> n_mli = rig.GetStreamRoi(n_ml, sId); 
+//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+        tdp::Image<tdp::Vector3fda> n_oli = rig.GetStreamRoi(n_ol, sId); 
+//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
 
         Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
         Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
