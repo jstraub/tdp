@@ -173,6 +173,9 @@ struct Rig {
   void ComputeNormals(Image<float>& cuD, bool useRgbCamParasForDepth, 
     Image<Vector3fda>& cuN);
 
+  size_t NumStreams() { return rgbdStream2cam_.size(); }
+  size_t NumCams() { return rgbdStream2cam_.size()/2; }
+
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
   // camera to rig transformations

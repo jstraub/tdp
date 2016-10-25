@@ -75,20 +75,7 @@ int main( int argc, char* argv[] )
   tdp::ImuInterpolator imuInterp(imu,nullptr);
   imuInterp.Start();
 
-  Eigen::Matrix3f R_ir;
-  R_ir << 0, 0,-1,
-       0,-1, 0,
-       -1, 0, 0;
-  tdp::SE3f T_ir(R_ir,Eigen::Vector3f::Zero());
-
   tdp::GuiBase gui(1200,800,video);
-  size_t w = video.Streams()[gui.iRGB[0]].Width();
-  size_t h = video.Streams()[gui.iRGB[0]].Height();
-  size_t wc = w+w%64; // for convolution
-  size_t hc = h+h%64;
-  float f = 550;
-  float uc = (w-1.)/2.;
-  float vc = (h-1.)/2.;
 
   size_t dTSDF = 512;
   size_t wTSDF = 512;
@@ -97,16 +84,22 @@ int main( int argc, char* argv[] )
   CameraT camR(Eigen::Vector4f(f,f,uc,vc)); 
   CameraT camD(Eigen::Vector4f(f,f,uc,vc)); 
 
+  tdp::Rig<CameraT> rig;
   if (calibPath.size() > 0) {
-    tdp::Rig<CameraT> rig;
     rig.FromFile(calibPath,false);
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
     rig.CorrespondOpenniStreams2Cams(streams);
     // camera model for computing point cloud and normals
     camR = rig.cams_[rig.rgbStream2cam_[0]];
     camD = camR; //rig.cams_[rig.dStream2cam_[0]];
-    if (rig.T_ris_.size() > 0) T_ir = rig.T_ris_[0];
+  } else {
+    return 2;
   }
+
+  size_t w = rig.NumCams()*video.Streams()[gui.iRGB[0]].Width();
+  size_t h = rig.NumCams()*video.Streams()[gui.iRGB[0]].Height();
+  size_t wc = w+w%64; // for convolution
+  size_t hc = h+h%64;
 
   tdp::Camera<float> camView(Eigen::Vector4f(220,220,319.5,239.5)); 
   // Define Camera Render Object (for view / scene browsing)
