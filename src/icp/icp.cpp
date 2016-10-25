@@ -32,7 +32,7 @@ void ICP::ComputeANN(
   for (it=0; it<maxIt; ++it) {
     int Nassoc = tdp::AssociateANN(pc_m, pc_o, T_mo.Inverse(),
         assoc_om, downSampleANN);
-    countThr = Nassoc / 10; 
+    countThr = Nassoc / 100; 
     cuAssoc_om.CopyFrom(assoc_om, cudaMemcpyHostToDevice);
     tdp::ICP::ComputeGivenAssociation(cuPc_m, n_m, cuPc_o, n_o, 
         cuAssoc_om, T_mo, 1, angleThr_deg, distThr, countThr, verbose,

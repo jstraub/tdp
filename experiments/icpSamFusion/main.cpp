@@ -115,13 +115,26 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
 
+  pangolin::View& containerLoopClosure = pangolin::Display("loopClosures");
+  containerLoopClosure.SetLayout(pangolin::LayoutEqual);
+
   pangolin::OpenGlRenderState camLoopClose(
       pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   pangolin::View& viewLoopClose = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(camLoopClose));
-  gui.container().AddDisplay(viewLoopClose);
+  containerLoopClosure.AddDisplay(viewLoopClose);
+  tdp::QuickView viewDebugA(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugA);
+  tdp::QuickView viewDebugB(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugB);
+  tdp::QuickView viewDebugC(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugC);
+  tdp::QuickView viewDebugD(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugD);
+
+  gui.container().AddDisplay(containerLoopClosure);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
@@ -202,14 +215,6 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewGrad3DPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewGrad3DPyr);
 
-  tdp::QuickView viewDebugA(wc, hc);
-  gui.container().AddDisplay(viewDebugA);
-  tdp::QuickView viewDebugB(wc, hc);
-  gui.container().AddDisplay(viewDebugB);
-  tdp::QuickView viewDebugC(wc, hc);
-  gui.container().AddDisplay(viewDebugC);
-  tdp::QuickView viewDebugD(wc, hc);
-  gui.container().AddDisplay(viewDebugD);
 
 //  viewDebugA.Show(false);
 //  viewDebugB.Show(false);
@@ -242,6 +247,12 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
+  pangolin::Var<bool> retryAllLoopClosures("ui.retry all loop close", false,false);
+  pangolin::Var<bool> retryLoopClosure("ui.retry loop close", false,false);
+  pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
+  pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
+
+
   pangolin::Var<bool> useANN("ui.use ANN", true,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
@@ -426,11 +437,12 @@ int main( int argc, char* argv[] )
 
           } else {
             std::cout << "unsuccessfull loop closure" << std::endl;
+            break; // to make it less cruncly
           }
         } else {
           std::cout << "aborting loop closure because overlap " << overlapBefore
             << " is to small" << std::endl;
-          break;
+          break; // to make it less cruncly
         }
       } else {
         std::cout << " skipping " << ids.first << " -> " << ids.second  
@@ -446,6 +458,7 @@ int main( int argc, char* argv[] )
             kfs[i].T_wk_ = kfSLAM.GetPose(i);
           }
         }
+        break; // to make it less cruncly
       }
     }
   };
@@ -481,6 +494,17 @@ int main( int argc, char* argv[] )
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
       std::cout << "resetting TSDF" << std::endl;
+    }
+
+    if (kfs.size() > 1 && pangolin::Pushed(retryAllLoopClosures)) {
+      for (int i=0; i<kfs.size()-1; ++i) 
+        for (int j=0; j<kfs.size()-1; ++j) 
+          loopClose.emplace_back(i,j);
+    }
+
+    if (loopCloseA < kfs.size() && loopCloseB < kfs.size() 
+        && pangolin::Pushed(retryLoopClosure)) {
+        loopClose.emplace_back(loopCloseA,loopCloseB);
     }
 
     if (pangolin::Pushed(runKfOnlyFusion)) {
@@ -612,6 +636,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(mut);
         for (int i=0; i<kfs.size()-1; ++i) {
           loopClose.emplace_back(kfs.size()-1,i);
+          loopClose.emplace_back(i,kfs.size()-1);
         }
         std::cout << "# loop closure hypotheses " << loopClose.size()<< std::endl;
 
@@ -619,12 +644,12 @@ int main( int argc, char* argv[] )
         T_ac = tdp::SE3f();
         T_mo = kfs[idActive].T_wk_*T_ac;
 
-      } else {
-        std::cout << "NOT adding keyframe " << kfs.size() 
-          << " angle: " << se3.head<3>().norm()*180./M_PI 
-          << " dist: " << se3.tail<3>().norm() 
-          << " active: " << idActive << "/" << kfs.size()
-          << std::endl;
+//      } else {
+//        std::cout << "NOT adding keyframe " << kfs.size() 
+//          << " angle: " << se3.head<3>().norm()*180./M_PI 
+//          << " dist: " << se3.tail<3>().norm() 
+//          << " active: " << idActive << "/" << kfs.size()
+//          << std::endl;
       }
 
       if (tryLoopClose) {
@@ -663,6 +688,17 @@ int main( int argc, char* argv[] )
       for (size_t i=0; i<kfSLAM.size(); ++i) {
         tdp::SE3f T_wk = kfSLAM.GetPose(i);
         pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
+      }
+
+      if (loopCloseA < kfSLAM.size()) {
+        tdp::SE3f T_wk = kfSLAM.GetPose(loopCloseA);
+        pangolin::glDrawFrustrum(rig.cams_[0].GetKinv(), 640,480,
+            T_wk.matrix(), 0.03f);
+      }
+      if (loopCloseB < kfSLAM.size()) {
+        tdp::SE3f T_wk = kfSLAM.GetPose(loopCloseB);
+        pangolin::glDrawFrustrum(rig.cams_[0].GetKinv(), 640,480,
+            T_wk.matrix(), 0.03f);
       }
 
       glColor4f(1.,0.3,0.3,0.6);
