@@ -307,7 +307,6 @@ int main( int argc, char* argv[] )
 
   int idActive = 0;
 
-
   tdp::ThreadedValue<bool> runLoopClosure(true);
   std::mutex mut;
 
@@ -479,29 +478,21 @@ int main( int argc, char* argv[] )
     glColor3f(1.0f, 1.0f, 1.0f);
 
     gui.NextFrames();
-    tdp::Image<uint16_t> dRaw;
     int64_t t_host_us_d = 0;
-    if (!gui.ImageD(dRaw,0,&t_host_us_d)) continue;
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
-    // construct pyramid  
-    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-        cudaMemcpyDeviceToDevice, 0.03);
-    tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
-    // compute normals
-    tdp::Depth2Normals(cuDPyr,camD,ns_c);
+    rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+    rig.ComputePc(cuD, true, pcs_c);
+    rig.ComputeNormals(cuD, true, ns_c);
 
-    if (!gui.ImageRGB(rgb,0)) continue;
-    cudaMemset(cuRgb.ptr_, 0, cuRgb.SizeBytes());
+    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);
-    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
-    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
-    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
-        cuGreydv, cuGs);
-    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
+//    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
+//    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
+//    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
+//        cuGreydv, cuGs);
+//    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
     if(kfs.size() > 0) {

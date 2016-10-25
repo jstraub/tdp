@@ -170,8 +170,16 @@ struct Rig {
   void ComputePc(Image<float>& cuD, bool useRgbCamParasForDepth, 
     Image<Vector3fda>& cuPc);
 
+  template<int LEVELS>
+  void ComputePc(Image<float>& cuD, bool useRgbCamParasForDepth, 
+      Pyramid<Vector3fda,LEVELS>& cuPyrPc);
+
   void ComputeNormals(Image<float>& cuD, bool useRgbCamParasForDepth, 
     Image<Vector3fda>& cuN);
+
+  template<int LEVELS>
+  void ComputeNormals(Image<float>& cuD, bool useRgbCamParasForDepth, 
+      Pyramid<Vector3fda,LEVELS>& cuPyrN);
 
   size_t NumStreams() { return rgbdStream2cam_.size(); }
   size_t NumCams() { return rgbdStream2cam_.size()/2; }
@@ -333,6 +341,16 @@ void Rig<CamT>::ComputeNormals(Image<float>& cuD,
 }
 
 template<class CamT>
+template<int LEVELS>
+void Rig<CamT>::ComputeNormals<LEVELS>(Image<float>& cuD, 
+    bool useRgbCamParasForDepth, 
+    Pyramid<Vector3fda,LEVELS>& cuPyrN) {
+  Image<Vector3fda> cuPc = cuPyrN.GetImage(0);
+  ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+  tdp::CompleteNormalPyramid<tdp::Vector3fda,LEVELS>(cuPyrN,cudaMemcpyDeviceToDevice);
+}
+
+template<class CamT>
 void Rig<CamT>::ComputePc(Image<float>& cuD, 
     bool useRgbCamParasForDepth, 
     Image<Vector3fda>& cuPc) {
@@ -354,6 +372,16 @@ void Rig<CamT>::ComputePc(Image<float>& cuD,
     // compute point cloud from depth in rig coordinate system
     tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
   }
+}
+
+template<class CamT>
+template<int LEVELS>
+void Rig<CamT>::ComputePc<LEVELS>(Image<float>& cuD, 
+    bool useRgbCamParasForDepth, 
+    Pyramid<Vector3fda,LEVELS>& cuPyrPc) {
+  Image<Vector3fda> cuPc = cuPyrPc.GetImage(0);
+  ComputePc(cuD, useRgbCamParasForDepth, cuPc);
+  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc,cudaMemcpyDeviceToDevice);
 }
 
 }

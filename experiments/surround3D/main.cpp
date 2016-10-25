@@ -370,17 +370,9 @@ int main( int argc, char* argv[] )
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     TOCK("depth collection");
     TICK("pc and normals");
-    rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
-    rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+    rig.ComputePc(cuD, useRgbCamParasForDepth, pcs_o);
+    rig.ComputeNormals(cuD, useRgbCamParasForDepth, ns_o);
     TOCK("pc and normals");
-//    if (gui.verbose) std::cout << "ray trace tsdf" << std::endl;
-    TICK("Setup Pyramids");
-    // TODO might want to use the pyramid construction with smoothing
-    pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
-    ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
-    TOCK("Setup Pyramids");
 
     tdp::SE3f T_wr_imu = T_mr0*T_ir.Inverse()*imuInterp.Ts_wi_[t_host_us_d*1000]*T_ir;
     if (odomImu) {
