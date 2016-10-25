@@ -145,9 +145,6 @@ int main( int argc, char* argv[] )
       pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
-  pangolin::View& viewLoopClose = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(camLoopClose));
-  gui.container().AddDisplay(viewLoopClose);
 
   tdp::QuickView viewRgb(w,h);
   gui.container().AddDisplay(viewRgb);
@@ -187,15 +184,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
 
-  // loop closure pc
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcB(w, h);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNB(w, h);
-
-  tdp::ManagedHostImage<int> assoc_ba(w,h);
-  tdp::ManagedDeviceImage<int> cuAssoc_ba(w,h);
-
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuD(w, h);
@@ -213,9 +201,6 @@ int main( int argc, char* argv[] )
   // current pc
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_o(w,h);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_o(w,h);
-  // loop closure pc
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_l(w,h);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_l(w,h);
 
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
@@ -262,15 +247,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   inlierThrLvl0("ui.inlier thr lvl 0", 10000, 1000, 100000);
 
   pangolin::Var<bool> dispEst("ui.disp Est", false,true);
-
-  pangolin::Var<bool> keyFrameSLAM("ui.keyframe SLAM", false, true);
-  pangolin::Var<bool> tryLoopClose("ui.loop close", false,true);
-  pangolin::Var<float>  keyFrameDistThresh("ui.KF dist thr", 0.3, 0.01, 0.5);
-  pangolin::Var<float>  keyFrameAngleThresh("ui.KF angle thr", 20, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",30,1,100);
-  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",30,0.,90.);
-  pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.50,0.,1.);
-  pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",8,0,10);
 
   pangolin::RegisterKeyPressCallback('c', [&](){
       for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
@@ -325,9 +301,6 @@ int main( int argc, char* argv[] )
 //      << imuInterp.gravity0_.transpose() << std::endl
 //      << T_mr << std::endl;
   }
-  tdp::KeyframeSLAM kfSLAM;
-  std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
-  std::vector<tdp::KeyFrame> kfs;
   tdp::SE3f T_mr = T_mr0;
   std::vector<tdp::SE3f> T_mrs;
   std::vector<tdp::SE3f> T_wr_imus;
@@ -480,84 +453,6 @@ int main( int argc, char* argv[] )
       TOCK("Ray Trace TSDF");
     }
 
-    if (keyFrameSLAM) {
-      Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-      if (kfs.size() > 0)
-        se3 = kfs.back().T_wk_.Log(T_mr);
-      if ((kfs.size() == 0 && gui.frame > 10)
-          || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
-          || se3.tail<3>().norm() > keyFrameDistThresh) {
-        std::cout << "adding keyframe " << kfs.size() 
-          << " angle: " << se3.head<3>().norm()*180./M_PI 
-          << " dist: " << se3.tail<3>().norm() << std::endl;
-
-        if (kfs.size() == 0) {
-          kfSLAM.AddOrigin(T_mr);
-        } else {
-          // TODO:
-//          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
-        }
-        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
-        n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
-//        kfSLAM.AddKeyframe(pc, n, rgb, T_mr);
-        kfs.emplace_back(pc, n, rgb, T_mr);
-
-        kfs.back().pyrPc_.Reinitialise(pcs_o.w_, pcs_o.h_);
-        kfs.back().pyrN_.Reinitialise(ns_o.w_, ns_o.h_);
-        kfs.back().pyrGrey_.Reinitialise(rgb.w_, rgb.h_);
-        kfs.back().pyrPc_.CopyFrom(pcs_o, cudaMemcpyDeviceToHost);
-        kfs.back().pyrN_.CopyFrom(ns_o, cudaMemcpyDeviceToHost);
-
-        tdp::Image<float> grey0 = kfs.back().pyrGrey_.GetImage(0);
-        tdp::Rgb2GreyCpu(rgb, grey0, 1./255.);
-        tdp::CompletePyramid(kfs.back().pyrGrey_, cudaMemcpyHostToHost);
-
-        tryLoopClose = true;
-      }
-    }
-
-    if (pangolin::Pushed(tryLoopClose) && kfs.size() > 1) {
-      int idA = kfs.size()-1;
-      tdp::KeyFrame& kfA = kfs[idA];
-      cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
-      cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
-      size_t numLoopClosures = 0;
-      for (int idB=(int)kfs.size()-2; idB>-1; --idB) {
-        tdp::KeyFrame& kfB = kfs[idB];
-        Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
-        if ( se3.head<3>().norm()*180./M_PI < 2.*keyFrameAngleThresh
-          && se3.tail<3>().norm()           < 2.*keyFrameDistThresh) {
-
-          // TODO: check against all KFs
-          // TODO: check overlap
-
-
-          cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
-          cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
-
-          tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-          std::cout << kfs.size()-2 << " to " 
-            << kfs.size()-1 
-            << " Initial transformation: " << std::endl 
-            << T_ab.matrix3x4() << std::endl;
-          float err;
-          float count;
-          tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
-              assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
-              icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
-              icpDownSample, gui.verbose, err, count);
-          if (err == err && count > 3000) {
-            std::cout << "successfull loop closure "
-              << T_ab.matrix3x4() << std::endl;
-            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
-            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
-            numLoopClosures ++;
-          }
-        }
-      }
-      if (numLoopClosures > 0) 
-        kfSLAM.Optimize(); 
-    }
 
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
@@ -577,65 +472,24 @@ int main( int argc, char* argv[] )
       viewMain3D.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
-      if (!keyFrameSLAM) {
-        for (size_t i=0; i<T_mrs.size(); ++i) {
-          if (i%10==0) 
-            pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
-          glColor4f(1.,1.,0.,0.6);
-          if (i>0) {
-            pangolin::glDrawLine(
-                T_mrs[i].translation()(0),
-                T_mrs[i].translation()(1),
-                T_mrs[i].translation()(2),
-                T_mrs[i-1].translation()(0),
-                T_mrs[i-1].translation()(1),
-                T_mrs[i-1].translation()(2));
-          }
-        }
-        for (size_t i=0; i<T_wr_imus.size(); ++i) {
-          if (i%10==0) 
-            pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
-          glColor4f(0.,1.,1.,0.6);
-        }
-      } else {
-        for (size_t i=0; i<T_mrs.size(); ++i) {
-          glColor4f(1.,1.,0.,0.6);
-          if (i>0) {
-            pangolin::glDrawLine(
-                T_mrs[i].translation()(0), T_mrs[i].translation()(1),
-                T_mrs[i].translation()(2),
-                T_mrs[i-1].translation()(0), T_mrs[i-1].translation()(1),
-                T_mrs[i-1].translation()(2));
-          }
-        }
-        for (size_t i=0; i<kfs.size(); ++i) {
-          tdp::SE3f& T_wk = kfs[i].T_wk_;
-          pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
-        }
-        glColor4f(1.,0.3,0.3,0.6);
-        for (auto& it : loopClosures) {
-          tdp::SE3f& T_wk_A = kfs[it.first.first].T_wk_;
-          tdp::SE3f& T_wk_B = kfs[it.first.second].T_wk_;
+      for (size_t i=0; i<T_mrs.size(); ++i) {
+        if (i%10==0) 
+          pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
+        glColor4f(1.,1.,0.,0.6);
+        if (i>0) {
           pangolin::glDrawLine(
-              T_wk_A.translation()(0), T_wk_A.translation()(1),
-              T_wk_A.translation()(2),
-              T_wk_B.translation()(0), T_wk_B.translation()(1),
-              T_wk_B.translation()(2));
+              T_mrs[i].translation()(0),
+              T_mrs[i].translation()(1),
+              T_mrs[i].translation()(2),
+              T_mrs[i-1].translation()(0),
+              T_mrs[i-1].translation()(1),
+              T_mrs[i-1].translation()(2));
         }
-        for (size_t i=0; i<kfSLAM.size(); ++i) {
-          tdp::SE3f T_wk = kfSLAM.GetPose(i);
-          pangolin::glDrawAxis(T_wk.matrix(), 0.1f);
-        }
-        glColor4f(0.,1.0,1.0,0.6);
-        for (auto& it : loopClosures) {
-          tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first.first);
-          tdp::SE3f T_wk_B = kfSLAM.GetPose(it.first.second);
-          pangolin::glDrawLine(
-              T_wk_A.translation()(0), T_wk_A.translation()(1),
-              T_wk_A.translation()(2),
-              T_wk_B.translation()(0), T_wk_B.translation()(1),
-              T_wk_B.translation()(2));
-        }
+      }
+      for (size_t i=0; i<T_wr_imus.size(); ++i) {
+        if (i%10==0) 
+          pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
+        glColor4f(0.,1.,1.,0.6);
       }
 
       Eigen::AlignedBox3f box(grid0,gridE);
@@ -664,33 +518,6 @@ int main( int argc, char* argv[] )
       pangolin::glUnsetFrameOfReference();
     }
 
-    if (viewLoopClose.IsShown() && kfs.size() > 1) {
-      viewLoopClose.Activate(camLoopClose);
-      tdp::KeyFrame& kfA = kfs[kfs.size()-1];
-      tdp::KeyFrame& kfB = kfs[kfs.size()-2];
-      tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-
-      vbo.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);
-      pangolin::glDrawAxis(0.1f);
-      glColor4f(1.f,0.f,0.f,0.5f);
-      pangolin::RenderVbo(vbo);
-
-      vbo.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
-      pangolin::glSetFrameOfReference(T_ab.matrix());
-      pangolin::glDrawAxis(0.1f);
-      glColor4f(0.f,1.f,0.f,0.5f);
-      pangolin::RenderVbo(vbo);
-      pangolin::glUnsetFrameOfReference();
-
-      glColor4f(1.f,0.f,1.f,0.5f);
-      for (size_t i=0; i<assoc_ba.Area(); i+= 300) 
-        if (assoc_ba[i] < assoc_ba.Area()) {
-          tdp::Vector3fda pb_in_a = T_ab*kfB.pc_[assoc_ba[i]];
-          pangolin::glDrawLine(
-              kfA.pc_[i](0), kfA.pc_[i](1), kfA.pc_[i](2),
-              pb_in_a(0), pb_in_a(1), pb_in_a(2));
-        }
-    }
     glDisable(GL_DEPTH_TEST);
 
     // Draw 2D stuff
