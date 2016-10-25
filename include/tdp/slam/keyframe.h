@@ -80,9 +80,58 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
       overlap, rmse, errB);
 }
 
+template <typename CamT>
+void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
+    const Rig<CamT>& cam, int lvl, float& overlap,
+    float& rmse, const SE3f* T_ab = nullptr, Image<float>* errB=nullptr) {
+  tdp::SE3f T_ab_ = kfA.T_wk_.Inverse() * kfB.T_wk_;
+  if (T_ab)
+    T_ab_ = *T_ab;
+
+  const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
+  const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
+  const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
+
+  for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
+    int32_t cId;
+//    if (useRgbCamParasForDepth) {
+      cId = rig.rgbStream2cam_[sId]; 
+//    } else {
+//      cId = rig.dStream2cam_[sId]; 
+//    }
+    CamT cam = rig.cams_[cId].Scale(pow(0.5,lvl));
+    tdp::SE3f T_rc = rig.T_rcs_[cId];
+
+    const Image<float> greyAi = rig.GetStreamRoI(greyA, sId);
+    const Image<float> greyBi = rig.GetStreamRoI(greyB, sId);
+    const Image<Vector3fda> pcBi = rig.GetStreamRoI(pcB, sId);
+
+    Image<float>* errBi = nullptr;
+    if (errB) {
+      errBi = new Image<float>();
+      *errBi = rig.GetStreamRoI(*errB, sId);
+    }
+
+    float overlapi = 0.;
+    float rmsei = 0.;
+    Overlap(greyAi, greyBi, pcBi, T_rc.Inverse()*T_ab_, 
+        cam,
+//        ScaleCamera(cam,pow(0.5,lvl)), 
+        overlapi, rmsei, errBi);
+    rmse += rmsei;
+    overlap += overlapi;
+
+    if (errB) {
+      delete errBi;
+    }
+  }
+  rmse /= rig.dStream2cam_.size();
+  overlap /= rig.dStream2cam_.size();
+}
+
 template <int D, class Derived>
 void Overlap(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab,
+    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
     const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse, 
     Image<float>* errB=nullptr) {
 
