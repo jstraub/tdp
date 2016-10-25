@@ -201,6 +201,11 @@ struct Rig {
 
   void Render3D(const SE3f& T_mr, float scale=1.);
 
+  template <typename T>
+  Image<T> GetStreamRoI(const Image<T>& I, size_t streamId) {
+    return I.GetRoi(0, rgbdStream2cam_[streamId]*hSingle, wSingle, hSingle);
+  };
+
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
   // camera to rig transformations
