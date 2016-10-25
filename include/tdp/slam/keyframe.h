@@ -107,4 +107,128 @@ void Overlap(const Image<float>& greyA, const Image<float>& greyB,
   rmse = sqrt( rmse/N );
 }
 
+
+//bool CheckLoopClosures(
+//    std::list<std::pair<int,int>>& loopClose,
+//    KeyframeSLAM& kfSLAM,
+//
+//    int icpDownSample,
+//    float keyFrameAngleThresh,
+//    float keyFrameDistThresh,
+//    float icpLoopCloseErrThr,
+//    float icpLoopCloseOverlapThr,
+//    float rmseThr,
+//    int icpLoopCloseOverlapLvl,
+//    ) {
+//  while (42) {
+//    std::pair<int,int> ids(-1,-1);
+//    if (loopClose.size() > 0) {
+//      std::pair<int,int> ids = loopClose.front();
+//      loopClose.pop_front();
+//    } else {
+//      break;
+//    }
+//    tdp::KeyFrame& kfA = kfs[ids.first];
+//    tdp::KeyFrame& kfB = kfs[ids.second];
+//    Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
+//    if ( se3.head<3>().norm()*180./M_PI < 3.5*keyFrameAngleThresh
+//        && se3.tail<3>().norm()           < 3.5*keyFrameDistThresh) {
+//
+//      tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
+//      std::cout << " checking " << ids.first << " -> " << ids.second
+//        << ": " << se3.head<3>().norm()*180./M_PI << " "
+//        << se3.tail<3>().norm()          
+//        << std::endl;
+//
+//      photoErrBefore.Fill(0.);
+//      float overlapBefore, rmseBefore;
+//      Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, 
+//          rmseBefore, nullptr, &photoErrBefore);
+//
+//      if (overlapBefore > icpLoopCloseOverlapThr) {
+//
+//        float err=0.;
+//        float count=10000;
+////        if (useANN) {
+//        cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
+//        cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
+//        cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
+//        cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+//        tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
+//            assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
+//            icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
+//            icpDownSample, gui.verbose, err, count);
+////        } else {
+////          // TODO test
+////          tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
+////          tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
+////          tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
+////          tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
+////
+////          pcs_m.CopyFrom(kfA.pyrPc_, cudaMemcpyHostToDevice);
+////          ns_m.CopyFrom(kfA.pyrN_, cudaMemcpyHostToDevice);
+////          pcs_m.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
+////          ns_m.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
+////
+////          std::vector<size_t> maxIt = {2*icpIter0, 2*icpIter1, 2*icpIter2};
+////          tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
+////              ns_c, T_ab, tdp::SE3f(),
+////              camD, maxIt, icpLoopCloseAngleThr_deg,
+////              icpLoopCloseDistThr, true | gui.verbose); 
+////        }
+//
+//        photoErrAfter.Fill(0.);
+//        float overlapAfter, rmseAfter;
+//        Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl,
+//            overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
+//
+//        std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
+//          << " RMSE " << rmseBefore << " -> " << rmseAfter 
+//          << " dRMSE " << (rmseBefore-rmseAfter)/rmseBefore
+//          << std::endl;
+//
+//        if (err == err 
+//            && err < icpLoopCloseErrThr
+//            && count*icpDownSample > 3000 
+//            && overlapAfter > icpLoopCloseOverlapThr
+//            && rmseAfter < rmseThr) {
+//          std::cout << "successfull loop closure "  << std::endl
+//            << T_ab.matrix3x4() << std::endl;
+//          kfSLAM.AddLoopClosure(idA, idB, T_ab);
+//          //            kfSLAM.AddLoopClosure(idB, idA, T_ab.Inverse());
+//          //            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
+//          numLoopClosures ++;
+//
+//          greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+//          greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
+//          photoErrAfterSuccess.CopyFrom(photoErrAfter, cudaMemcpyHostToHost);
+//          photoErrBeforeSuccess.CopyFrom(photoErrBefore, cudaMemcpyHostToHost);
+//          pcASuccess.CopyFrom(kfA.pc_, cudaMemcpyHostToHost);
+//          pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
+//          T_abSuccess = T_ab;
+//        } else {
+//          std::cout << "unsuccessfull loop closure" << std::endl;
+//        }
+//      }
+//      break;
+//    } else {
+//      std::cout << " skipping " << ids.first << " -> " << ids.second
+//        << ": " << se3.head<3>().norm()*180./M_PI << " "
+//        << se3.tail<3>().norm()          << std::endl;
+//    }
+//    if (numLoopClosures > 0) {
+//      kfSLAM.Optimize(); 
+//      if (useOptimizedPoses) {
+//        T_ac = kfSLAM.GetPose(idActive).Inverse()*kfs[idActive].T_wk_*T_ac;
+//        for (size_t i=0; i < kfs.size(); ++i) {
+//          kfs[i].T_wk_ = kfSLAM.GetPose(i);
+//        }
+//      }
+//    }
+//  }
+//}
+//
+//
+
+
 }
