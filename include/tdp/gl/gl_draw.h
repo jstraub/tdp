@@ -12,18 +12,17 @@ void glDrawPoint(GLfloat x1, GLfloat y1) {
   glEnd();
 }
 
+void glDrawLine(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
+  pangolin::glDrawLine(a(0),a(1),a(2),b(0),b(1),b(2));
+}
+
 void glDrawPoses(const std::vector<SE3f>& Ts, int step=10, float scale=0.1) {
   for (size_t i=1; i<Ts.size(); ++i) {
-    pangolin::glDrawLine(
-        Ts[i].translation()(0),
-        Ts[i].translation()(1),
-        Ts[i].translation()(2),
-        Ts[i-1].translation()(0),
-        Ts[i-1].translation()(1),
-        Ts[i-1].translation()(2));
+    glDrawLine(Ts[i].translation(), Ts[i-1].translation());
   }
-  for (size_t i=0; i<Ts.size(); i+=step)
-    pangolin::glDrawAxis(Ts[i].matrix(), scale);
+  if (step > 0)
+    for (size_t i=0; i<Ts.size(); i+=step)
+      pangolin::glDrawAxis(Ts[i].matrix(), scale);
 }
 
 }

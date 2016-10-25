@@ -612,16 +612,8 @@ int main( int argc, char* argv[] )
 
       pangolin::glDrawAxis(kfs[idActive].T_wk_.matrix(),0.08f);
       pangolin::glDrawAxis(T_mo.matrix(), 0.05f);
-      for (size_t i=0; i<T_mos.size(); ++i) {
-        glColor4f(1.,1.,0.,0.6);
-        if (i>0) {
-          pangolin::glDrawLine(
-              T_mos[i].translation()(0), T_mos[i].translation()(1),
-              T_mos[i].translation()(2),
-              T_mos[i-1].translation()(0), T_mos[i-1].translation()(1),
-              T_mos[i-1].translation()(2));
-        }
-      }
+      glColor4f(1.,1.,0.,0.6);
+      glDrawPoses(T_mos,-1);
       for (size_t i=0; i<kfs.size(); ++i) {
         tdp::SE3f& T_wk = kfs[i].T_wk_;
         pangolin::glDrawAxis(T_wk.matrix(), 0.03f);
@@ -635,21 +627,13 @@ int main( int argc, char* argv[] )
       for (auto& it : kfSLAM.loopClosures_) {
         tdp::SE3f& T_wk_A = kfs[it.first].T_wk_;
         tdp::SE3f& T_wk_B = kfs[it.second].T_wk_;
-        pangolin::glDrawLine(
-            T_wk_A.translation()(0), T_wk_A.translation()(1),
-            T_wk_A.translation()(2),
-            T_wk_B.translation()(0), T_wk_B.translation()(1),
-            T_wk_B.translation()(2));
+        glDrawLine(T_wk_A.translation() T_wk_B.translation());
       }
       glColor4f(0.,1.0,1.0,0.6);
       for (auto& it : kfSLAM.loopClosures_) {
         tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first);
         tdp::SE3f T_wk_B = kfSLAM.GetPose(it.second);
-        pangolin::glDrawLine(
-            T_wk_A.translation()(0), T_wk_A.translation()(1),
-            T_wk_A.translation()(2),
-            T_wk_B.translation()(0), T_wk_B.translation()(1),
-            T_wk_B.translation()(2));
+        glDrawLine(T_wk_A.translation() T_wk_B.translation());
       }
       // render model and observed point cloud
       if (showPcModel && kfs.size() > 0) {
