@@ -91,8 +91,8 @@ class Camera : public CameraBase<T,4,Camera<T>> {
     return val;
   }
 
-  Camera<T> Scale(T scale) {
-    Eigen::Matrix<T,4,1> paramsScaled = cam.params_;
+  Camera<T> Scale(T scale) const {
+    Eigen::Matrix<T,4,1> paramsScaled = this->params_;
     paramsScaled(0) *= scale;
     paramsScaled(1) *= scale;
     paramsScaled(2) = (paramsScaled(2)+0.5)*scale-0.5;
