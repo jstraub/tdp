@@ -204,19 +204,24 @@ struct Rig {
   void Render3D(const SE3f& T_mr, float scale=1.);
 
   template <typename T>
-  Image<T> GetStreamRoi(const Image<T>& I, size_t streamId) const {
+  Image<T> GetStreamRoi(const Image<T>& I, size_t streamId, float
+      scale=1.) const {
     size_t camMin = *std::min_element(rgbdStream2cam_.begin(),
         rgbdStream2cam_.end());
-    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hSingle,
-      wSingle, hSingle);
+    int w = floor(wSingle*scale);
+    int h = floor(hSingle*scale);
+    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*h, w, h);
   };
 
   template <typename T>
-  Image<T> GetStreamRoiOrigSize(const Image<T>& I, size_t streamId) const {
+  Image<T> GetStreamRoiOrigSize(const Image<T>& I, size_t streamId,
+      float scale=1.) const {
     size_t camMin = *std::min_element(rgbdStream2cam_.begin(),
         rgbdStream2cam_.end());
-    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hSingle,
-      wOrig, hOrig);
+    int w = floor(wOrig*scale);
+    int h = floor(hOrig*scale);
+    int hS = floor(hSingle*scale);
+    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hS, w, h);
   };
 
   // imu to rig transformations
@@ -409,6 +414,7 @@ void Rig<CamT>::ComputePc(Image<float>& cuD,
     tdp::SE3f T_rc = T_rcs_[cId];
 
     tdp::Image<tdp::Vector3fda> cuPc_i = GetStreamRoi(cuPc, sId);
+    cudaMemset(cuPc_i.ptr_, 0, cuPc_i.SizeBytes());
     tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     // compute point cloud from depth in rig coordinate system
     tdp::Depth2PCGpu(cuD_i, cam, T_rc, cuPc_i);
@@ -507,7 +513,7 @@ void Rig<CamT>::Render3D(
     
     pangolin::glDrawFrustrum(cam.GetKinv(), wSingle, hSingle,
         T_mo.matrix(), scale);
-    pangolin::glDrawAxis(T_mo.matrix(), scale);
+//    pangolin::glDrawAxis(T_mo.matrix(), scale);
 
   }
   pangolin::glDrawAxis(T_mr.matrix(), scale);

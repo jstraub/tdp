@@ -343,19 +343,26 @@ void ICP::ComputeProjective(
       tdp::Image<tdp::Vector3fda> n_ol = ns_o.GetImage(lvl);
 //      size_t w_l = pc_ml.w_;
 //      size_t h_l = pc_ml.h_/stream2cam.size();
+      float scale = pow(0.5,lvl);
       for (size_t sId=0; sId < stream2cam.size(); sId++) {
         int32_t cId = stream2cam[sId]; 
-        CameraT cam = rig.cams_[cId];
+        CameraT cam = rig.cams_[cId].Scale(scale);
         tdp::SE3f T_cr = rig.T_rcs_[cId].Inverse();
 
         // all PC and normals are in rig coordinates
-        tdp::Image<tdp::Vector3fda> pc_mli = rig.GetStreamRoi(pc_ml, sId);
-        tdp::Image<tdp::Vector3fda> pc_oli = rig.GetStreamRoi(pc_ol, sId); 
-//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
-        tdp::Image<tdp::Vector3fda> n_mli = rig.GetStreamRoi(n_ml, sId); 
-//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
-        tdp::Image<tdp::Vector3fda> n_oli = rig.GetStreamRoi(n_ol, sId); 
-//        .GetRoi(0, rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+//        tdp::Image<tdp::Vector3fda> pc_mli = pc_ml.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+//        tdp::Image<tdp::Vector3fda> pc_oli = pc_ol.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+//        tdp::Image<tdp::Vector3fda> n_mli = n_ml.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+//        tdp::Image<tdp::Vector3fda> n_oli = n_ol.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*h_l, w_l, h_l);
+
+        tdp::Image<tdp::Vector3fda> pc_mli = rig.GetStreamRoi(pc_ml, sId, scale);
+        tdp::Image<tdp::Vector3fda> pc_oli = rig.GetStreamRoi(pc_ol, sId, scale);
+        tdp::Image<tdp::Vector3fda> n_mli =  rig.GetStreamRoi(n_ml, sId, scale);
+        tdp::Image<tdp::Vector3fda> n_oli =  rig.GetStreamRoi(n_ol, sId, scale);
 
         Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
         Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
@@ -363,8 +370,7 @@ void ICP::ComputeProjective(
         float count_i = 0;
         // Compute ATA and ATb from A x = b
         ICPStep(pc_mli, n_mli, pc_oli, n_oli,
-            T_mr, T_cr, 
-            tdp::ScaleCamera<float>(cam,pow(0.5,lvl)),
+            T_mr, T_cr, cam,
             cos(angleThr_deg*M_PI/180.),
             distThr,ATA_i,ATb_i,error_i,count_i);
         ATA += ATA_i;

@@ -372,8 +372,8 @@ int main( int argc, char* argv[] )
 
             pcs_m.CopyFrom(kfA.pyrPc_, cudaMemcpyHostToDevice);
             ns_m.CopyFrom(kfA.pyrN_, cudaMemcpyHostToDevice);
-            pcs_m.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
-            ns_m.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
+            pcs_c.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
+            ns_c.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
 
             std::vector<size_t> maxIt = {2*icpIter0, 2*icpIter1, 2*icpIter2};
 //            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
@@ -471,9 +471,9 @@ int main( int argc, char* argv[] )
 
     if (runSlamFusion.GuiChanged() && runSlamFusion) {
       T_mos.clear();
-      T_mo = T_mo_0;
+      T_mo = kfs[0].T_wk_;
       idActive = -1;
-      gui.frame = 0;
+      gui.Seek(0);
       resetTSDF = true;
     }
 
@@ -502,6 +502,9 @@ int main( int argc, char* argv[] )
     glColor3f(1.0f, 1.0f, 1.0f);
 
     gui.NextFrames();
+
+    if (gui.frame < 1) continue;
+
     int64_t t_host_us_d = 0;
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
@@ -562,6 +565,7 @@ int main( int argc, char* argv[] )
         std::vector<float> errPerLvl;
         std::vector<float> countPerLvl;
         if (useRgbCamParasForDepth) {
+          std::cout << T_ac << std::endl;
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
               gui.verbose, T_ac, errPerLvl, countPerLvl);

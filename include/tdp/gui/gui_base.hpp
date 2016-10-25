@@ -44,6 +44,12 @@ class GuiBase {
 //    end_frame = frame + 1;
   }
 
+  void Seek(int destFrame) {
+    if (video_playback && destFrame < end_frame ) {
+      std::cout << "Seek seek " << video_playback->Seek(destFrame) << std::endl;
+    }
+  }
+
   pangolin::Image<uint8_t>& Image(int i) { return images[i]; } 
 
   bool ImageD(tdp::Image<uint16_t>& d, size_t camId=0, 
