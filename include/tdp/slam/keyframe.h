@@ -89,6 +89,8 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
   if (T_ab)
     T_ab_ = *T_ab;
 
+  overlap = 0.f;
+  rmse = 0.f;
   const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
   const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
   const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
@@ -103,14 +105,14 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
     CamT cam = rig.cams_[cId].Scale(pow(0.5,lvl));
     tdp::SE3f T_rc = rig.T_rcs_[cId];
 
-    const Image<float> greyAi = rig.GetStreamRoi(greyA, sId);
-    const Image<float> greyBi = rig.GetStreamRoi(greyB, sId);
-    const Image<Vector3fda> pcBi = rig.GetStreamRoi(pcB, sId);
+    const Image<float> greyAi = rig.GetStreamRoiOrigSize(greyA, sId);
+    const Image<float> greyBi = rig.GetStreamRoiOrigSize(greyB, sId);
+    const Image<Vector3fda> pcBi = rig.GetStreamRoiOrigSize(pcB, sId);
 
     Image<float>* errBi = nullptr;
     if (errB) {
       errBi = new Image<float>();
-      *errBi = rig.GetStreamRoi(*errB, sId);
+      *errBi = rig.GetStreamRoiOrigSize(*errB, sId);
     }
 
     float overlapi = 0.;

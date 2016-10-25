@@ -211,6 +211,14 @@ struct Rig {
       wSingle, hSingle);
   };
 
+  template <typename T>
+  Image<T> GetStreamRoiOrigSize(const Image<T>& I, size_t streamId) const {
+    size_t camMin = *std::min_element(rgbdStream2cam_.begin(),
+        rgbdStream2cam_.end());
+    return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hSingle,
+      wOrig, hOrig);
+  };
+
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
   // camera to rig transformations
@@ -230,8 +238,10 @@ struct Rig {
   std::vector<int32_t> dStream2cam_;
   std::vector<int32_t> rgbdStream2cam_;
 
-  size_t wSingle;
-  size_t hSingle;
+  size_t wOrig; // original size of stream
+  size_t hOrig;
+  size_t wSingle; // original size + additional size to get %64 == 0
+  size_t hSingle; // for convolution
 
   // camera serial IDs
   std::vector<std::string> serials_;
@@ -302,6 +312,8 @@ void Rig<CamT>::CollectRGB(const GuiBase& gui,
     if (!gui.ImageRGB(rgbStream, sId)) continue;
     // TODO: this is a bit hackie; should get the w and h somehow else
     // beforehand
+    wOrig = rgbStream.w_;
+    hOrig = rgbStream.h_;
     wSingle = rgbStream.w_+rgbStream.w_%64;
     hSingle = rgbStream.h_+rgbStream.h_%64;
     Image<Vector3bda> rgb_i = GetStreamRoi(rgb, sId);
@@ -325,6 +337,8 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     t_host_us_d += t_host_us_di;
     numStreams ++;
     int32_t cId = rgbdStream2cam_[sId]; 
+    wOrig = dStream.w_;
+    hOrig = dStream.h_;
     wSingle = dStream.w_+dStream.w_%64;
     hSingle = dStream.h_+dStream.h_%64;
     tdp::Image<uint16_t> cuDraw_i = GetStreamRoi(cuDraw, sId);

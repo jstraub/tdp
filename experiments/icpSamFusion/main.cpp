@@ -418,6 +418,10 @@ int main( int argc, char* argv[] )
 //            loopClosures.emplace(std::make_pair(idA, idB), T_ab);
             numLoopClosures ++;
 
+          } else {
+            std::cout << "unsuccessfull loop closure" << std::endl;
+          }
+
             greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
             greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
             photoErrAfterSuccess.CopyFrom(photoErrAfter, cudaMemcpyHostToHost);
@@ -425,9 +429,7 @@ int main( int argc, char* argv[] )
             pcASuccess.CopyFrom(kfA.pc_, cudaMemcpyHostToHost);
             pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
             T_abSuccess = T_ab;
-          } else {
-            std::cout << "unsuccessfull loop closure" << std::endl;
-          }
+
         }
         break;
       } else {
