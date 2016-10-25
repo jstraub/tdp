@@ -3,6 +3,7 @@
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
+#include <tdp/manifold/SE3.h>
 
 #include <iostream>
 #include <complex>
@@ -14,16 +15,18 @@ tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen
 tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc();
 void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc);
 inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& axesIds);
-Eigen::Matrix3f getLocalBasis(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es);
-void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::Matrix3fda>& locals, tdp::ANN& ann, int knn, float eps);
+Eigen::Matrix3f getLocalRot(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es);
+void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::SE3f>& locals, tdp::ANN& ann, int knn, float eps);
 inline float w(float d, int knn);
 inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec);
-void getThetas(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps);
-void getZEstimates(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::Matrix3fda>& locals, const tdp::Image<tdp::Vector6fda>& thetas, tdp::Image<tdp::Vector3fda>& estimates);
+void getThetas(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::SE3f>& locals, tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps);
+void getZEstimates(const tdp::Image<tdp::Vector3fda>& pc, const tdp::Image<tdp::SE3f>& locals, const tdp::Image<tdp::Vector6fda>& thetas, tdp::Image<tdp::Vector3fda>& estimates);
 
 //tests
-void test0();
-void test1();
+void test_meanAndCov();
+void test_getAllLocalBasis();
 void test_getAxesIds();
+void test_getLocalRot();
+
 
 #endif // SKINNING_H
