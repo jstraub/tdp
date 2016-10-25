@@ -502,7 +502,8 @@ int main( int argc, char* argv[] )
     if (runFusion && (fuseTSDF || numFused <= 30)) {
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+      tdp::TSDF::AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid,
+          tsdfMu, tsdfWMax); 
       numFused ++;
       TOCK("Add To TSDF");
     }
@@ -510,7 +511,7 @@ int main( int argc, char* argv[] )
     if (runFusion) {
       if (gui.verbose) std::cout << "ray trace" << std::endl;
       TICK("Ray Trace TSDF");
-      RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
+      tdp::TSDF::RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
           ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
       // get pc in model coordinate system
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
@@ -538,7 +539,7 @@ int main( int argc, char* argv[] )
     TICK("Draw 3D");
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
-    RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
+    tdp::TSDF::RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
         dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 

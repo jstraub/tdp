@@ -128,7 +128,7 @@ class Image {
   }
 #endif
 
-  Image<T> GetRoi(size_t u0, size_t v0, size_t w, size_t h) {
+  Image<T> GetRoi(size_t u0, size_t v0, size_t w, size_t h) const {
     return Image<T>(w,h,pitch_,&RowPtr(v0)[u0]);
   }
 

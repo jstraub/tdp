@@ -460,7 +460,7 @@ int main( int argc, char* argv[] )
     // Render point cloud from viewpoint of origin
     tdp::SE3f T_mv;
     T_mv.translation()(2) = -3.;
-    RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
+    tdp::TSDF::RayTraceTSDF(cuTSDF, cuDView, nEstdummy, T_mv, camView, grid0,
         dGrid, tsdfMu, tsdfWThr); 
     tdp::Depth2PCGpu(cuDView,camView,cuPcView);
 

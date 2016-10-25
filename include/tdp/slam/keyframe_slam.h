@@ -37,4 +37,4 @@ class KeyframeSLAM {
 
 }
 
-
+#include <tdp/slam/keyframe_slam_impl.hpp>

@@ -144,6 +144,8 @@ link_directories(
   ${Pangolin_DIR}
 )
 
+set(TDP_LIBS "tdp")
+
 add_subdirectory(./test)
 add_subdirectory(./experiments)
 add_subdirectory(./src)

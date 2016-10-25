@@ -22,6 +22,7 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/config.h>
+#include <tdp/tsdf/tsdf.h>
 
 namespace tdp {
 
@@ -189,7 +190,7 @@ struct Rig {
 
   template<int LEVELS>
   void RayTraceTSDF(
-      const Volume<TSDFval>& cuTSDF const SE3f& T_mr,
+      const Volume<TSDFval>& cuTSDF, const SE3f& T_mr,
       bool useRgbCamParasForDepth, 
       const Vector3fda& grid0, const Vector3fda& dGrid,
       float tsdfMu, float tsdfWThr,
@@ -202,7 +203,7 @@ struct Rig {
   void Render3D(const SE3f& T_mr, float scale=1.);
 
   template <typename T>
-  Image<T> GetStreamRoI(const Image<T>& I, size_t streamId) {
+  Image<T> GetStreamRoi(const Image<T>& I, size_t streamId) const {
     return I.GetRoi(0, rgbdStream2cam_[streamId]*hSingle, wSingle, hSingle);
   };
 
@@ -364,12 +365,13 @@ void Rig<CamT>::ComputeNormals(Image<float>& cuD,
 
 template<class CamT>
 template<int LEVELS>
-void Rig<CamT>::ComputeNormals<LEVELS>(Image<float>& cuD, 
+void Rig<CamT>::ComputeNormals(Image<float>& cuD, 
     bool useRgbCamParasForDepth, 
     Pyramid<Vector3fda,LEVELS>& cuPyrN) {
-  Image<Vector3fda> cuPc = cuPyrN.GetImage(0);
+  Image<Vector3fda> cuN = cuPyrN.GetImage(0);
   ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
-  tdp::CompleteNormalPyramid<tdp::Vector3fda,LEVELS>(cuPyrN,cudaMemcpyDeviceToDevice);
+  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN,
+      cudaMemcpyDeviceToDevice);
 }
 
 template<class CamT>
@@ -398,7 +400,7 @@ void Rig<CamT>::ComputePc(Image<float>& cuD,
 
 template<class CamT>
 template<int LEVELS>
-void Rig<CamT>::ComputePc<LEVELS>(Image<float>& cuD, 
+void Rig<CamT>::ComputePc(Image<float>& cuD, 
     bool useRgbCamParasForDepth, 
     Pyramid<Vector3fda,LEVELS>& cuPyrPc) {
   Image<Vector3fda> cuPc = cuPyrPc.GetImage(0);
@@ -426,16 +428,17 @@ void Rig<CamT>::AddToTSDF(const Image<float>& cuD,
     CamT cam = cams_[cId];
     tdp::SE3f T_rc = T_rcs_[cId];
     tdp::SE3f T_mo = T_mr*T_rc;
-    tdp::Image<float> cuD_i(wSingle, hSingle,
-        cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
-    AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
+    tdp::Image<float> cuD_i = GetStreamRoi(cuD,sId);
+//    (wSingle, hSingle, cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
+    TSDF::AddToTSDF<CamT::NumParams,CamT>(cuTSDF, cuD_i, T_mo, cam, grid0,
+        dGrid, tsdfMu, tsdfWMax); 
   }
 }
 
 template<class CamT>
 template<int LEVELS>
-void Rig<CamT>::RayTraceTSDF<LEVELS>(
-    const Volume<TSDFval>& cuTSDF
+void Rig<CamT>::RayTraceTSDF(
+    const Volume<TSDFval>& cuTSDF,
     const SE3f& T_mr,
     bool useRgbCamParasForDepth, 
     const Vector3fda& grid0,
@@ -463,7 +466,7 @@ void Rig<CamT>::RayTraceTSDF<LEVELS>(
         rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
 
     // ray trace the TSDF to get pc and normals in model cosy
-    RayTraceTSDF(cuTSDF, cuPcEst_i, 
+    TSDF::RayTraceTSDF<CamT::NumParams,CamT>(cuTSDF, cuPcEst_i, 
         cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
   }
   // just complete the surface normals obtained from the TSDF
@@ -478,11 +481,11 @@ void Rig<CamT>::Render3D(
 
   for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
     int32_t cId;
-    if (useRgbCamParasForDepth) {
-      cId = rgbStream2cam_[sId]; 
-    } else {
-      cId = dStream2cam_[sId]; 
-    }
+//    if (useRgbCamParasForDepth) {
+    cId = rgbStream2cam_[sId]; 
+//    } else {
+//      cId = dStream2cam_[sId]; 
+//    }
     CamT cam = cams_[cId];
     tdp::SE3f T_rc = T_rcs_[cId];
     tdp::SE3f T_mo = T_mr*T_rc;

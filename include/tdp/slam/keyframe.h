@@ -5,6 +5,7 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera_base.h>
+#include <tdp/camera/rig.h>
 namespace tdp {
 
 /// KeyFrame
@@ -82,7 +83,7 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 
 template <typename CamT>
 void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
-    const Rig<CamT>& cam, int lvl, float& overlap,
+    const Rig<CamT>& rig, int lvl, float& overlap,
     float& rmse, const SE3f* T_ab = nullptr, Image<float>* errB=nullptr) {
   tdp::SE3f T_ab_ = kfA.T_wk_.Inverse() * kfB.T_wk_;
   if (T_ab)
@@ -102,14 +103,14 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
     CamT cam = rig.cams_[cId].Scale(pow(0.5,lvl));
     tdp::SE3f T_rc = rig.T_rcs_[cId];
 
-    const Image<float> greyAi = rig.GetStreamRoI(greyA, sId);
-    const Image<float> greyBi = rig.GetStreamRoI(greyB, sId);
-    const Image<Vector3fda> pcBi = rig.GetStreamRoI(pcB, sId);
+    const Image<float> greyAi = rig.GetStreamRoi(greyA, sId);
+    const Image<float> greyBi = rig.GetStreamRoi(greyB, sId);
+    const Image<Vector3fda> pcBi = rig.GetStreamRoi(pcB, sId);
 
     Image<float>* errBi = nullptr;
     if (errB) {
       errBi = new Image<float>();
-      *errBi = rig.GetStreamRoI(*errB, sId);
+      *errBi = rig.GetStreamRoi(*errB, sId);
     }
 
     float overlapi = 0.;
@@ -278,6 +279,5 @@ void Overlap(const Image<float>& greyA, const Image<float>& greyB,
 //}
 //
 //
-
 
 }

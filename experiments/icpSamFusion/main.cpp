@@ -21,6 +21,7 @@
 #include <tdp/data/managed_volume.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/data/volume.h>
+#include <tdp/gl/gl_draw.h>
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
 #include <tdp/icp/icp.h>
@@ -81,8 +82,8 @@ int main( int argc, char* argv[] )
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
-  CameraT camR(Eigen::Vector4f(f,f,uc,vc)); 
-  CameraT camD(Eigen::Vector4f(f,f,uc,vc)); 
+//  CameraT camR(Eigen::Vector4f(f,f,uc,vc)); 
+//  CameraT camD(Eigen::Vector4f(f,f,uc,vc)); 
 
   tdp::Rig<CameraT> rig;
   if (calibPath.size() > 0) {
@@ -90,8 +91,8 @@ int main( int argc, char* argv[] )
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
     rig.CorrespondOpenniStreams2Cams(streams);
     // camera model for computing point cloud and normals
-    camR = rig.cams_[rig.rgbStream2cam_[0]];
-    camD = camR; //rig.cams_[rig.dStream2cam_[0]];
+//    camR = rig.cams_[rig.rgbStream2cam_[0]];
+//    camD = camR; //rig.cams_[rig.dStream2cam_[0]];
   } else {
     return 2;
   }
@@ -216,8 +217,9 @@ int main( int argc, char* argv[] )
   viewGrad3DPyr.Show(false);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
-  pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> tsdfDmax("ui.d max",6.,0.1,10.);
+  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
+  pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
+  pangolin::Var<bool> useRgbCamParasForDepth("ui.use RGB cam", true, true);
 
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -343,7 +345,7 @@ int main( int argc, char* argv[] )
 
         photoErrBefore.Fill(0.);
         float overlapBefore, rmseBefore;
-        Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl, overlapBefore, 
+        Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl, overlapBefore, 
             rmseBefore, nullptr, &photoErrBefore);
 
         if (overlapBefore > icpLoopCloseOverlapThr) {
@@ -372,15 +374,28 @@ int main( int argc, char* argv[] )
             ns_m.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
 
             std::vector<size_t> maxIt = {2*icpIter0, 2*icpIter1, 2*icpIter2};
-            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
-                ns_c, T_ab, tdp::SE3f(),
-              camD, maxIt, icpLoopCloseAngleThr_deg,
-              icpLoopCloseDistThr, true | gui.verbose); 
+//            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
+//                ns_c, T_ab, tdp::SE3f(),
+//              camD, maxIt, icpLoopCloseAngleThr_deg,
+//              icpLoopCloseDistThr, true | gui.verbose); 
+            std::vector<float> errPerLvl;
+            std::vector<float> countPerLvl;
+            if (useRgbCamParasForDepth) {
+              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+                  rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
+                  icpLoopCloseDistThr,
+                  gui.verbose, T_ab, errPerLvl, countPerLvl);
+            } else {
+              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+                  rig, rig.dStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
+                  icpLoopCloseDistThr,
+                  gui.verbose, T_ab, errPerLvl, countPerLvl);
+            }
           }
 
           photoErrAfter.Fill(0.);
           float overlapAfter, rmseAfter;
-          Overlap(kfA, kfB, camD, icpLoopCloseOverlapLvl,
+          Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl,
               overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
 
           std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
@@ -451,7 +466,7 @@ int main( int argc, char* argv[] )
       T_mos.clear();
       T_mo = T_mo_0;
       idActive = -1;
-      frame = 0;
+      gui.frame = 0;
       resetTSDF = true;
     }
 
@@ -469,7 +484,9 @@ int main( int argc, char* argv[] )
         const tdp::SE3f& T_mk = kfA.T_wk_;
         cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
         TICK("Add To TSDF");
-        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+//        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+        rig.AddToTSDF(cuD, T_mk, useRgbCamParasForDepth, 
+            grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
         TOCK("Add To TSDF");
       }
     }
@@ -498,8 +515,8 @@ int main( int argc, char* argv[] )
     if(kfs.size() > 0) {
       // Find closest KF
       int iMin = 0;
-      float distMin = 1e9;
-      float angMin = 1e9;
+//      float distMin = 1e9;
+//      float angMin = 1e9;
       float valMin = 1e9;
       for (int i=0; i<kfs.size(); ++i) {
         Eigen::Matrix<float,6,1> se3 = kfs[i].T_wk_.Log(T_mo);
@@ -530,12 +547,24 @@ int main( int argc, char* argv[] )
       TICK("ICP");
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       if (!icpGrad3D) {
-        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
-            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
-      } else {
-        tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
-            gs_c, T_ac, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
-            icpDistThr, gui.verbose); 
+//        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
+//            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
+        std::vector<float> errPerLvl;
+        std::vector<float> countPerLvl;
+        if (useRgbCamParasForDepth) {
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+              rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+              gui.verbose, T_ac, errPerLvl, countPerLvl);
+        } else {
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+              rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, 
+              icpDistThr,
+              gui.verbose, T_ac, errPerLvl, countPerLvl);
+        }
+//      } else {
+//        tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
+//            gs_c, T_ac, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
+//            icpDistThr, gui.verbose); 
       }
       TOCK("ICP");
       T_mo = kfs[idActive].T_wk_*T_ac;
@@ -627,13 +656,13 @@ int main( int argc, char* argv[] )
       for (auto& it : kfSLAM.loopClosures_) {
         tdp::SE3f& T_wk_A = kfs[it.first].T_wk_;
         tdp::SE3f& T_wk_B = kfs[it.second].T_wk_;
-        glDrawLine(T_wk_A.translation() T_wk_B.translation());
+        tdp::glDrawLine(T_wk_A.translation(), T_wk_B.translation());
       }
       glColor4f(0.,1.0,1.0,0.6);
       for (auto& it : kfSLAM.loopClosures_) {
         tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first);
         tdp::SE3f T_wk_B = kfSLAM.GetPose(it.second);
-        glDrawLine(T_wk_A.translation() T_wk_B.translation());
+        tdp::glDrawLine(T_wk_A.translation(), T_wk_B.translation());
       }
       // render model and observed point cloud
       if (showPcModel && kfs.size() > 0) {

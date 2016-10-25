@@ -20,12 +20,22 @@ file(GLOB SRCS
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 
+#file(GLOB ISAM_SRCS "./slam/*.cpp")
+
 file(GLOB BB_SRCS
   "./bb/*cpp"
   )
 
 if (BUILD_BB) 
-  list(APPEND BB_SRCS)
+  list(APPEND SRCS ${BB_SRCS})
+endif()
+
+if (ISAM_FOUND) 
+#  list(APPEND SRCS ${ISAM_SRCS})
+  list(APPEND TDP_LIBS 
+      ${ISAM_LIBRARY}
+      ${CHOLMOD_LIBRARIES}
+    )
 endif()
 
 if (ASIO_FOUND)

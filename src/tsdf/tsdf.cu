@@ -228,7 +228,7 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
 }
 
 template<int D, typename Derived>
-void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax) {
@@ -239,19 +239,19 @@ void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-template void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     SE3<float> T_rd, 
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax);
-template void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     SE3<float> T_rd, 
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax);
 
 template<int D, typename Derived>
-void RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n, 
+void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n, 
     SE3<float> T_rd, 
     CameraBase<float,D,Derived> camD,
     Vector3fda grid0, Vector3fda dGrid,
@@ -263,11 +263,11 @@ void RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-template void RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     Image<Vector3fda> n, SE3<float> T_rd, 
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr);
-template void RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, 
     Image<Vector3fda> n, SE3<float> T_rd, 
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid, float mu, float wThr);
@@ -318,7 +318,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf,
 }
 
 template<int D, typename Derived>
-void RayTraceTSDF(Volume<TSDFval> tsdf, 
+void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
     Image<Vector3fda> pc_d, 
     Image<Vector3fda> n_d, 
     SE3<float> T_rd, CameraBase<float,D,Derived>camD,
@@ -332,14 +332,14 @@ void RayTraceTSDF(Volume<TSDFval> tsdf,
 }
 
 // explicit instantiations
-template void RayTraceTSDF(Volume<TSDFval> tsdf, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
     Image<Vector3fda> pc_d, 
     Image<Vector3fda> n_d, 
     SE3<float> T_rd, 
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wThr);
-template void RayTraceTSDF(Volume<TSDFval> tsdf, 
+template void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, 
     Image<Vector3fda> pc_d, 
     Image<Vector3fda> n_d, 
     SE3<float> T_rd, 
