@@ -187,8 +187,19 @@ struct Rig {
     float tsdfMu, float tsdfWMax,
     Volume<TSDFval>& cuTSDF);
 
+  template<int LEVELS>
+  void RayTraceTSDF(
+      const Volume<TSDFval>& cuTSDF const SE3f& T_mr,
+      bool useRgbCamParasForDepth, 
+      const Vector3fda& grid0, const Vector3fda& dGrid,
+      float tsdfMu, float tsdfWThr,
+      Pyramid<Vector3fda,LEVELS>& cuPyrPc,
+      Pyramid<Vector3fda,LEVELS>& cuPyrN);
+
   size_t NumStreams() { return rgbdStream2cam_.size(); }
   size_t NumCams() { return rgbdStream2cam_.size()/2; }
+
+  void Render3D(const SE3f& T_mr, float scale=1.);
 
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
@@ -414,6 +425,69 @@ void Rig<CamT>::AddToTSDF(const Image<float>& cuD,
         cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
     AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
   }
+}
+
+template<class CamT>
+template<int LEVELS>
+void Rig<CamT>::RayTraceTSDF<LEVELS>(
+    const Volume<TSDFval>& cuTSDF
+    const SE3f& T_mr,
+    bool useRgbCamParasForDepth, 
+    const Vector3fda& grid0,
+    const Vector3fda& dGrid,
+    float tsdfMu,
+    float tsdfWThr,
+    Pyramid<Vector3fda,LEVELS>& cuPyrPc,
+    Pyramid<Vector3fda,LEVELS>& cuPyrN) {
+  tdp::Image<tdp::Vector3fda> cuNEst = cuPyrN.GetImage(0);
+  tdp::Image<tdp::Vector3fda> cuPcEst = cuPyrPc.GetImage(0);
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+    tdp::SE3f T_mo = T_mr*T_rc;
+
+    tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+    tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
+        rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+
+    // ray trace the TSDF to get pc and normals in model cosy
+    RayTraceTSDF(cuTSDF, cuPcEst_i, 
+        cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+  }
+  // just complete the surface normals obtained from the TSDF
+  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc,cudaMemcpyDeviceToDevice);
+  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN,cudaMemcpyDeviceToDevice);
+}
+
+template<class CamT>
+void Rig<CamT>::Render3D(
+    const SE3f& T_mr,
+    float scale) {
+
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+    tdp::SE3f T_mo = T_mr*T_rc;
+    
+    pangolin::glDrawFrustrum(cam.GetKinv(), wSingle, hSingle,
+        T_mo.matrix(), scale);
+    pangolin::glDrawAxis(T_mo.matrix(), scale);
+
+  }
+  pangolin::glDrawAxis(T_mr.matrix(), scale);
 }
 
 }

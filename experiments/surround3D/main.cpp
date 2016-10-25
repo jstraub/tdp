@@ -45,6 +45,7 @@
 #include <tdp/io/tinyply.h>
 #include <tdp/slam/keyframe.h>
 #include <tdp/slam/keyframe_slam.h>
+#include <tdp/gl/gl_draw.h>
 
 typedef tdp::CameraPoly3<float> CameraT;
 //typedef tdp::Camera<float> CameraT;
@@ -425,31 +426,33 @@ int main( int argc, char* argv[] )
 
     if (!gui.paused() && (odomImu || odomFrame2Model)) {
       TICK("Ray Trace TSDF");
-      tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
-      tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
-      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
-        int32_t cId;
-        if (useRgbCamParasForDepth) {
-          cId = rig.rgbStream2cam_[sId]; 
-        } else {
-          cId = rig.dStream2cam_[sId]; 
-        }
-        CameraT cam = rig.cams_[cId];
-        tdp::SE3f T_rc = rig.T_rcs_[cId];
-        tdp::SE3f T_mo = T_mr*T_rc;
-
-        tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-        tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
-            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
-
-        // ray trace the TSDF to get pc and normals in model cosy
-        RayTraceTSDF(cuTSDF, cuPcEst_i, 
-            cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
-      }
-      // just complete the surface normals obtained from the TSDF
-      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
-      tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
+      rig.RayTraceTSDF(cuTSDF, T_mr, useRgbCamParasForDepth, grid0,
+          dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
+//      tdp::Image<tdp::Vector3fda> cuNEst = ns_m.GetImage(0);
+//      tdp::Image<tdp::Vector3fda> cuPcEst = pcs_m.GetImage(0);
+//      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
+//        int32_t cId;
+//        if (useRgbCamParasForDepth) {
+//          cId = rig.rgbStream2cam_[sId]; 
+//        } else {
+//          cId = rig.dStream2cam_[sId]; 
+//        }
+//        CameraT cam = rig.cams_[cId];
+//        tdp::SE3f T_rc = rig.T_rcs_[cId];
+//        tdp::SE3f T_mo = T_mr*T_rc;
+//
+//        tdp::Image<tdp::Vector3fda> cuNEst_i = cuNEst.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+//        tdp::Image<tdp::Vector3fda> cuPcEst_i = cuPcEst.GetRoi(0,
+//            rig.rgbdStream2cam_[sId]*hSingle, wSingle, hSingle);
+//
+//        // ray trace the TSDF to get pc and normals in model cosy
+//        RayTraceTSDF(cuTSDF, cuPcEst_i, 
+//            cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+//      }
+//      // just complete the surface normals obtained from the TSDF
+//      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m,cudaMemcpyDeviceToDevice);
+//      tdp::CompleteNormalPyramid<3>(ns_m,cudaMemcpyDeviceToDevice);
       TOCK("Ray Trace TSDF");
     }
 
@@ -472,29 +475,16 @@ int main( int argc, char* argv[] )
       viewMain3D.Activate(s_cam);
       // draw the axis
       pangolin::glDrawAxis(0.1);
-      for (size_t i=0; i<T_mrs.size(); ++i) {
-        if (i%10==0) 
-          pangolin::glDrawAxis(T_mrs[i].matrix(), 0.1f);
-        glColor4f(1.,1.,0.,0.6);
-        if (i>0) {
-          pangolin::glDrawLine(
-              T_mrs[i].translation()(0),
-              T_mrs[i].translation()(1),
-              T_mrs[i].translation()(2),
-              T_mrs[i-1].translation()(0),
-              T_mrs[i-1].translation()(1),
-              T_mrs[i-1].translation()(2));
-        }
-      }
-      for (size_t i=0; i<T_wr_imus.size(); ++i) {
-        if (i%10==0) 
-          pangolin::glDrawAxis(T_wr_imus[i].matrix(), 0.1f);
-        glColor4f(0.,1.,1.,0.6);
-      }
+      glColor4f(0.,1.,1.,0.6);
+      glDrawPoses(T_wr_imus);
+      glColor4f(1.,0.,1.,0.6);
+      glDrawPoses(T_mrs);
 
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
+
+      rig.Render3D(T_mr, 0.1f);
 
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
@@ -503,7 +493,6 @@ int main( int argc, char* argv[] )
         pangolin::RenderVboCbo(vbo,cbo,true);
       }
       pangolin::glSetFrameOfReference(T_mr.matrix());
-      pangolin::glDrawAxis(0.1f);
       if (!dispEst) {
         pangolin::RenderVboCbo(vbo,cbo,true);
       }
