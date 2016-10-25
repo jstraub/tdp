@@ -181,6 +181,12 @@ struct Rig {
   void ComputeNormals(Image<float>& cuD, bool useRgbCamParasForDepth, 
       Pyramid<Vector3fda,LEVELS>& cuPyrN);
 
+  void AddToTSDF(const Image<float>& cuD, const SE3f& T_mr,
+    bool useRgbCamParasForDepth, 
+    const Vector3fda& grid0, const Vector3fda& dGrid,
+    float tsdfMu, float tsdfWMax,
+    Volume<TSDFval>& cuTSDF);
+
   size_t NumStreams() { return rgbdStream2cam_.size(); }
   size_t NumCams() { return rgbdStream2cam_.size()/2; }
 
@@ -382,6 +388,32 @@ void Rig<CamT>::ComputePc<LEVELS>(Image<float>& cuD,
   Image<Vector3fda> cuPc = cuPyrPc.GetImage(0);
   ComputePc(cuD, useRgbCamParasForDepth, cuPc);
   tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc,cudaMemcpyDeviceToDevice);
+}
+
+
+template<class CamT>
+void Rig<CamT>::AddToTSDF(const Image<float>& cuD, 
+    const SE3f& T_mr,
+    bool useRgbCamParasForDepth, 
+    const Vector3fda& grid0,
+    const Vector3fda& dGrid,
+    float tsdfMu,
+    float tsdfWMax,
+    Volume<TSDFval>& cuTSDF) {
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+    tdp::SE3f T_mo = T_mr*T_rc;
+    tdp::Image<float> cuD_i(wSingle, hSingle,
+        cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
+    AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
+  }
 }
 
 }

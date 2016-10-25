@@ -567,14 +567,12 @@ int main( int argc, char* argv[] )
           kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
         }
 
-        {
-          std::lock_guard<std::mutex> lock(mut);
-          for (int i=0; i<kfs.size()-1; ++i) {
-            loopClose.emplace_back(kfs.size()-1,i);
-          }
-          std::cout << "# loop closure hypotheses " 
-            << loopClose.size()<< std::endl;
+        std::lock_guard<std::mutex> lock(mut);
+        for (int i=0; i<kfs.size()-1; ++i) {
+          loopClose.emplace_back(kfs.size()-1,i);
         }
+        std::cout << "# loop closure hypotheses " << loopClose.size()<< std::endl;
+
         idActive = kfs.size()-1;
         T_ac = tdp::SE3f();
         T_mo = kfs[idActive].T_wk_*T_ac;
@@ -594,7 +592,9 @@ int main( int argc, char* argv[] )
       // track from already existing key frames and accumulate depth in
       // TSDF
       TICK("Add To TSDF");
-      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+//      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
+      rig.AddToTSDF(cuD, T_mo, useRgbCamParasForDepth, 
+          grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
       TOCK("Add To TSDF");
     }
 

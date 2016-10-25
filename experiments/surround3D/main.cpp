@@ -430,20 +430,22 @@ int main( int argc, char* argv[] )
     if (!gui.paused() && (fuseTSDF || numFused <= 30)) {
 //      if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
-      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
-        int32_t cId;
-        if (useRgbCamParasForDepth) {
-          cId = rig.rgbStream2cam_[sId]; 
-        } else {
-          cId = rig.dStream2cam_[sId]; 
-        }
-        CameraT cam = rig.cams_[cId];
-        tdp::SE3f T_rc = rig.T_rcs_[cId];
-        tdp::SE3f T_mo = T_mr*T_rc;
-        tdp::Image<float> cuD_i(wSingle, hSingle,
-            cuD.ptr_+rig.rgbdStream2cam_[sId]*wSingle*hSingle);
-        AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
-      }
+      rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
+          grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
+//      for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
+//        int32_t cId;
+//        if (useRgbCamParasForDepth) {
+//          cId = rig.rgbStream2cam_[sId]; 
+//        } else {
+//          cId = rig.dStream2cam_[sId]; 
+//        }
+//        CameraT cam = rig.cams_[cId];
+//        tdp::SE3f T_rc = rig.T_rcs_[cId];
+//        tdp::SE3f T_mo = T_mr*T_rc;
+//        tdp::Image<float> cuD_i(wSingle, hSingle,
+//            cuD.ptr_+rig.rgbdStream2cam_[sId]*wSingle*hSingle);
+//        AddToTSDF(cuTSDF, cuD_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWMax); 
+//      }
       numFused ++;
       TOCK("Add To TSDF");
     }
