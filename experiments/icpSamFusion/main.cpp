@@ -281,16 +281,16 @@ int main( int argc, char* argv[] )
 
   tdp::ThreadedValue<bool> runSave(true);
   std::thread workThread([&]() {
-//        while(runSave.Get()) {
-//          if (pangolin::Pushed(saveTSDF)) {
-//            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
-//            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
-//            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-//            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
-//            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
-//          }
-//          std::this_thread::sleep_for(std::chrono::microseconds(100));
-//        }
+        while(runSave.Get()) {
+          if (pangolin::Pushed(saveTSDF)) {
+            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
+            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+          }
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
       });
 
   gui.verbose = true;
@@ -472,7 +472,7 @@ int main( int argc, char* argv[] )
     if (runSlamFusion.GuiChanged() && runSlamFusion) {
       T_mos.clear();
       T_mo = kfs[0].T_wk_;
-      idActive = -1;
+      idActive = 0;
       gui.Seek(0);
       resetTSDF = true;
     }
@@ -565,7 +565,6 @@ int main( int argc, char* argv[] )
         std::vector<float> errPerLvl;
         std::vector<float> countPerLvl;
         if (useRgbCamParasForDepth) {
-          std::cout << T_ac << std::endl;
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
               gui.verbose, T_ac, errPerLvl, countPerLvl);
