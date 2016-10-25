@@ -135,6 +135,18 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
     return val;
   }
 
+  CameraPoly3<T> Scale(T scale) {
+    Eigen::Matrix<T,7,1> paramsScaled = cam.params_;
+    paramsScaled(0) *= scale;
+    paramsScaled(1) *= scale;
+    paramsScaled(2) = (paramsScaled(2)+0.5)*scale-0.5;
+    paramsScaled(3) = (paramsScaled(3)+0.5)*scale-0.5;
+    paramsScaled(4) *= scale;
+    paramsScaled(5) *= scale;
+    paramsScaled(6) *= scale;
+    return CameraPoly3<T>(paramsScaled);
+  };
+
 };
 
 

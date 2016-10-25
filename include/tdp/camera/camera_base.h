@@ -43,6 +43,10 @@ class CameraBase {
     return static_cast<const Derived*>(this)->GetKinv();
   }
 
+  Derived Scale(T scale) const {
+    return static_cast<const Derived*>(this)->Scale(scale);
+  }
+
   bool FromJson(pangolin::json::value& val){
     return static_cast<Derived*>(this)->FromJson(val);
   }
