@@ -54,12 +54,32 @@ int main( int argc, char* argv[] )
   std::string calibPath = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
+  bool runOnce = false;
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
-    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+    if (argc > 3 && std::string(argv[3]).compare("-1") == 0 ) runOnce = true;
+//    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
+
+  pangolin::Uri uri = pangolin::ParseUri(input_uri);
+  if (!uri.scheme.compare("file")) {
+    std::cout << uri.scheme << std::endl; 
+    if (pangolin::FileExists(uri.url+std::string("imu.pango"))
+     && pangolin::FileExists(uri.url+std::string("video.pango"))) {
+      imu_input_uri = input_uri + std::string("imu.pango");
+      tsdfOutputPath = uri.url + tsdfOutputPath;
+      input_uri = input_uri + std::string("video.pango");
+    } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
+      input_uri = input_uri + std::string("video.pango");
+    } 
+  }
+
+  std::cout << input_uri << std::endl;
+  std::cout << imu_input_uri << std::endl;
+
+
   Stopwatch::getInstance().setCustomSignature(1243984912);
 
   // Open Video by URI
@@ -310,14 +330,17 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
   pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",5,0,10);
 
+  tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+  tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+  tdp::Vector3fda dGrid = gridE - grid0;
+
   tdp::ThreadedValue<bool> runSave(true);
   std::thread workThread([&]() {
         while(runSave.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
-            tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
-            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
           }
           std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -506,9 +529,9 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
-    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
-    tdp::Vector3fda dGrid = gridE - grid0;
+    grid0 = tdp::Vector3fda(grid0x,grid0y,grid0z);
+    gridE = tdp::Vector3fda(gridEx,gridEy,gridEz);
+    dGrid = gridE - grid0;
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
@@ -748,6 +771,8 @@ int main( int argc, char* argv[] )
       TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
       tdp::ComputeMesh(TSDF, grid0, dGrid,
           T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
+      saveTSDF = true;
+      if (runOnce) break;
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
@@ -940,13 +965,19 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+
+  saveTSDF = true;
+
+  imuInterp.Stop();
+  if (imu) imu->Stop();
+  delete imu;
+
+  std::this_thread::sleep_for(std::chrono::microseconds(500));
+
   runSave.Set(false);
   workThread.join();
   runLoopClosure.Set(false);
   loopClosureThread.join();
-  imuInterp.Stop();
-  if (imu) imu->Stop();
-  delete imu;
   return 0;
 }
 

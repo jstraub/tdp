@@ -46,6 +46,7 @@ int main( int argc, char* argv[] )
   std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("/mesh.ply");
   std::cout << meshOutputPath << std::endl;
 
+  // TODO: use LoadTSDF to also get grid0 and dGrid
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
   if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
     pango_print_error("Unable to load volume");

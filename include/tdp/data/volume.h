@@ -73,10 +73,7 @@ class Volume {
 };
 
 template<typename T>
-void SaveVolume(const Volume<T>& V, const std::string& path) {
-
-  std::ofstream out;
-  out.open(path, std::ios::out | std::ios::binary);
+void SaveVolume(const Volume<T>& V, std::ofstream& out) {
 
   out.write((const char*)&(V.w_),sizeof(size_t));
   out.write((const char*)&(V.h_),sizeof(size_t));
@@ -84,6 +81,14 @@ void SaveVolume(const Volume<T>& V, const std::string& path) {
   for (size_t i=0; i < V.Vol(); ++i) {
     out.write((const char*)&(V.ptr_[i]),sizeof(T));
   }
+}
+
+template<typename T>
+void SaveVolume(const Volume<T>& V, const std::string& path) {
+
+  std::ofstream out;
+  out.open(path, std::ios::out | std::ios::binary);
+  SaveVolume(V, out);
   out.close();
 }
 

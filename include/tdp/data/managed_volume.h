@@ -53,24 +53,25 @@ void CopyVolume(Volume<T>& From, Volume<T>& To, cudaMemcpyKind cpType) {
 
 template<typename T>
 bool LoadVolume(ManagedHostVolume<T>& V, const std::string& path) {
-
   std::ifstream in;
   in.open(path, std::ios::in | std::ios::binary);
   if (!in.is_open())
     return false;
+  LoadVolume(V, in);
+  in.close();
+  return true;
+}
 
+template<typename T>
+void LoadVolume(ManagedHostVolume<T>& V, std::ifstream& in) {
   size_t w,h,d;
   in.read((char *)&(w),sizeof(size_t));
   in.read((char *)&(h),sizeof(size_t));
   in.read((char *)&(d),sizeof(size_t));
-
   V.Reinitialize(w,h,d);
-
   for (size_t i=0; i < V.Vol(); ++i) {
     in.read((char *)&V.ptr_[i],sizeof(T));
   }
-  in.close();
-  return true;
 }
 
 
