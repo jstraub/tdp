@@ -63,6 +63,12 @@ struct KeyFrame {
 
 };
 
+template <int D, class Derived>
+void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
+    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
+    const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse, 
+    Image<float>* errB = nullptr);
+
 /// Compute overlap fraction between two KFs in a given pyramid level
 /// lvl
 template <int D, class Derived>
@@ -109,18 +115,36 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
     const Image<float> greyBi = rig.GetStreamRoiOrigSize(greyB, sId);
     const Image<Vector3fda> pcBi = rig.GetStreamRoiOrigSize(pcB, sId);
 
+    //TODO
+    ManagedDeviceImage<float> cuGreyAi(greyAi.w_, greyAi.h_);
+    cuGreyAi.CopyFrom(greyAi, cudaMemcpyHostToDevice);
+    ManagedDeviceImage<float> cuGreyBi(greyBi.w_, greyBi.h_);
+    cuGreyBi.CopyFrom(greyBi, cudaMemcpyHostToDevice);
+    ManagedDeviceImage<Vector3fda> cuPcBi(pcBi.w_, pcBi.h_);
+    cuPcBi.CopyFrom(pcBi, cudaMemcpyHostToDevice);
+
     Image<float>* errBi = nullptr;
     if (errB) {
       errBi = new Image<float>();
       *errBi = rig.GetStreamRoiOrigSize(*errB, sId);
+//      std::cout << errBi->Description() << std::endl;
     }
+
+
+//    std::cout << cuGreyBi.Description() << std::endl
+//      << greyBi.Description() << std::endl;
+//    std::cout << cuGreyAi.Description() << std::endl
+//      << greyAi.Description() << std::endl;
+//    std::cout << cuPcBi.Description() << std::endl
+//      << pcBi.Description() << std::endl;
+
 
     float overlapi = 0.;
     float rmsei = 0.;
-    Overlap(greyAi, greyBi, pcBi, T_rc.Inverse()*T_ab_, 
-        cam,
-//        ScaleCamera(cam,pow(0.5,lvl)), 
-        overlapi, rmsei, errBi);
+//    Overlap(greyAi, greyBi, pcBi, T_rc.Inverse()*T_ab_, 
+//        cam, overlapi, rmsei, errBi);
+    OverlapGpu(cuGreyAi, cuGreyBi, cuPcBi, T_rc.Inverse()*T_ab_, 
+        cam, overlapi, rmsei, errBi);
     rmse += rmsei;
     overlap += overlapi;
 

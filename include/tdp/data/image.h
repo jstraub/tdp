@@ -64,10 +64,11 @@ class Image {
 
   TDP_HOST_DEVICE
   T GetBilinear(float x, float y) const {
-    int xl = std::max(0,(int)std::floor(x));
-    int xr = std::min((int)w_-1,(int)std::ceil(x));
-    int yu = std::max(0,(int)std::floor(y));
-    int yd = std::min((int)h_-1,(int)std::ceil(y));
+    int xl = (int)floor(x) < 0 ? 0 : (int)floor(x);
+    int xr = (int)ceil(x) > (int)w_-1 ? (int)w_-1 : (int)ceil(x);
+    int yu = (int)floor(y) < 0 ? 0 : (int)floor(y);
+    int yd = (int)ceil(y) > (int)h_-1 ? (int)h_-1 : (int)ceil(y);
+
     if (xl==xr && yu==yd) {
       return RowPtr(yu)[xl];
     } else if (xl==xr) {

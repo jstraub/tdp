@@ -10,6 +10,7 @@
 #include <pangolin/image/image_io.h>
 #include <pangolin/utils/file_utils.h>
 #include <pangolin/video/video_record_repeat.h>
+#include <pangolin/gl/gldraw.h>
 
 #include <tdp/camera/camera.h>
 #include <tdp/cuda/cuda.h>
@@ -201,7 +202,9 @@ struct Rig {
   size_t NumStreams() { return rgbdStream2cam_.size()*2; }
   size_t NumCams() { return rgbdStream2cam_.size(); }
 
+#ifndef __CUDACC__
   void Render3D(const SE3f& T_mr, float scale=1.);
+#endif
 
   template <typename T>
   Image<T> GetStreamRoi(const Image<T>& I, size_t streamId, float
@@ -211,7 +214,7 @@ struct Rig {
     int w = floor(wSingle*scale);
     int h = floor(hSingle*scale);
     return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*h, w, h);
-  };
+  }
 
   template <typename T>
   Image<T> GetStreamRoiOrigSize(const Image<T>& I, size_t streamId,
@@ -222,7 +225,7 @@ struct Rig {
     int h = floor(hOrig*scale);
     int hS = floor(hSingle*scale);
     return I.GetRoi(0, (rgbdStream2cam_[streamId]-camMin)*hS, w, h);
-  };
+  }
 
   // imu to rig transformations
   std::vector<SE3f> T_ris_; 
@@ -495,6 +498,7 @@ void Rig<CamT>::RayTraceTSDF(
   tdp::CompleteNormalPyramid<LEVELS>(cuPyrN,cudaMemcpyDeviceToDevice);
 }
 
+#ifndef __CUDACC__
 template<class CamT>
 void Rig<CamT>::Render3D(
     const SE3f& T_mr,
@@ -518,5 +522,6 @@ void Rig<CamT>::Render3D(
   }
   pangolin::glDrawAxis(T_mr.matrix(), scale);
 }
+#endif
 
 }

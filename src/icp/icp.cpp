@@ -4,6 +4,7 @@
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/utils/Stopwatch.h>
 
 #ifdef ANN_FOUND
 # include <tdp/nn/ann.h>
@@ -29,14 +30,21 @@ void ICP::ComputeANN(
   float errPrev = 0.f; 
   int countThr = 0;
   size_t it;
+
+  TICK("ICP ANN");
   for (it=0; it<maxIt; ++it) {
+    TICK("ANN");
     int Nassoc = tdp::AssociateANN(pc_m, pc_o, T_mo.Inverse(),
         assoc_om, downSampleANN);
-    countThr = Nassoc / 100; 
+    TOCK("ANN");
+    countThr = Nassoc / 50; 
+
+    TICK("ICP given assoc");
     cuAssoc_om.CopyFrom(assoc_om, cudaMemcpyHostToDevice);
     tdp::ICP::ComputeGivenAssociation(cuPc_m, n_m, cuPc_o, n_o, 
         cuAssoc_om, T_mo, 1, angleThr_deg, distThr, countThr, verbose,
         err, count);
+    TOCK("ICP given assoc");
     if (verbose) {
       std::cout << " it " << it 
         << ": err=" << err << "\tdErr/err=" << fabs(err-errPrev)/err
@@ -46,9 +54,10 @@ void ICP::ComputeANN(
     }
     //std::cout << dT.matrix() << std::endl;
     //std::cout << T_mo.matrix() << std::endl;
-    if (it>0 && fabs(err-errPrev)/err < 1e-7) break;
+    if (it>0 && fabs(err-errPrev)/err < 1e-5) break;
     errPrev = err;
   }
+  TOCK("ICP ANN");
   std::cout << "it=" << it
     << ": err=" << err << "\tdErr/err=" << fabs(err-errPrev)/err
     << " # inliers: " << count  << " thr: " << countThr
@@ -341,8 +350,6 @@ void ICP::ComputeProjective(
       tdp::Image<tdp::Vector3fda> n_ml = ns_m.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> pc_ol = pcs_o.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> n_ol = ns_o.GetImage(lvl);
-      size_t w_l = pc_ml.w_;
-      size_t h_l = pc_ml.h_/stream2cam.size();
       float scale = pow(0.5,lvl);
       for (size_t sId=0; sId < stream2cam.size(); sId++) {
         int32_t cId = stream2cam[sId]; 

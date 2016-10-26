@@ -154,6 +154,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> greyB(wc, hc);
   tdp::ManagedHostImage<float> photoErrBefore(wc, hc);
   tdp::ManagedHostImage<float> photoErrAfter(wc, hc);
+  tdp::ManagedDeviceImage<float> cuPhotoErrAfter(wc, hc);
 
   tdp::SE3f T_abSuccess;
   tdp::ManagedHostImage<float> photoErrBeforeSuccess(wc, hc);
@@ -252,8 +253,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
   pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
 
+  pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
 
-  pangolin::Var<bool> useANN("ui.use ANN", true,true);
+
+  pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
   pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
@@ -265,7 +268,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.20,0.,1.);
-  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,-1.,1.);
+  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", 0.01,-1.,1.);
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.18,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
@@ -327,16 +330,12 @@ int main( int argc, char* argv[] )
 
   auto computeLoopClosures = [&]() {
     size_t numLoopClosures = 0;
-    while (42) {
+    size_t I = loopClose.size()/10 +1;
+    for(size_t i=0; i < I; ++i) {
       std::pair<int,int> ids(-1,-1);
-      {
-        std::lock_guard<std::mutex> lock(mut);
-        if (loopClose.size() > 0) {
-          ids = loopClose.front();
-          loopClose.pop_front();
-        }
-  //      std::cout << "In thread: # loop closure hypotheses " 
-  //        << loopClose.size() << " " << ids.first << " " << ids.second << std::endl;
+      if (loopClose.size() > 0) {
+        ids = loopClose.front();
+        loopClose.pop_front();
       }
       if (ids.first < 0 && ids.second < 0) {
         break;
@@ -355,11 +354,18 @@ int main( int argc, char* argv[] )
 
         photoErrBefore.Fill(0.);
         float overlapBefore, rmseBefore;
+
+
+        TICK("Overlap");
+        cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
         Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl, overlapBefore, 
-            rmseBefore, nullptr, &photoErrBefore);
+            rmseBefore, nullptr, &cuPhotoErrAfter);
+        photoErrBefore.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
+        TOCK("Overlap");
 
         if (overlapBefore > icpLoopCloseOverlapThr) {
 
+          TICK("LoopClosure");
           float err=0.;
           float count=10000;
           if (useANN) {
@@ -402,11 +408,14 @@ int main( int argc, char* argv[] )
                   gui.verbose, T_ab, errPerLvl, countPerLvl);
             }
           }
+          TOCK("LoopClosure");
 
-          photoErrAfter.Fill(0.);
+//          photoErrAfter.Fill(0.);
+          cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
           float overlapAfter, rmseAfter;
           Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl,
-              overlapAfter, rmseAfter, &T_ab, &photoErrAfter);
+              overlapAfter, rmseAfter, &T_ab, &cuPhotoErrAfter);
+          photoErrAfter.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
 
           std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
             << " RMSE " << rmseBefore << " -> " << rmseAfter 
@@ -435,30 +444,27 @@ int main( int argc, char* argv[] )
             pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
             T_abSuccess = T_ab;
 
+            std::cout << "optimizing graph" << std::endl;
+            kfSLAM.Optimize(); 
+            if (useOptimizedPoses) {
+              T_ac = kfSLAM.GetPose(idActive).Inverse()*kfs[idActive].T_wk_*T_ac;
+              for (size_t i=0; i < kfs.size(); ++i) {
+                kfs[i].T_wk_ = kfSLAM.GetPose(i);
+              }
+            }
+            break;
+
           } else {
             std::cout << "unsuccessfull loop closure" << std::endl;
-            break; // to make it less cruncly
           }
         } else {
           std::cout << "aborting loop closure because overlap " << overlapBefore
             << " is to small" << std::endl;
-          break; // to make it less cruncly
         }
       } else {
         std::cout << " skipping " << ids.first << " -> " << ids.second  
           << ": " << se3.head<3>().norm()*180./M_PI << " "
           << se3.tail<3>().norm()          << std::endl;
-      }
-      if (numLoopClosures > 0) {
-        std::cout << "optimizing graph" << std::endl;
-        kfSLAM.Optimize(); 
-        if (useOptimizedPoses) {
-          T_ac = kfSLAM.GetPose(idActive).Inverse()*kfs[idActive].T_wk_*T_ac;
-          for (size_t i=0; i < kfs.size(); ++i) {
-            kfs[i].T_wk_ = kfSLAM.GetPose(i);
-          }
-        }
-        break; // to make it less cruncly
       }
     }
   };
@@ -482,6 +488,8 @@ int main( int argc, char* argv[] )
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
 
+    numLoopClose = loopClose.size();
+
     if (runSlamFusion.GuiChanged() && runSlamFusion) {
       T_mos.clear();
       T_mo = kfs[0].T_wk_;
@@ -498,13 +506,13 @@ int main( int argc, char* argv[] )
 
     if (kfs.size() > 1 && pangolin::Pushed(retryAllLoopClosures)) {
       for (int i=0; i<kfs.size()-1; ++i) 
-        for (int j=0; j<kfs.size()-1; ++j) 
+        for (int j=i+1; j<kfs.size()-1; ++j) 
           loopClose.emplace_back(i,j);
     }
 
     if (loopCloseA < kfs.size() && loopCloseB < kfs.size() 
         && pangolin::Pushed(retryLoopClosure)) {
-        loopClose.emplace_back(loopCloseA,loopCloseB);
+        loopClose.emplace_front(loopCloseA,loopCloseB);
     }
 
     if (pangolin::Pushed(runKfOnlyFusion)) {
@@ -635,8 +643,8 @@ int main( int argc, char* argv[] )
 
         std::lock_guard<std::mutex> lock(mut);
         for (int i=0; i<kfs.size()-1; ++i) {
-          loopClose.emplace_back(kfs.size()-1,i);
-          loopClose.emplace_back(i,kfs.size()-1);
+          loopClose.emplace_front(kfs.size()-1,i);
+//          loopClose.emplace_back(i,kfs.size()-1);
         }
         std::cout << "# loop closure hypotheses " << loopClose.size()<< std::endl;
 
