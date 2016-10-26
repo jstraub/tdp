@@ -21,8 +21,20 @@ class QuickView : public pangolin::View, public pangolin::ImageViewHandler {
   void SetImage(const pangolin::Image<T>& img);
 
   template <typename T>
-    void SetImage(const pangolin::Image<T>& img, const
-        pangolin::GlPixFormat& fmt, int stride);
+  void SetImage(const pangolin::Image<T>& img, const
+      pangolin::GlPixFormat& fmt, int stride);
+
+  void RenderImage() {
+    this->Activate();
+    // Render
+    this->UpdateView();
+    this->glSetViewOrtho();
+    pangolin::GlSlUtilities::OffsetAndScale(gloffsetscale_.first,
+        gloffsetscale_.second);
+    this->glRenderTexture(tex_);
+    pangolin::GlSlUtilities::UseNone();
+    this->glRenderOverlay();
+  }
 
   void Keyboard(View&, unsigned char key, int x, int y, bool pressed);
   void Mouse(View& view, pangolin::MouseButton button, int x, int y,
@@ -58,7 +70,8 @@ void QuickView::SetImage(const pangolin::Image<T>& img, const pangolin::GlPixFor
   tex_.Bind();
   glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)stride);
 
-  tex_.Upload(img.ptr,0,0,(GLsizei)img.w, (GLsizei)img.h, fmt.glformat, fmt.gltype);
+  tex_.Upload(img.ptr,0,0,(GLsizei)img.w, (GLsizei)img.h, fmt.glformat,
+      fmt.gltype);
 
   // Render
   this->UpdateView();
@@ -72,6 +85,7 @@ void QuickView::SetImage(const pangolin::Image<T>& img, const pangolin::GlPixFor
   fmt_ = fmt;
   stride_ = stride;
 }
+
 
 
 }
