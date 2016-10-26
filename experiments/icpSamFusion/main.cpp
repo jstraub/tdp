@@ -79,6 +79,7 @@ int main( int argc, char* argv[] )
   imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
+  gui.container().SetLayout(pangolin::LayoutEqual);
 
   size_t dTSDF = 512;
   size_t wTSDF = 512;
@@ -117,9 +118,16 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
 
+  pangolin::View& containerTracking = pangolin::Display("tracking");
+  containerTracking.SetLayout(pangolin::LayoutEqual);
+  tdp::QuickView viewKf(wc, hc);
+  containerTracking.AddDisplay(viewKf);
+  tdp::QuickView viewCurrent(wc, hc);
+  containerTracking.AddDisplay(viewCurrent);
+  gui.container().AddDisplay(containerTracking);
+
   pangolin::View& containerLoopClosure = pangolin::Display("loopClosures");
   containerLoopClosure.SetLayout(pangolin::LayoutEqual);
-
   pangolin::OpenGlRenderState camLoopClose(
       pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
@@ -222,13 +230,6 @@ int main( int argc, char* argv[] )
 
   tdp::QuickView viewGrad3DPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewGrad3DPyr);
-
-
-//  viewDebugA.Show(false);
-//  viewDebugB.Show(false);
-//  viewDebugC.Show(false);
-//  viewDebugD.Show(false);
-
   viewGrad3DPyr.Show(false);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
@@ -832,6 +833,13 @@ int main( int argc, char* argv[] )
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
+
+    if (viewKf.IsShown()) {
+      viewKf.SetImage(kfs[idActive].rgb_);
+    }
+    if (viewCurrent.IsShown()) {
+      viewCurrent.SetImage(rgb);
+    }
 
     if (viewDebugA.IsShown()) {
 //      viewDebugA.SetImage(pyrGrey.GetImage(0));
