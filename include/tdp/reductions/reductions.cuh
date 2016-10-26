@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include <tdp/eigen/dense.h>
 #include <tdp/cuda/cuda.h>
 #include <stdio.h>
 #include <assert.h>
@@ -86,6 +87,14 @@ __device__ inline void atomicAdd_<Eigen::Vector3f>(Eigen::Vector3f* address,
   atomicAdd_<float>(&((*address)(2)),val(2));
 };
 
+template<>
+__device__ inline void atomicAdd_<Vector3fda>(Vector3fda* address, 
+    const Vector3fda& val)
+{
+  atomicAdd_<float>(&((*address)(0)),val(0));
+  atomicAdd_<float>(&((*address)(1)),val(1));
+  atomicAdd_<float>(&((*address)(2)),val(2));
+};
 
 template<typename T, int BLK_SIZE>
 __device__ inline void SumPyramidReduce(int tid, T* vals, T* out) {
