@@ -171,10 +171,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuPhotoErrAfter(wc, hc);
 
   tdp::SE3f T_abSuccess;
-  tdp::ManagedHostImage<float> photoErrBeforeSuccess(wc, hc);
-  tdp::ManagedHostImage<float> photoErrAfterSuccess(wc, hc);
-  tdp::ManagedHostImage<tdp::Vector3fda> pcASuccess(wc, hc);
-  tdp::ManagedHostImage<tdp::Vector3fda> pcBSuccess(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcA(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNA(wc, hc);
@@ -219,6 +215,8 @@ int main( int argc, char* argv[] )
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer vboSuccessA(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer vboSuccessB(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
 
   tdp::ManagedHostImage<float> tsdfDEst(wc, hc);
@@ -454,12 +452,14 @@ int main( int argc, char* argv[] )
 //            loopClosures.emplace(std::make_pair(ids.first, ids.second), T_ab);
             numLoopClosures ++;
 
-            greyA.CopyFrom(kfA.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
-            greyB.CopyFrom(kfB.pyrGrey_.GetImage(0), cudaMemcpyHostToHost);
-            photoErrAfterSuccess.CopyFrom(photoErrAfter, cudaMemcpyHostToHost);
-            photoErrBeforeSuccess.CopyFrom(photoErrBefore, cudaMemcpyHostToHost);
-            pcASuccess.CopyFrom(kfA.pc_, cudaMemcpyHostToHost);
-            pcBSuccess.CopyFrom(kfB.pc_, cudaMemcpyHostToHost);
+            // update views
+            viewDebugA.SetImage(photoErrBefore);
+            viewDebugB.SetImage(photoErrAfter);
+            viewDebugC.SetImage(kfA.pyrGrey_.GetImage(0));
+            viewDebugD.SetImage(kfB.pyrGrey_.GetImage(0));
+            vboSuccessA.Upload(kfA.pc_.ptr_,kfA.pc_.SizeBytes(), 0);
+            vboSuccessB.Upload(kfB.pc_.ptr_,kfB.pc_.SizeBytes(), 0);
+
             T_abSuccess = T_ab;
 
             std::cout << "optimizing graph" << std::endl;
@@ -500,6 +500,7 @@ int main( int argc, char* argv[] )
   size_t Nmmf = 1000000;
   tdp::ManagedHostImage<tdp::Vector3fda> nMmf(Nmmf,1);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
+  pangolin::GlBuffer vboNMmf(pangolin::GlArrayBuffer,Nmmf,GL_FLOAT,3);
 
   tdp::SE3f T_wG;  // from grid to world
   // Stream and display video
@@ -540,7 +541,7 @@ int main( int argc, char* argv[] )
         nMmf[i] = ni;
       }
       cuNMmf.CopyFrom(nMmf, cudaMemcpyHostToDevice);
-      mmf.Compute(cuNMmf, 100, true);
+      mmf.Compute(cuNMmf, 10, true);
       size_t idMax = std::distance(mmf.Ns_.begin(),
           std::max_element(mmf.Ns_.begin(), mmf.Ns_.end()));
       std::cout << "largest MF: " << mmf.Ns_[idMax] << std::endl;
@@ -575,6 +576,7 @@ int main( int argc, char* argv[] )
       dGrid(0) /= (wTSDF-1);
       dGrid(1) /= (hTSDF-1);
       dGrid(2) /= (dTSDF-1);
+      vboNMmf.Upload(nMmf.ptr_,nMmf.SizeBytes(), 0);
     }
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -659,6 +661,7 @@ int main( int argc, char* argv[] )
         T_ac = kfs[iMin].T_wk_.Inverse()*kfs[idActive].T_wk_*T_ac;
         std::cout << T_ac << std::endl;
         idActive = iMin;
+        viewKf.SetImage(kfs[idActive].rgb_);
       } 
 
       tdp::KeyFrame& kf = kfs[idActive];
@@ -726,6 +729,7 @@ int main( int argc, char* argv[] )
         idActive = kfs.size()-1;
         T_ac = tdp::SE3f();
         T_mo = kfs[idActive].T_wk_*T_ac;
+        viewKf.SetImage(kfs[idActive].rgb_);
       }
       if (tryLoopClose) {
         computeLoopClosures();
@@ -866,11 +870,9 @@ int main( int argc, char* argv[] )
     if (viewNormals.IsShown()) {
       viewNormals.Activate(camNormals);
 
-      vbo.Resize(nMmf.Area());
-      vbo.Upload(nMmf.ptr_,nMmf.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
       glColor4f(1.f,0.f,0.f,0.5f);
-      pangolin::RenderVbo(vbo);
+      pangolin::RenderVbo(vboNMmf);
 
       for (size_t i=0; i<mmf.Rs_.size(); ++i) {
         tdp::SE3f T_wmmf(tdp::SO3f(mmf.Rs_[i]));
@@ -881,17 +883,14 @@ int main( int argc, char* argv[] )
     if (viewLoopClose.IsShown() && kfs.size() > 1) {
       viewLoopClose.Activate(camLoopClose);
 
-      vbo.Resize(pcASuccess.Area());
-      vbo.Upload(pcASuccess.ptr_,pcASuccess.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
       glColor4f(1.f,0.f,0.f,0.5f);
-      pangolin::RenderVbo(vbo);
+      pangolin::RenderVbo(vboSuccessA);
 
-      vbo.Upload(pcBSuccess.ptr_,pcBSuccess.SizeBytes(), 0);
       pangolin::glSetFrameOfReference(T_abSuccess.matrix());
       pangolin::glDrawAxis(0.1f);
       glColor4f(0.f,1.f,0.f,0.5f);
-      pangolin::RenderVbo(vbo);
+      pangolin::RenderVbo(vboSuccessB);
       pangolin::glUnsetFrameOfReference();
 
     }
@@ -903,26 +902,22 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewKf.IsShown()) {
-      viewKf.SetImage(kfs[idActive].rgb_);
+      viewKf.RenderImage();
     }
     if (viewCurrent.IsShown()) {
       viewCurrent.SetImage(rgb);
     }
-
     if (viewDebugA.IsShown()) {
-//      viewDebugA.SetImage(pyrGrey.GetImage(0));
-      viewDebugA.SetImage(photoErrBeforeSuccess);
+      viewDebugA.RenderImage();
     }
     if (viewDebugB.IsShown()) {
-//      if (kfs.size() > 0)
-//        viewDebugB.SetImage(kfs.back().pyrGrey_.GetImage(0));
-      viewDebugB.SetImage(photoErrAfterSuccess);
+      viewDebugB.RenderImage();
     }
     if (viewDebugC.IsShown()) {
-      viewDebugC.SetImage(greyA);
+      viewDebugC.RenderImage();
     }
     if (viewDebugD.IsShown()) {
-      viewDebugD.SetImage(greyB);
+      viewDebugD.RenderImage();
     }
 
     if (viewGrad3DPyr.IsShown()) {
