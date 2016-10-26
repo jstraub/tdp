@@ -20,8 +20,8 @@ void MMFvMFCostFctAssignmentGPU(
 template<int K>
 class vMFMMF {
  public:
-   vMFMMF(size_t w, size_t h, float tauR) 
-    : t_(0), tauR_(tauR), cuZ_(w,h), cuMu_(6*K,1), cuPi_(6*K,1) 
+   vMFMMF(float tauR) 
+    : t_(0), tauR_(tauR), cuMu_(6*K,1), cuPi_(6*K,1) 
    {Reset();};
    ~vMFMMF() {};
 
@@ -30,13 +30,14 @@ class vMFMMF {
 
    std::vector<Eigen::Matrix3f> Rs_; // rotations of MFs
    std::vector<float> cs_; // costs MFs
+   std::vector<float> Ns_; // counts
    int64_t t_;
    float tauR_;
  private:
    float UpdateMF(const Image<Vector3fda>& cuN);
    float UpdateAssociation(const Image<Vector3fda>& cuN);
 
-   Eigen::Matrix<float,3,6> ComputeSums(const Image<Vector3fda>& cuN, uint32_t k);
+   Eigen::Matrix<float,4,6> ComputeSums(const Image<Vector3fda>& cuN, uint32_t k);
 
    ManagedDeviceImage<uint32_t> cuZ_;
    ManagedDeviceImage<Vector3fda> cuMu_;
@@ -49,13 +50,18 @@ void vMFMMF<K>::Reset() {
   Rs_.resize(K, Eigen::Matrix3f::Identity());
   cs_.clear(); 
   cs_.resize(K, 0.f);
+  Ns_.clear(); 
+  Ns_.resize(K, 0.f);
   t_ = 0;
 }
 
 template<int K>
 float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN, 
     size_t maxIt, bool verbose) {
+  cuZ_.Reinitialise(cuN.w_, cuN.h_);
   float assocCost = 0;
+  Eigen::VectorXf csPrev(K);
+  csPrev.fill(1e16);
   for (size_t it=0; it<maxIt; ++it) {
     assocCost = UpdateAssociation(cuN);
     UpdateMF(cuN);
@@ -65,8 +71,16 @@ float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN,
       for (size_t k=0; k<K; ++k) {
         std::cout << "\t" << cs_[k];
       }
+      std::cout << " Ns: ";
+      for (size_t k=0; k<K; ++k) {
+        std::cout << "\t" << Ns_[k];
+      }
       std::cout << std::endl;
     }
+    Eigen::Map<Eigen::VectorXf> cs(&cs_[0],K);
+    if (((cs - csPrev).array().abs() < 1e-6).all())
+      break;
+    csPrev = cs;
   }
   return assocCost;
 }
@@ -74,16 +88,18 @@ float vMFMMF<K>::Compute(const Image<Vector3fda>& cuN,
 template<int K>
 float vMFMMF<K>::UpdateMF(const Image<Vector3fda>& cuN) {
   for (size_t k=0; k<K; ++k) {
+    Ns_[k] = 0;
     Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
     // tauR_*R^T is the contribution of the motion prior between two
     // frames to regularize solution in case data exists only on certain
     // axes
     if (t_ > 0) N += tauR_*Rs_[k].transpose();
-    Eigen::Matrix<float,3,6> nSums = ComputeSums(cuN, k);
+    Eigen::Matrix<float,4,6> nSums = ComputeSums(cuN, k);
     for (uint32_t j=0; j<6; ++j) { 
       Eigen::Vector3f m = Eigen::Vector3f::Zero();
       m(j/2) = j%2==0?1.:-1.;
-      N += m*nSums.col(j).transpose();
+      N += m*nSums.block<3,1>(0,j).transpose();
+      Ns_[k] += nSums(3,j);
     }
     Eigen::JacobiSVD<Eigen::Matrix3f> svd(N,Eigen::ComputeFullU|Eigen::ComputeFullV);
     if (svd.matrixV().determinant()*svd.matrixU().determinant() > 0)
@@ -98,16 +114,16 @@ float vMFMMF<K>::UpdateMF(const Image<Vector3fda>& cuN) {
 }
 
 template<int K>
-Eigen::Matrix<float,3,6> vMFMMF<K>::ComputeSums(const
+Eigen::Matrix<float,4,6> vMFMMF<K>::ComputeSums(const
     Image<Vector3fda>& cuN, uint32_t k) {
   ManagedDeviceImage<Vector4fda> cuSSs(6,1);
   cudaMemset(cuSSs.ptr_,0,cuSSs.SizeBytes());
   VectorSum(cuN, cuZ_, k*6, 6, cuSSs);
   ManagedHostImage<Vector4fda> SSs(6,1);
   SSs.CopyFrom(cuSSs,cudaMemcpyDeviceToHost);
-  Eigen::Matrix<float,3,6> ss;
+  Eigen::Matrix<float,4,6> ss;
   for (int j=0; j<6; ++j)
-    ss.col(j) = SSs[j].topRows<3>();
+    ss.col(j) = SSs[j];
   return ss;
 }
 

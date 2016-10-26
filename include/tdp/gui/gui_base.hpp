@@ -38,7 +38,8 @@ class GuiBase {
   void SeekFrames(int destFrame) {
     if (video_playback && destFrame < end_frame ) {
       std::cout << "SeekFrames seek " << video_playback->Seek(destFrame) << std::endl;
-      GrabFrames();
+      finished_ = false;
+//      GrabFrames();
       //std::cout << "seek " << video_playback->Seek(frame) << std::endl;
     }
 //    end_frame = frame + 1;

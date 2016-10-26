@@ -12,6 +12,7 @@ bool ComputeMesh(
   const Volume<TSDFval>& tsdf,
   const Vector3fda& grid0,
   const Vector3fda& dGrid,
+  SE3f& T_wg, // transformation from grid coordinate system to world
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& cbo,
   pangolin::GlBuffer& ibo,
@@ -38,7 +39,7 @@ bool ComputeMesh(
   colorStore.Fill(Vector3bda(128,128,128));
 
   for (size_t i=0; i<vertexStore.Area(); ++i)
-    vertexStore[i] += grid0;
+    vertexStore[i] = T_wg*(vertexStore[i] + grid0);
 
   vbo.Reinitialise(pangolin::GlArrayBuffer, nVertices,  GL_FLOAT,
       3, GL_DYNAMIC_DRAW);

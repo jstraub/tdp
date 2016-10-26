@@ -41,6 +41,7 @@
 #include <tdp/slam/keyframe.h>
 #include <tdp/slam/keyframe_slam.h>
 #include <tdp/gl/shaders.h>
+#include <tdp/rtmf/vMFMMF.h>
 #include <tdp/marching_cubes/marching_cubes.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -85,17 +86,11 @@ int main( int argc, char* argv[] )
   size_t wTSDF = 512;
   size_t hTSDF = 512;
 
-//  CameraT camR(Eigen::Vector4f(f,f,uc,vc)); 
-//  CameraT camD(Eigen::Vector4f(f,f,uc,vc)); 
-
   tdp::Rig<CameraT> rig;
   if (calibPath.size() > 0) {
     rig.FromFile(calibPath,false);
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
     rig.CorrespondOpenniStreams2Cams(streams);
-    // camera model for computing point cloud and normals
-//    camR = rig.cams_[rig.rgbStream2cam_[0]];
-//    camD = camR; //rig.cams_[rig.dStream2cam_[0]];
   } else {
     return 2;
   }
@@ -118,6 +113,14 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
 
+  pangolin::OpenGlRenderState camNormals(
+      pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      );
+  pangolin::View& viewNormals = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(camNormals));
+  gui.container().AddDisplay(viewNormals);
+
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
   tdp::QuickView viewKf(wc, hc);
@@ -125,6 +128,7 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewCurrent(wc, hc);
   containerTracking.AddDisplay(viewCurrent);
   gui.container().AddDisplay(containerTracking);
+
 
   pangolin::View& containerLoopClosure = pangolin::Display("loopClosures");
   containerLoopClosure.SetLayout(pangolin::LayoutEqual);
@@ -240,9 +244,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
+  pangolin::Var<bool> runSlamFusion("ui.run SLAM fusion", false,true);
+  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<bool>  recomputeBoundingBox("ui.compute BB", false, false);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
-  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
@@ -252,17 +258,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
-  pangolin::Var<bool> runSlamFusion("ui.run SLAM fusion", false,true);
-
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
   pangolin::Var<bool> retryAllLoopClosures("ui.retry all loop close", false,false);
   pangolin::Var<bool> retryLoopClosure("ui.retry loop close", false,false);
   pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
   pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
-
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
-
 
   pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
@@ -298,6 +300,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEx("ui.gridE x", 3.0,2,3);
   pangolin::Var<float> gridEy("ui.gridE y", 3.0,2,3);
   pangolin::Var<float> gridEz("ui.gridE z", 3.0,2,3);
+  pangolin::Var<int>   mmfId("ui.MMF id",0,0,2);
 
   pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
@@ -329,7 +332,6 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_ac; // current to active KF
 
   tdp::KeyframeSLAM kfSLAM;
-//  std::map<std::pair<int,int>,tdp::SE3f> loopClosures;
   std::vector<tdp::KeyFrame> kfs;
   std::vector<tdp::SE3f> T_mos;
 
@@ -368,7 +370,6 @@ int main( int argc, char* argv[] )
 
         photoErrBefore.Fill(0.);
         float overlapBefore, rmseBefore;
-
 
         TICK("Overlap");
         cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
@@ -495,6 +496,12 @@ int main( int argc, char* argv[] )
 
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
+  tdp::vMFMMF<3> mmf(10.);
+  size_t Nmmf = 1000000;
+  tdp::ManagedHostImage<tdp::Vector3fda> nMmf(Nmmf,1);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
+
+  tdp::SE3f T_wG;  // from grid to world
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -507,12 +514,67 @@ int main( int argc, char* argv[] )
 
     numLoopClose = loopClose.size();
 
-    if (runSlamFusion.GuiChanged() && runSlamFusion) {
+    if ((runSlamFusion.GuiChanged() && runSlamFusion)
+       || (gui.finished() && !runSlamFusion && loopClose.size() == 0)) {
       T_mos.clear();
       T_mo = kfs[0].T_wk_;
       idActive = 0;
       gui.Seek(0);
+      gui.finished_ = false;
       resetTSDF = true;
+      runSlamFusion = true;
+      recomputeBoundingBox = true;
+    }
+
+    if (pangolin::Pushed(recomputeBoundingBox)) {
+
+      for (size_t i=0; i<Nmmf; ++i) {
+        tdp::Vector3fda ni ;
+        do {
+          Eigen::Vector2f ids = 
+            0.5*(Eigen::Vector2f::Random()+Eigen::Vector2f::Ones());
+          int32_t idKf = floor(ids(0)*kfs.size());
+          int32_t idPt = floor(ids(1)*kfs[idKf].pyrN_.GetImage(2).Area());
+          ni = kfs[idKf].T_wk_.rotation()*kfs[idKf].pyrN_.GetImage(2)[idPt];
+        } while (!tdp::IsValidData(ni));
+        nMmf[i] = ni;
+      }
+      cuNMmf.CopyFrom(nMmf, cudaMemcpyHostToDevice);
+      mmf.Compute(cuNMmf, 100, true);
+      size_t idMax = std::distance(mmf.Ns_.begin(),
+          std::max_element(mmf.Ns_.begin(), mmf.Ns_.end()));
+      std::cout << "largest MF: " << mmf.Ns_[idMax] << std::endl;
+      std::cout << mmf.Rs_[idMax] << std::endl;
+      for (size_t k=0; k<3; ++k) {
+        std::cout << mmf.Rs_[k] << std::endl;
+      }
+      mmfId = idMax;
+      T_wG.rotation() = mmf.Rs_[mmfId];
+
+      grid0.fill(1e9);
+      gridE.fill(-1e9);
+      for (size_t i=0; i<Nmmf; ++i) {
+        tdp::Vector3fda pi;
+        do {
+          Eigen::Vector2f ids = 
+            0.5*(Eigen::Vector2f::Random()+Eigen::Vector2f::Ones());
+          int32_t idKf = floor(ids(0)*kfs.size());
+          int32_t idPt = floor(ids(1)*kfs[idKf].pyrPc_.GetImage(2).Area());
+          pi = T_wG.Inverse()*kfs[idKf].T_wk_*kfs[idKf].pyrPc_.GetImage(2)[idPt];
+        } while (!tdp::IsValidData(pi));
+        grid0 = grid0.array().min(pi.array());
+        gridE = gridE.array().max(pi.array());
+      }
+      grid0x = grid0(0);
+      grid0y = grid0(1);
+      grid0z = grid0(2);
+      gridEx = gridE(0);
+      gridEy = gridE(1);
+      gridEz = gridE(2);
+      dGrid = gridE - grid0;
+      dGrid(0) /= (wTSDF-1);
+      dGrid(1) /= (hTSDF-1);
+      dGrid(2) /= (dTSDF-1);
     }
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -541,7 +603,7 @@ int main( int argc, char* argv[] )
         cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
         TICK("Add To TSDF");
 //        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
-        rig.AddToTSDF(cuD, T_mk, useRgbCamParasForDepth, 
+        rig.AddToTSDF(cuD, T_wG.Inverse()*T_mk, useRgbCamParasForDepth, 
             grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
         TOCK("Add To TSDF");
       }
@@ -574,7 +636,7 @@ int main( int argc, char* argv[] )
 //    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
-    if(kfs.size() > 0) {
+    if(kfs.size() > 0 && !gui.finished()) {
       // Find closest KF
       int iMin = 0;
 //      float distMin = 1e9;
@@ -658,42 +720,30 @@ int main( int argc, char* argv[] )
           kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
         }
 
-        std::lock_guard<std::mutex> lock(mut);
         for (int i=0; i<kfs.size()-1; ++i) {
           loopClose.emplace_front(kfs.size()-1,i);
-//          loopClose.emplace_back(i,kfs.size()-1);
         }
-        std::cout << "# loop closure hypotheses " << loopClose.size()<< std::endl;
-
         idActive = kfs.size()-1;
         T_ac = tdp::SE3f();
         T_mo = kfs[idActive].T_wk_*T_ac;
-
-//      } else {
-//        std::cout << "NOT adding keyframe " << kfs.size() 
-//          << " angle: " << se3.head<3>().norm()*180./M_PI 
-//          << " dist: " << se3.tail<3>().norm() 
-//          << " active: " << idActive << "/" << kfs.size()
-//          << std::endl;
       }
-
       if (tryLoopClose) {
         computeLoopClosures();
       }
     } else {
-      // track from already existing key frames and accumulate depth in
-      // TSDF
-      TICK("Add To TSDF");
-//      AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
-      rig.AddToTSDF(cuD, T_mo, useRgbCamParasForDepth, 
-          grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
-      TOCK("Add To TSDF");
+      if (!gui.finished()) {
+        TICK("Add To TSDF");
+        rig.AddToTSDF(cuD, T_wG.Inverse()*T_mo, useRgbCamParasForDepth, 
+            grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
+        TOCK("Add To TSDF");
+      }
     }
 
-    if (pangolin::Pushed(runMarchingCubes)) {
+    if (pangolin::Pushed(runMarchingCubes)
+        || (runSlamFusion && gui.finished() && meshVbo.num_elements == 0)) {
       TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
-      tdp::ComputeMesh(TSDF, grid0, dGrid, meshVbo, meshCbo, meshIbo,
-          marchCubeswThr, marchCubesfThr);      
+      tdp::ComputeMesh(TSDF, grid0, dGrid,
+          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
     }
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
@@ -704,9 +754,12 @@ int main( int argc, char* argv[] )
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
 
+      T_wG.rotation() = tdp::SO3f(mmf.Rs_[mmfId]);
+      pangolin::glSetFrameOfReference(T_wG.matrix());
       Eigen::AlignedBox3f box(grid0,gridE);
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
+      pangolin::glUnsetFrameOfReference();
 
       pangolin::glDrawAxis(kfs[idActive].T_wk_.matrix(),0.08f);
       pangolin::glDrawAxis(T_mo.matrix(), 0.05f);
@@ -782,7 +835,6 @@ int main( int argc, char* argv[] )
       if (meshVbo.num_elements > 0
           && meshCbo.num_elements > 0
           && meshIbo.num_elements > 0) {
-
         meshVbo.Bind();
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
         meshCbo.Bind();
@@ -811,9 +863,25 @@ int main( int argc, char* argv[] )
 
     }
 
+    if (viewNormals.IsShown()) {
+      viewNormals.Activate(camNormals);
+
+      vbo.Resize(nMmf.Area());
+      vbo.Upload(nMmf.ptr_,nMmf.SizeBytes(), 0);
+      pangolin::glDrawAxis(0.1f);
+      glColor4f(1.f,0.f,0.f,0.5f);
+      pangolin::RenderVbo(vbo);
+
+      for (size_t i=0; i<mmf.Rs_.size(); ++i) {
+        tdp::SE3f T_wmmf(tdp::SO3f(mmf.Rs_[i]));
+        pangolin::glDrawAxis(T_wmmf.matrix(),0.2f);
+      }
+    }
+
     if (viewLoopClose.IsShown() && kfs.size() > 1) {
       viewLoopClose.Activate(camLoopClose);
 
+      vbo.Resize(pcASuccess.Area());
       vbo.Upload(pcASuccess.ptr_,pcASuccess.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
       glColor4f(1.f,0.f,0.f,0.5f);

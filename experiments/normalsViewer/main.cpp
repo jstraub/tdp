@@ -162,7 +162,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
-  tdp::vMFMMF<1> rtmf(w,h,tauR);
+  tdp::vMFMMF<1> rtmf(tauR);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
