@@ -38,6 +38,14 @@ Shaders::Shaders() {
       shaderRoot+std::string("matcap.frag"));
   matcapShader_.Link();
 
+  normalMeshShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("normalShading.vert"));
+  normalMeshShader_.AddShaderFromFile(pangolin::GlSlGeometryShader, 
+      shaderRoot+std::string("normalShading.geom"));
+  normalMeshShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("normalShading.frag"));
+  normalMeshShader_.Link();
+
 }
 
 }

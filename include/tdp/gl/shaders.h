@@ -8,6 +8,7 @@ class Shaders {
  public: 
   static Shaders* Instance();
 
+  pangolin::GlSlProgram normalMeshShader_;
   pangolin::GlSlProgram labelShader_;
   pangolin::GlSlProgram valueShader_;
   pangolin::GlSlProgram matcapShader_;
