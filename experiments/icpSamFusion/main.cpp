@@ -40,6 +40,8 @@
 #include <tdp/preproc/grey.h>
 #include <tdp/slam/keyframe.h>
 #include <tdp/slam/keyframe_slam.h>
+#include <tdp/gl/shaders.h>
+#include <tdp/marching_cubes/marching_cubes.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -177,6 +179,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
   tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
 
+  // mesh buffers
+  pangolin::GlBuffer meshVbo;
+  pangolin::GlBuffer meshCbo;
+  pangolin::GlBuffer meshIbo;
+
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
   
@@ -273,6 +280,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
+
+  pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
+  pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
+  pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
+
+
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
@@ -377,6 +390,7 @@ int main( int argc, char* argv[] )
               assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
               icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
               icpDownSample, gui.verbose, err, count);
+            count *= icpDownSample;
           } else {
             // TODO test
             tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
@@ -389,7 +403,7 @@ int main( int argc, char* argv[] )
             pcs_c.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
             ns_c.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
 
-            std::vector<size_t> maxIt = {2*icpIter0, 2*icpIter1, 2*icpIter2};
+            std::vector<size_t> maxIt = {icpIter0, icpIter1, icpIter2};
 //            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
 //                ns_c, T_ab, tdp::SE3f(),
 //              camD, maxIt, icpLoopCloseAngleThr_deg,
@@ -407,6 +421,8 @@ int main( int argc, char* argv[] )
                   icpLoopCloseDistThr,
                   gui.verbose, T_ab, errPerLvl, countPerLvl);
             }
+            count = countPerLvl[0];
+            err = errPerLvl[0];
           }
           TOCK("LoopClosure");
 
@@ -424,7 +440,7 @@ int main( int argc, char* argv[] )
 
           if (err == err 
               && err < icpLoopCloseErrThr
-              && count*icpDownSample > 3000 
+              && count > 3000 
               && overlapAfter > icpLoopCloseOverlapThr
               && (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr
               && rmseAfter < rmseThr) {
@@ -673,6 +689,12 @@ int main( int argc, char* argv[] )
       TOCK("Add To TSDF");
     }
 
+    if (pangolin::Pushed(runMarchingCubes)) {
+      TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+      tdp::ComputeMesh(TSDF, grid0, dGrid, meshVbo, meshCbo, meshIbo,
+          marchCubeswThr, marchCubesfThr);      
+    }
+
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
 
     TICK("Draw 3D");
@@ -754,6 +776,38 @@ int main( int argc, char* argv[] )
         pangolin::RenderVbo(cuPcbuf);
         pangolin::glUnsetFrameOfReference();
       }
+
+
+      if (meshVbo.num_elements > 0
+          && meshCbo.num_elements > 0
+          && meshIbo.num_elements > 0) {
+
+        meshVbo.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+        meshCbo.Bind();
+        glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+
+        auto& shader = tdp::Shaders::Instance()->normalMeshShader_;   
+        shader.Bind();
+        pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+        pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+        shader.SetUniform("P",P);
+        shader.SetUniform("MV",MV);
+
+        meshIbo.Bind();
+        glDrawElements(GL_TRIANGLES, meshIbo.num_elements*3,
+            meshIbo.datatype, 0);
+        meshIbo.Unbind();
+
+        shader.Unbind();
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(0);
+        meshCbo.Unbind();
+        meshVbo.Unbind();
+      }
+
     }
 
     if (viewLoopClose.IsShown() && kfs.size() > 1) {
