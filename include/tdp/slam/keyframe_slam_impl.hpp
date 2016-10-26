@@ -4,7 +4,7 @@ namespace tdp {
 
 KeyframeSLAM::KeyframeSLAM() :
   noisePrior_(isam::Information(10000. * isam::eye(6))),
-  noiseOdom_(isam::Information(1000. * isam::eye(6))),
+  noiseOdom_(isam::Information(10000. * isam::eye(6))),
   noiseLoopClosure_(isam::Information(100. * isam::eye(6)))
 { 
   isam::Properties props;
