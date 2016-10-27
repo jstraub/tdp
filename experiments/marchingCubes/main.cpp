@@ -47,8 +47,10 @@ int main( int argc, char* argv[] )
   std::cout << meshOutputPath << std::endl;
 
   // TODO: use LoadTSDF to also get grid0 and dGrid
+  tdp::Vector3fda grid0, dGrid;
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
-  if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
+  if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, grid0, dGrid)) {
+//  if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
     pango_print_error("Unable to load volume");
     return 1;
   }
@@ -60,9 +62,12 @@ int main( int argc, char* argv[] )
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f};
 
-  float xScale = 6./512;
-  float yScale = 6./512;
-  float zScale = 6./512;
+  float xScale = dGrid(0);
+  float yScale = dGrid(1);
+  float zScale = dGrid(2);
+//  float xScale = 6./512;
+//  float yScale = 6./512;
+//  float zScale = 6./512;
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;

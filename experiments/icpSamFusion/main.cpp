@@ -68,7 +68,7 @@ int main( int argc, char* argv[] )
     std::cout << uri.scheme << std::endl; 
     if (pangolin::FileExists(uri.url+std::string("imu.pango"))
      && pangolin::FileExists(uri.url+std::string("video.pango"))) {
-      imu_input_uri = input_uri + std::string("imu.pango");
+//      imu_input_uri = input_uri + std::string("imu.pango");
       tsdfOutputPath = uri.url + tsdfOutputPath;
       input_uri = input_uri + std::string("video.pango");
     } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
@@ -286,7 +286,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
-  pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.20, 0.01, 0.5);
+  pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.10, 0.01, 0.5);
   pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
   pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
@@ -295,9 +295,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
-  pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.20,0.,1.);
+  pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.30,0.,1.);
   pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", 0.01,-1.,1.);
-  pangolin::Var<float> rmseThr("ui.RMSE thr", 0.18,0.,1.);
+  pangolin::Var<float> rmseThr("ui.RMSE thr", 0.11,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);

@@ -19,6 +19,22 @@ def runSurround3D(path,logFile):
   else:
     with open(logFile,"a") as f:
       f.write(now+': executed '+' '.join(args)+"\n");
+def runIcpSamFusion(path,logFile):
+  args = [os.path.abspath("../build/experiments/icpSamFusion/icpSamFusion"),
+    "file://"+os.path.abspath(path)+"/",
+    os.path.abspath("../config/surround3D_2016_10_06.json") ,
+    '-1' ]
+  print ' '.join(args)
+  print ' --------------------- '
+  err = subp.call(' '.join(args),shell=True)
+  now = time.strftime("%Y-%m-%d %H:%M")
+  if err:
+    print 'error when executing ', ' '.join(args)
+    with open(logFile,"a") as f:
+      f.write(now+': ERROR when executing '+' '.join(args)+"\n");
+  else:
+    with open(logFile,"a") as f:
+      f.write(now+': executed '+' '.join(args)+"\n");
 
 def runMarchingCubes(path,logFile):
   args = [os.path.abspath("../build/experiments/marchingCubes/marchingCubes"),
@@ -46,12 +62,13 @@ for root, dirs, files in os.walk(path):
         print "found dir", root+d
         paths.append(os.path.join(root,d))
 
-doRunSurround3D = False
+doRunSurround3D = True
 doRunMarchingCubes = True
 
 if doRunSurround3D:
   for path in paths:
-    runSurround3D(path, "./log_runSurround3D.txt")
+#    runSurround3D(path, "./log_runSurround3D.txt")
+    runIcpSamFusion(path, "./log_runIcpSamFusion.txt")
 
 if doRunMarchingCubes:
   for path in paths:
