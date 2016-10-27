@@ -44,6 +44,11 @@
 float f_z(const tdp::Vector3fda& x) {
     return x(2);
 }
+\
+float f_etoz(const tdp::Vector3fda& x){
+//    return (float)exp(x(2));
+    return x(2)*x(2);
+}
 
 tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds){
   assert(pc.rows() == 1);
@@ -150,17 +155,19 @@ inline float w(float d, int knn){
     return d==0? 1: 1/(float)knn;
 }
 
-inline tdp::Vector6fda poly2Basis(const tdp::Vector2fda& vec){
-    tdp::Vector6fda newVec;
-    newVec << 1, vec[0], vec[1], vec[0]*vec[0], vec[0]*vec[1], vec[1]*vec[1];
-    return newVec;
+inline tdp::Vector6fda poly2Basis(const tdp::Vector3fda& p){
+    tdp::Vector6fda newP;
+    newP << 1, p[0], p[1], p[0]*p[0], p[0]*p[1], p[1]*p[1];
+    return newP;
 }
 
 inline Eigen::Vector4f homogeneous(const tdp::Vector3fda& p){
     return tdp::Vector4fda(p(0),p(1),p(2),1);
 }
 
-void getThetas(const tdp::Image<tdp::Vector3fda>& pc_w, const tdp::Image<tdp::SE3f>& T_wls, tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps){
+void getThetas(const tdp::Image<tdp::Vector3fda>& pc_w,
+               const tdp::Image<tdp::SE3f>& T_wls, tdp::Image<tdp::Vector6fda>& thetas,
+               tdp::ANN& ann, int knn, float eps){
     assert(pc_w.w_ == T_wls.w_&&pc_w.w_==thetas.w_);
     Eigen::VectorXi nnIds(knn);
     Eigen::VectorXf dists(knn);
@@ -177,13 +184,11 @@ void getThetas(const tdp::Image<tdp::Vector3fda>& pc_w, const tdp::Image<tdp::SE
         for (size_t k=0; k<knn; ++k){
             //std::cout << "iter: " << k << std::endl;
             //std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
-            tdp::Vector3fda npt_l_ = T_wl.Inverse()*pc_w[nnIds[k]];
-            //Take the first two dimensions
-            tdp::Vector2fda npt_2d(npt_l_(0), npt_l_(1));
+            tdp::Vector3fda npt_l = T_wl.Inverse()*pc_w[nnIds[k]];
             //target is the third dim coordinate
-            float npt_z = npt_l_(2);
+            float npt_z = npt_l(2);
             //project to higher dimension using poly2 basis
-            tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
+            tdp::Vector6fda phi_npt = poly2Basis(npt_l);
             //Construct data matrix X
             X.row(k) = phi_npt;
             //Construct target vector Y
@@ -199,42 +204,108 @@ void getThetas(const tdp::Image<tdp::Vector3fda>& pc_w, const tdp::Image<tdp::SE
         thetas[i] = theta;
     }
 }
+
 void getZEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
                    const tdp::Image<tdp::SE3f>& T_wl,
                    const tdp::Image<tdp::Vector6fda>& thetas,
                    tdp::Image<tdp::Vector3fda>& estimates_w){
-    tdp::Vector3fda pt_l, wc_z_estimated;
+    tdp::Vector3fda pt_l;
     tdp::Vector6fda phi_pt, theta;
     float z_estimated;
     for (size_t i=0; i<pc_w.Area(); ++i){
         pt_l = T_wl[i].Inverse()*pc_w[i];
         theta = thetas[i];
         //Estimate normals
-        phi_pt = poly2Basis(tdp::Vector2fda(pt_l(0), pt_l(1)));
+        phi_pt = poly2Basis(pt_l);
         z_estimated = theta.transpose()*phi_pt;\
         estimates_w[i] = T_wl[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),z_estimated));
-
-//        wc_z_estimated = locals[i].Inverse()*(tdp::Vector3fda(pt(0),pt(1),z_estimated));
-//        estimates(i,0) = tdp::Vector3fda(pt(0), pt(1), wc_z_estimated(2));
    }
 }
 
 void getSamples(const tdp::Image<tdp::SE3f>& T_wl,
                 const tdp::Image<tdp::Vector6fda>& thetas,
                 tdp::Image<tdp::Vector3fda>& estimates_w, size_t upsample){
-    tdp::Vector3fda pt_l, wc_z_estimated;
-    tdp::Vector6fda phi_pt, theta;
+    tdp::Vector3fda pt_l;
+    tdp::Vector6fda phi_pt;
     float z_estimated;
     for (size_t i=0; i<T_wl.Area(); ++i){
         for (size_t j=0; j<upsample; ++j) {
             pt_l = 0.1*tdp::Vector3fda::Random();
             //Estimate normals
-            phi_pt = poly2Basis(tdp::Vector2fda(pt_l(0), pt_l(1)));
+            phi_pt = poly2Basis(pt_l);
             z_estimated = thetas[i].transpose()*phi_pt;\
             estimates_w[i*upsample+j] = T_wl[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),z_estimated));
         }
-//        wc_z_estimated = locals[i].Inverse()*(tdp::Vector3fda(pt(0),pt(1),z_estimated));
-//        estimates(i,0) = tdp::Vector3fda(pt(0), pt(1), wc_z_estimated(2));
+   }
+}
+
+void getThetas_F(const tdp::Image<tdp::Vector3fda>& pc_w,
+               const tdp::Image<tdp::SE3f>& T_wls, const auto& f,
+               tdp::Image<tdp::Vector6fda>& thetas, tdp::ANN& ann, int knn, float eps){
+    assert(pc_w.w_ == T_wls.w_&&pc_w.w_==thetas.w_);
+    Eigen::VectorXi nnIds(knn);
+    Eigen::VectorXf dists(knn);
+    for (size_t i=0; i<pc_w.Area(); ++i){
+        tdp::Vector3fda pt = pc_w[i];
+        const tdp::SE3f& T_wl = T_wls[i];
+
+        // Get the neighbor ids and dists for this point
+        ann.Search(pt, knn, eps, nnIds, dists);
+
+        tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
+        tdp::Vector3fda Y(knn);
+        tdp::Vector6fda theta;
+        for (size_t k=0; k<knn; ++k){
+            //std::cout << "iter: " << k << std::endl;
+            //std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
+            tdp::Vector3fda npt_l = T_wl.Inverse()*pc_w[nnIds[k]];
+            //target of the weighted least square
+            float y = f(npt_l);
+
+            //construct data matrix X
+            X.row(k) = poly2Basis(npt_l);
+            //construct target vector Y
+            Y(k) = y;
+            // weight matrix W
+            W(k,k) = (dists(k)<1e-6? 1: 1.0f/knn);
+
+//            //Take the first two dimensions
+//            tdp::Vector2fda npt_2d(npt_l_(0), npt_l_(1));
+//            //target is the third dim coordinate
+//            float npt_z = f_z(npt_l);
+//            //project to higher dimension using poly2 basis
+//            tdp::Vector6fda phi_npt = poly2Basis(npt_2d);
+//            //Construct data matrix X
+//            X.row(k) = phi_npt;
+//            //Construct target vector Y
+//            Y(k) = npt_z;
+//            //Get weight matrix W
+//            W(k,k) = dists(k); //check if I need to scale this when in local coordinate system
+        }
+
+        //Solve weighted least square
+        Eigen::FullPivLU<tdp::Matrix6fda> X_lu;
+        X_lu.compute(X.transpose()*W*X);
+        theta = X_lu.solve(X.transpose()*W*Y);
+        thetas[i] = theta;
+    }
+}
+
+
+void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
+                   const tdp::Image<tdp::SE3f>& T_wls,
+                   const tdp::Image<tdp::Vector6fda>& thetas,
+                   tdp::Image<tdp::Vector3fda>& estimates_w){
+    tdp::Vector3fda pt_l;
+    tdp::Vector6fda phi_pt, theta;
+    float estimate_l;
+    for (size_t i=0; i<pc_w.Area(); ++i){
+        pt_l = T_wls[i].Inverse()*pc_w[i];
+        theta = thetas[i];
+        //Estimate normals
+        phi_pt = poly2Basis(pt_l);
+        estimate_l = theta.transpose()*phi_pt;
+        estimates_w[i] = T_wls[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),estimate_l));
    }
 }
 
@@ -279,8 +350,8 @@ void test_getAxesIds(){
 }
 
 void test_poly2Basis(){
-    tdp::Vector2fda vec1(10.,10.);
-    tdp::Vector2fda vec2(0,0);
+    tdp::Vector3fda vec1(10.,10.,10.);
+    tdp::Vector3fda vec2(0,0,0);
     std::cout << poly2Basis(vec1) << std::endl;
     std::cout << poly2Basis(vec2) << std::endl;
 
@@ -313,6 +384,10 @@ void test_getLocalRot(){
         std::cout << "localRot: \n" << localRot << std::endl;
         std::cout << "\t result: \n" << localRot*query << std::endl;
     }
+}
+
+void test_getThetas_F(){
+
 }
 
 //end of test
@@ -368,7 +443,7 @@ int main( int argc, char* argv[] ){
   container.AddDisplay(viewN);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vboM, vboS;
+  pangolin::GlBuffer vbo, vboZ, vboS, vboF;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
@@ -382,13 +457,10 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
 
 
-  tdp::ManagedHostImage<tdp::SE3f> T_wl(pc.w_,1);
+  tdp::ManagedHostImage<tdp::SE3f> T_wls(pc.w_,1);
   tdp::ManagedHostImage<tdp::Vector6fda> thetas(pc.w_,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1),fEstimates(pc.w_,1);
   tdp::ManagedHostImage<tdp::Vector3fda> zSamples(pc.w_*upsample,1);
-
-
-
 
 
   // Stream and display video
@@ -402,20 +474,24 @@ int main( int argc, char* argv[] ){
         //  processing of PC for skinning
       std::cout << "Running skinning..." << std::endl;
 
-      getAllLocalBasis(pc, T_wl, ann, knn, eps);
+      getAllLocalBasis(pc, T_wls, ann, knn, eps);
+//      getThetas(pc,T_wls,thetas,ann,knn,eps);
+//      getZEstimates(pc,T_wls,thetas,zEstimates);
+      getThetas_F(pc,T_wls, f_etoz, thetas,ann,knn,eps);
+      getFEstimates(pc,T_wls, thetas, fEstimates);
+      vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+      vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-      getThetas(pc,T_wl,thetas,ann,knn,eps);
+//      vboZ.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+//      vboZ.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
 
-      getZEstimates(pc,T_wl,thetas,zEstimates);
-      vboM.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-      vboM.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
-
-      zSamples.Reinitialise(pc.w_*upsample,1);
-      getSamples(T_wl,thetas,zSamples,upsample);
+//      zSamples.Reinitialise(pc.w_*upsample,1);
+//      getSamples(T_wls,thetas,zSamples,upsample);
 
       // put the estimated points to GLBuffer vboM
-      vboS.Reinitialise(pangolin::GlArrayBuffer, zSamples.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-      vboS.Upload(zSamples.ptr_, sizeof(tdp::Vector3fda) * zSamples.Area(), 0);
+//      vboS.Reinitialise(pangolin::GlArrayBuffer, zSamples.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+//      vboS.Upload(zSamples.ptr_, sizeof(tdp::Vector3fda) * zSamples.Area(), 0);
+
 
       std::cout << "<--DONE skinning-->" << std::endl;
     }
@@ -428,18 +504,18 @@ int main( int argc, char* argv[] ){
       pangolin::glDrawAxis(0.1);
 
       if (showBases) {
-          for (size_t i=0; i<T_wl.Area(); ++i) {
-              pangolin::glDrawAxis(T_wl[i].matrix(), 0.05f);
+          for (size_t i=0; i<T_wls.Area(); ++i) {
+              pangolin::glDrawAxis(T_wls[i].matrix(), 0.05f);
           }
       }
 
       glPointSize(2.);
-      glColor3f(1.0f, 0.0f, 1.0f);
-      pangolin::RenderVbo(vboM);
+      glColor3f(1.0f, 1.0f, 0.0f);
+      pangolin::RenderVbo(vboF);
 
-      glPointSize(1.);
-      glColor3f(0.0f, 1.0f, 1.0f);
-      pangolin::RenderVbo(vboS);
+//      glPointSize(1.);
+//      glColor3f(0.0f, 1.0f, 1.0f);
+//      pangolin::RenderVbo(vboS);
 
       glPointSize(1.);
       // draw the first arm pc
