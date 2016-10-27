@@ -130,34 +130,43 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
+  tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
+  TSDF.Fill(tdp::TSDFval(-1.01,0.));
+  tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
+  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  pangolin::GlBuffer meshVbo;
+  pangolin::GlBuffer meshCbo;
+  pangolin::GlBuffer meshIbo;
+
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale0("ui.depth scale0",
-      rig.depthSensorUniformScale_[0],1e-4,1e-3);
-  pangolin::Var<float> depthSensorScale1("ui.depth scale1",
-      rig.depthSensorUniformScale_[1],1e-4,1e-3);
-  pangolin::Var<float> depthSensorScale2("ui.depth scale2",
-      rig.depthSensorUniformScale_[2],1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
-
-  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
-  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
-  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-5.0,-2,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-5.0,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-5.0,-2,0);
-  pangolin::Var<float> gridEx("ui.gridE x",5.0,2,0);
-  pangolin::Var<float> gridEy("ui.gridE y",5.0,2,0);
-  pangolin::Var<float> gridEz("ui.gridE z",5.0,2,0);
-
-  pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
   pangolin::Var<int> ir("ui.IR", 16,0,16);
 //  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
   pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
   pangolin::Var<int> rotatingDepthScanIrPower("ui.IR power", 16,0,16);
   pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 1000, 1, 2000);
+
+  pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
+  pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
+  pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
+  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
+  pangolin::Var<float> grid0x("ui.grid0 x",-2.0,-2,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-2.0,-2,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-2.0,-2,0);
+  pangolin::Var<float> gridEx("ui.gridE x",2.0,2,0);
+  pangolin::Var<float> gridEy("ui.gridE y",2.0,2,0);
+  pangolin::Var<float> gridEz("ui.gridE z",2.0,2,0);
+
+  pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
+
+
+  pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
+  pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
+  pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+3)];
@@ -168,13 +177,12 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
 
+  tdp::SE3f T_mr;
+  tdp::SE3f T_wG;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    rig.depthSensorUniformScale_[0] = depthSensorScale0;
-    rig.depthSensorUniformScale_[1] = depthSensorScale1;
-    rig.depthSensorUniformScale_[2] = depthSensorScale2;
     tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
     tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
     tdp::Vector3fda dGrid = gridE - grid0;
@@ -260,6 +268,25 @@ int main( int argc, char* argv[] )
     tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
+    if (pangolin::Pushed(resetTSDF)) {
+      T_mr = tdp::SE3f(); 
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
+      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+    }
+
+    if (!gui.paused() && fuseTSDF) {
+      TICK("Add To TSDF");
+      rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
+          grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
+      TOCK("Add To TSDF");
+    }
+
+    if (pangolin::Pushed(runMarchingCubes)) {
+      TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+      tdp::ComputeMesh(TSDF, grid0, dGrid,
+          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
+    }
+
     pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
@@ -281,6 +308,37 @@ int main( int argc, char* argv[] )
 
       // render point cloud
       pangolin::RenderVboCbo(vbo,cbo,true);
+
+
+      if (meshVbo.num_elements > 0
+          && meshCbo.num_elements > 0
+          && meshIbo.num_elements > 0) {
+        meshVbo.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+        meshCbo.Bind();
+        glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+
+        auto& shader = tdp::Shaders::Instance()->normalMeshShader_;   
+        shader.Bind();
+        pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+        pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+        shader.SetUniform("P",P);
+        shader.SetUniform("MV",MV);
+
+        meshIbo.Bind();
+        glDrawElements(GL_TRIANGLES, meshIbo.num_elements*3,
+            meshIbo.datatype, 0);
+        meshIbo.Unbind();
+
+        shader.Unbind();
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(0);
+        meshCbo.Unbind();
+        meshVbo.Unbind();
+      }
+
     }
     glDisable(GL_DEPTH_TEST);
 
