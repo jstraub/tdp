@@ -35,6 +35,8 @@
 #include <tdp/utils/Stopwatch.h>
 
 #include <tdp/utils/threadedValue.hpp>
+#include <tdp/gl/shaders.h>
+#include <tdp/marching_cubes/marching_cubes.h>
 
 #include <pangolin/video/drivers/realsense.h>
 
