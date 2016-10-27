@@ -153,15 +153,15 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfMu("ui.mu",0.05,0.,1.);
   pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-2.0,-2,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-2.0,-2,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-2.0,-2,0);
-  pangolin::Var<float> gridEx("ui.gridE x",2.0,2,0);
-  pangolin::Var<float> gridEy("ui.gridE y",2.0,2,0);
-  pangolin::Var<float> gridEz("ui.gridE z",2.0,2,0);
+  pangolin::Var<float> grid0x("ui.grid0 x",-.262,-.5,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-.345,-.5,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",-.048,-.1,0);
+  pangolin::Var<float> gridEx("ui.gridE x",.30,0.5,0);
+  pangolin::Var<float> gridEy("ui.gridE y",.26,0.5,0);
+  pangolin::Var<float> gridEz("ui.gridE z",.71,0.9,0);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
@@ -179,8 +179,8 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
 
-  tdp::SE3f T_mr;
-  tdp::SE3f T_wG;
+  tdp::SE3f T_mr = tdp::SE3f();
+  tdp::SE3f T_wG = tdp::SE3f();
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -276,7 +276,8 @@ int main( int argc, char* argv[] )
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
     }
 
-    if (!gui.paused() && fuseTSDF) {
+    if (!gui.paused() && fuseTSDF && (!rotatingDepthScan || (rotatingDepthScan && received.Get()))) {
+    	std::cout << "fusing a frame" << std::endl;
       TICK("Add To TSDF");
       rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
           grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
