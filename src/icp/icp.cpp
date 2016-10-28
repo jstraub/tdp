@@ -380,14 +380,14 @@ void ICP::ComputeProjective(
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
-      ATA /= count;
-      ATb /= count;
+//      ATA /= count;
+//      ATb /= count;
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA);
-      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array().square();
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA.inverse());
+      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array();
       // condition number
       float kappa = ev.maxCoeff() / ev.minCoeff();
       float kappaR = ev.head<3>().maxCoeff() / ev.head<3>().minCoeff();
@@ -401,6 +401,7 @@ void ICP::ComputeProjective(
         << ": err=" << error 
         << "\tdErr/err=" << fabs(error-errPrev)/error
         << "\t# inliers: " << count 
+        << "\t# det(S): " << ev.array().prod()
         << "\t# kappa: " << kappa << ", " << kappaR << ", " << kappat
         << "\t|x|=" << x.head<3>().norm() << ", " << x.tail<3>().norm()
 //        << "\t# evs: " << ev.transpose()
@@ -526,14 +527,16 @@ void ICP::ComputeProjective(
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
-      ATA /= count;
-      ATb /= count;
+//      ATA /= count;
+//      ATb /= count;
       // solve for x using ldlt
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA);
-      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array().square();
+      // ATA is actually JTJ and the inverse of it gives a lower bound
+      // on the true covariance matrix.
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA.inverse());
+      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array();
       // condition number
       float kappa = ev.maxCoeff() / ev.minCoeff();
       float kappaR = ev.head<3>().maxCoeff() / ev.head<3>().minCoeff();
@@ -547,6 +550,7 @@ void ICP::ComputeProjective(
         << ": err=" << error 
         << "\tdErr/err=" << fabs(error-errPrev)/error
         << "\t# inliers: " << count 
+        << "\t# det(S): " << ev.array().prod()
         << "\t# kappa: " << kappa << ", " << kappaR << ", " << kappat
         << "\t|x|=" << x.head<3>().norm() << ", " << x.tail<3>().norm()
 //        << "\t# evs: " << ev.transpose()

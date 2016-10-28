@@ -360,7 +360,6 @@ int main( int argc, char* argv[] )
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose, T_mc, errPerLvl, countPerLvl);
-      T_wcs.push_back(T_wc);
     } else if (icpRgb) {
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
           cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
@@ -372,7 +371,10 @@ int main( int argc, char* argv[] )
           gui.verbose, T_mc, errPerLvl, countPerLvl);
     }
     TOCK("ICP");
-    if (!gui.paused()) T_wc = T_wc * T_mc;
+    if (!gui.paused()) {
+      T_wc = T_wc * T_mc;
+      T_wcs.push_back(T_wc);
+    }
 
     logInliers.Log(countPerLvl);
     logCost.Log(errPerLvl);
