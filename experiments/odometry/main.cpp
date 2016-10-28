@@ -147,10 +147,10 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotCost(&logCost, -100.f,1.f, -10.f,1.f, 10.f, 0.1f);
   plotters.AddDisplay(plotCost);
   pangolin::DataLog logRmse;
-  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,1.f, 1.f, 0.1f);
+  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,0.2f, 0.1f, 0.1f);
   plotters.AddDisplay(plotRmse);
   pangolin::DataLog logOverlap;
-  pangolin::Plotter plotOverlap(&logOverlap, -100.f,1.f, 0.f,1.f, 1.f, 0.1f);
+  pangolin::Plotter plotOverlap(&logOverlap, -100.f,1.f, 0.f,1.f, .1f, 0.1f);
   plotters.AddDisplay(plotOverlap);
   gui.container().AddDisplay(plotters);
 
@@ -193,6 +193,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb_m(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
@@ -201,7 +202,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector2fda> cuGradGrey(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc,hc);
-
 
   tdp::ManagedHostImage<float> grey_m(wc,hc);
 
@@ -313,6 +313,7 @@ int main( int argc, char* argv[] )
       gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
       cuPyrGrey_m.CopyFrom(cuPyrGrey_c, cudaMemcpyDeviceToDevice);
       cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
+      rgb_m.CopyFrom(rgb, cudaMemcpyHostToHost);
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -405,9 +406,10 @@ int main( int argc, char* argv[] )
           cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
               cudaMemcpyDeviceToDevice);
         }
+        cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
         glColor3f(0,1,0);
         pangolin::glSetFrameOfReference((T_wc*T_mc.Inverse()).matrix());
-        pangolin::RenderVbo(cuPcbuf);
+        pangolin::RenderVboCbo(cuPcbuf, cbo, true);
         pangolin::glUnsetFrameOfReference();
       }
       // render current camera second in the propper frame of
@@ -420,9 +422,10 @@ int main( int argc, char* argv[] )
           cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
               cudaMemcpyDeviceToDevice);
         }
+        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
         glColor3f(1,0,0);
         pangolin::glSetFrameOfReference(T_wc.matrix());
-        pangolin::RenderVbo(cuPcbuf);
+        pangolin::RenderVboCbo(cuPcbuf, cbo, true);
         pangolin::glUnsetFrameOfReference();
       }
     }

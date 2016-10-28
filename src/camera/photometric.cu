@@ -45,7 +45,7 @@ __global__ void KernelOverlap(
         Eigen::Vector2f uv = camA.Project(pBinA);
         if (greyA.Inside(uv)) {
           Vector3fda pA = pcA(floor(uv(0)), floor(uv(1)));
-          if ((pBinA-pA).norm() < 0.03) {
+//          if ((pBinA-pA).norm() < 0.03) {
             //          if (tid % 10 == 0)
             //          printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
             float diff = greyA.GetBilinear(uv)-greyB(x,y);
@@ -54,7 +54,7 @@ __global__ void KernelOverlap(
             if (errB) errB[id] = sqrt(rmse);
             sum[tid](0) += rmse;
             sum[tid](1) += 1;
-          }
+//          }
         }
         sum[tid](2) += 1;
       }
