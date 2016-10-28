@@ -6,6 +6,7 @@
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera_base.h>
 #include <tdp/camera/rig.h>
+#include <tdp/camera/photometric.h>
 namespace tdp {
 
 /// KeyFrame
@@ -62,12 +63,6 @@ struct KeyFrame {
   SE3f T_wk_; // Transformation from keyframe to world
 
 };
-
-template <int D, class Derived>
-void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
-    const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse, 
-    Image<float>* errB = nullptr);
 
 /// Compute overlap fraction between two KFs in a given pyramid level
 /// lvl
