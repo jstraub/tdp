@@ -56,8 +56,11 @@ class SO3mat : Manifold<T,3> {
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x) const;
 
+  TDP_HOST_DEVICE
   static Eigen::Matrix<T,3,3> invVee(const Eigen::Matrix<T,3,1>& w);
+  TDP_HOST_DEVICE
   static Eigen::Matrix<T,3,1> vee(const Eigen::Matrix<T,3,3>& W);
+  TDP_HOST_DEVICE
   static Eigen::Matrix<T,3,3> skew(const Eigen::Matrix<T,3,3>& W);
 
   /// Generator matrices of SO3
