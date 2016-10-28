@@ -42,6 +42,7 @@
 #include <tdp/slam/keyframe_slam.h>
 #include <tdp/gl/shaders.h>
 #include <tdp/rtmf/vMFMMF.h>
+#include <tdp/utils/colorMap.h>
 #include <tdp/marching_cubes/marching_cubes.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -167,6 +168,11 @@ int main( int argc, char* argv[] )
   containerLoopClosure.AddDisplay(viewDebugC);
   tdp::QuickView viewDebugD(wc, hc);
   containerLoopClosure.AddDisplay(viewDebugD);
+
+  tdp::QuickView viewDebugE(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugE);
+  tdp::QuickView viewDebugF(wc, hc);
+  containerLoopClosure.AddDisplay(viewDebugF);
 
   gui.container().AddDisplay(containerLoopClosure);
 
@@ -302,10 +308,11 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
 
+  pangolin::Var<bool> computePhotometricError("ui.comp Phot Err",true,true);
+
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
   pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
-
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
@@ -357,6 +364,7 @@ int main( int argc, char* argv[] )
   std::vector<tdp::SE3f> T_mos;
 
   std::list<std::pair<int,int>> loopClose;
+  std::map<std::pair<int,int>, float> rmses;
 
   gui.verbose = false;
 
@@ -493,6 +501,33 @@ int main( int argc, char* argv[] )
                 kfs[i].T_wk_ = kfSLAM.GetPose(i);
               }
             }
+
+            if (computePhotometricError) {
+              for (auto& it : kfSLAM.loopClosures_) {
+                tdp::KeyFrame& kfA = kfs[it.first];
+                tdp::KeyFrame& kfB = kfs[it.second];
+                float overlap, rmse;
+                TICK("Overlap");
+                //        cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
+                Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl, overlap, 
+                    rmse, nullptr, nullptr); //&cuPhotoErrAfter);
+                //        photoErrBefore.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
+                TOCK("Overlap");
+                std::cout << it.first << " to " << it.second << ":\tRMSE " << rmse
+                  << "\toverlap " << overlap << std::endl;
+                rmses[it] = rmse;
+              }
+
+              auto mapComp = [](const std::pair<std::pair<int,int>,float>& a, 
+                  const std::pair<std::pair<int,int>,float>& b) -> bool {
+                return a.second < b.second; };
+              std::pair<int,int> idMax =
+                std::max_element(rmses.begin(), rmses.end(),
+                    mapComp)->first;
+
+              viewDebugE.SetImage(kfs[idMax.first].pyrGrey_.GetImage(0));
+              viewDebugF.SetImage(kfs[idMax.second].pyrGrey_.GetImage(0));
+            }
             break;
 
           } else {
@@ -518,6 +553,7 @@ int main( int argc, char* argv[] )
       });
 
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
+
 
   tdp::vMFMMF<3> mmf(10.);
   size_t Nmmf = 1000000;
@@ -601,6 +637,7 @@ int main( int argc, char* argv[] )
       dGrid(2) /= (dTSDF-1);
       vboNMmf.Upload(nMmf.ptr_,nMmf.SizeBytes(), 0);
     }
+
 
     if (pangolin::Pushed(resetTSDF)) {
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
@@ -814,16 +851,32 @@ int main( int argc, char* argv[] )
             T_wk.matrix(), 0.03f);
       }
 
-      glColor4f(1.,0.3,0.3,0.6);
-      for (auto& it : kfSLAM.loopClosures_) {
-        tdp::SE3f& T_wk_A = kfs[it.first].T_wk_;
-        tdp::SE3f& T_wk_B = kfs[it.second].T_wk_;
-        tdp::glDrawLine(T_wk_A.translation(), T_wk_B.translation());
+      if (!useOptimizedPoses) {
+        glColor4f(1.,0.3,0.3,0.6);
+        for (auto& it : kfSLAM.loopClosures_) {
+          tdp::SE3f& T_wk_A = kfs[it.first].T_wk_;
+          tdp::SE3f& T_wk_B = kfs[it.second].T_wk_;
+          tdp::glDrawLine(T_wk_A.translation(), T_wk_B.translation());
+        }
       }
-      glColor4f(0.,1.0,1.0,0.6);
+
+      auto mapComp = [](const std::pair<std::pair<int,int>,float>& a, 
+          const std::pair<std::pair<int,int>,float>& b) -> bool {
+            return a.second < b.second; };
+      float rmseMin = std::min_element(rmses.begin(), rmses.end(),
+          mapComp)->second;
+      float rmseMax = std::max_element(rmses.begin(), rmses.end(),
+          mapComp)->second;
       for (auto& it : kfSLAM.loopClosures_) {
         tdp::SE3f T_wk_A = kfSLAM.GetPose(it.first);
         tdp::SE3f T_wk_B = kfSLAM.GetPose(it.second);
+        if (rmses.find(it) != rmses.end()) {
+          tdp::Vector3bda c = tdp::ColorMapHot(
+              (rmses[it]-rmseMin)/(rmseMax-rmseMin));
+          glColor4f(c(0)/255.,c(1)/255.,c(2)/255.,1.); 
+        } else {
+          glColor4f(0.,0.0,1.0,1.0); 
+        }
         tdp::glDrawLine(T_wk_A.translation(), T_wk_B.translation());
       }
       // render model and observed point cloud
@@ -943,6 +996,12 @@ int main( int argc, char* argv[] )
     }
     if (viewDebugD.IsShown()) {
       viewDebugD.RenderImage();
+    }
+    if (viewDebugE.IsShown()) {
+      viewDebugE.RenderImage();
+    }
+    if (viewDebugF.IsShown()) {
+      viewDebugF.RenderImage();
     }
 
     if (viewGrad3DPyr.IsShown()) {
