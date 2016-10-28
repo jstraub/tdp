@@ -38,6 +38,12 @@ class CameraBase {
     return static_cast<const Derived*>(this)->GetK();
   }
 
+  /// Jacobian of projection at 3D point p
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,2,3> Jproject(const Eigen::Matrix<T,3,1>& p) const {
+    return static_cast<const Derived*>(this)->Jproject(p);
+  }
+
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3> GetKinv() const {
     return static_cast<const Derived*>(this)->GetKinv();

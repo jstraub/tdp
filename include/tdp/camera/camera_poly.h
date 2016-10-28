@@ -83,6 +83,7 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
     return Eigen::Matrix<T,3,1>(ray(0)*scale*z, ray(1)*scale*z, z);
   }
 
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3> GetK() const {
     Eigen::Matrix<T,3,3> K = Eigen::Matrix<T,3,3>::Zero();
     K(0,0) = this->params_(0);
@@ -93,6 +94,7 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
     return K;
   }
 
+  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3> GetKinv() const {
     Eigen::Matrix<T,3,3> Kinv = Eigen::Matrix<T,3,3>::Zero();
     Kinv(0,0) = 1./this->params_(0);
@@ -101,6 +103,14 @@ class CameraPoly3 : public CameraBase<T,7,CameraPoly3<T>> {
     Kinv(0,2) = -this->params_(2)/this->params_(0);
     Kinv(1,2) = -this->params_(3)/this->params_(1);
     return Kinv;
+  }
+
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,2,3> Jproject(const Eigen::Matrix<T,3,1>& p) const {
+    Eigen::Matrix<T,2,3> Jpi;
+    Jpi << this->params_(0)/p(2), 0., -p(0)*this->params_(0)/(p(2)*p(2)),
+           0., this->params_(1)/p(2), -p(1)*this->params_(1)/(p(2)*p(2));
+    return Jpi;
   }
 
   bool FromJson(pangolin::json::value& val){

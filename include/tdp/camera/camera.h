@@ -66,6 +66,14 @@ class Camera : public CameraBase<T,4,Camera<T>> {
     return Kinv;
   }
 
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,2,3> Jproject(const Eigen::Matrix<T,3,1>& p) const {
+    Eigen::Matrix<T,2,3> Jpi;
+    Jpi << this->params_(0)/p(2), 0., -p(0)*this->params_(0)/(p(2)*p(2)),
+           0., this->params_(1)/p(2), -p(1)*this->params_(1)/(p(2)*p(2));
+    return Jpi;
+  }
+
   bool FromJson(pangolin::json::value& val){
     if (!val.contains("model"))
       return false;
