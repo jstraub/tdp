@@ -32,6 +32,10 @@ template<>
 TDP_HOST_DEVICE inline bool isNan(const Vector3fda& val)
 {return isNan<float>(val(0)) || isNan<float>(val(1)) || isNan<float>(val(2));};
 
+template<>
+TDP_HOST_DEVICE inline bool isNan(const Vector2fda& val)
+{return isNan<float>(val(0)) || isNan<float>(val(1));};
+
 #ifdef CUDA_FOUND
 void ComputeKernelParamsForArray(dim3& blocks, dim3& threads,
     size_t size, size_t numThreads, size_t numDataPerThread=1);

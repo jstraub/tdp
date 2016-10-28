@@ -28,6 +28,11 @@ inline Vector3fda zero()
 
 template<>
 TDP_HOST_DEVICE
+inline  Vector2fda zero()
+{return Vector2fda::Zero();};
+
+template<>
+TDP_HOST_DEVICE
 inline Eigen::Vector2f zero()
 {return Eigen::Vector2f::Zero();};
 

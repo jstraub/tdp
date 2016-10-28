@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <tdp/data/pyramid.h>
+#include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
 #include <tdp/cuda/cuda.h>
 #include <tdp/reductions/reductions.cuh>
@@ -48,6 +49,31 @@ void KernelPyrDown(
   }
 }
 
+
+//template<typename T>
+//void PyrDown(
+//    const Image<T>& Iin,
+//    Image<T>& Iout
+//    ) {
+//  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+//  assert(Iin.w_ == Iout.w_*2);
+//  assert(Iin.h_ == Iout.h_*2);
+//  dim3 threads, blocks;
+//  ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
+//  KernelPyrDown<T><<<blocks,threads>>>(Iin,Iout);
+//  checkCudaErrors(cudaDeviceSynchronize());
+//}
+
+//template void PyrDown(
+//    const Image<float>& Iin,
+//    Image<float>& Iout);
+//template void PyrDown(
+//    const Image<Vector3fda>& Iin,
+//    Image<Vector3fda>& Iout);
+//template void PyrDown(
+//    const Image<Vector2fda>& Iin,
+//    Image<Vector2fda>& Iout);
+
 void PyrDown(
     const Image<Vector3fda>& Iin,
     Image<Vector3fda>& Iout
@@ -58,6 +84,19 @@ void PyrDown(
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
   KernelPyrDown<Vector3fda><<<blocks,threads>>>(Iin,Iout);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void PyrDown(
+    const Image<Vector2fda>& Iin,
+    Image<Vector2fda>& Iout
+    ) {
+  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+  assert(Iin.w_ == Iout.w_*2);
+  assert(Iin.h_ == Iout.h_*2);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
+  KernelPyrDown<Vector2fda><<<blocks,threads>>>(Iin,Iout);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 

@@ -14,19 +14,33 @@
 namespace tdp {
 
 #ifdef CUDA_FOUND
-void PyrDown(
-    const Image<float>& Iin,
-    Image<float>& Iout
-    );
+  // TODO: no idea why tempalted header + explicit instantiation does
+  // not work
+//template <typename T>
+//void PyrDown(
+//    const Image<T>& Iin,
+//    Image<T>& Iout
+//    );
+
 void PyrDown(
     const Image<Vector3fda>& Iin,
     Image<Vector3fda>& Iout
     );
+void PyrDown(
+    const Image<Vector2fda>& Iin,
+    Image<Vector2fda>& Iout
+    );
+void PyrDown(
+    const Image<float>& Iin,
+    Image<float>& Iout
+    );
+
 void PyrDownBlur(
     const Image<float>& Iin,
     Image<float>& Iout,
     float sigma_in
     );
+
 #endif
 
 template<typename T, int LEVELS>
