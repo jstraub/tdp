@@ -50,7 +50,21 @@ Eigen::Matrix<T,6,1> SE3<T,Options>::Log(const SE3<T,Options>& other) const {
 
 template<typename T, int Options>
 SE3<T,Options> SE3<T,Options>::Exp_(const Eigen::Matrix<T,6,1>& w) {
-  return SE3<T,Options>(SO3<T,Options>::Exp_(w.topRows(3)), w.bottomRows(3));
+  const Eigen::Matrix<T,3,3,Options> W = SO3mat<T>::invVee(w.bottomRows(3));
+  const T theta = sqrt(w.topRows(3).array().square().matrix().sum());
+  const T thetaSq = theta*theta;
+  T b,c;
+  if (fabs(theta) < 1e-4) {
+    b = 0.5*(1.-thetaSq/12.*(1.-thetaSq/30.*(1.-thetaSq/56.)));
+    c = (1.-thetaSq/20.*(1.-thetaSq/42.*(1.-thetaSq/72.)))/6.;
+  } else {
+    b = (1.-cos(theta))/(thetaSq);
+    c = (1.-sinc(theta))/(thetaSq);
+  }
+  Eigen::Matrix<T,3,3,Options> V = 
+    Eigen::Matrix<T,3,3,Options>::Identity() + b*W + c*W*W;
+  return SE3<T,Options>(SO3<T,Options>::Exp_(w.topRows(3)), 
+      V*w.bottomRows(3));
 }
 
 template<typename T, int Options>
