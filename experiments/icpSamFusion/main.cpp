@@ -221,7 +221,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
   
-  tdp::ManagedHostPyramid<float,3> pyrGrey(wc,hc);
+  tdp::ManagedHostImage<float> greyDu(wc, hc);
+  tdp::ManagedHostImage<float> greyDv(wc, hc);
+  tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -234,6 +237,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_c(wc,hc);
+
+  tdp::ManagedDevicePyramid<float,3> cuPyrGrey_c(wc,hc);
+  tdp::ManagedDevicePyramid<float,3> cuPyrGrey_m(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_c(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_m(wc,hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3fda> nEstdummy(wc,hc);
 
@@ -279,8 +287,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
-  pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
+  pangolin::Var<bool>  icpRgb("ui.run ICP RGB", true, true);
 
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
@@ -305,6 +312,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", 0.01,-1.,1.);
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.11,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
+  pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",1.,0.,1.);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
 
@@ -441,16 +449,32 @@ int main( int argc, char* argv[] )
 //              icpLoopCloseDistThr, true | gui.verbose); 
             std::vector<float> errPerLvl;
             std::vector<float> countPerLvl;
-            if (useRgbCamParasForDepth) {
-              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
-                  rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
-                  icpLoopCloseDistThr,
-                  gui.verbose, T_ab, errPerLvl, countPerLvl);
+            if (icpRgb) {
+              tdp::ManagedDevicePyramid<float,3> cuPyrGrey_c(wc,hc);
+              tdp::ManagedDevicePyramid<float,3> cuPyrGrey_m(wc,hc);
+              tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_c(wc,hc);
+              tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_m(wc,hc);
+              cuPyrGrey_m.CopyFrom(kfA.pyrGrey_, cudaMemcpyHostToDevice);
+              cuPyrGrey_c.CopyFrom(kfB.pyrGrey_, cudaMemcpyHostToDevice);
+              cuPyrGradGrey_m.CopyFrom(kfA.pyrGradGrey_, cudaMemcpyHostToDevice);
+              cuPyrGradGrey_c.CopyFrom(kfB.pyrGradGrey_, cudaMemcpyHostToDevice);
+              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
+                  cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
+                  cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
+                  icpDistThr, icpRgbLambda, gui.verbose, T_ab,
+                  errPerLvl, countPerLvl);
             } else {
-              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
-                  rig, rig.dStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
-                  icpLoopCloseDistThr,
-                  gui.verbose, T_ab, errPerLvl, countPerLvl);
+              if (useRgbCamParasForDepth) {
+                tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+                    rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
+                    icpLoopCloseDistThr,
+                    gui.verbose, T_ab, errPerLvl, countPerLvl);
+              } else {
+                tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
+                    rig, rig.dStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
+                    icpLoopCloseDistThr,
+                    gui.verbose, T_ab, errPerLvl, countPerLvl);
+              }
             }
             count = countPerLvl[0];
             err = errPerLvl[0];
@@ -587,7 +611,6 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(recomputeBoundingBox)) {
-
       for (size_t i=0; i<Nmmf; ++i) {
         tdp::Vector3fda ni ;
         do {
@@ -691,11 +714,15 @@ int main( int argc, char* argv[] )
     rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);
-//    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
-//    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
-//    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
-//        cuGreydv, cuGs);
-//    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
+
+    tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
+    tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
+    greyDu.CopyFrom(cuGreyDu, cudaMemcpyDeviceToHost);
+    greyDv.CopyFrom(cuGreyDv, cudaMemcpyDeviceToHost);
+    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
+        cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
+
     TOCK("Setup Pyramids");
 
     if(kfs.size() > 0 && !gui.finished()) {
@@ -733,11 +760,18 @@ int main( int argc, char* argv[] )
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      if (!icpGrad3D) {
+      std::vector<float> errPerLvl;
+      std::vector<float> countPerLvl;
+      if (icpRgb) {
+        cuPyrGrey_m.CopyFrom(kf.pyrGrey_,cudaMemcpyHostToDevice);
+        cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_,cudaMemcpyHostToDevice);
+        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
+            cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
+            cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
+            icpDistThr, icpRgbLambda, gui.verbose, T_ac, errPerLvl, countPerLvl);
+      } else {
 //        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
 //            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
-        std::vector<float> errPerLvl;
-        std::vector<float> countPerLvl;
         if (useRgbCamParasForDepth) {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
@@ -771,8 +805,9 @@ int main( int argc, char* argv[] )
           << " T_mk: " << std::endl << T_mo
           << std::endl;
 
-        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
-        kfs.emplace_back(pcs_c, ns_c, pyrGrey, rgb, cuD, T_mo);
+//        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
+        kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
+            rgb, cuD, T_mo);
         if (kfs.size() == 1) {
           std::cout << "first KF -> adding origin" << std::endl;
           kfSLAM.AddOrigin(T_mo);

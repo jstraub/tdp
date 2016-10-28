@@ -33,12 +33,13 @@ struct KeyFrame {
       const Pyramid<Vector3fda,3>& pc, 
       const Pyramid<Vector3fda,3>& n,
       const Pyramid<float,3>& grey,
+      const Pyramid<Vector2fda,3>& gradGrey,
       const Image<Vector3bda>& rgb,
       const Image<float>& d,
       const SE3f& T_wk) :
     pc_(pc.w_, pc.h_), n_(n.w_, n.h_), rgb_(rgb.w_, rgb.h_), 
     d_(d.w_, d.h_), pyrPc_(pc.w_, pc.h_), pyrN_(n.w_, n.h_),
-    pyrGrey_(grey.w_, grey.h_),
+    pyrGrey_(grey.w_, grey.h_), pyrGradGrey_(gradGrey.w_, gradGrey.h_),
     T_wk_(T_wk)
   {
     pc_.CopyFrom(pc.GetConstImage(0),  cudaMemcpyDeviceToHost);
@@ -49,6 +50,7 @@ struct KeyFrame {
     pyrPc_.CopyFrom(pc,     cudaMemcpyDeviceToHost);
     pyrN_.CopyFrom(n,       cudaMemcpyDeviceToHost);
     pyrGrey_.CopyFrom(grey, cudaMemcpyHostToHost);
+    pyrGradGrey_.CopyFrom(gradGrey, cudaMemcpyDeviceToHost);
   }
 
   ManagedHostImage<Vector3fda> pc_;
@@ -59,6 +61,7 @@ struct KeyFrame {
   ManagedHostPyramid<Vector3fda,3> pyrPc_;
   ManagedHostPyramid<Vector3fda,3> pyrN_;
   ManagedHostPyramid<float,3> pyrGrey_;
+  ManagedHostPyramid<Vector2fda,3> pyrGradGrey_;
 
   SE3f T_wk_; // Transformation from keyframe to world
 
