@@ -17,6 +17,7 @@ template<int BLK_SIZE, int D, typename Derived>
 __global__ void KernelOverlap(
     Image<float> greyA,
     Image<float> greyB,
+    Image<Vector3fda> pcA,
     Image<Vector3fda> pcB,
     SE3f T_ab,
     CameraBase<float,D,Derived> camA,
@@ -40,16 +41,20 @@ __global__ void KernelOverlap(
     if (x < pcB.w_ && y < pcB.h_) {
       Vector3fda pB = pcB(x,y);
       if (IsValidData(pB)) {
-        Eigen::Vector2f uv = camA.Project(T_ab*pB);
+        Vector3fda pBinA = T_ab*pB;
+        Eigen::Vector2f uv = camA.Project(pBinA);
         if (greyA.Inside(uv)) {
-//          if (tid % 10 == 0)
-//          printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
-          float diff = greyA.GetBilinear(uv)-greyB(x,y);
-//          float diff = greyB(x,y);
-          float rmse = diff*diff;
-          if (errB) errB[id] = sqrt(rmse);
-          sum[tid](0) += rmse;
-          sum[tid](1) += 1;
+          Vector3fda pA = pcA(floor(uv(0)), floor(uv(1)));
+          if ((pBinA-pA).norm() < 0.03) {
+            //          if (tid % 10 == 0)
+            //          printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
+            float diff = greyA.GetBilinear(uv)-greyB(x,y);
+            //          float diff = greyB(x,y);
+            float rmse = diff*diff;
+            if (errB) errB[id] = sqrt(rmse);
+            sum[tid](0) += rmse;
+            sum[tid](1) += 1;
+          }
         }
         sum[tid](2) += 1;
       }
@@ -60,7 +65,9 @@ __global__ void KernelOverlap(
 
 template <int D, class Derived>
 void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
+    const Image<Vector3fda>& pcA, 
+    const Image<Vector3fda>& pcB, 
+    const SE3f& T_ab, 
     const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse, 
     Image<float>* errB) {
   
@@ -72,7 +79,7 @@ void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
   cudaMemset(out.ptr_, 0, out.SizeBytes());
 
   KernelOverlap<BLK_SIZE,D,Derived><<<blocks,threads,
-    BLK_SIZE*sizeof(Vector3fda)>>>(greyA, greyB, pcB, T_ab, camA, 10,
+    BLK_SIZE*sizeof(Vector3fda)>>>(greyA, greyB, pcA, pcB, T_ab, camA, 10,
         out, errB ? errB->ptr_ : nullptr);
   checkCudaErrors(cudaDeviceSynchronize());
 
@@ -87,12 +94,16 @@ void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
 
 template 
 void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
+    const Image<Vector3fda>& pcA, 
+    const Image<Vector3fda>& pcB, 
+    const SE3f& T_ab, 
     const BaseCameraf& camA, float& overlap, float& rmse, 
     Image<float>* errB);
 template 
 void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
+    const Image<Vector3fda>& pcA, 
+    const Image<Vector3fda>& pcB, 
+    const SE3f& T_ab, 
     const BaseCameraPoly3f& camA, float& overlap, float& rmse, 
     Image<float>* errB);
 

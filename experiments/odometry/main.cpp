@@ -335,8 +335,10 @@ int main( int argc, char* argv[] )
     float overlap, rmse;
     cudaMemset(cuIrmse.ptr_, 0, cuIrmse.SizeBytes());
     tdp::OverlapGpu(cuPyrGrey_m.GetImage(0), cuPyrGrey_c.GetImage(0),
-        pcs_c.GetImage(0), T_mc, rig.cams_[0], overlap, rmse, &cuIrmse);
+        pcs_m.GetImage(0), pcs_c.GetImage(0), T_mc, rig.cams_[0],
+        overlap, rmse, &cuIrmse); 
     Irmse.CopyFrom(cuIrmse, cudaMemcpyDeviceToHost);
+
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");

@@ -76,8 +76,9 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 
   const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
   const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
+  const Image<Vector3fda> pcA = kfA.pyrPc_.GetConstImage(lvl);
   const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
-  Overlap(greyA, greyB, pcB, T_ab_, 
+  Overlap(greyA, greyB, pcA, pcB, T_ab_, 
       ScaleCamera<float,D,Derived>(cam,pow(0.5,lvl)), 
       overlap, rmse, errB);
 }
@@ -94,6 +95,7 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
   rmse = 0.f;
   const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
   const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
+  const Image<Vector3fda> pcA = kfA.pyrPc_.GetConstImage(lvl);
   const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
 
   for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
@@ -108,6 +110,7 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 
     const Image<float> greyAi = rig.GetStreamRoiOrigSize(greyA, sId);
     const Image<float> greyBi = rig.GetStreamRoiOrigSize(greyB, sId);
+    const Image<Vector3fda> pcAi = rig.GetStreamRoiOrigSize(pcA, sId);
     const Image<Vector3fda> pcBi = rig.GetStreamRoiOrigSize(pcB, sId);
 
     //TODO
@@ -115,6 +118,8 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
     cuGreyAi.CopyFrom(greyAi, cudaMemcpyHostToDevice);
     ManagedDeviceImage<float> cuGreyBi(greyBi.w_, greyBi.h_);
     cuGreyBi.CopyFrom(greyBi, cudaMemcpyHostToDevice);
+    ManagedDeviceImage<Vector3fda> cuPcAi(pcAi.w_, pcAi.h_);
+    cuPcAi.CopyFrom(pcAi, cudaMemcpyHostToDevice);
     ManagedDeviceImage<Vector3fda> cuPcBi(pcBi.w_, pcBi.h_);
     cuPcBi.CopyFrom(pcBi, cudaMemcpyHostToDevice);
 
@@ -125,7 +130,6 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 //      std::cout << errBi->Description() << std::endl;
     }
 
-
 //    std::cout << cuGreyBi.Description() << std::endl
 //      << greyBi.Description() << std::endl;
 //    std::cout << cuGreyAi.Description() << std::endl
@@ -133,12 +137,11 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 //    std::cout << cuPcBi.Description() << std::endl
 //      << pcBi.Description() << std::endl;
 
-
     float overlapi = 0.;
     float rmsei = 0.;
 //    Overlap(greyAi, greyBi, pcBi, T_rc.Inverse()*T_ab_, 
 //        cam, overlapi, rmsei, errBi);
-    OverlapGpu(cuGreyAi, cuGreyBi, cuPcBi, T_rc.Inverse()*T_ab_, 
+    OverlapGpu(cuGreyAi, cuGreyBi, cuPcAi, cuPcBi, T_rc.Inverse()*T_ab_, 
         cam, overlapi, rmsei, errBi);
     rmse += rmsei;
     overlap += overlapi;
@@ -153,7 +156,9 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 
 template <int D, class Derived>
 void Overlap(const Image<float>& greyA, const Image<float>& greyB,
-    const Image<Vector3fda>& pcB, const SE3f& T_ab, 
+    const Image<Vector3fda>& pcA, 
+    const Image<Vector3fda>& pcB, 
+    const SE3f& T_ab, 
     const CameraBase<float,D,Derived>& camA, float& overlap, float& rmse, 
     Image<float>* errB=nullptr) {
 
