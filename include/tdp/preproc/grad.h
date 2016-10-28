@@ -19,6 +19,9 @@ void Gradient(const Image<float>& I,
     Image<float>& Iu, Image<float>& Iv,
     Image<Vector2fda>& gradI);
 
+void Grad2Image(const Image<Vector2fda>& grad,
+    Image<Vector3bda>& grad2d);
+
 template<int D, typename Derived>
 void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     const Image<float>& cuD,

@@ -113,4 +113,35 @@ void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,
     float gradNormThr,
     Image<Vector3fda>& cuGrad3D);
 
+__global__ 
+void KernelGrad2Image(
+    Image<Vector2fda> grad, Image<Vector3bda> grad2d) {
+  //const int tid = threadIdx.x;
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < grad.w_ && idy < grad.h_) {
+    Vector2fda gradi = grad(idx,idy);
+    if (IsValidData(gradi)) {
+      grad2d(idx,idy)(0) = gradi(0)>1.?255:(gradi(0)<-1?0:floor(gradi(0)*128+127));
+      grad2d(idx,idy)(1) = gradi(1)>1.?255:(gradi(1)<-1?0:floor(gradi(1)*128+127));
+      grad2d(idx,idy)(2) = 0;
+    } else {
+      grad2d(idx,idy)(0) = 0;
+      grad2d(idx,idy)(1) = 0;
+      grad2d(idx,idy)(2) = 0;
+    }
+  }
+}
+
+void Grad2Image(
+    const Image<Vector2fda>& grad,
+    Image<Vector3bda>& grad2d
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,grad,32,32);
+  KernelGrad2Image<<<blocks,threads>>>(grad,grad2d);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }
