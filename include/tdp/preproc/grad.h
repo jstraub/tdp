@@ -9,8 +9,15 @@ namespace tdp {
 void Gradient(const Image<float>& I, 
     Image<float>& Iu, Image<float>& Iv);
 
+void Gradient2Vector(const Image<float>& Iu, const Image<float>& Iv,
+    Image<Vector2fda>& gradI);
+
 void Gradient2AngleNorm(const Image<float>& Iu, const Image<float>& Iv,
     Image<float>& Itheta, Image<float>& Inorm);
+
+void Gradient(const Image<float>& I, 
+    Image<float>& Iu, Image<float>& Iv,
+    Image<Vector2fda>& gradI);
 
 template<int D, typename Derived>
 void Gradient3D(const Image<float>& Iu, const Image<float>& Iv,

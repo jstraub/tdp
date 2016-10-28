@@ -7,6 +7,27 @@
 namespace tdp {
 
 __global__
+void KernelGradient2Vector(Image<float> Iu, Image<float> Iv,
+    Image<Vector2fda> gradI) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < Iu.w_ && idy < Iu.h_) {
+    float Iui = Iu(idx,idy);
+    float Ivi = Iv(idx,idy);
+    gradI(idx,idy) = Vector2fda(Iui,Ivi);
+  }
+}
+
+void Gradient2Vector(const Image<float>& Iu, const Image<float>& Iv,
+    Image<Vector2fda>& gradI) {
+
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iu,32,32);
+  KernelGradient2Vector<<<blocks,threads>>>(Iu,Iv,gradI);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__global__
 void KernelGradient2AngleNorm(Image<float> Iu, Image<float> Iv,
     Image<float> Itheta, Image<float> Inorm) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;

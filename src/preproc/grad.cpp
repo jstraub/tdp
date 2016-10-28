@@ -31,4 +31,11 @@ void Gradient(const Image<float>& I,
   cudaMemset(Iv.ptr_,0,Iv.w_*sizeof(float));
 }
 
+void Gradient(const Image<float>& I, 
+    Image<float>& Iu, Image<float>& Iv,
+    Image<Vector2fda>& gradI) {
+  Gradient(I, Iu, Iv);
+  Gradient2Vector(Iu, Iv, gradI);
+}
+
 }
