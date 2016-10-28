@@ -26,7 +26,8 @@ template <typename T>
 T sinc(T angle) {
   if (fabs(angle) < 1e-6) {
     T angleSq = angle*angle;
-    return 1. - angleSq/6. + angleSq*angleSq/120.;
+//    return 1. - angleSq/6. + angleSq*angleSq/120.;
+    return 1. - angleSq/6.*(1.-angleSq/20.*(1.-angleSq/42.));
   }
   return sin(angle)/angle;
 }
