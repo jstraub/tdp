@@ -153,22 +153,24 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<float> tsdfMu("ui.mu",0.05,0.,1.);
+  pangolin::Var<float> tsdfMu("ui.mu",0.01,0.,0.1);
   pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-.262,-.5,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-.345,-.5,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",-.048,-.1,0);
-  pangolin::Var<float> gridEx("ui.gridE x",.30,0.5,0);
-  pangolin::Var<float> gridEy("ui.gridE y",.26,0.5,0);
-  pangolin::Var<float> gridEz("ui.gridE z",.71,0.9,0);
+  pangolin::Var<float> grid0x("ui.grid0 x",-0.16,-.5,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-0.16,-.5,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.17,0.,0.3);
+  pangolin::Var<float> gridEx("ui.gridE x",0.18,0.5,0.);
+  pangolin::Var<float> gridEy("ui.gridE y",0.15,0.5,0.);
+  pangolin::Var<float> gridEz("ui.gridE z",0.45,0.9,0.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
-  pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
+  pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
+
+  pangolin::Var<bool>  showPc("ui.showPc", true, true);
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+3)];
@@ -276,7 +278,7 @@ int main( int argc, char* argv[] )
       tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
     }
 
-    if (!gui.paused() && fuseTSDF && (!rotatingDepthScan || (rotatingDepthScan && received.Get()))) {
+    if (!gui.paused() && fuseTSDF ) {
     	std::cout << "fusing a frame" << std::endl;
       TICK("Add To TSDF");
       rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
@@ -309,8 +311,10 @@ int main( int argc, char* argv[] )
       glColor4f(1,0,0,0.5f);
       pangolin::glDrawAlignedBox(box);
 
-      // render point cloud
-      pangolin::RenderVboCbo(vbo,cbo,true);
+      if (showPc) {
+        // render point cloud
+        pangolin::RenderVboCbo(vbo,cbo,true);
+      }
 
 
       if (meshVbo.num_elements > 0

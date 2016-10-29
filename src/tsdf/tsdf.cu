@@ -210,18 +210,20 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     int y = floor(u_d(1)+0.5);
     if (0<=x&&x<d.w_ && 0<=y&&y<d.h_) {
       const float z_d = d(x, y);
-      const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
-      const float z_tsdf = (T_rd.translation()-p_r).norm()/lambda;
-      const float eta = z_d - z_tsdf;
-      if (eta >= -mu) {
-        const float etaOverMu = eta/mu;
-        const float psi = (etaOverMu>1.f?1.f:etaOverMu);
-        // TODO can use other weights as well (like incidence angle)
-        const float Wnew = 1.;
-        const float Wprev = tsdf(idx,idy,idz).w;
-        tsdf(idx,idy,idz).f = (Wprev*tsdf(idx,idy,idz).f
-            + Wnew*psi)/(Wprev+Wnew);
-        tsdf(idx,idy,idz).w = min(Wprev+Wnew, wMax);
+      if (z_d > 0.1) {
+        const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
+        const float z_tsdf = (T_rd.translation()-p_r).norm()/lambda;
+        const float eta = z_d - z_tsdf;
+        if (eta >= -mu) {
+          const float etaOverMu = eta/mu;
+          const float psi = (etaOverMu>1.f?1.f:etaOverMu);
+          // TODO can use other weights as well (like incidence angle)
+          const float Wnew = 1.;
+          const float Wprev = tsdf(idx,idy,idz).w;
+          tsdf(idx,idy,idz).f = (Wprev*tsdf(idx,idy,idz).f
+              + Wnew*psi)/(Wprev+Wnew);
+          tsdf(idx,idy,idz).w = min(Wprev+Wnew, wMax);
+        }
       }
     }
   }
