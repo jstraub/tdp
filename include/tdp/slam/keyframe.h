@@ -90,16 +90,26 @@ template <typename CamT>
 void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
     const Rig<CamT>& rig, int lvl, float& overlap,
     float& rmse, const SE3f* T_ab = nullptr, Image<float>* errB=nullptr) {
+
+
   tdp::SE3f T_ab_ = kfA.T_wk_.Inverse() * kfB.T_wk_;
   if (T_ab)
     T_ab_ = *T_ab;
 
   overlap = 0.f;
   rmse = 0.f;
-  const Image<float> greyA = kfA.pyrGrey_.GetConstImage(0);
-  const Image<float> greyB = kfB.pyrGrey_.GetConstImage(0);
-  const Image<Vector3fda> pcA = kfA.pyrPc_.GetConstImage(0);
-  const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(0);
+
+  size_t w = kfA.pyrGrey_.w_;
+  size_t h = kfA.pyrGrey_.h_;
+  ManagedDeviceImage<float> greyA(w,h);
+  greyA.CopyFrom(kfA.pyrGrey_.GetConstImage(0), cudaMemcpyHostToDevice);
+  ManagedDeviceImage<float> greyB(w,h);
+  greyB.CopyFrom(kfB.pyrGrey_.GetConstImage(0), cudaMemcpyHostToDevice);
+  ManagedDeviceImage<Vector3fda> pcA(w,h);
+  pcA.CopyFrom(kfA.pyrPc_.GetConstImage(0), cudaMemcpyHostToDevice);
+  ManagedDeviceImage<Vector3fda> pcB(w,h);
+  pcB.CopyFrom(kfB.pyrPc_.GetConstImage(0), cudaMemcpyHostToDevice);
+
   OverlapGpu(greyA, greyB, pcA, pcB, T_ab_, rig, overlap, rmse, errB); 
 }
 

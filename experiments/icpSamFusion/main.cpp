@@ -283,7 +283,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
-  pangolin::Var<bool> trackClosestKf("ui.track closest KF",false,false);
+  pangolin::Var<bool> trackClosestKf("ui.track closest KF",false,true);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
@@ -612,6 +612,7 @@ int main( int argc, char* argv[] )
       resetTSDF = true;
       runSlamFusion = true;
       recomputeBoundingBox = true;
+      trackClosestKf = true;
     }
 
     if (pangolin::Pushed(recomputeBoundingBox)) {
