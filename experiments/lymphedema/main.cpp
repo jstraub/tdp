@@ -156,12 +156,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> tsdfMu("ui.mu",0.01,0.,0.1);
   pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
-  pangolin::Var<float> grid0x("ui.grid0 x",-0.16,-.5,0);
-  pangolin::Var<float> grid0y("ui.grid0 y",-0.16,-.5,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",0.17,0.,0.3);
+  pangolin::Var<float> grid0x("ui.grid0 x",-0.175,-.5,0);
+  pangolin::Var<float> grid0y("ui.grid0 y",-0.116,-.5,0);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.243,0.,0.3);
   pangolin::Var<float> gridEx("ui.gridE x",0.18,0.5,0.);
-  pangolin::Var<float> gridEy("ui.gridE y",0.15,0.5,0.);
-  pangolin::Var<float> gridEz("ui.gridE z",0.45,0.9,0.);
+  pangolin::Var<float> gridEy("ui.gridE y",0.074,0.5,0.);
+  pangolin::Var<float> gridEz("ui.gridE z",0.461,0.9,0.);
 
   pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
 
@@ -171,6 +171,24 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::Var<bool>  showPc("ui.showPc", true, true);
+
+  tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+  tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+  tdp::Vector3fda dGrid = gridE - grid0;
+
+
+  tdp::ThreadedValue<bool> runSave(true);
+  std::thread workThread([&]() {
+        while(runSave.Get()) {
+          if (pangolin::Pushed(saveTSDF)) {
+            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, tsdfOutputPath);
+            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+          }
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+      });
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+3)];
@@ -187,9 +205,9 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
-    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
-    tdp::Vector3fda dGrid = gridE - grid0;
+    grid0 << grid0x,grid0y,grid0z;
+    gridE << gridEx,gridEy,gridEz;
+    dGrid = gridE - grid0;
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
@@ -375,4 +393,7 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
+
+  runSave.Set(false);
+  workThread.join();
 }
