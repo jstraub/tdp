@@ -11,6 +11,4 @@ add_executable(${ProjName}
 
 target_link_libraries(${ProjName}
   tdp
-  ${ISAM_LIBRARY}
-  ${CHOLMOD_LIBRARIES}
   )
