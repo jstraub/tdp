@@ -354,21 +354,23 @@ int main( int argc, char* argv[] )
     std::vector<float> errPerLvl;
     std::vector<float> countPerLvl;
     T_mc = tdp::SE3f();
+    Eigen::Matrix<float,6,6> Sigma_mc = 1e-4*Eigen::Matrix<float,6,6>::Identity();
     TICK("ICP");
     if(icpFrame2Frame) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-          gui.verbose, T_mc, errPerLvl, countPerLvl);
+          gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
     } else if (icpRgb) {
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
           cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
           cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
-          icpDistThr, icpRgbLambda, gui.verbose, T_mc, errPerLvl, countPerLvl);
+          icpDistThr, icpRgbLambda, gui.verbose, T_mc, Sigma_mc,
+          errPerLvl, countPerLvl);
     } else if (icpGrad3D) {
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-          gui.verbose, T_mc, errPerLvl, countPerLvl);
+          gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
     }
     TOCK("ICP");
     if (!gui.paused()) {
@@ -382,8 +384,13 @@ int main( int argc, char* argv[] )
     float overlap, rmse;
     cudaMemset(cuIrmse.ptr_, 0, cuIrmse.SizeBytes());
     tdp::OverlapGpu(cuPyrGrey_m.GetImage(0), cuPyrGrey_c.GetImage(0),
-        pcs_m.GetImage(0), pcs_c.GetImage(0), T_mc, rig.cams_[0],
+        pcs_m.GetImage(0), pcs_c.GetImage(0), T_mc, rig,
         overlap, rmse, &cuIrmse); 
+//    tdp::OverlapGpu(cuPyrGrey_m.GetImage(0), cuPyrGrey_c.GetImage(0),
+//        pcs_m.GetImage(0), pcs_c.GetImage(0),
+//        rig.T_rcs_[rig.rgbStream2cam_[0]].Inverse()* T_mc, 
+//        rig.cams_[rig.rgbStream2cam_[0]],
+//        overlap, rmse, &cuIrmse); 
     Irmse.CopyFrom(cuIrmse, cudaMemcpyDeviceToHost);
     rmseView = rmse;
     logRmse.Log(rmse);

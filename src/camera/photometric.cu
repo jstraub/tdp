@@ -19,7 +19,7 @@ __global__ void KernelOverlap(
     Image<float> greyB,
     Image<Vector3fda> pcA,
     Image<Vector3fda> pcB,
-    SE3f T_ab,
+    SE3f T_ab, // frame b to frame a !camera!
     CameraBase<float,D,Derived> camA,
     int N_PER_T,
     Image<Vector3fda> stats,
@@ -46,8 +46,8 @@ __global__ void KernelOverlap(
         if (greyA.Inside(uv)) {
           Vector3fda pA = pcA(floor(uv(0)), floor(uv(1)));
 //          if ((pBinA-pA).norm() < 0.03) {
-            //          if (tid % 10 == 0)
-            //          printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
+//          if (id % 1000 == 0)
+//            printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
             float diff = greyA.GetBilinear(uv)-greyB(x,y);
             //          float diff = greyB(x,y);
             float rmse = diff*diff;
@@ -59,6 +59,29 @@ __global__ void KernelOverlap(
         sum[tid](2) += 1;
       }
     }
+//    const int x = id%pcA.w_;
+//    const int y = id/pcA.w_;
+//    if (x < pcA.w_ && y < pcA.h_) {
+//      Vector3fda pA = pcA(x,y);
+//      if (IsValidData(pA)) {
+//        Vector3fda pAinB = T_ab.Inverse()*pA;
+//        Eigen::Vector2f uv = camA.Project(pAinB);
+//        if (greyB.Inside(uv)) {
+//          Vector3fda pA = pcA(floor(uv(0)), floor(uv(1)));
+////          if ((pBinA-pA).norm() < 0.03) {
+//            //          if (tid % 10 == 0)
+//            //          printf("%f %f %d %d %d\n", uv(0), uv(1), x, y, id);
+//            float diff = greyB.GetBilinear(uv)-greyA(x,y);
+//            //          float diff = greyB(x,y);
+//            float rmse = diff*diff;
+//            if (errB) errB[id] = sqrt(rmse);
+//            sum[tid](0) += rmse;
+//            sum[tid](1) += 1;
+////          }
+//        }
+//        sum[tid](2) += 1;
+//      }
+//    }
   }
   SumPyramidReduce<Vector3fda, BLK_SIZE>(tid, sum, stats.ptr_);
 }
@@ -79,8 +102,8 @@ void OverlapGpu(const Image<float>& greyA, const Image<float>& greyB,
   cudaMemset(out.ptr_, 0, out.SizeBytes());
 
   KernelOverlap<BLK_SIZE,D,Derived><<<blocks,threads,
-    BLK_SIZE*sizeof(Vector3fda)>>>(greyA, greyB, pcA, pcB, T_ab, camA, 10,
-        out, errB ? errB->ptr_ : nullptr);
+    BLK_SIZE*sizeof(Vector3fda)>>>(greyA, greyB, pcA, pcB, T_ab,
+        camA, 10, out, errB ? errB->ptr_ : nullptr);
   checkCudaErrors(cudaDeviceSynchronize());
 
   ManagedHostImage<Vector3fda> stats(1,1);

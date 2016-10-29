@@ -205,6 +205,7 @@ class ICP {
     float angleThr_deg, float distThr,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );
@@ -226,6 +227,7 @@ class ICP {
     float lambda,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );

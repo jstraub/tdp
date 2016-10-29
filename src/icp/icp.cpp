@@ -328,6 +328,7 @@ void ICP::ComputeProjective(
     float angleThr_deg, float distThr,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     ) {
@@ -386,7 +387,8 @@ void ICP::ComputeProjective(
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA.inverse());
+      Sigma_mr = ATA.inverse();
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(Sigma_mr);
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array();
       // condition number
       float kappa = ev.maxCoeff() / ev.minCoeff();
@@ -428,6 +430,7 @@ template void ICP::ComputeProjective(
     float angleThr_deg, float distThr,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );
@@ -443,6 +446,7 @@ template void ICP::ComputeProjective(
     float angleThr_deg, float distThr,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );
@@ -464,6 +468,7 @@ void ICP::ComputeProjective(
   float lambda,
   bool verbose,
   SE3f& T_mr,
+  Eigen::Matrix<float,6,6>& Sigma_mr,
   std::vector<float>& errPerLvl,
   std::vector<float>& countPerLvl
   ) {
@@ -535,7 +540,8 @@ void ICP::ComputeProjective(
 
       // ATA is actually JTJ and the inverse of it gives a lower bound
       // on the true covariance matrix.
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA.inverse());
+      Sigma_mr = ATA.inverse();
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(Sigma_mr);
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array();
       // condition number
       float kappa = ev.maxCoeff() / ev.minCoeff();
@@ -579,6 +585,7 @@ template void ICP::ComputeProjective(
     float lambda,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );
@@ -595,6 +602,7 @@ template void ICP::ComputeProjective(
     float lambda,
     bool verbose,
     SE3f& T_mr,
+    Eigen::Matrix<float,6,6>& Sigma_mr,
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     );

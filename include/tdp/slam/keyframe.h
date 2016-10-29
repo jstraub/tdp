@@ -96,65 +96,11 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
 
   overlap = 0.f;
   rmse = 0.f;
-  const Image<float> greyA = kfA.pyrGrey_.GetConstImage(lvl);
-  const Image<float> greyB = kfB.pyrGrey_.GetConstImage(lvl);
-  const Image<Vector3fda> pcA = kfA.pyrPc_.GetConstImage(lvl);
-  const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(lvl);
-
-  for (size_t sId=0; sId < rig.dStream2cam_.size(); sId++) {
-    int32_t cId;
-//    if (useRgbCamParasForDepth) {
-      cId = rig.rgbStream2cam_[sId]; 
-//    } else {
-//      cId = rig.dStream2cam_[sId]; 
-//    }
-    CamT cam = rig.cams_[cId].Scale(pow(0.5,lvl));
-    tdp::SE3f T_rc = rig.T_rcs_[cId];
-
-    const Image<float> greyAi = rig.GetStreamRoiOrigSize(greyA, sId);
-    const Image<float> greyBi = rig.GetStreamRoiOrigSize(greyB, sId);
-    const Image<Vector3fda> pcAi = rig.GetStreamRoiOrigSize(pcA, sId);
-    const Image<Vector3fda> pcBi = rig.GetStreamRoiOrigSize(pcB, sId);
-
-    //TODO
-    ManagedDeviceImage<float> cuGreyAi(greyAi.w_, greyAi.h_);
-    cuGreyAi.CopyFrom(greyAi, cudaMemcpyHostToDevice);
-    ManagedDeviceImage<float> cuGreyBi(greyBi.w_, greyBi.h_);
-    cuGreyBi.CopyFrom(greyBi, cudaMemcpyHostToDevice);
-    ManagedDeviceImage<Vector3fda> cuPcAi(pcAi.w_, pcAi.h_);
-    cuPcAi.CopyFrom(pcAi, cudaMemcpyHostToDevice);
-    ManagedDeviceImage<Vector3fda> cuPcBi(pcBi.w_, pcBi.h_);
-    cuPcBi.CopyFrom(pcBi, cudaMemcpyHostToDevice);
-
-    Image<float>* errBi = nullptr;
-    if (errB) {
-      errBi = new Image<float>();
-      *errBi = rig.GetStreamRoiOrigSize(*errB, sId);
-//      std::cout << errBi->Description() << std::endl;
-    }
-
-//    std::cout << cuGreyBi.Description() << std::endl
-//      << greyBi.Description() << std::endl;
-//    std::cout << cuGreyAi.Description() << std::endl
-//      << greyAi.Description() << std::endl;
-//    std::cout << cuPcBi.Description() << std::endl
-//      << pcBi.Description() << std::endl;
-
-    float overlapi = 0.;
-    float rmsei = 0.;
-//    Overlap(greyAi, greyBi, pcBi, T_rc.Inverse()*T_ab_, 
-//        cam, overlapi, rmsei, errBi);
-    OverlapGpu(cuGreyAi, cuGreyBi, cuPcAi, cuPcBi, T_rc.Inverse()*T_ab_, 
-        cam, overlapi, rmsei, errBi);
-    rmse += rmsei;
-    overlap += overlapi;
-
-    if (errB) {
-      delete errBi;
-    }
-  }
-  rmse /= rig.dStream2cam_.size();
-  overlap /= rig.dStream2cam_.size();
+  const Image<float> greyA = kfA.pyrGrey_.GetConstImage(0);
+  const Image<float> greyB = kfB.pyrGrey_.GetConstImage(0);
+  const Image<Vector3fda> pcA = kfA.pyrPc_.GetConstImage(0);
+  const Image<Vector3fda> pcB = kfB.pyrPc_.GetConstImage(0);
+  OverlapGpu(greyA, greyB, pcA, pcB, T_ab_, rig, overlap, rmse, errB); 
 }
 
 template <int D, class Derived>

@@ -4,7 +4,7 @@ namespace tdp {
 
 KeyframeSLAM::KeyframeSLAM() :
   noisePrior_(isam::Information(10000. * isam::eye(6))),
-  noiseOdom_(isam::Information(10000. * isam::eye(6))),
+  noiseOdom_(isam::Information(100. * isam::eye(6))),
   noiseLoopClosure_(isam::Information(100. * isam::eye(6)))
 { 
   isam::Properties props;
@@ -35,6 +35,12 @@ void KeyframeSLAM::AddOrigin(const SE3f& T_wk) {
   slam_.add_factor(prior);
 }
 
+void KeyframeSLAM::AddPose() {
+  isam::Pose3d_Node* poseNext = new isam::Pose3d_Node();
+  slam_.add_node(poseNext);
+  T_wk_.push_back(poseNext);
+}
+
 void KeyframeSLAM::AddIcpOdometry(int idA, int idB, const SE3f& T_ab) {
 
   isam::Pose3d poseAB(T_ab.matrix().cast<double>());
@@ -46,6 +52,19 @@ void KeyframeSLAM::AddIcpOdometry(int idA, int idB, const SE3f& T_ab) {
   isam::Pose3d_Pose3d_Factor* odo = new isam::Pose3d_Pose3d_Factor(
       T_wk_[idA], T_wk_[idB], poseAB, noiseOdom_);
   slam_.add_factor(odo);
+  loopClosures_.emplace_back(idA, idB);
+}
+
+void KeyframeSLAM::AddLoopClosure(int idA, int idB, const SE3f& T_ab,
+    const Eigen::Matrix<float,6,6>& Sigma_ab) {
+
+  isam::Covariance noise(Sigma_ab.cast<double>());
+  isam::Pose3d poseAB(T_ab.matrix().cast<double>());
+
+  isam::Pose3d_Pose3d_Factor* loop = new isam::Pose3d_Pose3d_Factor(
+      T_wk_[idA], T_wk_[idB], poseAB, noise);
+  slam_.add_factor(loop);
+
   loopClosures_.emplace_back(idA, idB);
 }
 

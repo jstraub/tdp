@@ -13,8 +13,11 @@ class KeyframeSLAM {
   ~KeyframeSLAM();
 
   void AddOrigin(const SE3f& T_wk);
+  void AddPose();
   void AddIcpOdometry(int idA, int idB, const SE3f& T_ab);
   void AddLoopClosure(int idA, int idB, const SE3f& T_ab);
+  void AddLoopClosure(int idA, int idB, const SE3f& T_ab,
+    const Eigen::Matrix<float,6,6>& Sigma_ab);
 
   void PrintValues();
   void PrintGraph();

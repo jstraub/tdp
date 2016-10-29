@@ -283,6 +283,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
+  pangolin::Var<bool> trackClosestKf("ui.track closest KF",false,false);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
@@ -366,6 +367,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_mo = T_mo_0;
 
   tdp::SE3f T_ac; // current to active KF
+  Eigen::Matrix<float,6,6> Sigma_ac = Eigen::Matrix<float,6,6>::Zero();
 
   tdp::KeyframeSLAM kfSLAM;
   std::vector<tdp::KeyFrame> kfs;
@@ -420,6 +422,7 @@ int main( int argc, char* argv[] )
           TICK("LoopClosure");
           float err=0.;
           float count=10000;
+          Eigen::Matrix<float,6,6> Sigma_ab = 1e-6*Eigen::Matrix<float,6,6>::Identity();
           if (useANN) {
             cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
             cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
@@ -461,19 +464,19 @@ int main( int argc, char* argv[] )
               tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
                   cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
                   cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
-                  icpDistThr, icpRgbLambda, gui.verbose, T_ab,
+                  icpDistThr, icpRgbLambda, gui.verbose, T_ab, Sigma_ab,
                   errPerLvl, countPerLvl);
             } else {
               if (useRgbCamParasForDepth) {
                 tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
                     rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
                     icpLoopCloseDistThr,
-                    gui.verbose, T_ab, errPerLvl, countPerLvl);
+                    gui.verbose, T_ab, Sigma_ab, errPerLvl, countPerLvl);
               } else {
                 tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
                     rig, rig.dStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
                     icpLoopCloseDistThr,
-                    gui.verbose, T_ab, errPerLvl, countPerLvl);
+                    gui.verbose, T_ab, Sigma_ab, errPerLvl, countPerLvl);
               }
             }
             count = countPerLvl[0];
@@ -501,8 +504,9 @@ int main( int argc, char* argv[] )
               && rmseAfter < rmseThr) {
             std::cout << GREEN << "successfull loop closure " 
               << NORMAL << std::endl
-              << T_ab.matrix3x4() << std::endl;
-            kfSLAM.AddLoopClosure(ids.first, ids.second, T_ab);
+              << T_ab.matrix3x4() 
+              << "Sigma_ab" << std::endl << Sigma_ab << std::endl;
+            kfSLAM.AddLoopClosure(ids.first, ids.second, T_ab, Sigma_ab);
 //            kfSLAM.AddLoopClosure(ids.second, ids.first, T_ab.Inverse());
 //            loopClosures.emplace(std::make_pair(ids.first, ids.second), T_ab);
             numLoopClosures ++;
@@ -726,30 +730,32 @@ int main( int argc, char* argv[] )
     TOCK("Setup Pyramids");
 
     if(kfs.size() > 0 && !gui.finished()) {
-      // Find closest KF
-      int iMin = 0;
-//      float distMin = 1e9;
-//      float angMin = 1e9;
-      float valMin = 1e9;
-      for (int i=0; i<kfs.size(); ++i) {
-        Eigen::Matrix<float,6,1> se3 = kfs[i].T_wk_.Log(T_mo);
-        float dist = se3.tail<3>().norm();
-        float ang = se3.head<3>().norm();
-//        if (ang < angMin && dist < distMin) {
-//          distMin = dist;
-//          angMin = ang;
-        if (2*ang+dist < valMin) {
-          valMin = 2*ang+dist;
-          iMin = i;
+      if (trackClosestKf) {
+        // Find closest KF
+        int iMin = 0;
+        //      float distMin = 1e9;
+        //      float angMin = 1e9;
+        float valMin = 1e9;
+        for (int i=0; i<kfs.size(); ++i) {
+          Eigen::Matrix<float,6,1> se3 = kfs[i].T_wk_.Log(T_mo);
+          float dist = se3.tail<3>().norm();
+          float ang = se3.head<3>().norm();
+          //        if (ang < angMin && dist < distMin) {
+          //          distMin = dist;
+          //          angMin = ang;
+          if (2*ang+dist < valMin) {
+            valMin = 2*ang+dist;
+            iMin = i;
+          }
         }
+        if (iMin != idActive) {
+          std::cout << "switching to tracking against KF " << iMin << std::endl;
+          T_ac = kfs[iMin].T_wk_.Inverse()*kfs[idActive].T_wk_*T_ac;
+          std::cout << T_ac << std::endl;
+          idActive = iMin;
+          viewKf.SetImage(kfs[idActive].rgb_);
+        } 
       }
-      if (iMin != idActive) {
-        std::cout << "switching to tracking against KF " << iMin << std::endl;
-        T_ac = kfs[iMin].T_wk_.Inverse()*kfs[idActive].T_wk_*T_ac;
-        std::cout << T_ac << std::endl;
-        idActive = iMin;
-        viewKf.SetImage(kfs[idActive].rgb_);
-      } 
 
       tdp::KeyFrame& kf = kfs[idActive];
       pcs_m.CopyFrom(kf.pyrPc_,cudaMemcpyHostToDevice);
@@ -762,25 +768,26 @@ int main( int argc, char* argv[] )
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       std::vector<float> errPerLvl;
       std::vector<float> countPerLvl;
+      Eigen::Matrix<float,6,6> dSigma_ac = 1e-6*Eigen::Matrix<float,6,6>::Identity();
       if (icpRgb) {
         cuPyrGrey_m.CopyFrom(kf.pyrGrey_,cudaMemcpyHostToDevice);
         cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_,cudaMemcpyHostToDevice);
         tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
             cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
             cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
-            icpDistThr, icpRgbLambda, gui.verbose, T_ac, errPerLvl, countPerLvl);
+            icpDistThr, icpRgbLambda, gui.verbose, T_ac, dSigma_ac, errPerLvl, countPerLvl);
       } else {
 //        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
 //            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
         if (useRgbCamParasForDepth) {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              gui.verbose, T_ac, errPerLvl, countPerLvl);
+              gui.verbose, T_ac, dSigma_ac, errPerLvl, countPerLvl);
         } else {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
               rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, 
               icpDistThr,
-              gui.verbose, T_ac, errPerLvl, countPerLvl);
+              gui.verbose, T_ac, dSigma_ac, errPerLvl, countPerLvl);
         }
 //      } else {
 //        tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
@@ -790,6 +797,7 @@ int main( int argc, char* argv[] )
       TOCK("ICP");
       T_mo = kfs[idActive].T_wk_*T_ac;
       T_mos.push_back(T_mo);
+      Sigma_ac += dSigma_ac;
     }
 
     if (!runSlamFusion) {
@@ -812,10 +820,14 @@ int main( int argc, char* argv[] )
           std::cout << "first KF -> adding origin" << std::endl;
           kfSLAM.AddOrigin(T_mo);
         } else {
-          std::cout << "not first KF -> adding ICP odom "
-            << kfs.size()-1 << " to " << idActive 
-            << std::endl;
-          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
+          std::cout << "not first KF -> adding new pose" << std::endl;
+          std::cout << Sigma_ac << std::endl;
+          kfSLAM.AddPose();
+          kfSLAM.AddLoopClosure(idActive, kfs.size()-1, T_ac, Sigma_ac);
+//          std::cout << "not first KF -> adding ICP odom "
+//            << kfs.size()-1 << " to " << idActive 
+//            << std::endl;
+//          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
         }
 
         for (int i=0; i<kfs.size()-1; ++i) {
@@ -824,6 +836,18 @@ int main( int argc, char* argv[] )
         idActive = kfs.size()-1;
         T_ac = tdp::SE3f();
         T_mo = kfs[idActive].T_wk_*T_ac;
+        Sigma_ac.fill(0.);
+
+        // sort to loop close closest frames (temporally) first
+        loopClose.sort( 
+            [&](const std::pair<int,int>& a, const std::pair<int,int>& b) {
+              return std::min(idActive-a.first, idActive-a.second) 
+                   < std::min(idActive-b.first, idActive-b.second); 
+            });
+        std::cout << loopClose.front().first << ", " << loopClose.front().second
+          << ";  "<< loopClose.back().first << ", " << loopClose.back().second
+          << std::endl;
+
         viewKf.SetImage(kfs[idActive].rgb_);
       }
       if (tryLoopClose) {

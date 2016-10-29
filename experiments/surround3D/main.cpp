@@ -361,14 +361,15 @@ int main( int argc, char* argv[] )
         std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
         std::vector<float> errPerLvl;
         std::vector<float> countPerLvl;
+        Eigen::Matrix<float,6,6> Sigma_mr = 1e-4*Eigen::Matrix<float,6,6>::Identity();
         if (useRgbCamParasForDepth) {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
               rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              gui.verbose, T_mr, errPerLvl, countPerLvl);
+              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
         } else {
           tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
               rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              gui.verbose, T_mr, errPerLvl, countPerLvl);
+              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
         }
         logInliers.Log(countPerLvl);
         logCost.Log(errPerLvl);
