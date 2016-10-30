@@ -301,7 +301,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.10, 0.01, 0.5);
-  pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 10, 1, 50);
+  pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 5, 1, 50);
   pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
   pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 90, 1, 180);
@@ -310,14 +310,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.30,0.,1.);
-  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", 0.01,-1.,1.);
+  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.1,-1.,1.);
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.11,0.,1.);
-  pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0.001,0.001,0.1);
+  pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0,-10,0.);
   pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",1.,0.,1.);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
 
-  pangolin::Var<bool> computePhotometricError("ui.comp Phot Err",true,true);
+  pangolin::Var<bool> computePhotometricError("ui.comp Phot Err",false,true);
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
   pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
@@ -496,12 +496,13 @@ int main( int argc, char* argv[] )
             << " dRMSE " << (rmseBefore-rmseAfter)/rmseBefore
             << std::endl;
 
-          if (err == err 
+          if (ids.first == ids.second-1 ||
+              (err == err 
               && err < icpLoopCloseErrThr
               && count > 3000 
               && overlapAfter > icpLoopCloseOverlapThr
               && (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr
-              && rmseAfter < rmseThr) {
+              && rmseAfter < rmseThr)) {
             std::cout << GREEN << "successfull loop closure " 
               << NORMAL << std::endl
               << T_ab.matrix3x4() 
@@ -559,7 +560,12 @@ int main( int argc, char* argv[] )
             break;
 
           } else {
-            std::cout << "unsuccessfull loop closure" << std::endl;
+            std::cout << "unsuccessfull loop closure: "
+              << "error=" << err << ", " 
+              << "count=" << count << ", "
+              << "overlapAfter=" << overlapAfter << ", "
+              << "rmseChange=" << (rmseBefore-rmseAfter)/rmseBefore << ", "
+              << "rmseAfter=" << rmseAfter << std::endl;
           }
         } else {
           std::cout << "aborting loop closure because overlap " << overlapBefore
@@ -817,13 +823,21 @@ int main( int argc, char* argv[] )
 //        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
         kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
             rgb, cuD, T_mo);
+
+        for (int i=0; i<kfs.size()-1; ++i) {
+          loopClose.emplace_front(kfs.size()-1,i);
+        }
+
+        T_mo = kfs[kfs.size()-1].T_wk_;
+
         if (kfs.size() == 1) {
           std::cout << "first KF -> adding origin" << std::endl;
           kfSLAM.AddOrigin(T_mo);
         } else {
           std::cout << "not first KF -> adding new pose" << std::endl;
           std::cout << Sigma_ac << std::endl;
-          kfSLAM.AddPose();
+          Sigma_ac = 1e-3*Eigen::Matrix<float,6,6>::Identity();
+          kfSLAM.AddPose(T_mo);
           kfSLAM.AddLoopClosure(idActive, kfs.size()-1, T_ac, Sigma_ac);
 //          std::cout << "not first KF -> adding ICP odom "
 //            << kfs.size()-1 << " to " << idActive 
@@ -831,12 +845,8 @@ int main( int argc, char* argv[] )
 //          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
         }
 
-        for (int i=0; i<kfs.size()-1; ++i) {
-          loopClose.emplace_front(kfs.size()-1,i);
-        }
         idActive = kfs.size()-1;
         T_ac = tdp::SE3f();
-        T_mo = kfs[idActive].T_wk_*T_ac;
         Sigma_ac.fill(0.);
 
         // sort to loop close closest frames (temporally) first

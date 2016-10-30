@@ -35,8 +35,10 @@ void KeyframeSLAM::AddOrigin(const SE3f& T_wk) {
   slam_.add_factor(prior);
 }
 
-void KeyframeSLAM::AddPose() {
+void KeyframeSLAM::AddPose(const SE3f& T_wk) {
   isam::Pose3d_Node* poseNext = new isam::Pose3d_Node();
+  isam::Pose3d poseWK(T_wk.matrix().cast<double>());
+  poseNext->init(poseWK);
   slam_.add_node(poseNext);
   T_wk_.push_back(poseNext);
 }
@@ -114,8 +116,10 @@ void KeyframeSLAM::Optimize() {
 
 SE3f KeyframeSLAM::GetPose(size_t i) {
   if (i<size()) {
-    Eigen::Matrix<float,4,4> T = T_wk_[i]->value().wTo().cast<float>();
-    return SE3f(T);
+    if (T_wk_[i]->initialized()) {
+      Eigen::Matrix<float,4,4> T = T_wk_[i]->value().wTo().cast<float>();
+      return SE3f(T);
+    }
   } 
   return SE3f(); 
 }

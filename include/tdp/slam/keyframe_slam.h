@@ -13,7 +13,7 @@ class KeyframeSLAM {
   ~KeyframeSLAM();
 
   void AddOrigin(const SE3f& T_wk);
-  void AddPose();
+  void AddPose(const SE3f& T_wk);
   void AddIcpOdometry(int idA, int idB, const SE3f& T_ab);
   void AddLoopClosure(int idA, int idB, const SE3f& T_ab);
   void AddLoopClosure(int idA, int idB, const SE3f& T_ab,
