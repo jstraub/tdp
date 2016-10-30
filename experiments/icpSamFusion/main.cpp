@@ -297,7 +297,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
   pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
-  pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",10,0,10);
+  pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",20,0,30);
 
   pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
@@ -311,7 +311,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
   pangolin::Var<int>   icpLoopCloseOverlapLvl("ui.overlap lvl",0,0,2);
   pangolin::Var<float> icpLoopCloseOverlapThr("ui.overlap thr",0.30,0.,1.);
-  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.1,-1.,1.);
+  pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,-1.,1.);
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.11,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0,-10,0.);
   pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",1.,0.,1.);
