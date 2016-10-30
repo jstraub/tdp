@@ -297,6 +297,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
   pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
+  pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",10,0,10);
 
   pangolin::Var<bool> useANN("ui.use ANN", false,true);
   pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
@@ -824,7 +825,8 @@ int main( int argc, char* argv[] )
         kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
             rgb, cuD, T_mo);
 
-        for (int i=0; i<kfs.size()-1; ++i) {
+        for (int i=kfs.size()-1; 
+            i > std::max(-1,(int)kfs.size()-maxLoopClosures-1); --i) {
           loopClose.emplace_front(kfs.size()-1,i);
         }
 
