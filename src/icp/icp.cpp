@@ -614,6 +614,7 @@ void ICP::ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
+    const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg) {
 
@@ -629,7 +630,7 @@ void ICP::ComputeProjectiveRotation(
       ICPStepRotation<D,Derived>(ns_m.GetImage(lvl), 
           ns_o.GetImage(lvl),
           pcs_o.GetImage(lvl), 
-          T_mo, ScaleCamera<float>(cam,pow(0.5,lvl)),
+          T_mo, T_cm, ScaleCamera<float>(cam,pow(0.5,lvl)),
           cos(angleThr_deg*M_PI/180.),
           Nda,count);
 #endif
@@ -665,6 +666,7 @@ template void ICP::ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
+    const SE3f& T_cm,
     const BaseCameraf& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
 template void ICP::ComputeProjectiveRotation(
@@ -672,6 +674,7 @@ template void ICP::ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
+    const SE3f& T_cm,
     const BaseCameraPoly3f& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
 

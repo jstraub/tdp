@@ -150,6 +150,7 @@ void ICPStepRotation (
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
+    const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
@@ -270,6 +271,7 @@ class ICP {
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
     SE3f& T_mo,
+    const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
 

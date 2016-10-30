@@ -758,6 +758,7 @@ __global__ void KernelICPStepRotation(
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     SE3f T_mo, 
+    SE3f T_cm,
     const CameraBase<float,D,Derived> cam,
     float dotThr,
     int N_PER_T,
@@ -781,7 +782,7 @@ __global__ void KernelICPStepRotation(
     // project into model camera
     // TODO: doing the association the other way around might be more
     // stable since the model depth is smoothed
-    Vector2fda x_o_in_m = cam.Project(pc_o_in_m);
+    Vector2fda x_o_in_m = cam.Project(T_cm * pc_o_in_m);
     const int u = floor(x_o_in_m(0)+0.5f);
     const int v = floor(x_o_in_m(1)+0.5f);
     if (0 <= u && u < pc_o.w_ && 0 <= v && v < pc_o.h_
@@ -827,6 +828,7 @@ void ICPStepRotation (
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
+    const SE3f& T_cm,
     const CameraBase<float,D,Derived>& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
@@ -840,7 +842,7 @@ void ICPStepRotation (
 
   KernelICPStepRotation<BLK_SIZE,D,Derived><<<blocks,threads,
     BLK_SIZE*sizeof(Vector10fda)>>>(
-        n_m,n_o,pc_o,T_mo,cam,
+        n_m,n_o,pc_o,T_mo, T_cm, cam,
         dotThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> nUpperTri(10,1);
@@ -865,6 +867,7 @@ template void ICPStepRotation (
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
+    const SE3f& T_cm,
     const BaseCameraf& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,
@@ -874,6 +877,7 @@ template void ICPStepRotation (
     Image<Vector3fda> n_o,
     Image<Vector3fda> pc_o,
     const SE3f& T_mo, 
+    const SE3f& T_cm,
     const BaseCameraPoly3f& cam,
     float dotThr,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& N,

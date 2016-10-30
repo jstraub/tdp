@@ -371,6 +371,12 @@ int main( int argc, char* argv[] )
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
+    } else if (icpRot) {
+      tdp::ICP::ComputeProjectiveRotation<CameraT::NumParams,CameraT>(
+          ns_m,  ns_c, pcs_c, 
+          T_mc, rig.T_rcs_[rig.rgbStream2cam_[0]].Inverse(),
+          rig.cams_[rig.rgbStream2cam_[0]],
+          maxIt, icpAngleThr_deg);
     }
     TOCK("ICP");
     if (!gui.paused()) {
