@@ -133,6 +133,7 @@ endif()
 
 include_directories(
   include
+  ./3rdparty/fast-C-src/
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_DIR}/include
   ${Pangolin_DIR}/../../include
