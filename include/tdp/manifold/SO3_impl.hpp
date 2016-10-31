@@ -98,6 +98,15 @@ void SO3<T,Options>::ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) c
 //  angle = acos( q_.w());
 }
 
+
+template<typename T, int Options>
+SO3<T,Options> SO3<T,Options>::FromOrthogonalVectors(
+    const Eigen::Matrix<T,3,1,Options>& a, const Eigen::Matrix<T,3,1,Options>& b)  {
+  Eigen::Matrix<T,3,3,Options> R;
+  R << a, b, a.cross(b);
+  return SO3<T,Options>(R);
+}
+
 template<typename T, int Options>
 Eigen::Matrix<T,3,1,Options> SO3<T,Options>::Log_(const SO3<T,Options>& R) {
   return 2.*R.ToAxisAngle();

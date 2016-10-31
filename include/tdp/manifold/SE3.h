@@ -68,8 +68,8 @@ class SE3 : Manifold<T,6> {
   SE3<T,Options>& operator*=(const SE3<T,Options>& other);
   const SE3<T,Options> operator*(const SE3<T,Options>& other) const;
 
-//  SE3<T,Options>& operator+=(const Eigen::Matrix<T,6,1>& w);
-//  const SE3<T,Options> operator+(const Eigen::Matrix<T,6,1>& w);
+  SE3<T,Options>& operator+=(const Eigen::Matrix<T,6,1>& w);
+  const SE3<T,Options> operator+(const Eigen::Matrix<T,6,1>& w);
 
   // transform 3D data point
   TDP_HOST_DEVICE

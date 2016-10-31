@@ -103,16 +103,16 @@ const SE3<T,Options> SE3<T,Options>::operator*(const SE3<T,Options>& other) cons
   return SE3<T,Options>(*this) *= other;
 }
 
-//template<typename T, int Options>
-//SE3<T,Options>& SE3<T,Options>::operator+=(const Eigen::Matrix<T,6,1>& w) {
-//  *this = this->Exp(w);
-//  return *this;
-//}
-//
-//template<typename T, int Options>
-//const SE3<T,Options> SE3<T,Options>::operator+(const Eigen::Matrix<T,6,1>& w) {
-//  return SE3<T,Options>(*this) += w;
-//}
+template<typename T, int Options>
+SE3<T,Options>& SE3<T,Options>::operator+=(const Eigen::Matrix<T,6,1>& w) {
+  *this = this->Exp(w);
+  return *this;
+}
+
+template<typename T, int Options>
+const SE3<T,Options> SE3<T,Options>::operator+(const Eigen::Matrix<T,6,1>& w) {
+  return SE3<T,Options>(*this) += w;
+}
 
 template<typename T, int Options>
 Eigen::Matrix<T,3,1> SE3<T,Options>::operator*(const Eigen::Matrix<T,3,1>& x) const {
