@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 numBits = 256 
 numBytes = numBits/8
+numInts = numBytes/4
 patchS = 32
 
 def samplePair():
@@ -23,13 +24,13 @@ while n != numBits:
 
 with open("brief.h",'w') as f:
   k = 0
-  for i in range(numBytes):
-    f.write("brief[{}] = ((img({},{}) < img({},{}) ? {} : 0)\n".format(i,xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],1))
+  for i in range(numInts):
+    f.write("desc({}) = ((patch({},{}) < patch({},{}) ? {} : 0)\n".format(i,xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],1))
     k+=1
-    for j in range(1,7):
-      f.write(" | (img({},{}) < img({},{}) ? {} : 0)\n".format(xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],2**j))
+    for j in range(1,31):
+      f.write(" | (patch({},{}) < patch({},{}) ? {} : 0)\n".format(xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],2**j))
       k+=1
-    f.write(" | (img({},{}) < img({},{}) ? {} : 0));\n".format(xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],128))
+    f.write(" | (patch({},{}) < patch({},{}) ? {} : 0));\n".format(xs[0,k*2],xs[1,k*2],xs[0,k*2+1],xs[1,k*2+1],2**31))
 
 plt.figure()
 for i in range(numBits):
