@@ -44,13 +44,7 @@ namespace tdp {
     return minId;
   }
 
-  bool ExtractBrief(const Image<uint8_t> grey, uint32_t x, uint32_t y, 
-      Vector8uda& desc) {
-    if (!grey.Inside(x-16,y-16) || !grey.Inside(x+15, y+15)) {
-      return false;
-    }
-    Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
-
+  bool ExtractBrief(const Image<uint8_t>& patch, Vector8uda& desc) {
     desc(0) = ((patch(23,15) < patch(8,10) ? 1 : 0)
         | (patch(13,5) < patch(13,19) ? 2 : 0)
         | (patch(7,22) < patch(17,22) ? 4 : 0)
@@ -309,6 +303,25 @@ namespace tdp {
         | (patch(19,25) < patch(22,17) ? 2147483648 : 0));
 
     return true;
+  }
+
+  bool ExtractBrief(const Image<uint8_t>& grey, int32_t x, int32_t y, 
+      Vector8uda& desc) {
+    if (!grey.Inside(x-16,y-16) || !grey.Inside(x+15, y+15)) {
+      return false;
+    }
+    Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
+    return ExtractBrief(patch, desc);
+  }
+
+  void ExtractBrief(const Image<uint8_t> grey, 
+      const Image<Vector2ida>& pts,
+      Image<Vector8uda>& descs) {
+    for (size_t i=0; i<pts.Area(); ++i) {
+      if(!tdp::ExtractBrief(grey, pts[i](0), pts[i](1), descs[i])) {
+        std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
+      }
+    }
   }
 
 }
