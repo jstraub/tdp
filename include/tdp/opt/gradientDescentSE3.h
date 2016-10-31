@@ -1,9 +1,8 @@
 #pragma once
 #include <iostream>
 #include <Eigen/Dense>
-#include <tdp/manifold/manifold.h>
 #include <tdp/manifold/SE3.h>
-#include <tdp/manifold/gradientDescent.h>
+#include <tdp/opt/gradientDescent.h>
 
 namespace tdp {
 

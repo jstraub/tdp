@@ -42,7 +42,7 @@ void GD<T,D,M>::LineSearch(Eigen::Matrix<T,D,1>* J, T* f) {
   T m = J->dot(d);
   while (*f-fNew < -c_*m*delta && delta > 1e-16) {
     delta *= t_;
-    thetaNew = theta_+delta*d;
+    thetaNew = theta_ + delta*d;
     //std::cout << thetaNew << std::endl;
     ComputeJacobian(thetaNew, NULL, &fNew);
     if (verbose_)
