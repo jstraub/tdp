@@ -20,6 +20,9 @@ class ManagedVolume : public Volume<T> {
    {}
 
   void Reinitialize(size_t w, size_t h, size_t d) {
+    if (this->w_ == w && this->h_ == h && this->d_ == d)
+      return;
+
     if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
     }

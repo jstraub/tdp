@@ -30,6 +30,8 @@ class ManagedPyramid : public Pyramid<T,LEVELS> {
    }
 
   void Reinitialise(size_t w, size_t h) {
+    if (this->w_ == w && this->h_ == h)
+      return;
     if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
     }
