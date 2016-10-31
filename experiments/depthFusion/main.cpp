@@ -291,6 +291,10 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
 
+  tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
+  tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
+  tdp::Vector3fda dGrid = gridE - grid0;
+
   tdp::ThreadedValue<bool> runWorker(true);
   std::thread workThread([&]() {
         while(runWorker.Get()) {
@@ -298,7 +302,7 @@ int main( int argc, char* argv[] )
             tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
             tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
+            tdp::TSDF::SaveTSDF(tmpTSDF, grid0, dGrid, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
           }
           std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -315,9 +319,9 @@ int main( int argc, char* argv[] )
       T_mo = T_mo_0;
       T_mo_prev = T_mo_0;
     }
-    tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
-    tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
-    tdp::Vector3fda dGrid = gridE - grid0;
+    grid0 = tdp::Vector3fda (grid0x,grid0y,grid0z);
+    gridE = tdp::Vector3fda (gridEx,gridEy,gridEz);
+    dGrid = gridE - grid0;
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
