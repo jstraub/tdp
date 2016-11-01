@@ -299,14 +299,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> printGraph("ui.print graph",false,false);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
-  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
-  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.10,0.,1.);
+  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",25,0.,90.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
   pangolin::Var<bool> trackClosestKf("ui.track closest KF",false,true);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpRgb("ui.run ICP RGB", true, true);
+  pangolin::Var<bool>  icpRgb("ui.run ICP RGB", false, true);
 
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);
@@ -315,7 +315,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   loopCloseA("ui.loopClose A",0,0,10);
   pangolin::Var<int>   loopCloseB("ui.loopClose B",1,0,10);
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
-  pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",20,0,30);
+  pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",40,0,30);
 
   pangolin::Var<bool>  useANN("ui.use ANN", false,true);
   pangolin::Var<bool>  showAfterOpt("ui.show after opt", false,true);
@@ -324,7 +324,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dEntropyThr("ui.dH Thr", 0.90, 0.5, 1.);
   pangolin::Var<int>   icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
-  pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 90, 1, 180);
+  pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 140, 1, 180);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
   pangolin::Var<int>   icpLoopCloseIter0("ui.icpLoop iter lvl 0",30,0,30);
@@ -807,6 +807,7 @@ int main( int argc, char* argv[] )
       std::vector<float> errPerLvl;
       std::vector<float> countPerLvl;
       Eigen::Matrix<float,6,6> dSigma_ac = 1e-6*Eigen::Matrix<float,6,6>::Identity();
+//      T_ac = tdp::SE3f();
       if (icpRgb) {
         cuPyrGrey_m.CopyFrom(kf.pyrGrey_,cudaMemcpyHostToDevice);
         cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_,cudaMemcpyHostToDevice);

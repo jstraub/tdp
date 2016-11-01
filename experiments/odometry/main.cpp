@@ -260,6 +260,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
+  pangolin::Var<bool> newKf("ui.new KF", true, true);
+
   pangolin::Var<bool>  icpFrame2Frame("ui.run frame2frame ICP", true, true);
   pangolin::Var<bool>  icpRgb("ui.run ICP RGB", false, true);
   pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
@@ -300,7 +302,7 @@ int main( int argc, char* argv[] )
       gui.Seek(0);
     }
 
-    if (gui.frame > 0 && !gui.paused()) { 
+    if (gui.frame > 0 && !gui.paused() && newKf) { 
 //      for (size_t lvl=0; lvl<3; ++lvl) {
 //        tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
 //        tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);
@@ -315,6 +317,7 @@ int main( int argc, char* argv[] )
       cuPyrGrey_m.CopyFrom(cuPyrGrey_c, cudaMemcpyDeviceToDevice);
       cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
       rgb_m.CopyFrom(rgb, cudaMemcpyHostToHost);
+      T_wc = T_wc_0;
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
