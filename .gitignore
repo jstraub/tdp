@@ -13,3 +13,4 @@ log*.txt
 
 *.o
 lib
+3rdparty/spectra
