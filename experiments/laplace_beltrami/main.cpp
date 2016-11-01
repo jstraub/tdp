@@ -251,6 +251,7 @@ void getThetas_F(const tdp::Image<tdp::Vector3fda>& pc_w,
 
         // Get the neighbor ids and dists for this point
         ann.Search(pt, knn, eps, nnIds, dists);
+        std::cout << nnIds.transpose() << std::endl;
 
         tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
         tdp::Vector3fda Y(knn);
@@ -258,10 +259,17 @@ void getThetas_F(const tdp::Image<tdp::Vector3fda>& pc_w,
         for (size_t k=0; k<knn; ++k){
             //std::cout << "iter: " << k << std::endl;
             //std::cout << "kth neighbor pt in wc: \n" << pc(nnIds[k],0) <<std::endl;
-            tdp::Vector3fda npt_l = T_wl.Inverse()*pc_w[nnIds[k]];
+//            if(knn!=10){
+//                std::cout << "lenght of nnids: " << nnIds.rows() << std::endl;
+//            }
+//            std::cout <<"k: " << k << " " << knn << " " << nnIds.rows() << std::endl;
+//            std::cout <<"nnids: " << nnIds(k) << std::endl;
+
+            tdp::Vector3fda npt_l = T_wl.Inverse()*pc_w[nnIds(k)];
             //target of the weighted least square
             float y = f(npt_l);
-
+            //std::cout << "z: " << npt_l(2) << std::endl;
+            //std::cout << "using f: " << y << std::endl;
             //construct data matrix X
             X.row(k) = poly2Basis(npt_l);
             //construct target vector Y
@@ -451,7 +459,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<bool> runSkinning("ui.run skinning", true, false);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
 
-  pangolin::Var<int> knn("ui.knn", 10,1,100);
+  pangolin::Var<int> knn("ui.knn", 5,1,100);
 
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
@@ -477,13 +485,16 @@ int main( int argc, char* argv[] ){
       getAllLocalBasis(pc, T_wls, ann, knn, eps);
 //      getThetas(pc,T_wls,thetas,ann,knn,eps);
 //      getZEstimates(pc,T_wls,thetas,zEstimates);
-      getThetas_F(pc,T_wls, f_etoz, thetas,ann,knn,eps);
-      getFEstimates(pc,T_wls, thetas, fEstimates);
+//      vboZ.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+//      vboZ.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
+
+
+      getThetas_F(pc, T_wls, f_z, thetas, ann, knn, eps);
+      getFEstimates(pc, T_wls, thetas, fEstimates);
       vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
       vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-//      vboZ.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-//      vboZ.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
+
 
 //      zSamples.Reinitialise(pc.w_*upsample,1);
 //      getSamples(T_wls,thetas,zSamples,upsample);
