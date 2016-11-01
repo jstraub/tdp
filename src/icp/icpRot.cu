@@ -13,7 +13,6 @@
 #include <tdp/reductions/reductions.cuh>
 #include <tdp/manifold/SE3.h>
 #include <tdp/cuda/cuda.cuh>
-#include <tdp/icp/icpRot.h>
 
 namespace tdp {
 

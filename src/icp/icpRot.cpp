@@ -1,4 +1,4 @@
-#include <tdp/icp/icp.h>
+#include <tdp/icp/icpRot.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_poly.h>
@@ -8,7 +8,7 @@
 namespace tdp {
 
 template<int D, typename Derived>
-void ICP::ComputeProjectiveRotation(
+void ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
@@ -46,8 +46,8 @@ void ICP::ComputeProjectiveRotation(
       std::cout << N <<  std::endl;
       std::cout << dR <<  std::endl;
       // apply x to the transformation
-      T_mo.rotation() = SO3f(dR); // this actually gives me an absloute rotation
-//      T_mo.rotation() = SO3f(dR) * T_mo.rotation();
+      //T_mo.rotation() = SO3f(dR); // this actually gives me an absloute rotation
+      T_mo.rotation() = SO3f(dR) * T_mo.rotation();
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
@@ -61,7 +61,7 @@ void ICP::ComputeProjectiveRotation(
   }
 }
 
-template void ICP::ComputeProjectiveRotation(
+template void ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
@@ -69,7 +69,7 @@ template void ICP::ComputeProjectiveRotation(
     const SE3f& T_cm,
     const BaseCameraf& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg);
-template void ICP::ComputeProjectiveRotation(
+template void ComputeProjectiveRotation(
     Pyramid<Vector3fda,3>& ns_m,
     Pyramid<Vector3fda,3>& ns_o,
     Pyramid<Vector3fda,3>& pcs_o,
