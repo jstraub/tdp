@@ -35,7 +35,7 @@ TEST(Spectra, dense) {
 TEST(Spectra, sparse) {
   // A band matrix with 1 on the main diagonal, 2 on the below-main subdiagonal,
   // and 3 on the above-main subdiagonal
-  const int n = 1000000;
+  const int n = 1000;
   Eigen::SparseMatrix<double> M(n, n);
   M.reserve(Eigen::VectorXi::Constant(n, 3));
   for(int i = 0; i < n; i++)

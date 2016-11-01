@@ -15,7 +15,12 @@
 #include <pangolin/image/image_io.h>
 
 #include <tdp/eigen/dense.h>
-#include <tdp/data/managed_image.h>
+#include <Eigen/Eigenvalues>
+#include <Eigen/Sparse>
+#include <SymEigsSolver.h>
+#include <GenEigsSolver.h>
+#include <MatOp/SparseGenMatProd.h>
+
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
@@ -31,6 +36,8 @@
 #include <tdp/nn/ann.h>
 #include <tdp/manifold/S.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/data/managed_image.h>
+
 
 #include <tdp/utils/status.h>
 
@@ -38,7 +45,6 @@
 #include <cmath>
 #include <complex>
 #include <vector>
-#include <Eigen/Eigenvalues>
 #include "laplace_beltrami.h"
 
 float f_z(const tdp::Vector3fda& x) {
@@ -89,6 +95,10 @@ void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
     for (size_t i=0; i<pc.w_; ++i) {
        pc[i] = tdp::S3f::Random().vector();
     }
+}
+
+void GetCylindricalPc(tdp::Image<tdp::Vector3fda>& pc){
+    //todo: use [s1;R]
 }
 
 inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
@@ -316,7 +326,48 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
         estimates_w[i] = T_wls[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),estimate_l));
    }
 }
+void getSimpleLB(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
+    tdp::ANN ann;
+    ann.ComputeKDtree(pc);
 
+    Eigen::VectorXi nnIds(knn);
+    Eigen::VectorXf dists(knn);
+    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
+    L.reserve(Eigen::VectorXi::Constant(pc.Area(),knn));
+    for (int i=0; i<pc.Area(); ++i){
+        ann.Search(pc[i], knn, eps, nnIds, dists);
+        std::cout << "\n\n-----------" << std::endl;
+        std::cout << "nnids: " << nnIds << std::endl;
+        for (int k=0; k<knn; ++k){
+            if (dists(k)<1e-7){
+                L.insert(i, nnIds(k)) = 0.0f;
+            }
+            L.insert(i, nnIds(k)) = 1.0f/dists(k);
+            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
+            //std::cout << "Li: " << L.row(i) << std::endl;
+        }
+    }
+
+
+    // Construct matrix operation object using the wrapper class SparseGenMatProd
+    Spectra::SparseGenMatProd<float> op(L);
+
+    // Construct eigen solver object, requesting the largest three eigenvalues
+    Spectra::GenEigsSolver<float, Spectra::SMALLEST_MAGN,
+      Spectra::SparseGenMatProd<float> > eigs(&op, 3, 6);
+
+    // Initialize and compute
+    eigs.init();
+    int nconv = eigs.compute();
+
+    // Retrieve results
+    Eigen::VectorXcf evalues;
+    if(eigs.info() == Spectra::SUCCESSFUL) {
+      evalues = eigs.eigenvalues();
+      std::cout << "Eigenvalues found:\n" << evalues << std::endl;
+  //    std::cout << eigs.eigenvectors() << std::endl;
+    }
+}
 
 //tests
 void test_meanAndCov(){
@@ -398,12 +449,17 @@ void test_getThetas_F(){
 
 }
 
+void test_getSimpleLB(){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    getSimpleLB(pc,3,1e-6);
+}
+
 //end of test
 
 int main( int argc, char* argv[] ){
     //test_getLocalRot();
     //return 1;
-    //test1();
+    test_getSimpleLB();
     //return 1;
   // load pc and normal from the input paths
   //tdp::ManagedHostImage<tdp::Vector3fda> pc=GetSimplePc();
@@ -423,6 +479,11 @@ int main( int argc, char* argv[] ){
   tdp::ANN ann;
   ann.ComputeKDtree(pc);
 
+  //Get the simple laplacian
+  //std::cout << "here simple lb result: \n" <<
+               getSimpleLB(pc, 3, 1e-7);
+                       //<< std::endl;
+  return 1;
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
