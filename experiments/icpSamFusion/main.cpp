@@ -176,6 +176,23 @@ int main( int argc, char* argv[] )
 
   gui.container().AddDisplay(containerLoopClosure);
 
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+//  pangolin::DataLog logInliers;
+//  pangolin::Plotter plotInliers(&logInliers, -100.f,1.f, 0, 130000.f, 
+//      10.f, 0.1f);
+//  plotters.AddDisplay(plotInliers);
+//  pangolin::DataLog logCost;
+//  pangolin::Plotter plotCost(&logCost, -100.f,1.f, -10.f,1.f, 10.f, 0.1f);
+//  plotters.AddDisplay(plotCost);
+//  pangolin::DataLog logRmse;
+//  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,0.2f, 0.1f, 0.1f);
+//  plotters.AddDisplay(plotRmse);
+  pangolin::DataLog logdH;
+  pangolin::Plotter plotdH(&logdH, -100.f,1.f, 0.f,2.f, .1f, 0.1f);
+  plotters.AddDisplay(plotdH);
+  gui.container().AddDisplay(plotters);
+
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
@@ -279,6 +296,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runSlamFusion("ui.run SLAM fusion", false,true);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
   pangolin::Var<bool>  recomputeBoundingBox("ui.compute BB", false, false);
+  pangolin::Var<bool> printGraph("ui.print graph",false,false);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
@@ -299,11 +317,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
   pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",20,0,30);
 
-  pangolin::Var<bool> useANN("ui.use ANN", false,true);
-  pangolin::Var<bool> showAfterOpt("ui.show after opt", false,true);
-  pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.10, 0.01, 0.5);
-  pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 5, 1, 50);
-  pangolin::Var<int>  icpDownSample("ui.ICP downsample",100,1,200);
+  pangolin::Var<bool>  useANN("ui.use ANN", false,true);
+  pangolin::Var<bool>  showAfterOpt("ui.show after opt", false,true);
+  pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.75, 0.35, 0.5);
+  pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 35, 15, 50);
+  pangolin::Var<float> dEntropyThr("ui.dH Thr", 0.90, 0.5, 1.);
+  pangolin::Var<int>   icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
   pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 90, 1, 180);
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
@@ -364,6 +383,7 @@ int main( int argc, char* argv[] )
         }
       });
 
+  size_t numKfsPrev = 0;
   tdp::SE3f T_mo_0;
   tdp::SE3f T_mo = T_mo_0;
 
@@ -372,6 +392,7 @@ int main( int argc, char* argv[] )
 
   tdp::KeyframeSLAM kfSLAM;
   std::vector<tdp::KeyFrame> kfs;
+  std::vector<float> Hs;
   std::vector<tdp::SE3f> T_mos;
 
   std::list<std::pair<int,int>> loopClose;
@@ -384,26 +405,15 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> runLoopClosure(true);
   std::mutex mut;
 
-  auto computeLoopClosures = [&]() {
-    size_t numLoopClosures = 0;
-    size_t I = loopClose.size()/10 +1;
-    for(size_t i=0; i < I; ++i) {
-      std::pair<int,int> ids(-1,-1);
-      if (loopClose.size() > 0) {
-        ids = loopClose.front();
-        loopClose.pop_front();
-      }
-      if (ids.first < 0 && ids.second < 0) {
-        break;
-      }
-      tdp::KeyFrame& kfA = kfs[ids.first];
-      tdp::KeyFrame& kfB = kfs[ids.second];
+  auto loopCloseKfs = [&](int idA, int idB) -> bool {
+      tdp::KeyFrame& kfA = kfs[idA];
+      tdp::KeyFrame& kfB = kfs[idB];
       Eigen::Matrix<float,6,1> se3 = kfA.T_wk_.Log(kfB.T_wk_);
       if ( se3.head<3>().norm()*180./M_PI < loopCloseAngleThresh
         && se3.tail<3>().norm()           < loopCloseDistThresh) {
 
         tdp::SE3f T_ab = kfA.T_wk_.Inverse() * kfB.T_wk_;
-        std::cout << " checking " << ids.first << " -> " << ids.second 
+        std::cout << " checking " << idA << " -> " << idB
           << ": " << se3.head<3>().norm()*180./M_PI << " "
           << se3.tail<3>().norm()          
           << std::endl;
@@ -497,7 +507,7 @@ int main( int argc, char* argv[] )
             << " dRMSE " << (rmseBefore-rmseAfter)/rmseBefore
             << std::endl;
 
-          if (ids.first == ids.second-1 ||
+          if (idA == idB-1 ||
               (err == err 
               && err < icpLoopCloseErrThr
               && count > 3000 
@@ -508,10 +518,9 @@ int main( int argc, char* argv[] )
               << NORMAL << std::endl
               << T_ab.matrix3x4() 
               << "Sigma_ab" << std::endl << Sigma_ab << std::endl;
-            kfSLAM.AddLoopClosure(ids.first, ids.second, T_ab, Sigma_ab);
+            kfSLAM.AddLoopClosure(idA, idB, T_ab, Sigma_ab);
 //            kfSLAM.AddLoopClosure(ids.second, ids.first, T_ab.Inverse());
 //            loopClosures.emplace(std::make_pair(ids.first, ids.second), T_ab);
-            numLoopClosures ++;
 
             // update views
             viewDebugA.SetImage(photoErrBefore);
@@ -558,8 +567,7 @@ int main( int argc, char* argv[] )
               viewDebugE.SetImage(kfs[idMax.first].pyrGrey_.GetImage(0));
               viewDebugF.SetImage(kfs[idMax.second].pyrGrey_.GetImage(0));
             }
-            break;
-
+            return true;
           } else {
             std::cout << "unsuccessfull loop closure: "
               << "error=" << err << ", " 
@@ -573,9 +581,26 @@ int main( int argc, char* argv[] )
             << " is to small" << std::endl;
         }
       } else {
-        std::cout << " skipping " << ids.first << " -> " << ids.second  
+        std::cout << " skipping " << idA << " -> " << idB
           << ": " << se3.head<3>().norm()*180./M_PI << " "
           << se3.tail<3>().norm()          << std::endl;
+      }
+      return false;
+  };
+
+  auto computeLoopClosures = [&]() {
+    size_t I = loopClose.size()/10 +1;
+    for(size_t i=0; i < I; ++i) {
+      std::pair<int,int> ids(-1,-1);
+      if (loopClose.size() > 0) {
+        ids = loopClose.front();
+        loopClose.pop_front();
+      }
+      if (ids.first < 0 && ids.second < 0) {
+        break;
+      }
+      if (loopCloseKfs(ids.first, ids.second)) {
+        break;
       }
     }
   };
@@ -608,6 +633,11 @@ int main( int argc, char* argv[] )
     dGrid(2) /= (dTSDF-1);
 
     numLoopClose = loopClose.size();
+
+    if (pangolin::Pushed(printGraph)) {
+      kfSLAM.PrintValues();
+      kfSLAM.PrintGraph();
+    }
 
     if ((runSlamFusion.GuiChanged() && runSlamFusion)
        || (gui.finished() && !runSlamFusion && loopClose.size() == 0)) {
@@ -805,27 +835,40 @@ int main( int argc, char* argv[] )
       TOCK("ICP");
       T_mo = kfs[idActive].T_wk_*T_ac;
       T_mos.push_back(T_mo);
-      Sigma_ac += dSigma_ac;
+//      Sigma_ac += dSigma_ac;
+      Sigma_ac = dSigma_ac;
+
+      // capture the entropy of the transformation right after
+      if (kfs.size() > numKfsPrev)
+        Hs.push_back(log(Sigma_ac.determinant()));
+
     }
 
     if (!runSlamFusion) {
       Eigen::Matrix<float,6,1> se3 = Eigen::Matrix<float,6,1>::Zero();
-      if (kfs.size() > 0) 
+      float dH = 0.;
+      if (kfs.size() > 0) {
         se3 = kfs[idActive].T_wk_.Log(T_mo);
+        dH = log(Sigma_ac.determinant()) / Hs[idActive];
+        logdH.Log(dH, dEntropyThr);
+      }
       if ( (kfs.size() == 0)
           || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
-          || se3.tail<3>().norm() > keyFrameDistThresh) {
+          || se3.tail<3>().norm() > keyFrameDistThresh
+          || dH < dEntropyThr) {
         std::cout << "adding keyframe " << kfs.size() 
           << " angle: " << se3.head<3>().norm()*180./M_PI 
           << " dist: " << se3.tail<3>().norm() 
+          << " dH: " << dH
           << " T_mk: " << std::endl << T_mo
           << std::endl;
 
 //        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
+        numKfsPrev = kfs.size();
         kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
             rgb, cuD, T_mo);
 
-        for (int i=kfs.size()-1; 
+        for (int i=kfs.size()-3; 
             i > std::max(-1,(int)kfs.size()-maxLoopClosures-1); --i) {
           loopClose.emplace_front(kfs.size()-1,i);
         }
@@ -838,13 +881,16 @@ int main( int argc, char* argv[] )
         } else {
           std::cout << "not first KF -> adding new pose" << std::endl;
           std::cout << Sigma_ac << std::endl;
-          Sigma_ac = 1e-3*Eigen::Matrix<float,6,6>::Identity();
+//          Sigma_ac = 1e-3*Eigen::Matrix<float,6,6>::Identity();
           kfSLAM.AddPose(T_mo);
           kfSLAM.AddLoopClosure(idActive, kfs.size()-1, T_ac, Sigma_ac);
 //          std::cout << "not first KF -> adding ICP odom "
 //            << kfs.size()-1 << " to " << idActive 
 //            << std::endl;
 //          kfSLAM.AddIcpOdometry(idActive, kfs.size()-1, T_ac);
+//          if (!loopCloseKfs(idActive, kfs.size()-1)) {
+//            std::cout << "warning not closing consecutive pose Loop!" << std::endl;
+//          }
         }
 
         idActive = kfs.size()-1;
@@ -1084,6 +1130,8 @@ int main( int argc, char* argv[] )
       dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
       viewGrad3DPyr.SetImage(dispNormals2dPyr);
     }
+
+    plotdH.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
