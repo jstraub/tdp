@@ -47,6 +47,8 @@
 #include <vector>
 #include "laplace_beltrami.h"
 
+#include <tdp/gl/shaders.h>
+
 float f_z(const tdp::Vector3fda& x) {
     return x(2);
 }
@@ -519,7 +521,7 @@ int main( int argc, char* argv[] ){
   container.AddDisplay(viewN);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vboZ, vboS, vboF;
+  pangolin::GlBuffer vbo, vboZ, vboS, vboF, valuebo;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
@@ -528,6 +530,8 @@ int main( int argc, char* argv[] ){
   pangolin::Var<bool> showBases("ui.show bases", true, true);
 
   pangolin::Var<int> knn("ui.knn", 5,1,100);
+  pangolin::Var<float>minVal("ui min Val",-1,-1,0);
+  pangolin::Var<float>maxVal("ui max Val",1,1,0);
 
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
@@ -562,7 +566,10 @@ int main( int argc, char* argv[] ){
       vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
       vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-
+      valuebo.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() ,
+          GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      // TODO: upload values to visualize here
+//      valuebo.Upload(...)
 
 //      zSamples.Reinitialise(pc.w_*upsample,1);
 //      getSamples(T_wls,thetas,zSamples,upsample);
@@ -600,6 +607,31 @@ int main( int argc, char* argv[] ){
       // draw the first arm pc
       glColor3f(1.0f, 0.0f, 0.0f);
       pangolin::RenderVbo(vbo);
+
+
+      // renders the vbo with colors from valuebo
+      auto& shader = tdp::Shaders::Instance()->valueShader_;   
+      shader.Bind();
+      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal);
+      shader.SetUniform("maxValue", maxVal);
+      valuebo.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+      vbo.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+
+      glEnableVertexAttribArray(0); 
+      glEnableVertexAttribArray(1);
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valuebo.Unbind();
+      glDisableVertexAttribArray(0);
+      vbo.Unbind();
+
+
     }
 
     glDisable(GL_DEPTH_TEST);
