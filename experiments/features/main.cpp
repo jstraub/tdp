@@ -31,6 +31,7 @@
 #include <tdp/preproc/blur.h>
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/registration/robust3D3D.h>
+#include <tdp/ransac/ransac.h>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -110,7 +111,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
 
+  pangolin::Var<bool> useHuber("ui.Use Huber", false, true);
   pangolin::Var<float> huberDelta("ui.huber Delta",0.1,0.01,1.);
+
+  pangolin::Var<bool> useRansac("ui.Use RANSAC", false, true);
+  pangolin::Var<float> ransacMaxIt("ui.max it",100,1,1000);
+  pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
@@ -217,10 +223,21 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     }
     TOCK("Matching");
 
-    tdp::Huber3D3D<float> huber(pc, pcB, assocAB, huberDelta);
-    huber.Compute(tdp::SE3f(), 1e-5, 100);
-    tdp::SE3f T =  huber.GetMinimum().Inverse();
-    std::cout << T << std::endl;
+    tdp::SE3f T_ab;
+    if (useHuber && assocAB.Area() > 5) {
+      tdp::Huber3D3D<float> huber(pc, pcB, assocAB, huberDelta);
+      huber.Compute(tdp::SE3f(), 1e-5, 100);
+      T_ab =  huber.GetMinimum().Inverse();
+      std::cout << T_ab << std::endl;
+    }
+    if (useRansac && assocAB.Area() > 5) {
+      tdp::P3P p3p;
+      tdp::Ransac<tdp::Vector3fda> ransac(&p3p);
+      size_t numInliers = 0;
+      T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
+          ransacThr, numInliers);
+      std::cout << "#inliers " << numInliers << std::endl;
+    }
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -234,7 +251,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     vbo.Upload(pcB.ptr_,pcB.SizeBytes(), 0);
     // render point cloud
-    pangolin::glSetFrameOfReference(T.matrix());
+    pangolin::glSetFrameOfReference(T_ab.matrix());
     pangolin::RenderVbo(vbo);
     pangolin::glUnsetFrameOfReference();
 

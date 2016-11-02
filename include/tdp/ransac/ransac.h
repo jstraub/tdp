@@ -31,14 +31,14 @@ class P3P : public Model<Vector3fda> {
       std::vector<uint32_t>& ids, SE3f& T_ab) {
     Eigen::Vector3d meanA(0,0,0);
     Eigen::Vector3d meanB(0,0,0);
-    for (size_t i=0; i<3; ++i) {
+    for (size_t i=0; i<ids.size(); ++i) {
       meanA += pcA[assoc[ids[i]](0)].cast<double>();
       meanB += pcB[assoc[ids[i]](1)].cast<double>();
     }
-    meanA /= 3.;
-    meanB /= 3.;
+    meanA /= ids.size();
+    meanB /= ids.size();
     Eigen::Matrix3d outer = Eigen::Matrix3d::Zero();
-    for (size_t i=0; i<4; ++i) {
+    for (size_t i=0; i<ids.size(); ++i) {
       outer += (pcB[assoc[ids[i]](1)].cast<double>()-meanB)
         * (pcA[assoc[ids[i]](0)].cast<double>()-meanA).transpose();
     }
@@ -60,13 +60,16 @@ class P3P : public Model<Vector3fda> {
 
   virtual size_t ConsensusSize(const Image<Vector3fda>& pcA, 
       const Image<Vector3fda>& pcB,
-      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids, 
+      const Image<Vector2ida>& assoc, std::vector<uint32_t>& inlierIds, 
       const SE3f& T_ab, float thr) {
     size_t numInliers = 0;
-    for (size_t i=3; i<ids.size(); ++i) {
-      float dist = (pcA[assoc[ids[i]](0)] - T_ab * pcB[assoc[ids[i]](1)]).norm();
+    inlierIds.clear();
+    inlierIds.reserve(assoc.Area());
+    for (size_t i=0; i<assoc.Area(); ++i) {
+      float dist = (pcA[assoc[i](0)] - T_ab * pcB[assoc[i](1)]).norm();
       if (dist < thr) {
         numInliers ++; 
+        inlierIds.push_back(i);
       }
     }
     return numInliers;
@@ -96,13 +99,14 @@ public:
     std::vector<uint32_t> ids(assoc.Area());
     std::iota(ids.begin(), ids.end(), 0);
 
+    std::vector<uint32_t> idsInlier;
     for (size_t it=0; it<maxIt; ++it) {
       std::random_shuffle(ids.begin(), ids.end());
-
+      std::vector<uint32_t> idsModel(ids.begin(), ids.begin()+3);
       // compute model from the sampled datapoints
-      if(!model_->Compute(pcA, pcB, assoc, ids, T_ab)) continue;
+      if(!model_->Compute(pcA, pcB, assoc, idsModel, T_ab)) continue;
 //      std::cout << T_ab << std::endl;
-      size_t nInlier=model_->ConsensusSize(pcA, pcB, assoc, ids, T_ab, thr);
+      size_t nInlier=model_->ConsensusSize(pcA, pcB, assoc, idsInlier, T_ab, thr);
 //      std::cout<<"Ransac::find: nInlier="<<nInlier<<std::endl;
       // model is good enough -> remember
       if(nInlier > maxInlier){
@@ -112,10 +116,11 @@ public:
 //        std::cout<<"Ransac::find: LatestT_wc:"<<std::endl<<LatestT_wc;
       }
     }
+    numInliers = model_->ConsensusSize(pcA, pcB, assoc, idsInlier, maxT_ab, thr);
+    model_->Compute(pcA, pcB, assoc, idsInlier, T_ab);
 //    std::cout<<"Inliers of best model: " << maxInlier << std::endl
 //      << "Model: " << std::endl << maxT_ab << std::endl;
-    numInliers = maxInlier;
-    return maxT_ab;
+    return T_ab;
   }
 
   uint32_t getInlierCount() const { return mInlierCount;};
