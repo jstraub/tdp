@@ -326,7 +326,7 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
         estimates_w[i] = T_wls[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),estimate_l));
    }
 }
-void getSimpleLB(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
+void getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
 
@@ -337,13 +337,16 @@ void getSimpleLB(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
         std::cout << "\n\n-----------" << std::endl;
-        std::cout << "nnids: " << nnIds << std::endl;
+        std::cout << "i: " << i << std::endl;
+        std::cout << "nnids:\n" << nnIds << std::endl;
+        std::cout << "dists:\n" << dists << std::endl;
+
         for (int k=0; k<knn; ++k){
             if (dists(k)<1e-7){
                 L.insert(i, nnIds(k)) = 0.0f;
             }
             L.insert(i, nnIds(k)) = 1.0f/dists(k);
-            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
+            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << ": " /*<< L(i,nnIds(k))*/ << std::endl;
             //std::cout << "Li: " << L.row(i) << std::endl;
         }
     }
@@ -357,7 +360,7 @@ void getSimpleLB(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps
       Spectra::SparseGenMatProd<float> > eigs(&op, 3, 6);
 
     // Initialize and compute
-    eigs.init();
+    eigs.init();//todo: sort_rule=Spectra::SMALLEST_MAGN
     int nconv = eigs.compute();
 
     // Retrieve results
@@ -366,6 +369,10 @@ void getSimpleLB(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps
       evalues = eigs.eigenvalues();
       std::cout << "Eigenvalues found:\n" << evalues << std::endl;
   //    std::cout << eigs.eigenvectors() << std::endl;
+    } else{
+        std::cout << "failed" << std::endl;
+        std::cout << "L matrix was:  \n" << L << std::endl;
+
     }
 }
 
@@ -460,7 +467,7 @@ int main( int argc, char* argv[] ){
     //test_getLocalRot();
     //return 1;
     test_getSimpleLB();
-    //return 1;
+    return 1;
   // load pc and normal from the input paths
   //tdp::ManagedHostImage<tdp::Vector3fda> pc=GetSimplePc();
   tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
