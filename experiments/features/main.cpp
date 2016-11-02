@@ -114,9 +114,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<bool> useHuber("ui.Use Huber", false, true);
   pangolin::Var<float> huberDelta("ui.huber Delta",0.1,0.01,1.);
 
-  pangolin::Var<bool> useRansac("ui.Use RANSAC", false, true);
+  pangolin::Var<bool> useRansac("ui.Use RANSAC", true, true);
   pangolin::Var<float> ransacMaxIt("ui.max it",100,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
+  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.6,0.1,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
@@ -126,6 +127,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<tdp::Vector8uda> descsB;
 
   tdp::ManagedHostImage<tdp::Vector2ida> pts;
+  tdp::ManagedHostImage<float> orientations;
   tdp::ManagedHostImage<tdp::Vector2ida> ptsB;
 
   tdp::ManagedHostImage<tdp::SE3f> cosys;
@@ -177,12 +179,17 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Depth2Normals(cuD, cam, cuN);
 
     TICK("Detection");
-    tdp::DetectFast(grey, fastB, 16, pts);
+    tdp::DetectOFast(grey, fastB, 16, pts, orientations);
     TOCK("Detection");
+
+//    for (size_t i=0; i< orientations.Area(); ++i) {
+//      std::cout << orientations[i] << " ";
+//    }
+//    std::cout << std::endl;
 
     TICK("Extraction");
     descsA.Reinitialise(pts.w_, 1);
-    tdp::ExtractBrief(grey, pts, descsA);
+    tdp::ExtractBrief(grey, pts, orientations, descsA);
     TOCK("Extraction");
 
     tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
@@ -237,6 +244,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
           ransacThr, numInliers);
       std::cout << "#inliers " << numInliers << std::endl;
+      if (numInliers < ransacInlierPercThr*assocAB.Area()) {
+        T_ab = tdp::SE3f();
+      }
     }
 
     // Draw 3D stuff
@@ -274,9 +284,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (viewGrey.IsShown()) {
       viewGrey.SetImage(grey);
       viewGrey.Activate();
-      glColor3f(1,0,0);
       for (size_t i=0; i<pts.Area(); ++i) {
+        glColor3f(1,0,0);
         pangolin::glDrawCross(pts[i](0), pts[i](1), 3);
+        glColor3f(0,1,0);
+        pangolin::glDrawLine(pts[i](0), pts[i](1), 
+          pts[i](0)+cos(orientations[i])*10, pts[i](1)+sin(orientations[i])*10);
       } 
     }
     if (viewAssoc.IsShown()) {

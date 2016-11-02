@@ -14,6 +14,7 @@ namespace tdp {
 void DetectFast(const Image<uint8_t>& grey, int b, int borderS,
     ManagedHostImage<Vector2ida>& pts
     ) {
+
   int numPts = 0;
   xy* pts_ = fast9_detect_nonmax(grey.ptr_, grey.w_, grey.h_, grey.pitch_, b, 
       &numPts);
@@ -35,6 +36,32 @@ void DetectFast(const Image<uint8_t>& grey, int b, int borderS,
       pts[j++](1) = pts_[i].y;
     }
   }
+
+}
+
+// http://www.vision.cs.chubu.ac.jp/CV-R/pdf/Rublee_iccv2011.pdf
+void DetectOFast(const Image<uint8_t>& grey, int b, int borderS,
+    ManagedHostImage<Vector2ida>& pts,
+    ManagedHostImage<float>& orientation
+    ) {
+
+  DetectFast(grey, b, borderS, pts);
+  orientation.Reinitialise(pts.w_, 1);
+
+  for (size_t i=0; i<pts.Area(); ++i) {
+    int x0 = pts[i](0);
+    int y0 = pts[i](1);
+    float m01 = 0.;
+    float m10 = 0.;
+    for (int x=-4; x < 5; ++x)
+      for (int y=-4; y < 5; ++y) {
+        m01 += (float)y*(float)grey(x0+x,y0+y); 
+        m10 += (float)x*(float)grey(x0+x,y0+y); 
+      }
+    orientation[i] = atan2(m01, m10);
+//    std::cout << orientation[i] << ": " << m01 << " " << m10 << std::endl;
+  }
+
 }
 
 }
