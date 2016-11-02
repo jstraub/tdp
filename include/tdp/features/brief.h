@@ -151,7 +151,8 @@ namespace tdp {
       return false;
     }
     Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
-    int intOrient = (int)floor((M_PI-orientation)/M_PI*180./12.);
+    int intOrient = (int)floor((
+      orientation < 0. ? orientation + 2*M_PI : orientation)/M_PI*180./12.);
 //    std::cout << orientation << ": " << intOrient << std::endl;
     return ExtractBrief(patch, desc, 
         intOrient);
