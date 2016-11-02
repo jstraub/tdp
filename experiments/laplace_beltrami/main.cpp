@@ -45,6 +45,7 @@
 #include <cmath>
 #include <complex>
 #include <vector>
+#include <cstdlib>
 #include "laplace_beltrami.h"
 
 #include <tdp/gl/shaders.h>
@@ -83,8 +84,8 @@ tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen
 }
 
 tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc(){
-    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
-    for (size_t i=0; i<10; ++i){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc(7,1);
+    for (size_t i=0; i<pc.Area(); ++i){
         tdp::Vector3fda pt;
         pt << i,i,i;
         pc(i,0) = pt;
@@ -101,9 +102,17 @@ void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
 
 void GetCylindricalPc(tdp::Image<tdp::Vector3fda>& pc){
     //todo: use [s1;R]
+    for (size_t i=0; i<pc.Area(); ++i){
+
+        tdp::S2f pt_2d = tdp::S2f::Random().vector();
+        float z  = static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX);
+        pc[i] = tdp::Vector3fda(pt_2d.vector()(0), pt_2d.vector()(1), z);
+        std::cout << pc[i] << std::endl;
+    }
 }
 
 inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
+
     int hi(0), lo(0), mid;
     for (size_t i=0; i<vec.size(); ++i){
         if (vec[i] < vec[lo]){
@@ -124,6 +133,7 @@ inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& sortIds){
 }
 
 Eigen::Matrix3f getLocalRot(const tdp::Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda>& es){
+
     std::vector<float> evalues;
     std::vector<int> axesIds;
     for (size_t i=0; i<cov.rows(); ++i){
@@ -140,8 +150,9 @@ Eigen::Matrix3f getLocalRot(const tdp::Matrix3fda& cov, const Eigen::SelfAdjoint
     return localRot;
 }
 
+void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::SE3f>& T_wl,
+                      tdp::ANN& ann, int knn, float eps){
 
-void getAllLocalBasis(const tdp::Image<tdp::Vector3fda>& pc, tdp::Image<tdp::SE3f>& T_wl, tdp::ANN& ann, int knn, float eps){
     //assumes ANN has complete computing kd tree
     //query `knn` number of neighbors
     assert( (pc.w_==T_wl.w_)&&(pc.h_ == T_wl.h_) );
@@ -263,7 +274,7 @@ void getThetas_F(const tdp::Image<tdp::Vector3fda>& pc_w,
 
         // Get the neighbor ids and dists for this point
         ann.Search(pt, knn, eps, nnIds, dists);
-        std::cout << nnIds.transpose() << std::endl;
+        //std::cout << nnIds.transpose() << std::endl;
 
         tdp::MatrixXfda X(knn,6), W(knn,knn);//todo clean this up
         tdp::Vector3fda Y(knn);
@@ -328,54 +339,73 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
         estimates_w[i] = T_wls[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),estimate_l));
    }
 }
-Eigen::VectorXcf getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
-    tdp::ANN ann;
-    ann.ComputeKDtree(pc);
+
+Eigen::VectorXf real(Eigen::VectorXcf vec_c){
+    Eigen::VectorXf vec_r(vec_c.size());
+    for (int i=0; i<vec_c.size(); i++){
+        vec_r(i)= vec_c(i).real();
+    }
+    return vec_r;
+}
+
+void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evector_real,
+                         tdp::ANN& ann, const int knn, const float eps){
+    assert(evector_real.size() == pc.Area());
 
     Eigen::VectorXi nnIds(knn);
     Eigen::VectorXf dists(knn);
-    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
+    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area()); //column major
     L.reserve(Eigen::VectorXi::Constant(pc.Area(),knn));
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
-        std::cout << "\n\n-----------" << std::endl;
-        std::cout << "i: " << i << std::endl;
-        std::cout << "nnids:\n" << nnIds << std::endl;
-        std::cout << "dists:\n" << dists << std::endl;
+        // Debugging
+//        std::cout << "\n\n-----------" << std::endl;
+//        std::cout << "i: " << i << std::endl;
+//        std::cout << "nnids:\n" << nnIds << std::endl;
+//        std::cout << "dists:\n" << dists << std::endl;
 
         for (int k=0; k<knn; ++k){
             if (dists(k)<1e-7){
-                L.insert(i, nnIds(k)) = 0.0f;
+                L.insert(nnIds(k),i) = 0.0f;
+            } else{
+                L.insert(nnIds(k),i) = 1.0f/dists(k);
             }
-            L.insert(i, nnIds(k)) = 1.0f/dists(k);
-            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << ": " /*<< L(i,nnIds(k))*/ << std::endl;
-            //std::cout << "Li: " << L.row(i) << std::endl;
+//            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
         }
+        // show the current row
+        // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
+//        for (Eigen::SparseMatrix<float>::InnerIterator it(L,i); it; ++it){
+//            std::cout << "\n\nrow index: " << it.row() << std::endl;
+//            std::cout << "col index should be i: " <<it.col() <<std::endl;
+//            std::cout << "val:" << it.value() <<std::endl;
+//        }
     }
+    //std::cout << "L:\n" << L<<std::endl; //L is symmetric
 
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
     // Construct eigen solver object, requesting the largest three eigenvalues
-    Spectra::GenEigsSolver<float, Spectra::SMALLEST_MAGN,
+    Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
       Spectra::SparseGenMatProd<float> > eigs(&op, 3, 6);
 
     // Initialize and compute
-    eigs.init();//todo: sort_rule=Spectra::SMALLEST_MAGN
-    int nconv = eigs.compute();
+    eigs.init();
+    int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
 
     // Retrieve results
     Eigen::VectorXcf evalues;
+    Eigen::VectorXcf evector_complex;
     if(eigs.info() == Spectra::SUCCESSFUL) {
       evalues = eigs.eigenvalues();
-      std::cout << "Eigenvalues found:\n" << evalues << std::endl;
-  //    std::cout << eigs.eigenvectors() << std::endl;
+      evector_complex = eigs.eigenvectors().col(1);
+      evector_real = real(evector_complex);
+      std::cout << "Eigenvalues found:\n" << evalues << std::endl; //check first should be zero
+      std::cout << evector_real << std::endl;
+
     } else{
         std::cout << "failed" << std::endl;
-        std::cout << "L matrix was:  \n" << L << std::endl;
-
     }
-    return evalues;
 }
 
 //tests
@@ -458,9 +488,29 @@ void test_getThetas_F(){
 
 }
 
-void test_getSimpleLB(){
+void test_real(){
+    std::complex<float> one_c(1.0f,1.0f);
+    std::complex<float> two_c(2.0f,2.0f);
+    std::complex<float> three_c(3.0f,3.0f);
+    Eigen::Vector3cf vec_c;
+    vec_c(0) = one_c;
+    vec_c(1) = two_c;
+    vec_c(2) = three_c;
+    std::cout << real(vec_c) << std::endl;
+}
+
+void test_getSimpleLBEigen(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
-    getSimpleLB(pc,3,1e-6);
+    tdp::ANN ann;
+    ann.ComputeKDtree(pc);
+    Eigen::VectorXf evec(pc.Area(),1);
+    getSimpleLBEvector(pc,evec, ann, 3,1e-6);
+    std::cout << evec << std::endl;
+}
+
+void test_getCylinder(){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    GetCylindricalPc(pc);
 }
 
 //end of test
@@ -468,12 +518,12 @@ void test_getSimpleLB(){
 int main( int argc, char* argv[] ){
     //test_getLocalRot();
     //return 1;
-    test_getSimpleLB();
-    return 1;
+    //test_getSimpleLBEigen();
+    //test_getCylinder();
+    //return 1;
   // load pc and normal from the input paths
   //tdp::ManagedHostImage<tdp::Vector3fda> pc=GetSimplePc();
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
-
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
 
   if (argc > 1) {
@@ -481,18 +531,14 @@ int main( int argc, char* argv[] ){
       std::cout << "input " << input << std::endl;
       tdp::LoadPointCloud(input, pc, ns);
   } else {
-      GetSphericalPc(pc);
+      //GetSphericalPc(pc);
+      GetCylindricalPc(pc);
   }
 
   // build kd tree
   tdp::ANN ann;
   ann.ComputeKDtree(pc);
 
-  //Get the simple laplacian
-  //std::cout << "here simple lb result: \n" <<
-               getSimpleLB(pc, 3, 1e-7);
-                       //<< std::endl;
-  return 1;
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -530,18 +576,18 @@ int main( int argc, char* argv[] ){
   pangolin::Var<bool> showBases("ui.show bases", true, true);
 
   pangolin::Var<int> knn("ui.knn", 5,1,100);
-  pangolin::Var<float>minVal("ui min Val",-1,-1,0);
-  pangolin::Var<float>maxVal("ui max Val",1,1,0);
+  pangolin::Var<float>minVal("ui min Val",-0.71,-1,0);
+  pangolin::Var<float>maxVal("ui max Val",0.01,1,0);
 
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
 
 
   tdp::ManagedHostImage<tdp::SE3f> T_wls(pc.w_,1);
-  tdp::ManagedHostImage<tdp::Vector6fda> thetas(pc.w_,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1),fEstimates(pc.w_,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> zSamples(pc.w_*upsample,1);
-
+  //tdp::ManagedHostImage<tdp::Vector6fda> thetas(pc.w_,1);
+  //tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1),fEstimates(pc.w_,1);
+  //tdp::ManagedHostImage<tdp::Vector3fda> zSamples(pc.w_*upsample,1);
+  Eigen::VectorXf evec(pc.Area(),1);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -561,15 +607,19 @@ int main( int argc, char* argv[] ){
 //      vboZ.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
 
 
-      getThetas_F(pc, T_wls, f_z, thetas, ann, knn, eps);
-      getFEstimates(pc, T_wls, thetas, fEstimates);
-      vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-      vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
+      //getThetas_F(pc, T_wls, f_z, thetas, ann, knn, eps);
+      //getFEstimates(pc, T_wls, thetas, fEstimates);
+      //vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
+      //vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-      valuebo.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() ,
+      getSimpleLBEvector(pc, evec, ann, knn, eps);
+      Eigen::MatrixXf temp(1,evec.rows());
+      temp.row(0) = evec;
+      std::cout << "evec: " << temp.row(0) << std::endl;
+      valuebo.Reinitialise(pangolin::GlArrayBuffer, evec.rows() ,
           GL_FLOAT,1, GL_DYNAMIC_DRAW);
       // TODO: upload values to visualize here
-//      valuebo.Upload(...)
+      valuebo.Upload(&evec(0), sizeof(float)*evec.rows(), 0);
 
 //      zSamples.Reinitialise(pc.w_*upsample,1);
 //      getSamples(T_wls,thetas,zSamples,upsample);
@@ -606,7 +656,7 @@ int main( int argc, char* argv[] ){
       glPointSize(1.);
       // draw the first arm pc
       glColor3f(1.0f, 0.0f, 0.0f);
-      pangolin::RenderVbo(vbo);
+      //pangolin::RenderVbo(vbo);
 
 
       // renders the vbo with colors from valuebo
