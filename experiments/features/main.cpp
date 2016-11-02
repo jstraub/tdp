@@ -160,7 +160,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1.);
 
-    tdp::Blur5(cuGrey,cuGreyChar, 1.5);
+    tdp::Blur9(cuGrey,cuGreyChar, 2.0);
     grey.CopyFrom(cuGreyChar, cudaMemcpyDeviceToHost);
 //    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.);
 

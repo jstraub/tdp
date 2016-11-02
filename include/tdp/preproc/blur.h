@@ -17,4 +17,16 @@ void Blur5(
     float sigma_in
     );
 
+void Blur9(
+    const Image<float>& Iin,
+    Image<float>& Iout,
+    float sigma_in
+    );
+
+void Blur9(
+    const Image<float>& Iin,
+    Image<uint8_t>& Iout,
+    float sigma_in
+    );
+
 }
