@@ -1,77 +1,126 @@
 #pragma once
+#include <algorithm>
+#include <vector>
 #include <tdp/manifold/SE3.h>
+#include <tdp/data/image.h>
+#include <tdp/eigen/dense.h>
 
 namespace tdp {
 
 template<class T>
 class Model {
  public:
-  Model();
-  virtual ~Model();
-  SE3f Compute(const Image<T>& dataA, const Image<T>& dataB);
-  size_t ConsensusSize(
+  Model() {}
+  virtual ~Model() {}
+  virtual bool Compute(const Image<T>& dataA, const Image<T>& dataB,
+      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids,
+      SE3f& T_ab) = 0;
+  virtual size_t ConsensusSize(const Image<T>& dataA, const Image<T>& dataB,
+      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids,
+      const SE3f& T_ab, float thr) = 0;
  private:
-}
+};
 
-class P3P : public Model {
+class P3P : public Model<Vector3fda> {
  public:
-  SE3f Compute(const Image<T>& pcA, const Image<T>& pcB);
+  P3P() {}
+  virtual ~P3P() {}
+  virtual bool Compute(const Image<Vector3fda>& pcA, 
+      const Image<Vector3fda>& pcB, 
+      const Image<Vector2ida>& assoc, 
+      std::vector<uint32_t>& ids, SE3f& T_ab) {
+    Eigen::Vector3d meanA(0,0,0);
+    Eigen::Vector3d meanB(0,0,0);
+    for (size_t i=0; i<3; ++i) {
+      meanA += pcA[assoc[ids[i]](0)].cast<double>();
+      meanB += pcB[assoc[ids[i]](1)].cast<double>();
+    }
+    meanA /= 3.;
+    meanB /= 3.;
+    Eigen::Matrix3d outer = Eigen::Matrix3d::Zero();
+    for (size_t i=0; i<4; ++i) {
+      outer += (pcB[assoc[ids[i]](1)].cast<double>()-meanB)
+        * (pcA[assoc[ids[i]](0)].cast<double>()-meanA).transpose();
+    }
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(outer, Eigen::ComputeThinU |
+        Eigen::ComputeThinV);
+    double detUV = (svd.matrixV()*svd.matrixU().transpose()).determinant();
+//    std::cout << detUV << "; " << svd.rank() 
+//      << "; " << svd.singularValues().transpose() 
+//      << std::endl;
+//    std::cout << svd.matrixV() << std::endl << svd.matrixU() << std::endl;
+    Eigen::Vector3d diag(1,1, detUV);
+    Eigen::Matrix3d R_ab = svd.matrixV()*diag.asDiagonal()
+      *svd.matrixU().transpose();
+    Eigen::Vector3d t_ab = meanA - R_ab*meanB;
+//    std::cout << R_ab << std::endl << t_ab.transpose() << std::endl;
+    T_ab = SE3f(R_ab.cast<float>(), t_ab.cast<float>());
+    return true;
+  }
+
+  virtual size_t ConsensusSize(const Image<Vector3fda>& pcA, 
+      const Image<Vector3fda>& pcB,
+      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids, 
+      const SE3f& T_ab, float thr) {
+    size_t numInliers = 0;
+    for (size_t i=3; i<ids.size(); ++i) {
+      float dist = (pcA[assoc[ids[i]](0)] - T_ab * pcB[assoc[ids[i]](1)]).norm();
+      if (dist < thr) {
+        numInliers ++; 
+      }
+    }
+    return numInliers;
+  }
  private:
 };
 
 /* RANSAC algorithm
  */
+template<class T>
 class Ransac
 {
 public:
-  Ransac()
-  {};
+  Ransac(Model<T>* model) : model_(model)
+  {}
   ~Ransac()
-  {};
+  {}
 
-
-  SE3f Compute(const Image<Vector3fda>& pcA, const Image<Vector3fda>& pcB,
+  SE3f Compute(const Image<T>& pcA, const Image<T>& pcB,
       const Image<Vector2ida>& assoc,
-      size_t maxIt)
+      size_t maxIt, float thr, size_t& numInliers)
   {
-    SE3f T_wc;
-    SE3f LatestT_wc;
-    int32_t maxInlier=-1;
+    SE3f T_ab;
+    SE3f maxT_ab;
+    size_t maxInlier = 0;
 
     std::vector<uint32_t> ids(assoc.Area());
     std::iota(ids.begin(), ids.end(), 0);
 
     for (size_t it=0; it<maxIt; ++it) {
-      std::vector<Assoc<Desc,uint32_t> > sample;
       std::random_shuffle(ids.begin(), ids.end());
-      for (size_t j=0; j<
-      {
-        uint32_t id=ids[0];
-      };
 
       // compute model from the sampled datapoints
-      ++i;
-      if(!mModel.compute(sample,LatestT_wc)) continue;
-      uint32_t nInlier=mModel.consensusSize(LatestT_wc.inverse(),pairing);;
+      if(!model_->Compute(pcA, pcB, assoc, ids, T_ab)) continue;
+//      std::cout << T_ab << std::endl;
+      size_t nInlier=model_->ConsensusSize(pcA, pcB, assoc, ids, T_ab, thr);
 //      std::cout<<"Ransac::find: nInlier="<<nInlier<<std::endl;
-
       // model is good enough -> remember
-      if(int32_t(nInlier) > maxInlier){
-        maxInlier=nInlier;
-        T_wc=LatestT_wc;
+      if(nInlier > maxInlier){
+        maxInlier = nInlier;
+        maxT_ab = T_ab; 
 //        std::cout<<"nInlier="<<nInlier<<std::endl;
 //        std::cout<<"Ransac::find: LatestT_wc:"<<std::endl<<LatestT_wc;
       }
     }
-    std::cout<<"Inliers of best model: "<<maxInlier<<std::endl
-      <<"Model: "<<std::endl<<T_wc << std::endl;
-    mInlierCount=maxInlier;
-    return T_wc;
+//    std::cout<<"Inliers of best model: " << maxInlier << std::endl
+//      << "Model: " << std::endl << maxT_ab << std::endl;
+    numInliers = maxInlier;
+    return maxT_ab;
   }
 
   uint32_t getInlierCount() const { return mInlierCount;};
 
-  Model mModel;
+  Model<T>* model_;
 
 private:
   uint32_t mInlierCount;

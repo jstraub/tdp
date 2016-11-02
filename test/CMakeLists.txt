@@ -19,6 +19,9 @@ target_link_libraries(spectra ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(image image.cpp)
 target_link_libraries(image tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+add_executable(ransac ransac.cpp)
+target_link_libraries(ransac tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
   add_executable(sl3 SL3.cpp)
   target_link_libraries(sl3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
