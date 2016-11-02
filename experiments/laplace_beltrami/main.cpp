@@ -328,7 +328,7 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
         estimates_w[i] = T_wls[i]*(tdp::Vector3fda(pt_l(0),pt_l(1),estimate_l));
    }
 }
-void getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
+Eigen::VectorXcf getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const float eps){
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
 
@@ -353,7 +353,6 @@ void getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const floa
         }
     }
 
-
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
@@ -376,6 +375,7 @@ void getSimpleLBEigen(tdp::Image<tdp::Vector3fda>& pc, const int knn, const floa
         std::cout << "L matrix was:  \n" << L << std::endl;
 
     }
+    return evalues;
 }
 
 //tests
