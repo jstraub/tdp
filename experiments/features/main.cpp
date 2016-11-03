@@ -33,6 +33,8 @@
 #include <tdp/registration/robust3D3D.h>
 #include <tdp/ransac/ransac.h>
 
+#include <tdp/data/pyramid.h>
+
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
 
@@ -100,6 +102,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<float> cuGreydv(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc, hc);
 
+  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGrey(wc, hc);
+  tdp::ManagedHostPyramid<uint8_t,3> pyrGrey(wc, hc);
+
   tdp::ManagedHostImage<tdp::Vector3fda> grad3D(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
 
@@ -126,7 +131,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedHostImage<tdp::Vector8uda> descsA;
   tdp::ManagedHostImage<tdp::Vector8uda> descsB;
 
-  tdp::ManagedHostImage<tdp::Vector2ida> pts;
+  tdp::ManagedHostImage<tdp::Vector2ida> ptsA;
   tdp::ManagedHostImage<float> orientations;
   tdp::ManagedHostImage<tdp::Vector2ida> ptsB;
 
@@ -140,10 +145,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   while(!pangolin::ShouldQuit())
   {
     if (gui.frame == 1 || pangolin::Pushed(newKf)) {
-      descsB.Reinitialise(descsA.w_, 1);
+      descsB.Reinitialise(descsA.w_, descsA.h_);
       descsB.CopyFrom(descsA, cudaMemcpyHostToHost);
-      ptsB.Reinitialise(pts.w_, 1);
-      ptsB.CopyFrom(pts, cudaMemcpyHostToHost);
+      ptsB.Reinitialise(ptsA.w_, 1);
+      ptsB.CopyFrom(ptsA, cudaMemcpyHostToHost);
       greyB.CopyFrom(grey, cudaMemcpyHostToHost);
       pcB.CopyFrom(pc, cudaMemcpyHostToHost);
     }
@@ -158,10 +163,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
-    tdp::Rgb2Grey(cuRgb,cuGrey, 1.);
+    tdp::Rgb2Grey(cuRgb,cuPyrGrey.GetImage(0), 1.);
 
-    tdp::Blur9(cuGrey,cuGreyChar, 10.);
-    grey.CopyFrom(cuGreyChar, cudaMemcpyDeviceToHost);
+    tdp::CompletePyramidBlur(cuPyrGrey, cudaMemcpyDeviceToDevice);
+
+//    tdp::Blur9(cuGrey,cuGreyChar, 10.);
+    grey.CopyFrom(cuPyrGrey.GetImage(1), cudaMemcpyDeviceToHost);
 //    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.);
 
     // get depth image
@@ -179,17 +186,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Depth2Normals(cuD, cam, cuN);
 
     TICK("Detection");
-    tdp::DetectOFast(grey, fastB, 16, pts, orientations);
+    tdp::DetectOFast(grey, fastB, 16, ptsA, orientations);
     TOCK("Detection");
 
-//    for (size_t i=0; i< orientations.Area(); ++i) {
-//      std::cout << orientations[i] << " ";
-//    }
-//    std::cout << std::endl;
-
     TICK("Extraction");
-    descsA.Reinitialise(pts.w_, 1);
-    tdp::ExtractBrief(grey, pts, orientations, descsA);
+//    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
+    tdp::ExtractBrief(pyrGrey, ptsA, orientations, descsA);
     TOCK("Extraction");
 
     tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
@@ -197,23 +199,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     grad3D.CopyFrom(cuGrad3D, cudaMemcpyDeviceToHost);
     n.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
-    cosys.Reinitialise(pts.w_,1);
-    for (size_t i=0; i<pts.Area(); ++i) {
-      const tdp::Vector3fda& pci = pc(pts[i](0),pts[i](1));
-      const tdp::Vector3fda& ni = n(pts[i](0),pts[i](1));
-      tdp::Vector3fda gradi = grad3D(pts[i](0),pts[i](1)).normalized();
+    cosys.Reinitialise(ptsA.w_,1);
+    for (size_t i=0; i<ptsA.Area(); ++i) {
+      const tdp::Vector3fda& pci = pc(ptsA[i](0),ptsA[i](1));
+      const tdp::Vector3fda& ni = n(ptsA[i](0),ptsA[i](1));
+      tdp::Vector3fda gradi = grad3D(ptsA[i](0),ptsA[i](1)).normalized();
       tdp::SO3f R = tdp::SO3f::FromOrthogonalVectors(ni, gradi);
       cosys[i] = tdp::SE3f(R, pci);
     }
 
     TICK("Matching");
     int numMatches = 0;
-    assoc.Reinitialise(pts.w_,1);
-    for (size_t i=0; i<descsA.Area(); ++i) {
+    assoc.Reinitialise(descsA.w_,1);
+    for (size_t i=0; i<descsA.w_; ++i) {
       int dist = 256;
-      assoc[i] = tdp::Closest(descsA[i], descsB, &dist);
+      // match from current level 1 to all other levels
+      assoc[i] = tdp::ClosestBrief(descsA(i,1), descsB, &dist);
       if (dist >= briefMatchThr 
-          || !tdp::IsValidData(pc(pts[i](0),pts[i](1)))
+          || !tdp::IsValidData(pc(ptsA[i](0),ptsA[i](1)))
           || !tdp::IsValidData(pcB(ptsB[assoc[i]](0),ptsB[assoc[i]](1)))) {
         assoc[i] = -1; 
       } else {
@@ -224,7 +227,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     assocAB.Reinitialise(numMatches,1);
     for (size_t i=0; i<assoc.Area(); ++i) {
       if (assoc[i] >= 0) {
-        assocAB[j](0) = pts[i](0)+pts[i](1)*w;
+        assocAB[j](0) = ptsA[i](0)+ptsA[i](1)*w;
         assocAB[j++](1) = ptsB[assoc[i]](0)+ptsB[assoc[i]](1)*w;
       }
     }
@@ -284,12 +287,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     if (viewGrey.IsShown()) {
       viewGrey.SetImage(grey);
       viewGrey.Activate();
-      for (size_t i=0; i<pts.Area(); ++i) {
+      for (size_t i=0; i<ptsA.Area(); ++i) {
         glColor3f(1,0,0);
-        pangolin::glDrawCross(pts[i](0), pts[i](1), 3);
+        pangolin::glDrawCross(ptsA[i](0), ptsA[i](1), 3);
         glColor3f(0,1,0);
-        pangolin::glDrawLine(pts[i](0), pts[i](1), 
-          pts[i](0)+cos(orientations[i])*10, pts[i](1)+sin(orientations[i])*10);
+        pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
+          ptsA[i](0)+cos(orientations[i])*10, ptsA[i](1)+sin(orientations[i])*10);
       } 
     }
     if (viewAssoc.IsShown()) {
@@ -300,15 +303,15 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       viewAssoc.SetImage(greyAssoc);
       viewAssoc.Activate();
       glColor3f(1,0,0);
-      for (size_t i=0; i<pts.Area(); ++i) {
-        pangolin::glDrawCross(pts[i](0), pts[i](1), 3);
+      for (size_t i=0; i<ptsA.Area(); ++i) {
+        pangolin::glDrawCross(ptsA[i](0), ptsA[i](1), 3);
       }
       for (size_t i=0; i<ptsB.Area(); ++i) {
         pangolin::glDrawCross(ptsB[i](0)+wOrig, ptsB[i](1), 3);
       }
-      for (size_t i=0; i<descsA.Area(); ++i) {
+      for (size_t i=0; i<ptsA.Area(); ++i) {
         if (assoc[i] >= 0)
-          pangolin::glDrawLine(pts[i](0), pts[i](1), 
+          pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
               ptsB[assoc[i]](0)+wOrig, ptsB[assoc[i]](1));
       }
     }

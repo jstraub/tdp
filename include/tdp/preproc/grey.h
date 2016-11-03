@@ -20,4 +20,7 @@ void Rgb2GreyCpu(const Image<Vector3bda>& rgb,
 void Rgb2Grey(const Image<Vector3bda>& cuRgb,
     Image<float>& cuGrey, float scale=1./255.);
 
+void Rgb2Grey(const Image<Vector3bda>& cuRgb,
+    Image<uint8_t>& cuGrey);
+
 }

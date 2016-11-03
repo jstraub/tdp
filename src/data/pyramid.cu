@@ -113,12 +113,12 @@ void PyrDown(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
-template<typename T>
+template<typename Tin, typename Tout>
 __global__
 void KernelPyrDownBlur(
-    const Image<T> Iin,
-    Image<T> Iout,
-    T sigma_in
+    const Image<Tin> Iin,
+    Image<Tout> Iout,
+    Tin sigma_in
     ) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -130,14 +130,14 @@ void KernelPyrDownBlur(
     int yMin = max(0,2*idy - D/2);
     int yMax = min(2*idy - D/2 + D, (int)Iin.h_);
 
-    T val0 = Iin(2*idx, 2*idy);
+    Tin val0 = Iin(2*idx, 2*idy);
     float ws[] = {0.375f, 0.25f, 0.0625f}; // weights of kernel
 
     float W = 0;
     float sum = 0;
     for (int y=yMin; y<yMax; ++y) {
       for (int x=xMin; x<xMax; ++x) {
-        T val = Iin(x, y);
+        Tin val = Iin(x, y);
         if (fabs(val-val0) < 3*sigma_in) {
           float wx = ws[abs(x-2*idx)];
           float wy = ws[abs(y-2*idy)];
@@ -146,7 +146,7 @@ void KernelPyrDownBlur(
         }
       }
     }
-    Iout(idx,idy) = static_cast<T>(sum/W);
+    Iout(idx,idy) = static_cast<Tout>(sum/W);
   }
 }
 
@@ -160,7 +160,21 @@ void PyrDownBlur(
   assert(Iin.h_ == Iout.h_*2);
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
-  KernelPyrDownBlur<float><<<blocks,threads>>>(Iin,Iout,sigma_in);
+  KernelPyrDownBlur<float,float><<<blocks,threads>>>(Iin,Iout,sigma_in);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void PyrDownBlur(
+    const Image<uint8_t>& Iin,
+    Image<uint8_t>& Iout,
+    float sigma_in
+    ) {
+  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+  assert(Iin.w_ == Iout.w_*2);
+  assert(Iin.h_ == Iout.h_*2);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
+  KernelPyrDownBlur<uint8_t,uint8_t><<<blocks,threads>>>(Iin,Iout,sigma_in);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 

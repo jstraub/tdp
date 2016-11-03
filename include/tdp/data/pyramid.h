@@ -41,7 +41,22 @@ void PyrDownBlur(
     float sigma_in
     );
 
+void PyrDownBlur(
+    const Image<uint8_t>& Iin,
+    Image<uint8_t>& Iout,
+    float sigma_in
+    );
+
 #endif
+
+Vector2fda ConvertLevel(const Vector2fda& uv, int lvlFrom, int lvlTo) {
+  return Vector2fda((uv(0)+0.5)*pow(2.,lvlFrom-lvlTo)-0.5,
+      (uv(1)+0.5)*pow(2.,lvlFrom-lvlTo)-0.5);
+}
+Vector2fda ConvertLevel(const Vector2ida& uv, int lvlFrom, int lvlTo) {
+  return Vector2fda((uv(0)+0.5)*pow(2.,lvlFrom-lvlTo)-0.5,
+      (uv(1)+0.5)*pow(2.,lvlFrom-lvlTo)-0.5);
+}
 
 template<typename T, int LEVELS>
 class Pyramid {

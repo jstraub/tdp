@@ -5,6 +5,7 @@
 
 #include <Eigen/Dense>
 #include <tdp/data/image.h>
+#include <tdp/data/pyramid.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/eigen/dense.h>
 
@@ -30,14 +31,17 @@ namespace tdp {
       + hammingDistance(a(7),b(7));
   }
 
-  int Closest(const Vector8uda& a, const Image<Vector8uda>& bs, int* dist) {
+  int ClosestBrief(const Vector8uda& a, const Image<Vector8uda>& bs, int* dist) {
     int minId = -1;
     int minDist = 257;
-    for (int i=0; i<bs.Area(); ++i) {
-      int dist = Distance(a, bs[i]);
-      if (dist < minDist) {
-        minDist = dist;
-        minId = i;
+    for (int i=0; i<bs.w_; ++i) {
+      // iterate over pyramid levels
+      for (int j=0; j<bs.h_; ++j) {
+        int dist = Distance(a, bs(i,j));
+        if (dist < minDist) {
+          minDist = dist;
+          minId = i;
+        }
       }
     }
     if (dist) *dist = minDist;
@@ -160,7 +164,8 @@ namespace tdp {
 
   void ExtractBrief(const Image<uint8_t> grey, 
       const Image<Vector2ida>& pts,
-      Image<Vector8uda>& descs) {
+      ManagedHostImage<Vector8uda>& descs) {
+    descs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
       if(!tdp::ExtractBrief(grey, pts[i](0), pts[i](1), descs[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
@@ -171,11 +176,32 @@ namespace tdp {
   void ExtractBrief(const Image<uint8_t> grey, 
       const Image<Vector2ida>& pts,
       const Image<float>& orientations,
-      Image<Vector8uda>& descs) {
+      ManagedHostImage<Vector8uda>& descs) {
+    descs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
       if(!tdp::ExtractBrief(grey, pts[i](0), pts[i](1), descs[i], 
             orientations[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
+      }
+    }
+  }
+
+  template<int LEVELS>
+  void ExtractBrief(const Pyramid<uint8_t, LEVELS> pyrGrey, 
+      const Image<Vector2ida>& pts,
+      const Image<float>& orientations,
+      int ptsLvl,
+      ManagedHostImage<Vector8uda>& descs) {
+    descs.Reinitialise(pts.w_, LEVELS);
+    for (size_t lvl=0; lvl < LEVELS; ++lvl) {
+      Image<uint8_t> grey = pyrGrey.GetImage(lvl);
+      for (size_t i=0; i<pts.Area(); ++i) {
+        Vector2fda pt = ConvertLevel(pts[i], ptsLvl, lvl);
+        //TODO interpolated brief
+        if(!tdp::ExtractBrief(grey, floor(pt(0)), floor(pt(1)), descs(i,lvl), 
+              orientations[i])) {
+          std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
+        }
       }
     }
   }
