@@ -34,6 +34,7 @@
 #include <tdp/ransac/ransac.h>
 
 #include <tdp/data/pyramid.h>
+#include <tdp/camera/photometric.h>
 
 void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 {
@@ -76,6 +77,20 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   gui.container().AddDisplay(viewGrey);
   tdp::QuickView viewAssoc(w*2,h);
   gui.container().AddDisplay(viewAssoc);
+
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+  pangolin::DataLog logInliers;
+  pangolin::Plotter plotInliers(&logInliers, -100.f,1.f, 0, 1.f, 
+      1.f, 0.1f);
+  plotters.AddDisplay(plotInliers);
+  pangolin::DataLog logOverlap;
+  pangolin::Plotter plotOverlap(&logOverlap, -100.f,1.f, 0.f,1.f, 1.f, 0.1f);
+  plotters.AddDisplay(plotOverlap);
+  pangolin::DataLog logRmse;
+  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f, 100.0f, 0.1f, 0.1f);
+  plotters.AddDisplay(plotRmse);
+  gui.container().AddDisplay(plotters);
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
@@ -255,11 +270,21 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       size_t numInliers = 0;
       T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
           ransacThr, numInliers);
+      float overlap = 0.;
+      float rmse = 0.;
+      tdp::Overlap(grey, greyB, pc, pcB, T_ab, cam, overlap, rmse);
+
       std::cout << "#inliers " << numInliers 
-        << " %: " << numInliers /(float)assocAB.Area() << std::endl;
-      if (numInliers < ransacInlierPercThr*assocAB.Area()) {
-        T_ab = tdp::SE3f();
-      }
+        << " %: " << numInliers /(float)assocAB.Area() 
+        << overlap << " " << rmse << std::endl;
+
+      logOverlap.Log(overlap);
+      logRmse.Log(rmse);
+      logInliers.Log(numInliers/(float)assocAB.Area());
+
+//      if (numInliers < ransacInlierPercThr*assocAB.Area()) {
+//        T_ab = tdp::SE3f();
+//      }
     }
 
     // Draw 3D stuff
@@ -286,6 +311,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // Draw 2D stuff
     // SHowFrames renders the raw input streams (in our case RGB and D)
     gui.ShowFrames();
+
+    plotOverlap.ScrollView(1,0);
+    plotRmse.ScrollView(1,0);
+    plotInliers.ScrollView(1,0);
     // render normals image
     if (viewN2D.IsShown()) {
       // convert normals to RGB image
