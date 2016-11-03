@@ -194,7 +194,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
     pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
     TICK("Detection");
-    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 19, ptsA, orientations);
+    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, ptsA, orientations);
     TOCK("Detection");
 
     TICK("Extraction");

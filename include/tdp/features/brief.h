@@ -264,12 +264,12 @@ namespace tdp {
     int32_t x = brief.pt_(0);
     int32_t y = brief.pt_(1);
 //    if (!grey.Inside(x-16,y-16) || !grey.Inside(x+15, y+15)) {
-    if (!grey.Inside(x-19,y-19) || !grey.Inside(x+18, y+18)) {
+    if (!grey.Inside(x-18,y-18) || !grey.Inside(x+18, y+18)) {
       brief.desc_.fill(0);
       return false;
     }
 //    Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
-    Image<uint8_t> patch = grey.GetRoi(x-19, y-19, 38,38);
+    Image<uint8_t> patch = grey.GetRoi(x-18, y-18, 37,37);
     int intOrient = (int)floor((
       brief.orientation_ < 0. ? brief.orientation_ + 2*M_PI : brief.orientation_
         )/M_PI*180./12.);

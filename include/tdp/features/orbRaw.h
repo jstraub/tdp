@@ -1,5 +1,3 @@
-
-
 // The ORB image locations are taken from the OopenCV implementation. Hence I
 // replicate their license agreement here.
 
@@ -36,9 +34,6 @@
 *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 *  POSSIBILITY OF SUCH DAMAGE.
 *********************************************************************/
-
-/** Authors: Ethan Rublee, Vincent Rabaud, Gary Bradski */
-
 void ExtractOrb0(const Image<uint8_t>& patch, Vector8uda& desc) {
 desc(0) = ((patch(26,15) < patch(27,23) ? 1 : 0)
  | (patch(22,20) < patch(25,6) ? 2 : 0)

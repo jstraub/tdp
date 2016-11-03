@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 numBits = 256 
 numBytes = numBits/8
 numInts = numBytes/4
-patchS = 38
-
+patchS = 37
 
 #/*********************************************************************
 #* Software License Agreement (BSD License)
@@ -327,7 +326,7 @@ with open("orb.h",'w') as f:
     R = np.array([[np.cos(alpha), -np.sin(alpha)],[np.sin(alpha), np.cos(alpha)]])
     xs = np.copy(xs0)
     xs = R.dot(xs)
-    xs += 0.5*(patchS-1.)
+    xs += 0.5*patchS
     xs = np.floor(xs).astype(int)
 
     if np.any(xs >= patchS):
