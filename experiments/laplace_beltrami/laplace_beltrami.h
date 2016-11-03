@@ -17,7 +17,10 @@ tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc,
 
 tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc();
 
-void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc);
+
+void GetSphericalPc(tdp::ManagedHostImage<tdp::Vector3fda>& pc);
+
+void GetCylindricalPc(tdp::ManagedHostImage<tdp::Vector3fda>& pc);
 
 inline void getAxesIds(const std::vector<auto>& vec, std::vector<int>& axesIds);
 
@@ -46,12 +49,33 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
                    const tdp::Image<tdp::Vector6fda>& thetas,
                    tdp::Image<tdp::Vector3fda>& estimates_w);
 
+void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc,
+                         Eigen::VectorXf& evector_real,
+                         tdp::ANN& ann, const int knn, const float eps,
+                         float alpha, int idEv);
+
+void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L,
+           tdp::ANN& ann, const int knn, const float eps,
+           float alpha);
+
+void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc,
+                          const Eigen::SparseMatrix<float>& L,
+                          Eigen::VectorXf& evector, int idEv);
+
+
+void getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
+                      const Eigen::SparseMatrix<float>&L,
+                      Eigen::MatrixXf curvature);
+
 //tests
+void test_getCylinder();
 void test_meanAndCov();
 void test_getAllLocalBasis();
 void test_getAxesIds();
 void test_getLocalRot();
 void test_getThetas_F();
+void test_Laplacian();
+
 
 
 

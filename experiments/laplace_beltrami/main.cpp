@@ -93,21 +93,21 @@ tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc(){
     return pc;
 }
 
-void GetSphericalPc(tdp::Image<tdp::Vector3fda>& pc)
-{
+
+void GetSphericalPc(tdp::ManagedHostImage<tdp::Vector3fda>& pc){
+    pc.Reinitialise(pc.w_, pc.h_);
     for (size_t i=0; i<pc.w_; ++i) {
        pc[i] = tdp::S3f::Random().vector();
     }
 }
 
-void GetCylindricalPc(tdp::Image<tdp::Vector3fda>& pc){
+void GetCylindricalPc(tdp::ManagedHostImage<tdp::Vector3fda>& pc){
     //todo: use [s1;R]
+    pc.Reinitialise(pc.w_, pc.h_);
     for (size_t i=0; i<pc.Area(); ++i){
-
         tdp::S2f pt_2d = tdp::S2f::Random().vector();
         float z  = static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX);
         pc[i] = tdp::Vector3fda(pt_2d.vector()(0), pt_2d.vector()(1), z);
-        std::cout << pc[i] << std::endl;
     }
 }
 
@@ -348,40 +348,25 @@ Eigen::VectorXf real(Eigen::VectorXcf vec_c){
     return vec_r;
 }
 
-void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evector_real,
-                         tdp::ANN& ann, const int knn, const float eps,
-                         int idEv, float radius = 0.03){
-    assert(evector_real.size() == pc.Area());
+void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L,
+           tdp::ANN& ann, const int knn, const float eps,
+           float alpha){
+    assert(L.rows()==pc.Area() && L.cols()==pc.Area());
 
     Eigen::VectorXi nnIds(knn);
     Eigen::VectorXf dists(knn);
-    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area()); //column major
-    L.reserve(Eigen::VectorXi::Constant(pc.Area(),knn));
+    L.reserve(Eigen::VectorXi::Constant(pc.Area(),2*knn)); //todo: better memory init
     for (int i=0; i<pc.Area(); ++i){
-        ann.SearchRadius(pc[i], radius, eps, nnIds, dists);
-        // Debugging
-//        std::cout << "\n\n-----------" << std::endl;
-//        std::cout << "i: " << i << std::endl;
-//        std::cout << "nnids:\n" << nnIds << std::endl;
-//        std::cout << "dists:\n" << dists << std::endl;
+        ann.Search(pc[i], knn, eps, nnIds, dists);
 
-        int degree = 0;
         for (int k=0; k<knn; ++k){
-            if (dists(k) < radius*radius){
-                degree++;
+            if (L.coeffRef(i,nnIds(k)) <1e-10){ //check for efficiency
+                L.insert(i,nnIds(k)) = exp(dists(k)/alpha);
+            }
+            if (L.coeffRef(nnIds(k),i) <1e-10){
+                L.insert(nnIds(k),i) = exp(dists(k)/alpha);
             }
         }
-        for (int k=0; k<knn; ++k){
-            if(i == nnIds(k)) {
-                L.insert(i,nnIds(k)) = 1.0f;
-            } else if (dists(k) < radius*radius){
-                L.insert(i,nnIds(k)) = -1.0f/degree;
-                // L.insert(i,nnIds(k)) = -1.0f/dists(k);
-            }
-            //            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
-        }
-        //if (i%30 == 0)
-        //    std::cout << degree  << std::endl;
         // show the current row
         // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
 //        for (Eigen::SparseMatrix<float>::InnerIterator it(L,i); it; ++it){
@@ -390,15 +375,18 @@ void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evect
 //            std::cout << "val:" << it.value() <<std::endl;
 //        }
     }
-    //std::cout << "L:\n" << L<<std::endl; //L is symmetric
+}
 
+
+
+void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>& L,
+                           Eigen::VectorXf& evector, int idEv){
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
     // Retrieve results
     Eigen::VectorXcf evalues;
     Eigen::VectorXcf evector_complex;
-
     // Construct eigen solver object, requesting the largest three eigenvalues
     Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
             Spectra::SparseGenMatProd<float> > eigs(&op, idEv+1, 2*(idEv+1)+1);
@@ -410,15 +398,23 @@ void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evect
     if(eigs.info() == Spectra::SUCCESSFUL) {
         evalues = eigs.eigenvalues();
         evector_complex = eigs.eigenvectors().col(idEv);
-        evector_real = evector_complex.real();
+        evector = (evector_complex.real());
         std::cout << "Eigenvalues found:\n" << evalues << std::endl; //check first should be zero
-        //std::cout << evector_real << std::endl;
-
     } else{
         std::cout << "failed" << std::endl;
     }
+}
 
 
+void getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>&L,
+                      Eigen::MatrixXf curvature){
+    Eigen::VectorXf pc_vec(pc.Area(),3);
+    for (int i=0; i<pc.Area(); ++i){
+        pc_vec(i,0) = pc[i][0]; //x coordinate
+        pc_vec(i,1) = pc[i][1]; //y coordinate
+        pc_vec(i,2) = pc[i][2];
+    }
+    curvature = L*pc_vec;
 }
 
 //tests
@@ -512,13 +508,24 @@ void test_real(){
     std::cout << real(vec_c) << std::endl;
 }
 
-void test_getSimpleLBEigen(){
+void test_Laplacian(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
-    Eigen::VectorXf evec(pc.Area(),1);
-    getSimpleLBEvector(pc,evec, ann, 3,1e-6, 1);
-    std::cout << evec << std::endl;
+
+    Eigen::VectorXf evector(pc.Area(),1);
+    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
+    float alpha = 1;
+    int idEv = 0; int knn=5; float eps=1e-6;
+    getLaplacian(pc,L,ann,knn,eps,alpha);
+    //getLaplacianEvector(pc, L, evector, idEv);
+    //std::cout << evector << std::endl;
+
+    //Test meancurvature
+    Eigen::VectorXf curvature(pc.Area());
+    getMeanCurvature(pc, L, curvature);
+    //std::cout << "mean curvature: \n" << curvature <<std::endl;
+    //should be all zeros for a linear pc
 }
 
 void test_getCylinder(){
@@ -529,19 +536,15 @@ void test_getCylinder(){
 //end of test
 
 int main( int argc, char* argv[] ){
-    //test_getLocalRot();
-    //return 1;
-    //test_getSimpleLBEigen();
-    //test_getCylinder();
+    //test_Laplacian();
     //return 1;
   // load pc and normal from the input paths
-  //tdp::ManagedHostImage<tdp::Vector3fda> pc=GetSimplePc();
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns(1000,1);
 
   if (argc > 1) {
       const std::string input = std::string(argv[1]);
-      std::cout << "input " << input << std::endl;
+      std::cout << "input pc: " << input << std::endl;
       tdp::LoadPointCloud(input, pc, ns);
   } else {
       GetSphericalPc(pc);
@@ -551,7 +554,6 @@ int main( int argc, char* argv[] ){
   // build kd tree
   tdp::ANN ann;
   ann.ComputeKDtree(pc);
-
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -586,26 +588,27 @@ int main( int argc, char* argv[] ){
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> runSkinning("ui.run skinning", true, false);
+  pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
-
+  // variables for KNN
   pangolin::Var<int> knn("ui.knn", 100,1,100);
+  pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
+
   pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
-  pangolin::Var<float> radius("ui. radius", 0.15,0.01,1.0);
-
-
+  pangolin::Var<float> alpha("ui. alpha", 0.1,0.1,2); //variance of rbf kernel
+  // viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
-
-  pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
+  // sampling
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
-
 
   tdp::ManagedHostImage<tdp::SE3f> T_wls(pc.w_,1);
   //tdp::ManagedHostImage<tdp::Vector6fda> thetas(pc.w_,1);
   //tdp::ManagedHostImage<tdp::Vector3fda> zEstimates(pc.w_,1),fEstimates(pc.w_,1);
   //tdp::ManagedHostImage<tdp::Vector3fda> zSamples(pc.w_*upsample,1);
-  Eigen::VectorXf evec(pc.Area(),1);
-
+  Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
+  Eigen::VectorXf evector(pc.Area(),1);
+  Eigen::MatrixXf curvature(pc.Area(),3);
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -614,9 +617,18 @@ int main( int argc, char* argv[] ){
     glColor3f(1.0f, 1.0f, 1.0f);
 
     if (pangolin::Pushed(runSkinning) || knn.GuiChanged() || upsample.GuiChanged()
-            || idEv.GuiChanged()) {
+            || idEv.GuiChanged() || alpha.GuiChanged()) {
         //  processing of PC for skinning
       std::cout << "Running skinning..." << std::endl;
+
+      if( pcOption.GuiChanged()){
+        std::cout << "Roading new pc..." << pcOption << std::endl;
+        if (pcOption == 0){
+            GetSphericalPc(pc);
+        } else if (pcOption ==1 ){
+            GetCylindricalPc(pc);
+        }
+      }
 
      // getAllLocalBasis(pc, T_wls, ann, knn, eps);
 //      getThetas(pc,T_wls,thetas,ann,knn,eps);
@@ -624,21 +636,30 @@ int main( int argc, char* argv[] ){
 //      vboZ.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
 //      vboZ.Upload(zEstimates.ptr_, sizeof(tdp::Vector3fda) * zEstimates.Area(), 0);
 
-
       //getThetas_F(pc, T_wls, f_z, thetas, ann, knn, eps);
       //getFEstimates(pc, T_wls, thetas, fEstimates);
       //vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
       //vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-      getSimpleLBEvector(pc, evec, ann, knn, eps, idEv, radius);
-      valuebo.Reinitialise(pangolin::GlArrayBuffer, evec.rows() ,
+      // get Laplacian operator and its eigenvectors
+      getLaplacian(pc,L,ann, knn, eps, alpha);
+      getLaplacianEvector(pc, L, evector, idEv);
+      // get Mean curvature
+      getMeanCurvature(pc, L, curvature);
+      for (int i=0; i<(int)curvature.rows(); i++){
+          if (curvature(i,0)>0 || curvature(i,1)>0 || curvature(i,2)>0){
+              std::cout << "i: " << i << ", " <<curvature.row(i) << std::endl;
+
+          }
+      }
+      valuebo.Reinitialise(pangolin::GlArrayBuffer, evector.rows() ,
           GL_FLOAT,1, GL_DYNAMIC_DRAW);
       // TODO: upload values to visualize here
-      valuebo.Upload(&evec(0), sizeof(float)*evec.rows(), 0);
-      std::cout << evec.minCoeff() << " " << evec.maxCoeff() << std::endl;
+      valuebo.Upload(&evector(0), sizeof(float)*evector.rows(), 0);
+      std::cout << evector.minCoeff() << " " << evector.maxCoeff() << std::endl;
 
-      minVal = evec.minCoeff()-1e-3;
-      maxVal = evec.maxCoeff();
+      minVal = evector.minCoeff()-1e-3;
+      maxVal = evector.maxCoeff();
 
 //      zSamples.Reinitialise(pc.w_*upsample,1);
 //      getSamples(T_wls,thetas,zSamples,upsample);
