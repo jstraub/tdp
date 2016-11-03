@@ -35,9 +35,43 @@
 
 #include <tdp/data/pyramid.h>
 #include <tdp/camera/photometric.h>
+#include <tdp/camera/rig.h>
+#include <tdp/camera/camera_poly.h>
+#include <tdp/icp/icp.h>
 
-void VideoViewer(const std::string& input_uri, const std::string& output_uri)
+typedef tdp::CameraPoly3f CameraT;
+
+int main( int argc, char* argv[] )
 {
+  std::string input_uri = "openni2://";
+  std::string output_uri = "pango://video.pango";
+  std::string calibPath = "";
+  std::string imu_input_uri = "";
+  std::string tsdfOutputPath = "tsdf.raw";
+  bool runOnce = false;
+
+  if( argc > 1 ) {
+    input_uri = std::string(argv[1]);
+    calibPath = (argc > 2) ? std::string(argv[2]) : "";
+    if (argc > 3 && std::string(argv[3]).compare("-1") == 0 ) runOnce = true;
+//    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+  }
+
+  pangolin::Uri uri = pangolin::ParseUri(input_uri);
+  if (!uri.scheme.compare("file")) {
+    std::cout << uri.scheme << std::endl; 
+    if (pangolin::FileExists(uri.url+std::string("imu.pango"))
+     && pangolin::FileExists(uri.url+std::string("video.pango"))) {
+//      imu_input_uri = input_uri + std::string("imu.pango");
+      tsdfOutputPath = uri.url + tsdfOutputPath;
+      input_uri = input_uri + std::string("video.pango");
+    } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
+      input_uri = input_uri + std::string("video.pango");
+    } 
+  }
+
+  std::cout << input_uri << std::endl;
+  std::cout << imu_input_uri << std::endl;
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, output_uri);
@@ -45,7 +79,16 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 1;
+  }
+
+  tdp::Rig<CameraT> rig;
+  if (calibPath.size() > 0) {
+    rig.FromFile(calibPath,false);
+    std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+    rig.CorrespondOpenniStreams2Cams(streams);
+  } else {
+    return 2;
   }
 
   tdp::GUI gui(1200,800,video);
@@ -56,10 +99,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   size_t hOrig = video.Streams()[gui.iD[0]].Height();
   // width and height need to be multiple of 64 for convolution
   // algorithm to compute normals.
-  w += w%64;
-  h += h%64;
-  size_t wc = w;
-  size_t hc = h;
+  size_t wc = (w+w%64); // for convolution
+  size_t hc = rig.NumCams()*(h+h%64);
+  w = wc;
+  h = hc;
+
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -122,6 +166,11 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc, hc);
 
 
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
+
   tdp::ManagedHostImage<tdp::Vector3fda> grad3D(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
 
@@ -137,6 +186,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> huberDelta("ui.huber Delta",0.1,0.01,1.);
 
   pangolin::Var<bool> useRansac("ui.Use RANSAC", true, true);
+  pangolin::Var<bool> runICP("ui.run ICP", true, true);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
   pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
@@ -146,6 +196,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
+
+  pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
+  pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,10);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
   tdp::ManagedHostImage<tdp::Brief> descsA;
   tdp::ManagedHostImage<tdp::Brief> descsB;
@@ -173,6 +229,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       pcB.CopyFrom(pc, cudaMemcpyHostToHost);
       orientationsB.Reinitialise(ptsA.w_,1);
       orientationsB.CopyFrom(orientations, cudaMemcpyHostToHost);
+
+      pcs_m.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+      ns_m.CopyFrom(ns_c, cudaMemcpyDeviceToDevice);
     }
 
     // clear the OpenGL render buffers
@@ -182,6 +241,14 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     gui.NextFrames();
 
     // get rgb image
+//    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
+//    tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
+//    tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
+//    greyDu.CopyFrom(cuGreyDu, cudaMemcpyDeviceToHost);
+//    greyDv.CopyFrom(cuGreyDv, cudaMemcpyDeviceToHost);
+//    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
+//        cudaMemcpyDeviceToDevice);
+//    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
@@ -191,18 +258,24 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::CompletePyramid(cuPyrGrey, cudaMemcpyDeviceToDevice);
 
     // get depth image
-    tdp::Image<uint16_t> dRaw;
-    if (!gui.ImageD(dRaw)) continue;
-    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+//    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+    int64_t t_host_us_d =0;
+    rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+    rig.ComputePc(cuD, true, pcs_c);
+    rig.ComputeNormals(cuD, true, ns_c);
+
     // copy raw image to gpu
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+//    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     // convet depth image from uint16_t to float [m]
-    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
+//    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
+//    // compute point cloud (on CPU)
+//    tdp::Depth2PC(d,cam,pc);
+//    // compute normals
+//    tdp::Depth2Normals(cuD, cam, cuN);
+
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    // compute point cloud (on CPU)
-    tdp::Depth2PC(d,cam,pc);
-    // compute normals
-    tdp::Depth2Normals(cuD, cam, cuN);
+    pc.CopyFrom(pcs_c.GetImage(0), cudaMemcpyDeviceToHost);
+    cuN.CopyFrom(ns_c.GetImage(0), cudaMemcpyDeviceToDevice);
 
     int fastLvl = 0;
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
@@ -270,13 +343,25 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       size_t numInliers = 0;
       T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
           ransacThr, numInliers);
+
+      std::vector<size_t> maxIt = {icpIter0, icpIter1, icpIter2};
+      std::vector<float> errPerLvl;
+      std::vector<float> countPerLvl;
+      Eigen::Matrix<float,6,6> Sigma_ab = 1e-6*Eigen::Matrix<float,6,6>::Identity();
+      if (runICP) {
+        tdp::ICP::ComputeProjective<CameraT>(pcs_c, ns_c, pcs_m, ns_m,
+            rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
+            icpLoopCloseDistThr,
+            gui.verbose, T_ab, Sigma_ab, errPerLvl, countPerLvl);
+      }
+
       float overlap = 0.;
       float rmse = 0.;
       tdp::Overlap(grey, greyB, pc, pcB, T_ab, cam, overlap, rmse);
 
       std::cout << "#inliers " << numInliers 
         << " %: " << numInliers /(float)assocAB.Area() 
-        << overlap << " " << rmse << std::endl;
+        << " overlap " <<  overlap << " rmse " << rmse << std::endl;
 
       logOverlap.Log(overlap);
       logRmse.Log(rmse);
@@ -380,51 +465,3 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 }
 
 
-int main( int argc, char* argv[] )
-{
-  const std::string dflt_output_uri = "pango://video.pango";
-
-  if( argc > 1 ) {
-    const std::string input_uri = std::string(argv[1]);
-    const std::string output_uri = (argc > 2) ? std::string(argv[2]) : dflt_output_uri;
-    try{
-      VideoViewer(input_uri, output_uri);
-    } catch (pangolin::VideoException e) {
-      std::cout << e.what() << std::endl;
-    }
-  }else{
-    const std::string input_uris[] = {
-      "dc1394:[fps=30,dma=10,size=640x480,iso=400]//0",
-      "convert:[fmt=RGB24]//v4l:///dev/video0",
-      "convert:[fmt=RGB24]//v4l:///dev/video1",
-      "openni:[img1=rgb]//",
-      "test:[size=160x120,n=1,fmt=RGB24]//"
-        ""
-    };
-
-    std::cout << "Usage  : VideoViewer [video-uri]" << std::endl << std::endl;
-    std::cout << "Where video-uri describes a stream or file resource, e.g." << std::endl;
-    std::cout << "\tfile:[realtime=1]///home/user/video/movie.pvn" << std::endl;
-    std::cout << "\tfile:///home/user/video/movie.avi" << std::endl;
-    std::cout << "\tfiles:///home/user/seqiemce/foo%03d.jpeg" << std::endl;
-    std::cout << "\tdc1394:[fmt=RGB24,size=640x480,fps=30,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tdc1394:[fmt=FORMAT7_1,size=640x480,pos=2+2,iso=400,dma=10]//0" << std::endl;
-    std::cout << "\tv4l:///dev/video0" << std::endl;
-    std::cout << "\tconvert:[fmt=RGB24]//v4l:///dev/video0" << std::endl;
-    std::cout << "\tmjpeg://http://127.0.0.1/?action=stream" << std::endl;
-    std::cout << "\topenni:[img1=rgb]//" << std::endl;
-    std::cout << std::endl;
-
-    // Try to open some video device
-    for(int i=0; !input_uris[i].empty(); ++i )
-    {
-      try{
-        pango_print_info("Trying: %s\n", input_uris[i].c_str());
-        VideoViewer(input_uris[i], dflt_output_uri);
-        return 0;
-      }catch(pangolin::VideoException) { }
-    }
-  }
-
-  return 0;
-}
