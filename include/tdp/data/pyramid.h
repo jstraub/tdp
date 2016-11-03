@@ -34,6 +34,10 @@ void PyrDown(
     const Image<float>& Iin,
     Image<float>& Iout
     );
+void PyrDown(
+    const Image<uint8_t>& Iin,
+    Image<uint8_t>& Iout
+    );
 
 void PyrDownBlur(
     const Image<float>& Iin,

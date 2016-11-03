@@ -113,6 +113,19 @@ void PyrDown(
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+void PyrDown(
+    const Image<uint8_t>& Iin,
+    Image<uint8_t>& Iout
+    ) {
+  //printf("%dx%d %dx%d\n",Iin.w_,Iin.h_,Iout.w_,Iout.h_);
+  assert(Iin.w_ == Iout.w_*2);
+  assert(Iin.h_ == Iout.h_*2);
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
+  KernelPyrDown<uint8_t><<<blocks,threads>>>(Iin,Iout);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 template<typename Tin, typename Tout>
 __global__
 void KernelPyrDownBlur(
