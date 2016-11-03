@@ -127,9 +127,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
-  pangolin::Var<float> harrisThr("ui.harris thr",0.5,0.001,2.0);
+  pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
-  pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
+  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
 
   tdp::ManagedHostImage<tdp::Brief> descsA;
@@ -137,6 +137,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
   tdp::ManagedHostImage<tdp::Vector2ida> ptsA;
   tdp::ManagedHostImage<float> orientations;
+  tdp::ManagedHostImage<float> orientationsB;
   tdp::ManagedHostImage<tdp::Vector2ida> ptsB;
 
   tdp::ManagedHostImage<tdp::SE3f> cosys;
@@ -155,6 +156,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       ptsB.CopyFrom(ptsA, cudaMemcpyHostToHost);
       greyB.CopyFrom(grey, cudaMemcpyHostToHost);
       pcB.CopyFrom(pc, cudaMemcpyHostToHost);
+      orientationsB.Reinitialise(ptsA.w_,1);
+      orientationsB.CopyFrom(orientations, cudaMemcpyHostToHost);
     }
 
     // clear the OpenGL render buffers
@@ -221,9 +224,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       int dist = 256;
       // match from current level 1 to all other levels
       assoc[i] = tdp::ClosestBrief(descsA(i,0), descsB, &dist);
-      if (dist >= briefMatchThr 
-          || !tdp::IsValidData(pc(ptsA[i](0),ptsA[i](1)))
-          || !tdp::IsValidData(pcB(ptsB[assoc[i]](0),ptsB[assoc[i]](1)))) {
+      if (dist >= briefMatchThr ) {
+//          || !tdp::IsValidData(pc(ptsA[i](0),ptsA[i](1)))
+//          || !tdp::IsValidData(pcB(ptsB[assoc[i]](0),ptsB[assoc[i]](1)))) {
         assoc[i] = -1; 
       } else {
         numMatches ++;
@@ -300,7 +303,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
         pangolin::glDrawCross(ptsA[i](0), ptsA[i](1), 3);
         glColor3f(0,1,0);
         pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
-          ptsA[i](0)+cos(orientations[i])*10, ptsA[i](1)+sin(orientations[i])*10);
+          ptsA[i](0)+cos(orientations[i])*10,
+          ptsA[i](1)+sin(orientations[i])*10);
       } 
     }
     if (viewAssoc.IsShown()) {
@@ -312,11 +316,21 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       viewAssoc.Activate();
       glColor3f(1,0,0);
       for (size_t i=0; i<ptsA.Area(); ++i) {
+        glColor3f(1,0,0);
         pangolin::glDrawCross(ptsA[i](0), ptsA[i](1), 3);
+        glColor3f(0,1,0);
+        pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
+          ptsA[i](0)+cos(orientations[i])*10, ptsA[i](1)+sin(orientations[i])*10);
       }
       for (size_t i=0; i<ptsB.Area(); ++i) {
+        glColor3f(1,0,0);
         pangolin::glDrawCross(ptsB[i](0)+wOrig, ptsB[i](1), 3);
+        glColor3f(0,1,0);
+        pangolin::glDrawLine(ptsB[i](0)+wOrig, ptsB[i](1), 
+          ptsB[i](0)+wOrig+cos(orientationsB[i])*10, 
+          ptsB[i](1)+sin(orientationsB[i])*10);
       }
+      glColor3f(0,1,1);
       for (size_t i=0; i<ptsA.Area(); ++i) {
         if (assoc[i] >= 0)
           pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
