@@ -18,6 +18,7 @@ class LSH {
     std::iota(ids.begin(), ids.end(), 0);
     std::random_shuffle(ids.begin(), ids.end());
     hashIds_.assign(ids.begin(), ids.begin()+H);
+    std::sort(hashIds_.begin(), hashIds_.end());
   }
 
   void Insert(const Brief& feat) {
@@ -25,11 +26,19 @@ class LSH {
     store_[hash].emplace_back(feat);
   }
 
-  const Brief& SearchBest(const Brief& feat, int& dist) const {
+  bool SearchBest(const Brief& feat, int& dist, Brief& brief) const {
     const uint32_t hash = Hash(feat.desc_);
-    const Image<Brief> candidates(store_[hash].size(),1,&store_[hash][0]);
-    int idClosest = ClosestBrief(feat, candidates, dist);
-    return store_[hash][idClosest]; 
+    if (store_[hash].size() == 0) {
+      return false;
+    } else if (store_[hash].size() == 1) {
+      brief = store_[hash][0];
+      dist = Distance(brief.desc_, feat.desc_);
+    } else if (store_[hash].size() > 1) {
+      const Image<Brief> candidates(store_[hash].size(),1,&store_[hash][0]);
+      int idClosest = ClosestBrief(feat, candidates, dist);
+      brief = store_[hash][idClosest]; 
+    }
+    return true;
   }
 
   const std::vector<Brief>& SearchBucket(const Brief& feat) const {
@@ -45,6 +54,14 @@ class LSH {
       }
     }
     return hash;
+  }
+
+  void PrintHash() {
+    for (size_t i=0; i<256; ++i) {
+      std::cout << (std::find(hashIds_.begin(), 
+            hashIds_.end(),i) == hashIds_.end() ? "." : "x";
+    }
+    std::cout << endl;
   }
 
  private:
@@ -65,18 +82,28 @@ class LshForest {
     }
   }
 
-  Brief SearchBest(const Brief& feat) const {
-    int dist = 256;
-    int minDist = 256;
+  bool SearchBest(const Brief& feat, Brief& brief) const {
+    int dist = 257;
+    int minDist = 257;
     Brief minFeat;
     for (auto& lsh : lshs_) {
-      const Brief& bestFeat = lsh.SearchBest(feat, dist);
-      if (dist < minDist) {
+      if (lsh.SearchBest(feat, dist, bestFeat) && dist < minDist) {
         minDist = dist;
         minFeat = bestFeat;
       }
     }
-    return minFeat;
+    if (minDist < 257) {
+      brief = minFeat;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  void PrintHashs() {
+    for (auto& lsh : lshs_) {
+      lsh.PrintHash();
+    }
   }
 
  private:

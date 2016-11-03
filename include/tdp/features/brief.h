@@ -11,6 +11,14 @@
 
 namespace tdp {
 
+  struct Brief {
+    Vector8uda desc_;
+    Vector2ida pt_;
+    uint32_t lvl_;
+    uint32_t frame_;
+    float orientation_;
+  };
+
   int hammingDistance (uint64_t x, uint64_t y) {
     uint64_t res = x ^ y;
     return __builtin_popcountll (res);
@@ -31,13 +39,13 @@ namespace tdp {
       + hammingDistance(a(7),b(7));
   }
 
-  int ClosestBrief(const Vector8uda& a, const Image<Vector8uda>& bs, int* dist) {
+  int ClosestBrief(const Brief& a, const Image<Brief>& bs, int* dist) {
     int minId = -1;
     int minDist = 257;
     for (int i=0; i<bs.w_; ++i) {
       // iterate over pyramid levels
       for (int j=0; j<bs.h_; ++j) {
-        int dist = Distance(a, bs(i,j));
+        int dist = Distance(a.desc_, bs(i,j).desc_);
         if (dist < minDist) {
           minDist = dist;
           minId = i;
@@ -47,7 +55,6 @@ namespace tdp {
     if (dist) *dist = minDist;
     return minId;
   }
-
 
   // http://www.vision.cs.chubu.ac.jp/CV-R/pdf/Rublee_iccv2011.pdf
   #include <tdp/features/briefRaw.h>
@@ -149,25 +156,30 @@ namespace tdp {
     return false;
   }
 
-  bool ExtractBrief(const Image<uint8_t>& grey, int32_t x, int32_t y, 
-      Vector8uda& desc, float orientation = 0.) {
+  bool ExtractBrief(const Image<uint8_t>& grey, 
+      Brief& brief) {
+    int32_t x = brief.pt_(0);
+    int32_t y = brief.pt_(1);
     if (!grey.Inside(x-16,y-16) || !grey.Inside(x+15, y+15)) {
       return false;
     }
     Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
     int intOrient = (int)floor((
       orientation < 0. ? orientation + 2*M_PI : orientation)/M_PI*180./12.);
-//    std::cout << orientation << ": " << intOrient << std::endl;
-    return ExtractBrief(patch, desc, 
-        intOrient);
+    return ExtractBrief(patch, brief.desc_, intOrient);
   }
 
   void ExtractBrief(const Image<uint8_t> grey, 
       const Image<Vector2ida>& pts,
-      ManagedHostImage<Vector8uda>& descs) {
+      uint32_t frame, 
+      ManagedHostImage<Brief>& brief) {
     descs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
-      if(!tdp::ExtractBrief(grey, pts[i](0), pts[i](1), descs[i])) {
+      descs[i].pt_ = pts[i];
+      descs[i].lvl_= 0;
+      descs[i].frame_ = frame;
+      descs[i].orientation_= 0.;
+      if(!tdp::ExtractBrief(grey, descs[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
       }
     }
@@ -176,11 +188,15 @@ namespace tdp {
   void ExtractBrief(const Image<uint8_t> grey, 
       const Image<Vector2ida>& pts,
       const Image<float>& orientations,
+      uint32_t frame, 
       ManagedHostImage<Vector8uda>& descs) {
     descs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
-      if(!tdp::ExtractBrief(grey, pts[i](0), pts[i](1), descs[i], 
-            orientations[i])) {
+      descs[i].pt_ = pts[i];
+      descs[i].lvl_= 0;
+      descs[i].frame_ = frame;
+      descs[i].orientation_= orientations[i];
+      if(!tdp::ExtractBrief(grey, descs[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
       }
     }
@@ -190,6 +206,7 @@ namespace tdp {
   void ExtractBrief(const Pyramid<uint8_t, LEVELS> pyrGrey, 
       const Image<Vector2ida>& pts,
       const Image<float>& orientations,
+      uint32_t frame,
       int ptsLvl,
       ManagedHostImage<Vector8uda>& descs) {
     descs.Reinitialise(pts.w_, LEVELS);
@@ -197,9 +214,12 @@ namespace tdp {
       Image<uint8_t> grey = pyrGrey.GetImage(lvl);
       for (size_t i=0; i<pts.Area(); ++i) {
         Vector2fda pt = ConvertLevel(pts[i], ptsLvl, lvl);
+        descs[i].pt_ = Vector2ida(floor(pt(0)), floor(pt(1)));
+        descs[i].lvl_= lvl;
+        descs[i].frame_ = frame;
+        descs[i].orientation_= orientations[i];
         //TODO interpolated brief
-        if(!tdp::ExtractBrief(grey, floor(pt(0)), floor(pt(1)), descs(i,lvl), 
-              orientations[i])) {
+        if(!tdp::ExtractBrief(grey, descs(i,lvl))) {
           std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
         }
       }

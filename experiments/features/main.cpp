@@ -128,8 +128,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
 
-  tdp::ManagedHostImage<tdp::Vector8uda> descsA;
-  tdp::ManagedHostImage<tdp::Vector8uda> descsB;
+  tdp::ManagedHostImage<tdp::Brief> descsA;
+  tdp::ManagedHostImage<tdp::Brief> descsB;
 
   tdp::ManagedHostImage<tdp::Vector2ida> ptsA;
   tdp::ManagedHostImage<float> orientations;
