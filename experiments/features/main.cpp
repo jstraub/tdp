@@ -189,13 +189,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // compute normals
     tdp::Depth2Normals(cuD, cam, cuN);
 
-
     int fastLvl = 0;
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
     grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
     pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
     TICK("Detection");
-    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 16, ptsA, orientations);
+    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 19, ptsA, orientations);
     TOCK("Detection");
 
     TICK("Extraction");
