@@ -25,7 +25,7 @@ void DetectFast(const Image<uint8_t>& grey, int b, int borderS,
      && borderS <= pts_[i].y && pts_[i].y < grey.h_-borderS)
       numPtsInside ++;
   }
-  std::cout << numPts << " -> " << numPtsInside << std::endl;
+//  std::cout << numPts << " -> " << numPtsInside << std::endl;
 
   pts.Reinitialise(numPtsInside, 1);
   int j = 0;

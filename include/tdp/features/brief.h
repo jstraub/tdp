@@ -17,6 +17,8 @@ namespace tdp {
     uint32_t lvl_;
     uint32_t frame_;
     float orientation_;
+  
+    bool IsValid() const { return (desc_.array() > 0).all(); }
   };
 
   int hammingDistance (uint64_t x, uint64_t y) {
@@ -42,14 +44,17 @@ namespace tdp {
   int ClosestBrief(const Brief& a, const Image<Brief>& bs, int* dist) {
     int minId = -1;
     int minDist = 257;
-    for (int i=0; i<bs.w_; ++i) {
-      // iterate over pyramid levels
-      for (int j=0; j<bs.h_; ++j) {
-        int dist = Distance(a.desc_, bs(i,j).desc_);
-        if (dist < minDist) {
-          minDist = dist;
-          minId = i;
-        }
+    if (a.IsValid()) {
+      for (int i=0; i<bs.w_; ++i) {
+        // iterate over pyramid levels
+        for (int j=0; j<bs.h_; ++j) 
+          if (bs(i,j).IsValid()) {
+            int dist = Distance(a.desc_, bs(i,j).desc_);
+            if (dist < minDist) {
+              minDist = dist;
+              minId = i;
+            }
+          }
       }
     }
     if (dist) *dist = minDist;
@@ -161,66 +166,75 @@ namespace tdp {
     int32_t x = brief.pt_(0);
     int32_t y = brief.pt_(1);
     if (!grey.Inside(x-16,y-16) || !grey.Inside(x+15, y+15)) {
+      brief.desc_.fill(0);
       return false;
     }
     Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
     int intOrient = (int)floor((
-      orientation < 0. ? orientation + 2*M_PI : orientation)/M_PI*180./12.);
-    return ExtractBrief(patch, brief.desc_, intOrient);
+      brief.orientation_ < 0. ? 
+        brief.orientation_ + 2*M_PI : brief.orientation_)/M_PI*180./12.);
+    bool ret = ExtractBrief(patch, brief.desc_, intOrient);
+    return ret;
   }
 
-  void ExtractBrief(const Image<uint8_t> grey, 
+  void ExtractBrief(const Image<uint8_t>& grey, 
       const Image<Vector2ida>& pts,
       uint32_t frame, 
-      ManagedHostImage<Brief>& brief) {
-    descs.Reinitialise(pts.w_, 1);
+      ManagedHostImage<Brief>& briefs) {
+    briefs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
-      descs[i].pt_ = pts[i];
-      descs[i].lvl_= 0;
-      descs[i].frame_ = frame;
-      descs[i].orientation_= 0.;
-      if(!tdp::ExtractBrief(grey, descs[i])) {
+      briefs[i].pt_ = pts[i];
+      briefs[i].lvl_= 0;
+      briefs[i].frame_ = frame;
+      briefs[i].orientation_= 0.;
+      if(!tdp::ExtractBrief(grey, briefs[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
       }
     }
   }
 
-  void ExtractBrief(const Image<uint8_t> grey, 
+  void ExtractBrief(const Image<uint8_t>& grey, 
       const Image<Vector2ida>& pts,
       const Image<float>& orientations,
       uint32_t frame, 
-      ManagedHostImage<Vector8uda>& descs) {
-    descs.Reinitialise(pts.w_, 1);
+      ManagedHostImage<Brief>& briefs) {
+    briefs.Reinitialise(pts.w_, 1);
     for (size_t i=0; i<pts.Area(); ++i) {
-      descs[i].pt_ = pts[i];
-      descs[i].lvl_= 0;
-      descs[i].frame_ = frame;
-      descs[i].orientation_= orientations[i];
-      if(!tdp::ExtractBrief(grey, descs[i])) {
+      briefs[i].pt_ = pts[i];
+      briefs[i].lvl_= 0;
+      briefs[i].frame_ = frame;
+      briefs[i].orientation_= orientations[i];
+      if(!tdp::ExtractBrief(grey, briefs[i])) {
         std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
       }
     }
   }
 
   template<int LEVELS>
-  void ExtractBrief(const Pyramid<uint8_t, LEVELS> pyrGrey, 
+  void ExtractBrief(const Pyramid<uint8_t, LEVELS>& pyrGrey, 
       const Image<Vector2ida>& pts,
       const Image<float>& orientations,
       uint32_t frame,
       int ptsLvl,
-      ManagedHostImage<Vector8uda>& descs) {
-    descs.Reinitialise(pts.w_, LEVELS);
+      ManagedHostImage<Brief>& briefs) {
+    briefs.Reinitialise(pts.w_, LEVELS);
     for (size_t lvl=0; lvl < LEVELS; ++lvl) {
-      Image<uint8_t> grey = pyrGrey.GetImage(lvl);
+      const Image<uint8_t> grey = pyrGrey.GetConstImage(lvl);
       for (size_t i=0; i<pts.Area(); ++i) {
         Vector2fda pt = ConvertLevel(pts[i], ptsLvl, lvl);
-        descs[i].pt_ = Vector2ida(floor(pt(0)), floor(pt(1)));
-        descs[i].lvl_= lvl;
-        descs[i].frame_ = frame;
-        descs[i].orientation_= orientations[i];
+//        std::cout << ptsLvl << " " << lvl << " "
+//          << pts[i].transpose() << " -> " << pt.transpose() << std::endl;
+        briefs(i,lvl).pt_ = Vector2ida(floor(pt(0)), floor(pt(1)));
+        briefs(i,lvl).lvl_= lvl;
+        briefs(i,lvl).frame_ = frame;
+        briefs(i,lvl).orientation_= orientations[i];
         //TODO interpolated brief
-        if(!tdp::ExtractBrief(grey, descs(i,lvl))) {
-          std::cout << pts[i].transpose() << " could not be extracted" << std::endl;
+        if(!tdp::ExtractBrief(grey, briefs(i,lvl))) {
+          std::cout << "lvl: " << lvl << " "<< grey.w_ << "x" << grey.h_ << ": " 
+            << briefs(i,lvl).pt_.transpose() 
+            << " could not be extracted" << std::endl;
+//        } else {
+//          std::cout << briefs(i,lvl).desc_.transpose() << std::endl;
         }
       }
     }

@@ -82,9 +82,12 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
-  tdp::ManagedHostImage<uint8_t> grey(wOrig, hOrig);
-  tdp::ManagedHostImage<uint8_t> greyB(wOrig, hOrig);
+  tdp::ManagedHostImage<uint8_t> grey(wOrig/2, hOrig/2);
+  tdp::ManagedHostImage<uint8_t> greyB(wOrig/2, hOrig/2);
   tdp::ManagedHostImage<uint8_t> greyAssoc(wOrig*2, hOrig);
+  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGrey(wOrig, hOrig);
+  tdp::ManagedHostPyramid<uint8_t,3> pyrGrey(wOrig, hOrig);
+
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pcB(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
@@ -102,8 +105,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<float> cuGreydv(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc, hc);
 
-  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGrey(wc, hc);
-  tdp::ManagedHostPyramid<uint8_t,3> pyrGrey(wc, hc);
 
   tdp::ManagedHostImage<tdp::Vector3fda> grad3D(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
@@ -163,12 +164,13 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
-    tdp::Rgb2Grey(cuRgb,cuPyrGrey.GetImage(0), 1.);
-
-    tdp::CompletePyramidBlur(cuPyrGrey, cudaMemcpyDeviceToDevice);
+    tdp::Image<uint8_t> cuGrey0 = cuPyrGrey.GetImage(0);
+    tdp::Rgb2Grey(cuRgb,cuGrey0);
+    tdp::CompletePyramidBlur(cuPyrGrey, cudaMemcpyDeviceToDevice, 10.);
 
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
     grey.CopyFrom(cuPyrGrey.GetImage(1), cudaMemcpyDeviceToHost);
+    pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
 //    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.);
 
     // get depth image
@@ -191,7 +193,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
 
     TICK("Extraction");
 //    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
-    tdp::ExtractBrief(pyrGrey, ptsA, orientations, descsA);
+    tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, 1, descsA);
     TOCK("Extraction");
 
     tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
@@ -214,7 +216,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     for (size_t i=0; i<descsA.w_; ++i) {
       int dist = 256;
       // match from current level 1 to all other levels
-      assoc[i] = tdp::ClosestBrief(descsA(i,1), descsB, &dist);
+      assoc[i] = tdp::ClosestBrief(descsA(i,0), descsB, &dist);
       if (dist >= briefMatchThr 
           || !tdp::IsValidData(pc(ptsA[i](0),ptsA[i](1)))
           || !tdp::IsValidData(pcB(ptsB[assoc[i]](0),ptsB[assoc[i]](1)))) {
@@ -222,6 +224,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       } else {
         numMatches ++;
       }
+
     }
     int32_t j=0;
     assocAB.Reinitialise(numMatches,1);
