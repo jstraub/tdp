@@ -115,9 +115,9 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> huberDelta("ui.huber Delta",0.1,0.01,1.);
 
   pangolin::Var<bool> useRansac("ui.Use RANSAC", true, true);
-  pangolin::Var<float> ransacMaxIt("ui.max it",100,1,1000);
+  pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
-  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.6,0.1,1.0);
+  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
@@ -160,7 +160,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1.);
 
-    tdp::Blur9(cuGrey,cuGreyChar, 2.0);
+    tdp::Blur9(cuGrey,cuGreyChar, 10.);
     grey.CopyFrom(cuGreyChar, cudaMemcpyDeviceToHost);
 //    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.);
 
@@ -243,7 +243,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       size_t numInliers = 0;
       T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
           ransacThr, numInliers);
-      std::cout << "#inliers " << numInliers << std::endl;
+      std::cout << "#inliers " << numInliers/(float)assocAB.Area() << std::endl;
       if (numInliers < ransacInlierPercThr*assocAB.Area()) {
         T_ab = tdp::SE3f();
       }
