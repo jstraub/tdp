@@ -40,15 +40,25 @@ class ANN {
     kdTree_ = new ANNkd_tree(pc_, N_, 3, 1, ANN_KD_SUGGEST);
   }
 
-  void Search(Vector3fda& query, int k, float eps, 
+  void Search(Vector3fda& query, int k, float eps,
        Eigen::VectorXi& nnIds, Eigen::VectorXf& dists) {
     assert(nnIds.size() == k);
     assert(dists.size() == k);
     kdTree_->annkSearch(&query(0), k, &nnIds(0), &dists(0), eps);
-    for (int i=0; i<k; ++i) { 
+    for (int i=0; i<k; ++i) {
       nnIds(i) = nnIds(i) >= 0 ? idMap_[nnIds(i)] : nnIds(i);
     }
   }
+
+  void SearchRadius(Vector3fda& query, float r, float eps,
+       Eigen::VectorXi& nnIds, Eigen::VectorXf& dists) {
+    assert(nnIds.size() == dists.size());
+    kdTree_->annkFRSearch(&query(0), r*r, nnIds.rows(), &nnIds(0), &dists(0), eps);
+    for (int i=0; i<nnIds.rows(); ++i) {
+      nnIds(i) = nnIds(i) >= 0 ? idMap_[nnIds(i)] : nnIds(i);
+    }
+  }
+
 
   int N_;
  private:

@@ -349,7 +349,8 @@ Eigen::VectorXf real(Eigen::VectorXcf vec_c){
 }
 
 void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evector_real,
-                         tdp::ANN& ann, const int knn, const float eps){
+                         tdp::ANN& ann, const int knn, const float eps,
+                         int idEv, float radius = 0.03){
     assert(evector_real.size() == pc.Area());
 
     Eigen::VectorXi nnIds(knn);
@@ -357,21 +358,30 @@ void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evect
     Eigen::SparseMatrix<float> L(pc.Area(), pc.Area()); //column major
     L.reserve(Eigen::VectorXi::Constant(pc.Area(),knn));
     for (int i=0; i<pc.Area(); ++i){
-        ann.Search(pc[i], knn, eps, nnIds, dists);
+        ann.SearchRadius(pc[i], radius, eps, nnIds, dists);
         // Debugging
 //        std::cout << "\n\n-----------" << std::endl;
 //        std::cout << "i: " << i << std::endl;
 //        std::cout << "nnids:\n" << nnIds << std::endl;
 //        std::cout << "dists:\n" << dists << std::endl;
 
+        int degree = 0;
         for (int k=0; k<knn; ++k){
-            if (dists(k)<1e-7){
-                L.insert(nnIds(k),i) = 0.0f;
-            } else{
-                L.insert(nnIds(k),i) = 1.0f/dists(k);
+            if (dists(k) < radius*radius){
+                degree++;
             }
-//            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
         }
+        for (int k=0; k<knn; ++k){
+            if(i == nnIds(k)) {
+                L.insert(i,nnIds(k)) = 1.0f;
+            } else if (dists(k) < radius*radius){
+                L.insert(i,nnIds(k)) = -1.0f/degree;
+                // L.insert(i,nnIds(k)) = -1.0f/dists(k);
+            }
+            //            std::cout << "inserting at i, j: " << i << ", " << nnIds(k) << std::endl;
+        }
+        //if (i%30 == 0)
+        //    std::cout << degree  << std::endl;
         // show the current row
         // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
 //        for (Eigen::SparseMatrix<float>::InnerIterator it(L,i); it; ++it){
@@ -385,27 +395,30 @@ void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc, Eigen::VectorXf& evect
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
+    // Retrieve results
+    Eigen::VectorXcf evalues;
+    Eigen::VectorXcf evector_complex;
+
     // Construct eigen solver object, requesting the largest three eigenvalues
     Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
-      Spectra::SparseGenMatProd<float> > eigs(&op, 3, 6);
+            Spectra::SparseGenMatProd<float> > eigs(&op, idEv+1, 2*(idEv+1)+1);
 
     // Initialize and compute
     eigs.init();
     int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
 
-    // Retrieve results
-    Eigen::VectorXcf evalues;
-    Eigen::VectorXcf evector_complex;
     if(eigs.info() == Spectra::SUCCESSFUL) {
-      evalues = eigs.eigenvalues();
-      evector_complex = eigs.eigenvectors().col(1);
-      evector_real = real(evector_complex);
-      std::cout << "Eigenvalues found:\n" << evalues << std::endl; //check first should be zero
-      std::cout << evector_real << std::endl;
+        evalues = eigs.eigenvalues();
+        evector_complex = eigs.eigenvectors().col(idEv);
+        evector_real = evector_complex.real();
+        std::cout << "Eigenvalues found:\n" << evalues << std::endl; //check first should be zero
+        //std::cout << evector_real << std::endl;
 
     } else{
         std::cout << "failed" << std::endl;
     }
+
+
 }
 
 //tests
@@ -504,7 +517,7 @@ void test_getSimpleLBEigen(){
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
     Eigen::VectorXf evec(pc.Area(),1);
-    getSimpleLBEvector(pc,evec, ann, 3,1e-6);
+    getSimpleLBEvector(pc,evec, ann, 3,1e-6, 1);
     std::cout << evec << std::endl;
 }
 
@@ -523,7 +536,7 @@ int main( int argc, char* argv[] ){
     //return 1;
   // load pc and normal from the input paths
   //tdp::ManagedHostImage<tdp::Vector3fda> pc=GetSimplePc();
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
 
   if (argc > 1) {
@@ -531,8 +544,8 @@ int main( int argc, char* argv[] ){
       std::cout << "input " << input << std::endl;
       tdp::LoadPointCloud(input, pc, ns);
   } else {
-      //GetSphericalPc(pc);
-      GetCylindricalPc(pc);
+      GetSphericalPc(pc);
+      //GetCylindricalPc(pc);
   }
 
   // build kd tree
@@ -575,9 +588,13 @@ int main( int argc, char* argv[] ){
   pangolin::Var<bool> runSkinning("ui.run skinning", true, false);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
 
-  pangolin::Var<int> knn("ui.knn", 5,1,100);
-  pangolin::Var<float>minVal("ui min Val",-0.71,-1,0);
-  pangolin::Var<float>maxVal("ui max Val",0.01,1,0);
+  pangolin::Var<int> knn("ui.knn", 100,1,100);
+  pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
+  pangolin::Var<float> radius("ui. radius", 0.15,0.01,1.0);
+
+
+  pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
+  pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
 
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
@@ -596,11 +613,12 @@ int main( int argc, char* argv[] ){
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (pangolin::Pushed(runSkinning) || knn.GuiChanged() || upsample.GuiChanged()) {
+    if (pangolin::Pushed(runSkinning) || knn.GuiChanged() || upsample.GuiChanged()
+            || idEv.GuiChanged()) {
         //  processing of PC for skinning
       std::cout << "Running skinning..." << std::endl;
 
-      getAllLocalBasis(pc, T_wls, ann, knn, eps);
+     // getAllLocalBasis(pc, T_wls, ann, knn, eps);
 //      getThetas(pc,T_wls,thetas,ann,knn,eps);
 //      getZEstimates(pc,T_wls,thetas,zEstimates);
 //      vboZ.Reinitialise(pangolin::GlArrayBuffer, zEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
@@ -612,14 +630,15 @@ int main( int argc, char* argv[] ){
       //vboF.Reinitialise(pangolin::GlArrayBuffer, fEstimates.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
       //vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
-      getSimpleLBEvector(pc, evec, ann, knn, eps);
-      Eigen::MatrixXf temp(1,evec.rows());
-      temp.row(0) = evec;
-      std::cout << "evec: " << temp.row(0) << std::endl;
+      getSimpleLBEvector(pc, evec, ann, knn, eps, idEv, radius);
       valuebo.Reinitialise(pangolin::GlArrayBuffer, evec.rows() ,
           GL_FLOAT,1, GL_DYNAMIC_DRAW);
       // TODO: upload values to visualize here
       valuebo.Upload(&evec(0), sizeof(float)*evec.rows(), 0);
+      std::cout << evec.minCoeff() << " " << evec.maxCoeff() << std::endl;
+
+      minVal = evec.minCoeff()-1e-3;
+      maxVal = evec.maxCoeff();
 
 //      zSamples.Reinitialise(pc.w_*upsample,1);
 //      getSamples(T_wls,thetas,zSamples,upsample);
