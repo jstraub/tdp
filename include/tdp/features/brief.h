@@ -269,8 +269,8 @@ namespace tdp {
     }
     Image<uint8_t> patch = grey.GetRoi(x-16, y-16, 32,32);
     int intOrient = (int)floor((
-      brief.orientation_ < 0. ? 
-        brief.orientation_ + 2*M_PI : brief.orientation_)/M_PI*180./12.);
+      brief.orientation_ < 0. ? brief.orientation_ + 2*M_PI : brief.orientation_
+        )/M_PI*180./12.);
     bool ret = ExtractOrb(patch, brief.desc_, intOrient);
     return ret;
   }

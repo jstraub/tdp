@@ -99,6 +99,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(w, h);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wOrig, hOrig);
+  tdp::ManagedDeviceImage<float> cuGreyOrig(wOrig, hOrig);
   tdp::ManagedDeviceImage<float> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<uint8_t> cuGreyChar(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreydu(wc, hc);
@@ -126,6 +127,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
+  pangolin::Var<float> harrisThr("ui.harris thr",0.5,0.001,2.0);
+  pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",30,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
 
@@ -164,10 +167,10 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    tdp::Rgb2Grey(cuRgb,cuGreyOrig,1.);
     tdp::Image<uint8_t> cuGrey0 = cuPyrGrey.GetImage(0);
-    tdp::Rgb2Grey(cuRgb,cuGrey0);
-    tdp::CompletePyramidBlur(cuPyrGrey, cudaMemcpyDeviceToDevice, 10.);
-
+    tdp::Blur5(cuGreyOrig,cuGrey0, 10.);
+    tdp::CompletePyramid(cuPyrGrey, cudaMemcpyDeviceToDevice);
 
     // get depth image
     tdp::Image<uint16_t> dRaw;
@@ -189,7 +192,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
     pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
     TICK("Detection");
-    tdp::DetectOFast(grey, fastB, 16, ptsA, orientations);
+    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 16, ptsA, orientations);
     TOCK("Detection");
 
     TICK("Extraction");

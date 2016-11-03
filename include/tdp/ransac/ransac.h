@@ -42,8 +42,8 @@ class P3P : public Model<Vector3fda> {
       outer += (pcB[assoc[ids[i]](1)].cast<double>()-meanB)
         * (pcA[assoc[ids[i]](0)].cast<double>()-meanA).transpose();
     }
-    Eigen::JacobiSVD<Eigen::Matrix3d> svd(outer, Eigen::ComputeThinU |
-        Eigen::ComputeThinV);
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(outer, Eigen::ComputeFullU |
+        Eigen::ComputeFullV);
     double detUV = (svd.matrixV()*svd.matrixU().transpose()).determinant();
 //    std::cout << detUV << "; " << svd.rank() 
 //      << "; " << svd.singularValues().transpose() 
