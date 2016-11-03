@@ -359,13 +359,16 @@ void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
 
+        alpha = dists.maxCoeff();
         for (int k=0; k<knn; ++k){
-            if (L.coeffRef(i,nnIds(k)) <1e-10){ //check for efficiency
-                L.insert(i,nnIds(k)) = exp(dists(k)/alpha);
+            if (i==nnIds(k)) {
+                L.insert(i,nnIds(k)) = (-1./alpha*dists.array()).exp().sum();
+            } else {
+                L.insert(i,nnIds(k)) = -exp(-dists(k)/alpha);
             }
-            if (L.coeffRef(nnIds(k),i) <1e-10){
-                L.insert(nnIds(k),i) = exp(dists(k)/alpha);
-            }
+//            if (L.coeffRef(nnIds(k),i) <1e-10){
+//                L.insert(nnIds(k),i) = exp(-dists(k)/alpha);
+//            }
         }
         // show the current row
         // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
@@ -408,11 +411,11 @@ void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMa
 
 void getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>&L,
                       Eigen::MatrixXf curvature){
-    Eigen::VectorXf pc_vec(pc.Area(),3);
+    Eigen::MatrixXf pc_vec(pc.Area(),3);
     for (int i=0; i<pc.Area(); ++i){
-        pc_vec(i,0) = pc[i][0]; //x coordinate
-        pc_vec(i,1) = pc[i][1]; //y coordinate
-        pc_vec(i,2) = pc[i][2];
+        pc_vec(i,0) = pc[i](0); //x coordinate
+        pc_vec(i,1) = pc[i](1); //y coordinate
+        pc_vec(i,2) = pc[i](2);
     }
     curvature = L*pc_vec;
 }
@@ -539,8 +542,8 @@ int main( int argc, char* argv[] ){
     //test_Laplacian();
     //return 1;
   // load pc and normal from the input paths
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(1000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
 
   if (argc > 1) {
       const std::string input = std::string(argv[1]);
@@ -591,11 +594,11 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
   // variables for KNN
-  pangolin::Var<int> knn("ui.knn", 100,1,100);
+  pangolin::Var<int> knn("ui.knn", 0,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
 
   pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
-  pangolin::Var<float> alpha("ui. alpha", 0.1,0.1,2); //variance of rbf kernel
+  pangolin::Var<float> alpha("ui. alpha", 0.01, 0.001, 0.1); //variance of rbf kernel
   // viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
@@ -646,11 +649,8 @@ int main( int argc, char* argv[] ){
       getLaplacianEvector(pc, L, evector, idEv);
       // get Mean curvature
       getMeanCurvature(pc, L, curvature);
-      for (int i=0; i<(int)curvature.rows(); i++){
-          if (curvature(i,0)>0 || curvature(i,1)>0 || curvature(i,2)>0){
+      for (int i=0; i<(int)curvature.rows(); i+= 100){
               std::cout << "i: " << i << ", " <<curvature.row(i) << std::endl;
-
-          }
       }
       valuebo.Reinitialise(pangolin::GlArrayBuffer, evector.rows() ,
           GL_FLOAT,1, GL_DYNAMIC_DRAW);
