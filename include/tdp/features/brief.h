@@ -230,9 +230,9 @@ namespace tdp {
         briefs(i,lvl).orientation_= orientations[i];
         //TODO interpolated brief
         if(!tdp::ExtractBrief(grey, briefs(i,lvl))) {
-          std::cout << "lvl: " << lvl << " "<< grey.w_ << "x" << grey.h_ << ": " 
-            << briefs(i,lvl).pt_.transpose() 
-            << " could not be extracted" << std::endl;
+//          std::cout << "lvl: " << lvl << " "<< grey.w_ << "x" << grey.h_ << ": " 
+//            << briefs(i,lvl).pt_.transpose() 
+//            << " could not be extracted" << std::endl;
 //        } else {
 //          std::cout << briefs(i,lvl).desc_.transpose() << std::endl;
         }

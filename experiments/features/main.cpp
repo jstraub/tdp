@@ -82,8 +82,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
-  tdp::ManagedHostImage<uint8_t> grey(wOrig/2, hOrig/2);
-  tdp::ManagedHostImage<uint8_t> greyB(wOrig/2, hOrig/2);
+  tdp::ManagedHostImage<uint8_t> grey(wOrig, hOrig);
+  tdp::ManagedHostImage<uint8_t> greyB(wOrig, hOrig);
   tdp::ManagedHostImage<uint8_t> greyAssoc(wOrig*2, hOrig);
   tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGrey(wOrig, hOrig);
   tdp::ManagedHostPyramid<uint8_t,3> pyrGrey(wOrig, hOrig);
@@ -168,10 +168,6 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::Rgb2Grey(cuRgb,cuGrey0);
     tdp::CompletePyramidBlur(cuPyrGrey, cudaMemcpyDeviceToDevice, 10.);
 
-//    tdp::Blur9(cuGrey,cuGreyChar, 10.);
-    grey.CopyFrom(cuPyrGrey.GetImage(1), cudaMemcpyDeviceToHost);
-    pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
-//    tdp::Rgb2GreyCpu<uint8_t>(rgb, grey, 1.);
 
     // get depth image
     tdp::Image<uint16_t> dRaw;
@@ -187,13 +183,18 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     // compute normals
     tdp::Depth2Normals(cuD, cam, cuN);
 
+
+    int fastLvl = 0;
+//    tdp::Blur9(cuGrey,cuGreyChar, 10.);
+    grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
+    pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
     TICK("Detection");
     tdp::DetectOFast(grey, fastB, 16, ptsA, orientations);
     TOCK("Detection");
 
     TICK("Extraction");
 //    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
-    tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, 1, descsA);
+    tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, fastLvl, descsA);
     TOCK("Extraction");
 
     tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
@@ -249,7 +250,8 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
       size_t numInliers = 0;
       T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
           ransacThr, numInliers);
-      std::cout << "#inliers " << numInliers/(float)assocAB.Area() << std::endl;
+      std::cout << "#inliers " << numInliers 
+        << " %: " << numInliers /(float)assocAB.Area() << std::endl;
       if (numInliers < ransacInlierPercThr*assocAB.Area()) {
         T_ab = tdp::SE3f();
       }

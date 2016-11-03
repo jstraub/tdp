@@ -7,7 +7,7 @@ TEST(lsh, init) {
   LSH<14> lsh;
   lsh.PrintHash();
 
-  Brief brief;
+  Brief brief, query;
   for (size_t i=0; i<100; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 0;
@@ -20,7 +20,10 @@ TEST(lsh, init) {
   }
   brief.desc_ = Vector8uda::Random();
   brief.frame_ = 1;
-  if(lsh.SearchBest(brief)) {
+  query.desc_ = Vector8uda::Random();
+  query.frame_ = 1;
+  int dist = 0;
+  if(lsh.SearchBest(query,dist,brief)) {
     std::cout << "found" << std::endl;
   } else {
     std::cout << "miss" << std::endl;

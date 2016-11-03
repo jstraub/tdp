@@ -3,6 +3,7 @@
  */
 #pragma once
 #include <vector>
+#include <list>
 #include <algorithm>
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
@@ -34,8 +35,9 @@ class LSH {
       brief = store_[hash][0];
       dist = Distance(brief.desc_, feat.desc_);
     } else if (store_[hash].size() > 1) {
-      const Image<Brief> candidates(store_[hash].size(),1,&store_[hash][0]);
-      int idClosest = ClosestBrief(feat, candidates, dist);
+      const Image<Brief> candidates(store_[hash].size(),1,
+        const_cast<Brief*>(&store_[hash][0]));
+      int idClosest = ClosestBrief(feat, candidates, &dist);
       brief = store_[hash][idClosest]; 
     }
     return true;
@@ -59,14 +61,14 @@ class LSH {
   void PrintHash() {
     for (size_t i=0; i<256; ++i) {
       std::cout << (std::find(hashIds_.begin(), 
-            hashIds_.end(),i) == hashIds_.end() ? "." : "x";
+            hashIds_.end(),i) == hashIds_.end() ? "." : "x");
     }
-    std::cout << endl;
+    std::cout << std::endl;
   }
 
  private:
   std::vector<uint32_t> hashIds_;
-  std::vector<std::vector<std::pair<Vector8uda,uint32_t>>> store_;
+  std::vector<std::vector<Brief>> store_;
 
 };
 
@@ -85,7 +87,7 @@ class LshForest {
   bool SearchBest(const Brief& feat, Brief& brief) const {
     int dist = 257;
     int minDist = 257;
-    Brief minFeat;
+    Brief minFeat, bestFeat;
     for (auto& lsh : lshs_) {
       if (lsh.SearchBest(feat, dist, bestFeat) && dist < minDist) {
         minDist = dist;
