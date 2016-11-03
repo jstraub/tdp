@@ -61,6 +61,104 @@ namespace tdp {
     return minId;
   }
 
+  #include <tdp/features/orbRaw.h>
+  bool ExtractOrb(const Image<uint8_t>& patch, Vector8uda& desc, 
+      int orientation) {
+    switch (orientation) {
+    case 0:
+      ExtractOrb0(patch, desc);
+      return true;
+    case 1:
+      ExtractOrb1(patch, desc);
+      return true;
+    case 2:
+      ExtractOrb2(patch, desc);
+      return true;
+    case 3:
+      ExtractOrb3(patch, desc);
+      return true;
+    case 4:
+      ExtractOrb4(patch, desc);
+      return true;
+    case 5:
+      ExtractOrb5(patch, desc);
+      return true;
+    case 6:
+      ExtractOrb6(patch, desc);
+      return true;
+    case 7:
+      ExtractOrb7(patch, desc);
+      return true;
+    case 8:
+      ExtractOrb8(patch, desc);
+      return true;
+    case 9:
+      ExtractOrb9(patch, desc);
+      return true;
+    case 10:
+      ExtractOrb10(patch, desc);
+      return true;
+    case 11:
+      ExtractOrb11(patch, desc);
+      return true;
+    case 12:
+      ExtractOrb12(patch, desc);
+      return true;
+    case 13:
+      ExtractOrb13(patch, desc);
+      return true;
+    case 14:
+      ExtractOrb14(patch, desc);
+      return true;
+    case 15:
+      ExtractOrb15(patch, desc);
+      return true;
+    case 16:
+      ExtractOrb16(patch, desc);
+      return true;
+    case 17:
+      ExtractOrb17(patch, desc);
+      return true;
+    case 18:
+      ExtractOrb18(patch, desc);
+      return true;
+    case 19:
+      ExtractOrb19(patch, desc);
+      return true;
+    case 20:
+      ExtractOrb20(patch, desc);
+      return true;
+    case 21:
+      ExtractOrb21(patch, desc);
+      return true;
+    case 22:
+      ExtractOrb22(patch, desc);
+      return true;
+    case 23:
+      ExtractOrb23(patch, desc);
+      return true;
+    case 24:
+      ExtractOrb24(patch, desc);
+      return true;
+    case 25:
+      ExtractOrb25(patch, desc);
+      return true;
+    case 26:
+      ExtractOrb26(patch, desc);
+      return true;
+    case 27:
+      ExtractOrb27(patch, desc);
+      return true;
+    case 28:
+      ExtractOrb28(patch, desc);
+      return true;
+    case 29:
+      ExtractOrb29(patch, desc);
+      return true;
+    }
+    return false;
+  }
+
   // http://www.vision.cs.chubu.ac.jp/CV-R/pdf/Rublee_iccv2011.pdf
   #include <tdp/features/briefRaw.h>
 
@@ -173,7 +271,7 @@ namespace tdp {
     int intOrient = (int)floor((
       brief.orientation_ < 0. ? 
         brief.orientation_ + 2*M_PI : brief.orientation_)/M_PI*180./12.);
-    bool ret = ExtractBrief(patch, brief.desc_, intOrient);
+    bool ret = ExtractOrb(patch, brief.desc_, intOrient);
     return ret;
   }
 
