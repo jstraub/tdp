@@ -49,7 +49,7 @@ struct BinaryKF {
     : pyrGrey(w,h), pyrPc(w,h), lsh(11)
   {}
 
-  ManagedHostImage<uint8_t> pyrGrey;
+  ManagedHostPyramid<uint8_t,3> pyrGrey;
   ManagedHostPyramid<Vector3fda,3> pyrPc;
   ManagedHostImage<Brief> feats;
   LshForest<14> lsh;
@@ -57,7 +57,8 @@ struct BinaryKF {
 };
 
 void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
-    int ransacMaxIt, float ransacThr) {
+    int ransacMaxIt, float ransacThr, float ransacInlierPercThr,
+    std::vector<std::pair<int,int>>& loopClosures) {
 
   auto& kfA = kfs[kfs.size()-1];
   for (size_t i=0; i<kfs.size()-1; ++i) {
@@ -104,8 +105,11 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
     std::cout << kfs.size()-1 <<  " -> " << i << ": " 
       << assoc.size() << " " << assoc.size()/(float)kfA.feats.Area() 
       << " after RANSAC "
-      << numInliers << " " << numInliers/(float)kfA.feats.Area() 
+      << numInliers << " " << numInliers/(float)assoc.size()
       << std::endl;
+    if (numInliers/(float)assoc.size() > ransacInlierPercThr) {
+      loopClosures.emplace_back(kfs.size()-1, i);
+    }
   }
 }
 
@@ -188,8 +192,28 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewN2D);
   tdp::QuickView viewGrey(w,h);
   gui.container().AddDisplay(viewGrey);
+  tdp::QuickView viewPyrGrey(3*w/2,h);
+  gui.container().AddDisplay(viewPyrGrey);
   tdp::QuickView viewAssoc(w*2,h);
   gui.container().AddDisplay(viewAssoc);
+  tdp::QuickView viewLoop(500,500);
+  gui.container().AddDisplay(viewLoop);
+
+  pangolin::View& viewClosures = pangolin::Display("closures");
+  viewClosures.SetLayout(pangolin::LayoutEqual);
+  tdp::QuickView viewClosuresImg0(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg0);
+  tdp::QuickView viewClosuresImg1(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg1);
+  tdp::QuickView viewClosuresImg2(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg2);
+  tdp::QuickView viewClosuresImg3(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg3);
+  tdp::QuickView viewClosuresImg4(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg4);
+  tdp::QuickView viewClosuresImg5(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg5);
+  gui.container().AddDisplay(viewClosures);
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
@@ -218,6 +242,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<uint8_t> greyAssoc(wOrig*2, hOrig);
   tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGrey(wOrig, hOrig);
   tdp::ManagedHostPyramid<uint8_t,3> pyrGrey(wOrig, hOrig);
+
+  tdp::ManagedHostImage<uint8_t> pyrGreyImg(3*wOrig/2, hOrig);
 
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> pcB(w, h);
@@ -266,6 +292,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
+  pangolin::Var<int> showKf("ui.showKf",0,0,1);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
@@ -294,6 +321,7 @@ int main( int argc, char* argv[] )
 
   gui.verbose = false;
 
+  std::vector<std::pair<int,int>> loopClosures;
   bool updatedEntropy = false;
   float dH = 0.f;
   float dHkf = 0.;
@@ -321,12 +349,16 @@ int main( int argc, char* argv[] )
 
       kfs.emplace_back(wc,hc);
       kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-      kfs.back().pyrGrey.CopyFrom(grey, cudaMemcpyHostToHost);
+      kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
       kfs.back().lsh.Insert(descsA);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
 
-      tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr);
+      tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr,
+          ransacInlierPercThr, loopClosures);
+
+      showKf = kfs.size()-1;
+
     } else if (kfs.size() > 0) {
       kfs.back().lsh.Insert(descsA);
     }
@@ -538,6 +570,10 @@ int main( int argc, char* argv[] )
           ptsA[i](1)+sin(orientations[i])*10);
       } 
     }
+    if (viewPyrGrey.IsShown()) {
+      tdp::PyramidToImage(pyrGrey, pyrGreyImg, cudaMemcpyHostToHost);
+      viewPyrGrey.SetImage(pyrGreyImg);
+    }
     if (viewAssoc.IsShown()) {
       tdp::Image<uint8_t> greyAssocA = greyAssoc.GetRoi(0,0,wOrig, hOrig);
       tdp::Image<uint8_t> greyAssocB = greyAssoc.GetRoi(wOrig,0,wOrig, hOrig);
@@ -566,6 +602,52 @@ int main( int argc, char* argv[] )
         if (assoc[i] >= 0)
           pangolin::glDrawLine(ptsA[i](0), ptsA[i](1), 
               ptsB[assoc[i]](0)+wOrig, ptsB[assoc[i]](1));
+      }
+    }
+    if(viewLoop.IsShown()) {
+      viewLoop.Activate();
+      glColor3f(1,0,0);
+      for (size_t i=0; i<kfs.size(); ++i) {
+        float alpha = 2*M_PI*i/kfs.size();
+        pangolin::glDrawCircle(250+200.*cos(alpha), 250+200.*sin(alpha),5);
+      }
+      glColor3f(0,1,0);
+      for (auto& loop : loopClosures) {
+        float alphaA = 2*M_PI*loop.first/kfs.size();
+        float alphaB = 2*M_PI*loop.second/kfs.size();
+        pangolin::glDrawLine(250+200.*cos(alphaA), 250+200.*sin(alphaA),
+            250+200.*cos(alphaB), 250+200.*sin(alphaB));
+      }
+    }
+    if(viewClosures.IsShown() && kfs.size() > 0) {
+      std::cout << "setting loop closure images" << std::endl;
+      viewClosuresImg0.SetImage(kfs[showKf].pyrGrey.GetImage(2));
+      viewClosuresImg5.SetImage(pyrGrey.GetImage(2));
+      size_t i=0;
+      for (auto& loop : loopClosures) {
+        if (loop.first == showKf) {
+          switch(i) {
+            case 0:
+              viewClosuresImg1.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 1:
+              viewClosuresImg2.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 2:
+              viewClosuresImg3.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 3:
+              viewClosuresImg4.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 4:
+              viewClosuresImg5.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            default:
+              std::cout << "not enough displays" << std::endl;
+          }
+          std::cout << "   setting " << i << std::endl;
+          ++i;
+        }
       }
     }
 

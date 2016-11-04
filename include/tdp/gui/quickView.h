@@ -12,6 +12,7 @@ namespace tdp {
 class QuickView : public pangolin::View, public pangolin::ImageViewHandler {
  public:
   QuickView(size_t w, size_t h);
+//  QuickView(const QuickView& other);
   ~QuickView() {};
 
   template <typename T>

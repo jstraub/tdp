@@ -10,6 +10,12 @@ QuickView::QuickView(size_t w, size_t h)
     this->SetHandler(dynamic_cast<pangolin::Handler*>(this));
 }
 
+//QuickView::QuickView(const QuickView& other)
+//  : pangolin::ImageViewHandler(other), pangolin::View(0.),
+//  gloffsetscale_(0.f,1.f) {
+//    this->SetHandler(dynamic_cast<pangolin::Handler*>(this));
+//}
+
 void QuickView::Keyboard(View&, unsigned char key, int x, int y, bool pressed) {
   if (key == 'a') {
     int bytesPerElem = 1;
