@@ -104,7 +104,6 @@ int main( int argc, char* argv[] )
   w = wc;
   h = hc;
 
-
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
@@ -217,10 +216,13 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<tdp::Vector2ida> assocAB;
 
+  gui.verbose = true;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
     if (gui.frame == 1 || pangolin::Pushed(newKf)) {
+      if (gui.verbose) std::cout << "kf" << std::endl;
       descsB.Reinitialise(descsA.w_, descsA.h_);
       descsB.CopyFrom(descsA, cudaMemcpyHostToHost);
       ptsB.Reinitialise(ptsA.w_, 1);
@@ -240,6 +242,7 @@ int main( int argc, char* argv[] )
     // get next frames from the video source
     gui.NextFrames();
 
+    if (gui.verbose) std::cout << "rgb" << std::endl;
     // get rgb image
 //    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
 //    tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
@@ -259,6 +262,7 @@ int main( int argc, char* argv[] )
 
     // get depth image
 //    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+    if (gui.verbose) std::cout << "depth" << std::endl;
     int64_t t_host_us_d =0;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     rig.ComputePc(cuD, true, pcs_c);
@@ -281,29 +285,33 @@ int main( int argc, char* argv[] )
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
     grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
     pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
+    if (gui.verbose) std::cout << "detect" << std::endl;
     TICK("Detection");
     tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, ptsA, orientations);
     TOCK("Detection");
 
+    if (gui.verbose) std::cout << "extract" << std::endl;
     TICK("Extraction");
 //    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
     tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, fastLvl, descsA);
     TOCK("Extraction");
 
-    tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
-        cuGreydv, cuGrad3D);
-    grad3D.CopyFrom(cuGrad3D, cudaMemcpyDeviceToHost);
-    n.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
-    cosys.Reinitialise(ptsA.w_,1);
-    for (size_t i=0; i<ptsA.Area(); ++i) {
-      const tdp::Vector3fda& pci = pc(ptsA[i](0),ptsA[i](1));
-      const tdp::Vector3fda& ni = n(ptsA[i](0),ptsA[i](1));
-      tdp::Vector3fda gradi = grad3D(ptsA[i](0),ptsA[i](1)).normalized();
-      tdp::SO3f R = tdp::SO3f::FromOrthogonalVectors(ni, gradi);
-      cosys[i] = tdp::SE3f(R, pci);
-    }
+//    tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
+//        cuGreydv, cuGrad3D);
+//    grad3D.CopyFrom(cuGrad3D, cudaMemcpyDeviceToHost);
+//    n.CopyFrom(cuN, cudaMemcpyDeviceToHost);
+//
+//    cosys.Reinitialise(ptsA.w_,1);
+//    for (size_t i=0; i<ptsA.Area(); ++i) {
+//      const tdp::Vector3fda& pci = pc(ptsA[i](0),ptsA[i](1));
+//      const tdp::Vector3fda& ni = n(ptsA[i](0),ptsA[i](1));
+//      tdp::Vector3fda gradi = grad3D(ptsA[i](0),ptsA[i](1)).normalized();
+//      tdp::SO3f R = tdp::SO3f::FromOrthogonalVectors(ni, gradi);
+//      cosys[i] = tdp::SE3f(R, pci);
+//    }
 
+    if (gui.verbose) std::cout << "matching" << std::endl;
     TICK("Matching");
     int numMatches = 0;
     assoc.Reinitialise(descsA.w_,1);
@@ -332,12 +340,14 @@ int main( int argc, char* argv[] )
 
     tdp::SE3f T_ab;
     if (useHuber && assocAB.Area() > 5) {
+      if (gui.verbose) std::cout << "huber" << std::endl;
       tdp::Huber3D3D<float> huber(pc, pcB, assocAB, huberDelta);
       huber.Compute(tdp::SE3f(), 1e-5, 100);
       T_ab =  huber.GetMinimum().Inverse();
       std::cout << T_ab << std::endl;
     }
     if (useRansac && assocAB.Area() > 5) {
+      if (gui.verbose) std::cout << "ransac" << std::endl;
       tdp::P3P p3p;
       tdp::Ransac<tdp::Vector3fda> ransac(&p3p);
       size_t numInliers = 0;
@@ -349,6 +359,7 @@ int main( int argc, char* argv[] )
       std::vector<float> countPerLvl;
       Eigen::Matrix<float,6,6> Sigma_ab = 1e-6*Eigen::Matrix<float,6,6>::Identity();
       if (runICP) {
+        if (gui.verbose) std::cout << "icp" << std::endl;
         tdp::ICP::ComputeProjective<CameraT>(pcs_c, ns_c, pcs_m, ns_m,
             rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
             icpLoopCloseDistThr,
@@ -371,7 +382,7 @@ int main( int argc, char* argv[] )
 //        T_ab = tdp::SE3f();
 //      }
     }
-
+    if (gui.verbose) std::cout << "draw 3D" << std::endl;
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);

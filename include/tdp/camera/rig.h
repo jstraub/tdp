@@ -100,10 +100,12 @@ struct Rig {
                   pangolin::TypedImage scale8bit = pangolin::LoadImage(path);
                   size_t w = scale8bit.w/4;
                   size_t h = scale8bit.h;
-                  std::cout << "w x h: " << w << "x" << h << std::endl;
+                  std::cout << "depth scale size w x h: " 
+                    << w << "x" << h << " " <<  path << std::endl;
                   Image<float> scaleWrap(w,h,w*sizeof(float),
                       (float*)scale8bit.ptr);
                   cuDepthScales_.emplace_back(w,h);
+                  std::cout << cuDepthScales_[cuDepthScales_.size()-1].Description() << std::endl;
                   cuDepthScales_[cuDepthScales_.size()-1].CopyFrom(scaleWrap,
                       cudaMemcpyHostToDevice);
                   std::cout << "found and loaded depth scale file"
