@@ -56,7 +56,8 @@ struct BinaryKF {
 
 };
 
-void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr ) {
+void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
+    int ransacMaxIt, float ransacThr) {
 
   auto& kfA = kfs[kfs.size()-1];
   for (size_t i=0; i<kfs.size()-1; ++i) {
@@ -64,20 +65,46 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr ) {
     kfB.lsh.PrintFillStatus();
 
     TICK("MatchKFs");
-    size_t numInliers = 0;
+    std::vector<uint32_t> assoc;
+    std::vector<Vector3fda> featB;
+    assoc.reserve(kfA.feats.w_);
+    featB.reserve(kfA.feats.w_);
     for (size_t j=0; j<kfA.feats.w_; ++j) {
-      Brief featA;
+      Brief feat;
       int dist;
-      if (kfB.lsh.SearchBest(kfA.feats(j,1),dist,featA)
+      if (kfB.lsh.SearchBest(kfA.feats(j,1),dist,feat)
           && dist < briefMatchThr) {
         std::cout << dist << " ";
-        numInliers++;
+        assoc.push_back(j);
+        featB.push_back(feat.p_c_);
       }
     }
     TOCK("MatchKFs");
     std::cout << std::endl;
     std::cout << kfs.size()-1 <<  " -> " << i << ": " 
-      << numInliers/(float)kfA.feats.Area() << std::endl;
+      << assoc.size()/(float)kfA.feats.Area()
+      << std::endl;
+
+    TICK("RANSAC");
+    ManagedHostImage<Vector3fda> pcA(assoc.size());
+    ManagedHostImage<Vector2ida> assocAB(assoc.size());
+    Image<Vector3fda> pcB(featB.size(), 1, &featB[0]);
+    for (size_t i=0; i<assoc.size(); ++i) {
+      pcA[i] = kfA.feats(assoc[i],1).p_c_;
+      assocAB[i](0) = i;
+      assocAB[i](1) = i;
+    }
+    P3P p3p;
+    Ransac<Vector3fda> ransac(&p3p);
+    size_t numInliers = 0;
+    SE3f T_ab = ransac.Compute(pcA, pcB, assocAB, ransacMaxIt,
+        ransacThr, numInliers);
+    TOCK("RANSAC");
+    
+    std::cout << kfs.size()-1 <<  " -> " << i << ": " 
+      << assoc.size()/(float)kfA.feats.Area() << " after RANSAC "
+      << numInliers/(float)kfA.feats.Area() 
+      << std::endl;
   }
 }
 
@@ -296,7 +323,7 @@ int main( int argc, char* argv[] )
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
 
-      tdp::MatchKFs(kfs, briefMatchThr);
+      tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr);
     } else if (kfs.size() > 0) {
       kfs.back().lsh.Insert(descsA);
     }
