@@ -38,8 +38,50 @@
 #include <tdp/camera/rig.h>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/icp/icp.h>
+#include <tdp/features/lsh.h>
 
 typedef tdp::CameraPoly3f CameraT;
+
+
+namespace tdp {
+struct BinaryKF {
+  BinaryKF(size_t w, size_t h)
+    : pyrGrey(w,h), pyrPc(w,h), lsh(11)
+  {}
+
+  ManagedHostImage<uint8_t> pyrGrey;
+  ManagedHostPyramid<Vector3fda,3> pyrPc;
+  ManagedHostImage<Brief> feats;
+  LshForest<14> lsh;
+
+};
+
+void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr ) {
+
+  auto& kfA = kfs[kfs.size()-1];
+  for (size_t i=0; i<kfs.size()-1; ++i) {
+    auto& kfB = kfs[i];
+    kfB.lsh.PrintFillStatus();
+
+    TICK("MatchKFs");
+    size_t numInliers = 0;
+    for (size_t j=0; j<kfA.feats.w_; ++j) {
+      Brief featA;
+      int dist;
+      if (kfB.lsh.SearchBest(kfA.feats(j,1),dist,featA)
+          && dist < briefMatchThr) {
+        std::cout << dist << " ";
+        numInliers++;
+      }
+    }
+    TOCK("MatchKFs");
+    std::cout << std::endl;
+    std::cout << kfs.size()-1 <<  " -> " << i << ": " 
+      << numInliers/(float)kfA.feats.Area() << std::endl;
+  }
+}
+
+}
 
 int main( int argc, char* argv[] )
 {
@@ -133,6 +175,9 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logRmse;
   pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f, 100.0f, 0.1f, 0.1f);
   plotters.AddDisplay(plotRmse);
+  pangolin::DataLog logdH;
+  pangolin::Plotter plotdH(&logdH, -100.f,1.f, 0.7f, 1.3f, 0.1f, 0.1f);
+  plotters.AddDisplay(plotdH);
   gui.container().AddDisplay(plotters);
 
   // camera model for computing point cloud and normals
@@ -195,6 +240,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
+  pangolin::Var<float> dEntropyThr("ui.dH Thr",0.9,0.8,1.0);
 
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
@@ -216,12 +262,19 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<tdp::Vector2ida> assocAB;
 
-  gui.verbose = true;
+  gui.verbose = false;
+
+  bool updatedEntropy = false;
+  float dH = 0.f;
+  float dHkf = 0.;
+
+  std::vector<tdp::BinaryKF> kfs;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    if (gui.frame == 1 || pangolin::Pushed(newKf)) {
+    if (gui.frame == 1 || pangolin::Pushed(newKf)
+        || dH/dHkf < dEntropyThr) {
       if (gui.verbose) std::cout << "kf" << std::endl;
       descsB.Reinitialise(descsA.w_, descsA.h_);
       descsB.CopyFrom(descsA, cudaMemcpyHostToHost);
@@ -234,6 +287,18 @@ int main( int argc, char* argv[] )
 
       pcs_m.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
       ns_m.CopyFrom(ns_c, cudaMemcpyDeviceToDevice);
+      updatedEntropy = true;
+
+      kfs.emplace_back(wc,hc);
+      kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+      kfs.back().pyrGrey.CopyFrom(grey, cudaMemcpyHostToHost);
+      kfs.back().lsh.Insert(descsA);
+      kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
+      kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
+
+      tdp::MatchKFs(kfs, briefMatchThr);
+    } else if (kfs.size() > 0) {
+      kfs.back().lsh.Insert(descsA);
     }
 
     // clear the OpenGL render buffers
@@ -294,6 +359,9 @@ int main( int argc, char* argv[] )
     TICK("Extraction");
 //    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
     tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, fastLvl, descsA);
+    for (size_t i=0; i<descsA.Area(); ++i) {
+      descsA[i].p_c_ = pcs_c(descsA[i].lvl_, descsA[i].pt_(0), descsA[i].pt_(1));
+    }
     TOCK("Extraction");
 
 
@@ -364,6 +432,11 @@ int main( int argc, char* argv[] )
             rig, rig.rgbStream2cam_, maxIt, icpLoopCloseAngleThr_deg, 
             icpLoopCloseDistThr,
             gui.verbose, T_ab, Sigma_ab, errPerLvl, countPerLvl);
+        dH =  log(Sigma_ab.determinant());
+        if (updatedEntropy) {
+          dHkf = dH;
+          updatedEntropy = false;
+        }
       }
 
       float overlap = 0.;
@@ -372,8 +445,10 @@ int main( int argc, char* argv[] )
 
       std::cout << "#inliers " << numInliers 
         << " %: " << numInliers /(float)assocAB.Area() 
-        << " overlap " <<  overlap << " rmse " << rmse << std::endl;
+        << " overlap " <<  overlap << " rmse " << rmse 
+        << " dH/dHkf " << dH/dHkf << std::endl;
 
+      logdH.Log(dH/dHkf, dEntropyThr);
       logOverlap.Log(overlap);
       logRmse.Log(rmse);
       logInliers.Log(numInliers/(float)assocAB.Area());
@@ -409,6 +484,7 @@ int main( int argc, char* argv[] )
     gui.ShowFrames();
 
     plotOverlap.ScrollView(1,0);
+    plotdH.ScrollView(1,0);
     plotRmse.ScrollView(1,0);
     plotInliers.ScrollView(1,0);
     // render normals image

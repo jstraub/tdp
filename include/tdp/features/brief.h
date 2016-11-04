@@ -14,6 +14,7 @@ namespace tdp {
   struct Brief {
     Vector8uda desc_;
     Vector2ida pt_;
+    Vector3fda p_c_; 
     uint32_t lvl_;
     uint32_t frame_;
     float orientation_;

@@ -13,26 +13,55 @@ TEST(lsh, init) {
     brief.frame_ = 0;
     lsh.Insert(brief);
   }
-  for (size_t i=0; i<100; ++i) {
+  std::vector<Brief> queries;
+  for (size_t i=0; i<10; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 1;
     lsh.Insert(brief);
+    queries.push_back(brief);
   }
-  brief.desc_ = Vector8uda::Random();
-  brief.frame_ = 1;
-  query.desc_ = Vector8uda::Random();
-  query.frame_ = 1;
-  int dist = 0;
-  if(lsh.SearchBest(query,dist,brief)) {
-    std::cout << "found" << std::endl;
-  } else {
-    std::cout << "miss" << std::endl;
+  lsh.PrintFillStatus();
+  for (auto& query : queries) {
+    brief.desc_ = Vector8uda::Random();
+    brief.frame_ = 1;
+    int dist = 0;
+    if(lsh.SearchBest(query,dist,brief)) {
+      std::cout << "found " << dist << std::endl;
+    } else {
+      std::cout << "miss" << std::endl;
+    }
   }
 }
 
 TEST(lshforest, init) {
   LshForest<14> lsh(11);
   lsh.PrintHashs();
+
+  Brief brief, query;
+  for (size_t i=0; i<100; ++i) {
+    brief.desc_ = Vector8uda::Random();
+    brief.frame_ = 0;
+    lsh.Insert(brief);
+  }
+  std::vector<Brief> queries;
+  for (size_t i=0; i<10; ++i) {
+    brief.desc_ = Vector8uda::Random();
+    brief.frame_ = 1;
+    lsh.Insert(brief);
+    queries.push_back(brief);
+  }
+  lsh.PrintFillStatus();
+  for (auto& query : queries) {
+    brief.desc_ = Vector8uda::Random();
+    brief.frame_ = 1;
+    int dist = 0;
+    if(lsh.SearchBest(query,dist,brief)) {
+      std::cout << "found " << dist << std::endl;
+    } else {
+      std::cout << "miss" << std::endl;
+    }
+  }
+
 }
 
 int main(int argc, char **argv) {

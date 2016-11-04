@@ -4,6 +4,7 @@
 #pragma once
 #include <vector>
 #include <list>
+#include <bitset>
 #include <algorithm>
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
@@ -30,6 +31,7 @@ class LSH {
   bool SearchBest(const Brief& feat, int& dist, Brief& brief) const {
     const uint32_t hash = Hash(feat.desc_);
     if (store_[hash].size() == 0) {
+      dist = 257;
       return false;
     } else if (store_[hash].size() == 1) {
       brief = store_[hash][0];
@@ -50,20 +52,43 @@ class LSH {
 
   uint32_t Hash(const Vector8uda& desc) const {
     uint32_t hash = 0;
+//    std::cout << "start hash" << std::endl;
     for (size_t i=0; i<H; ++i) {
-      if (desc(hashIds_[i]/32) & (1 << hashIds_[i]%32)) {
+//      std::cout << hashIds_[i] << " " 
+//        << std::bitset<32>(desc(hashIds_[i]/32)).to_string() <<
+//        " " << std::bitset<32>((1 << (hashIds_[i]%32))).to_string()
+//        << " " << std::bitset<32>((desc(hashIds_[i]/32) & (1 << (hashIds_[i]%32)))).to_string() << std::endl;
+      if ((desc(hashIds_[i]/32) & (1 << (hashIds_[i]%32))) != 0) {
         hash |= (1 << i);
+//        std::cout << hash << std::endl;
       }
     }
     return hash;
   }
 
-  void PrintHash() {
+  void PrintHash() const {
     for (size_t i=0; i<256; ++i) {
       std::cout << (std::find(hashIds_.begin(), 
             hashIds_.end(),i) == hashIds_.end() ? "." : "x");
     }
     std::cout << std::endl;
+  }
+
+  void PrintFillStatus() const {
+    size_t min = std::numeric_limits<size_t>::max();
+    size_t max = 0;
+    size_t avg = 0;
+    size_t nBuckets = 0;
+    for (size_t i=0; i<store_.size(); ++i) {
+      avg += store_[i].size();
+      min = store_[i].size() > 0 ? std::min(min, store_[i].size()) : min;
+      max = std::max(max, store_[i].size());
+      nBuckets += (store_[i].size() > 0 ? 1 : 0);
+    }
+    std::cout << "# occupied buckets " << nBuckets << " of " << store_.size()
+      << "\tper bucket avg " << (double)avg/(double)store_.size() 
+      << "\tmin " << min 
+      << "\tmax " << max << std::endl;
   }
 
  private:
@@ -84,9 +109,15 @@ class LshForest {
     }
   }
 
-  bool SearchBest(const Brief& feat, Brief& brief) const {
+  void Insert(const Image<Brief>& feats) {
+    for (size_t i=0; i<feats.Area(); ++i) {
+      Insert(feats[i]);
+    }
+  }
+
+  bool SearchBest(const Brief& feat, int& minDist, Brief& brief) const {
+    minDist = 257;
     int dist = 257;
-    int minDist = 257;
     Brief minFeat, bestFeat;
     for (auto& lsh : lshs_) {
       if (lsh.SearchBest(feat, dist, bestFeat) && dist < minDist) {
@@ -102,9 +133,15 @@ class LshForest {
     return true;
   }
 
-  void PrintHashs() {
+  void PrintHashs() const {
     for (auto& lsh : lshs_) {
       lsh.PrintHash();
+    }
+  }
+
+  void PrintFillStatus() const {
+    for (auto& lsh : lshs_) {
+      lsh.PrintFillStatus();
     }
   }
 

@@ -66,9 +66,34 @@ class Pyramid {
     : w_(w), h_(h), ptr_(ptr)
   {}
 
+  TDP_HOST_DEVICE
+  const T& operator()(size_t lvl, size_t u, size_t v) const {
+    return *(ImgPtr(lvl)+v*Width(lvl)+u);
+  }
+
+  TDP_HOST_DEVICE
+  T& operator()(size_t lvl, size_t u, size_t v) {
+    return *(ImgPtr(lvl)+v*Width(lvl)+u);
+  }
+
+  TDP_HOST_DEVICE
+  const T& operator[](size_t i) const {
+    return *(ptr_+i);
+  }
+
+  TDP_HOST_DEVICE
+  T& operator[](size_t i) {
+    return *(ptr_+i);
+  }
+
+  TDP_HOST_DEVICE
+  T* ImgPtr(size_t lvl) const {
+    return ptr_+NumElemsToLvl(lvl);
+  }
+
   const Image<T> GetConstImage(int lvl) const {
     if (lvl < LEVELS) {
-      return Image<T>(Width(lvl),Height(lvl),ptr_+NumElemsToLvl(lvl));
+      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl));
     }
     assert(false);
     return Image<T>(0,0,nullptr);
@@ -76,7 +101,7 @@ class Pyramid {
 
   Image<T> GetImage(int lvl) {
     if (lvl < LEVELS) {
-      return Image<T>(Width(lvl),Height(lvl),ptr_+NumElemsToLvl(lvl));
+      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl));
     }
     assert(false);
     return Image<T>(0,0,nullptr);
