@@ -27,7 +27,7 @@ void KernelPyrDown(
     T val01 = in0[idx*2+1];
     T val10 = in1[idx*2];
     T val11 = in1[idx*2+1];
-    T val = zero<T>();
+    T val = zero<T>(); // use float to handle overflow with eg uint8_t
     float num = 0.;
     if (!isNan(val00)) {
       val += val00;
@@ -45,10 +45,45 @@ void KernelPyrDown(
       val += val11;
       num ++;
     }
-    Iout(idx,idy) = val/num;
+    Iout(idx,idy) = static_cast<T>(val/num);
   }
 }
 
+__global__
+void KernelPyrDownUint8(
+    const Image<uint8_t> Iin,
+    Image<uint8_t> Iout
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < Iout.w_ && idy < Iout.h_) {
+    uint8_t* in0 = Iin.RowPtr(idy*2);
+    uint8_t* in1 = Iin.RowPtr(idy*2+1);
+    uint8_t val00 = in0[idx*2];
+    uint8_t val01 = in0[idx*2+1];
+    uint8_t val10 = in1[idx*2];
+    uint8_t val11 = in1[idx*2+1];
+    float val = 0.f; // use float to handle overflow with eg uint8_t
+    float num = 0.f;
+    if (!isNan(val00)) {
+      val += val00;
+      num ++;
+    }
+    if (!isNan(val01)) {
+      val += val01;
+      num ++;
+    }
+    if (!isNan(val10)) {
+      val += val10;
+      num ++;
+    }
+    if (!isNan(val11)) {
+      val += val11;
+      num ++;
+    }
+    Iout(idx,idy) = static_cast<uint8_t>(val/num);
+  }
+}
 
 //template<typename T>
 //void PyrDown(
@@ -122,7 +157,7 @@ void PyrDown(
   assert(Iin.h_ == Iout.h_*2);
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,Iout,32,32);
-  KernelPyrDown<uint8_t><<<blocks,threads>>>(Iin,Iout);
+  KernelPyrDownUint8<<<blocks,threads>>>(Iin,Iout);
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
