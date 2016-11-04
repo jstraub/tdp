@@ -102,8 +102,9 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
     TOCK("RANSAC");
     
     std::cout << kfs.size()-1 <<  " -> " << i << ": " 
-      << assoc.size()/(float)kfA.feats.Area() << " after RANSAC "
-      << numInliers/(float)kfA.feats.Area() 
+      << assoc.size() << " " << assoc.size()/(float)kfA.feats.Area() 
+      << " after RANSAC "
+      << numInliers << " " << numInliers/(float)kfA.feats.Area() 
       << std::endl;
   }
 }
@@ -242,6 +243,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
 
+  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrPc(wc,hc);
+
   tdp::ManagedHostImage<tdp::Vector3fda> grad3D(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
 
@@ -372,6 +375,7 @@ int main( int argc, char* argv[] )
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     pc.CopyFrom(pcs_c.GetImage(0), cudaMemcpyDeviceToHost);
     cuN.CopyFrom(ns_c.GetImage(0), cudaMemcpyDeviceToDevice);
+    pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
 
     int fastLvl = 0;
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
@@ -387,7 +391,7 @@ int main( int argc, char* argv[] )
 //    tdp::ExtractBrief(grey, ptsA, orientations, descsA);
     tdp::ExtractBrief(pyrGrey, ptsA, orientations, gui.frame, fastLvl, descsA);
     for (size_t i=0; i<descsA.Area(); ++i) {
-      descsA[i].p_c_ = pcs_c(descsA[i].lvl_, descsA[i].pt_(0), descsA[i].pt_(1));
+      descsA[i].p_c_ = pyrPc(descsA[i].lvl_, descsA[i].pt_(0), descsA[i].pt_(1));
     }
     TOCK("Extraction");
 
