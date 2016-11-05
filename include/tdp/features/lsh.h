@@ -29,14 +29,16 @@ class LSH {
     }
   }
 
-  void Insert(const Brief* feat) {
+  void Insert(Brief* feat) {
     if (feat->IsValid()) {
       const uint32_t hash = Hash(feat->desc_);
       if (!store_[hash]) {
-        store_[hash] = new std::vector<Brief*>(1,feat);
-      } else {
-        store_[hash]->push_back(feat);
+        store_[hash] = new std::vector<Brief*>();
       }
+      if (hash >= 1<<H) 
+        std::cout << "hash to big: " << hash << " " << (1<<H) << std::endl;
+      std::cout << hash << " " << store_[hash] << std::endl;
+      store_[hash]->push_back(feat);
     }
   }
 
@@ -79,6 +81,7 @@ class LSH {
 //        std::cout << hash << std::endl;
       }
     }
+    assert(hash < (1<<H));
     return hash;
   }
 
@@ -118,12 +121,19 @@ class LSH {
 template<int H>
 class LshForest {
  public:
-  LshForest(uint32_t N) : lshs_(N) {
+  LshForest(uint32_t N) : lshs_(N) { 
+    for (size_t i=0; i<N; ++i)
+      lshs_[i] = new LSH<H>();
+  }
+
+  ~LshForest() {
+    for (size_t i=0; i<lshs_.size(); ++i)
+      delete lshs_[i];
   }
 
   void Insert(const Brief* feat) {
     for (auto& lsh : lshs_) {
-      lsh.Insert(feat);
+      lsh->Insert(feat);
     }
   }
 
@@ -133,7 +143,7 @@ class LshForest {
     Brief* minFeat;
     Brief* bestFeat;
     for (auto& lsh : lshs_) {
-      if (lsh.SearchBest(feat, dist, bestFeat) && dist < minDist) {
+      if (lsh->SearchBest(feat, dist, bestFeat) && dist < minDist) {
         minDist = dist;
         minFeat = bestFeat;
       }
@@ -148,40 +158,49 @@ class LshForest {
 
   void PrintHashs() const {
     for (auto& lsh : lshs_) {
-      lsh.PrintHash();
+      lsh->PrintHash();
     }
   }
 
   void PrintFillStatus() const {
     for (auto& lsh : lshs_) {
-      lsh.PrintFillStatus();
+      lsh->PrintFillStatus();
     }
   }
 
  protected:
-  std::list<LSH<H>> lshs_;
+  std::vector<LSH<H>*> lshs_;
 };
 
 template<int H>
 class ManagedLshForest : public LshForest<H> {
  public:
- 
+  ManagedLshForest(uint32_t N) : LshForest<H>(N) 
+  {}
+
   ~ManagedLshForest() {
     for (auto feat : feats_) 
       delete feat;
+  }
+
+  void Insert(const Brief& feat) {
+    for (auto& lsh : this->lshs_) {
+      feats_.push_back(new Brief(feat));
+      lsh->Insert(feats_.back());
+    }
   }
 
   /// overwrite the insert via pointer to make a copy of the input
   void Insert(const Brief* feat) {
     for (auto& lsh : this->lshs_) {
       feats_.push_back(new Brief(*feat));
-      lsh.Insert(feats_.back());
+      lsh->Insert(feats_.back());
     }
   }
 
   void Insert(const Image<Brief>& feats) {
     for (size_t i=0; i<feats.Area(); ++i) {
-      Insert(&feats[i]);
+      Insert(feats[i]);
     }
   }
 

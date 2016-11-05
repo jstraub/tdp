@@ -9,19 +9,19 @@ TEST(ransac, p3p) {
   size_t N = 100;
   ManagedHostImage<Vector3fda> pcA(N,1);
   ManagedHostImage<Vector3fda> pcB(N,1);
-  ManagedHostImage<Vector2ida> assoc(N,1);
+  ManagedHostImage<int32_t> assoc(N,1);
   for (size_t i=0; i<2*N/3; ++i) {
     pcB[i] = Vector3fda::Random();
     pcA[i] = trueT_ab * pcB[i];
-    assoc[i] = Vector2ida(i,i);
+    assoc[i] = i;
   }
   for (size_t i=2*N/3; i<N; ++i) {
     pcB[i] = Vector3fda::Random();
     pcA[i] = trueT_ab * pcB[i] + 0.1* Vector3fda::Random();
-    assoc[i] = Vector2ida(i,i);
+    assoc[i] = i;
   }
 
-  P3P model;
+  P3PVector3 model;
   Ransac<Vector3fda> ransac(&model);
 
   size_t numInliers = 0;
@@ -36,17 +36,17 @@ TEST(ransac, p3pSimple) {
   size_t N = 4;
   ManagedHostImage<Vector3fda> pcA(N,1);
   ManagedHostImage<Vector3fda> pcB(N,1);
-  ManagedHostImage<Vector2ida> assoc(N,1);
+  ManagedHostImage<int32_t> assoc(N,1);
   pcB[0] = Vector3fda(0,0,0);
   pcB[1] = Vector3fda(1,0,0);
   pcB[2] = Vector3fda(0,1,0);
   pcB[3] = Vector3fda(0,0,1);
   for (size_t i=0; i<N; ++i) {
     pcA[i] = trueT_ab * pcB[i];
-    assoc[i] = Vector2ida(i,i);
+    assoc[i] = i;
   }
 
-  P3P model;
+  P3PVector3 model;
   Ransac<Vector3fda> ransac(&model);
 
   size_t numInliers = 0;

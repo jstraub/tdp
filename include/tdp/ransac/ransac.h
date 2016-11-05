@@ -4,6 +4,7 @@
 #include <tdp/manifold/SE3.h>
 #include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
+#include <tdp/features/brief.h>
 
 namespace tdp {
 
@@ -13,36 +14,31 @@ class Model {
   Model() {}
   virtual ~Model() {}
   virtual bool Compute(const Image<T>& dataA, const Image<T>& dataB,
-      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids,
+      const Image<int32_t>& assocBA, std::vector<uint32_t>& ids,
       SE3f& T_ab) = 0;
   virtual size_t ConsensusSize(const Image<T>& dataA, const Image<T>& dataB,
-      const Image<Vector2ida>& assoc, std::vector<uint32_t>& ids,
+      const Image<int32_t>& assocBA, std::vector<uint32_t>& ids,
+      const SE3f& T_ab, float thr) = 0;
+
+  virtual bool Compute(const std::vector<T>& dataA, const std::vector<T>& dataB,
+      const std::vector<int32_t>& assocBA, std::vector<uint32_t>& ids,
+      SE3f& T_ab) = 0;
+  virtual size_t ConsensusSize(const std::vector<T>& dataA, 
+      const std::vector<T>& dataB,
+      const std::vector<int32_t>& assocBA, std::vector<uint32_t>& ids,
       const SE3f& T_ab, float thr) = 0;
  private:
 };
 
-class P3P : public Model<Vector3fda> {
+template<class T>
+class P3P : public Model<T> {
  public:
   P3P() {}
   virtual ~P3P() {}
-  virtual bool Compute(const Image<Vector3fda>& pcA, 
-      const Image<Vector3fda>& pcB, 
-      const Image<Vector2ida>& assoc, 
-      std::vector<uint32_t>& ids, SE3f& T_ab) {
-    Eigen::Vector3d meanA(0,0,0);
-    Eigen::Vector3d meanB(0,0,0);
-    for (size_t i=0; i<ids.size(); ++i) {
-      meanA += pcA[assoc[ids[i]](0)].cast<double>();
-      meanB += pcB[assoc[ids[i]](1)].cast<double>();
-    }
-    meanA /= ids.size();
-    meanB /= ids.size();
-    Eigen::Matrix3d outer = Eigen::Matrix3d::Zero();
-    for (size_t i=0; i<ids.size(); ++i) {
-      outer += (pcB[assoc[ids[i]](1)].cast<double>()-meanB)
-        * (pcA[assoc[ids[i]](0)].cast<double>()-meanA).transpose();
-    }
-    Eigen::JacobiSVD<Eigen::Matrix3d> svd(outer, Eigen::ComputeFullU |
+
+  static SE3f StatisticsToPose(const Eigen::Vector3d& meanA, 
+      const Eigen::Vector3d& meanB, const Eigen::Matrix3d& cov) {
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(cov, Eigen::ComputeFullU |
         Eigen::ComputeFullV);
     double detUV = (svd.matrixV()*svd.matrixU().transpose()).determinant();
 //    std::cout << detUV << "; " << svd.rank() 
@@ -54,19 +50,166 @@ class P3P : public Model<Vector3fda> {
       *svd.matrixU().transpose();
     Eigen::Vector3d t_ab = meanA - R_ab*meanB;
 //    std::cout << R_ab << std::endl << t_ab.transpose() << std::endl;
-    T_ab = SE3f(R_ab.cast<float>(), t_ab.cast<float>());
+    return SE3f(R_ab.cast<float>(), t_ab.cast<float>());
+  }
+};
+
+class P3PBrief : public P3P<Brief> {
+ public:
+  P3PBrief() {}
+  virtual ~P3PBrief() {}
+
+  virtual bool Compute(const Image<Brief>& dataA, 
+      const Image<Brief>& dataB, 
+      const Image<int32_t>& assocBA, 
+      std::vector<uint32_t>& ids, SE3f& T_ab) {
+    Eigen::Vector3d meanA(0,0,0);
+    Eigen::Vector3d meanB(0,0,0);
+    for (size_t i=0; i<ids.size(); ++i) {
+      meanA += dataA[ids[i]].p_c_.cast<double>();
+      meanB += dataB[assocBA[ids[i]]].p_c_.cast<double>();
+    }
+    meanA /= ids.size();
+    meanB /= ids.size();
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for (size_t i=0; i<ids.size(); ++i) {
+      cov += (dataB[ids[i]].p_c_.cast<double>()-meanB)
+        * (dataA[assocBA[ids[i]]].p_c_.cast<double>()-meanA).transpose();
+    }
+    T_ab = StatisticsToPose(meanA, meanB, cov);
+    return true;
+  }
+
+  virtual size_t ConsensusSize(const Image<Brief>& dataA, 
+      const Image<Brief>& dataB,
+      const Image<int32_t>& assocBA, std::vector<uint32_t>& inlierIds, 
+      const SE3f& T_ab, float thr) {
+    size_t numInliers = 0;
+    inlierIds.clear();
+    inlierIds.reserve(assocBA.Area());
+    for (size_t i=0; i<assocBA.Area(); ++i) {
+      float dist = (dataA[i].p_c_ - T_ab * dataB[assocBA[i]].p_c_).norm();
+      if (dist < thr) {
+        numInliers ++; 
+        inlierIds.push_back(i);
+      }
+    }
+    return numInliers;
+  }
+
+  virtual bool Compute(const std::vector<Brief>& dataA, 
+      const std::vector<Brief>& dataB, 
+      const std::vector<int32_t>& assocBA, 
+      std::vector<uint32_t>& ids, SE3f& T_ab) {
+    Eigen::Vector3d meanA(0,0,0);
+    Eigen::Vector3d meanB(0,0,0);
+    for (size_t i=0; i<ids.size(); ++i) {
+      meanA += dataA[ids[i]].p_c_.cast<double>();
+      meanB += dataB[assocBA[ids[i]]].p_c_.cast<double>();
+    }
+    meanA /= ids.size();
+    meanB /= ids.size();
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for (size_t i=0; i<ids.size(); ++i) {
+      cov += (dataB[ids[i]].p_c_.cast<double>()-meanB)
+        * (dataA[assocBA[ids[i]]].p_c_.cast<double>()-meanA).transpose();
+    }
+    T_ab = StatisticsToPose(meanA, meanB, cov);
+    return true;
+  }
+
+  virtual size_t ConsensusSize(const std::vector<Brief>& dataA, 
+      const std::vector<Brief>& dataB,
+      const std::vector<int32_t>& assocBA, std::vector<uint32_t>& inlierIds, 
+      const SE3f& T_ab, float thr) {
+    size_t numInliers = 0;
+    inlierIds.clear();
+    inlierIds.reserve(assocBA.size());
+    for (size_t i=0; i<assocBA.size(); ++i) {
+      float dist = (dataA[i].p_c_ - T_ab * dataB[assocBA[i]].p_c_).norm();
+      if (dist < thr) {
+        numInliers ++; 
+        inlierIds.push_back(i);
+      }
+    }
+    return numInliers;
+  }
+ private:
+};
+
+class P3PVector3 : public P3P<Vector3fda> {
+ public:
+  P3PVector3() {}
+  virtual ~P3PVector3() {}
+
+  virtual bool Compute(const Image<Vector3fda>& pcA, 
+      const Image<Vector3fda>& pcB, 
+      const Image<int32_t>& assocBA, 
+      std::vector<uint32_t>& ids, SE3f& T_ab) {
+    Eigen::Vector3d meanA(0,0,0);
+    Eigen::Vector3d meanB(0,0,0);
+    for (size_t i=0; i<ids.size(); ++i) {
+      meanA += pcA[ids[i]].cast<double>();
+      meanB += pcB[assocBA[ids[i]]].cast<double>();
+    }
+    meanA /= ids.size();
+    meanB /= ids.size();
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for (size_t i=0; i<ids.size(); ++i) {
+      cov += (pcB[ids[i]].cast<double>()-meanB)
+        * (pcA[assocBA[ids[i]]].cast<double>()-meanA).transpose();
+    }
+    T_ab = StatisticsToPose(meanA, meanB, cov);
     return true;
   }
 
   virtual size_t ConsensusSize(const Image<Vector3fda>& pcA, 
       const Image<Vector3fda>& pcB,
-      const Image<Vector2ida>& assoc, std::vector<uint32_t>& inlierIds, 
+      const Image<int32_t>& assocBA, std::vector<uint32_t>& inlierIds, 
       const SE3f& T_ab, float thr) {
     size_t numInliers = 0;
     inlierIds.clear();
-    inlierIds.reserve(assoc.Area());
-    for (size_t i=0; i<assoc.Area(); ++i) {
-      float dist = (pcA[assoc[i](0)] - T_ab * pcB[assoc[i](1)]).norm();
+    inlierIds.reserve(assocBA.Area());
+    for (size_t i=0; i<assocBA.Area(); ++i) {
+      float dist = (pcA[i] - T_ab * pcB[assocBA[i]]).norm();
+      if (dist < thr) {
+        numInliers ++; 
+        inlierIds.push_back(i);
+      }
+    }
+    return numInliers;
+  }
+
+  virtual bool Compute(const std::vector<Vector3fda>& pcA, 
+      const std::vector<Vector3fda>& pcB, 
+      const std::vector<int32_t>& assocBA, 
+      std::vector<uint32_t>& ids, SE3f& T_ab) {
+    Eigen::Vector3d meanA(0,0,0);
+    Eigen::Vector3d meanB(0,0,0);
+    for (size_t i=0; i<ids.size(); ++i) {
+      meanA += pcA[ids[i]].cast<double>();
+      meanB += pcB[assocBA[ids[i]]].cast<double>();
+    }
+    meanA /= ids.size();
+    meanB /= ids.size();
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for (size_t i=0; i<ids.size(); ++i) {
+      cov += (pcB[ids[i]].cast<double>()-meanB)
+        * (pcA[assocBA[ids[i]]].cast<double>()-meanA).transpose();
+    }
+    T_ab = StatisticsToPose(meanA, meanB, cov);
+    return true;
+  }
+
+  virtual size_t ConsensusSize(const std::vector<Vector3fda>& pcA, 
+      const std::vector<Vector3fda>& pcB,
+      const std::vector<int32_t>& assocBA, std::vector<uint32_t>& inlierIds, 
+      const SE3f& T_ab, float thr) {
+    size_t numInliers = 0;
+    inlierIds.clear();
+    inlierIds.reserve(assocBA.size());
+    for (size_t i=0; i<assocBA.size(); ++i) {
+      float dist = (pcA[i] - T_ab * pcB[assocBA[i]]).norm();
       if (dist < thr) {
         numInliers ++; 
         inlierIds.push_back(i);
@@ -88,15 +231,14 @@ public:
   ~Ransac()
   {}
 
-  SE3f Compute(const Image<T>& pcA, const Image<T>& pcB,
-      const Image<Vector2ida>& assoc,
-      size_t maxIt, float thr, size_t& numInliers)
+  SE3f Compute(const Image<T>& dataA, const Image<T>& dataB,
+      Image<int32_t>& assocBA, size_t maxIt, float thr, size_t& numInliers)
   {
     SE3f T_ab;
     SE3f maxT_ab;
     size_t maxInlier = 0;
 
-    std::vector<uint32_t> ids(assoc.Area());
+    std::vector<uint32_t> ids(assocBA.Area());
     std::iota(ids.begin(), ids.end(), 0);
 
     std::vector<uint32_t> idsInlier;
@@ -104,24 +246,75 @@ public:
       std::random_shuffle(ids.begin(), ids.end());
       std::vector<uint32_t> idsModel(ids.begin(), ids.begin()+3);
       // compute model from the sampled datapoints
-      if(!model_->Compute(pcA, pcB, assoc, idsModel, T_ab)) continue;
-//      std::cout << T_ab << std::endl;
-      size_t nInlier=model_->ConsensusSize(pcA, pcB, assoc, idsInlier, T_ab, thr);
-//      std::cout<<"Ransac::find: nInlier="<<nInlier<<std::endl;
+      if(!model_->Compute(dataA, dataB, assocBA, idsModel, T_ab)) continue;
+      size_t nInlier=model_->ConsensusSize(dataA, dataB, assocBA,
+          idsInlier, T_ab, thr);
       // model is good enough -> remember
       if(nInlier > maxInlier){
         maxInlier = nInlier;
         maxT_ab = T_ab; 
-//        std::cout<<"nInlier="<<nInlier<<std::endl;
-//        std::cout<<"Ransac::find: LatestT_wc:"<<std::endl<<LatestT_wc;
       }
     }
-    numInliers = model_->ConsensusSize(pcA, pcB, assoc, idsInlier, maxT_ab, thr);
-    model_->Compute(pcA, pcB, assoc, idsInlier, T_ab);
+    numInliers = model_->ConsensusSize(dataA, dataB, assocBA,
+        idsInlier, maxT_ab, thr);
+    model_->Compute(dataA, dataB, assocBA, idsInlier, T_ab);
+
+    std::sort(idsInlier.begin(), idsInlier.end());
+    size_t j=0;
+    for (size_t i=0; i<assocBA.Area(); ++i) {
+      if (i == idsInlier[j]) {
+        ++j;
+      } else {
+        assocBA[i] = -1;
+      }
+    }
 //    std::cout<<"Inliers of best model: " << maxInlier << std::endl
 //      << "Model: " << std::endl << maxT_ab << std::endl;
     return T_ab;
   }
+
+  SE3f Compute(const std::vector<T>& dataA, const std::vector<T>& dataB,
+      std::vector<int32_t>& assocBA, size_t maxIt, float thr, size_t& numInliers)
+  {
+    SE3f T_ab;
+    SE3f maxT_ab;
+    size_t maxInlier = 0;
+
+    std::vector<uint32_t> ids(assocBA.size());
+    std::iota(ids.begin(), ids.end(), 0);
+
+    std::vector<uint32_t> idsInlier;
+    for (size_t it=0; it<maxIt; ++it) {
+      std::random_shuffle(ids.begin(), ids.end());
+      std::vector<uint32_t> idsModel(ids.begin(), ids.begin()+3);
+      // compute model from the sampled datapoints
+      if(!model_->Compute(dataA, dataB, assocBA, idsModel, T_ab)) continue;
+      size_t nInlier=model_->ConsensusSize(dataA, dataB, assocBA,
+          idsInlier, T_ab, thr);
+      // model is good enough -> remember
+      if(nInlier > maxInlier){
+        maxInlier = nInlier;
+        maxT_ab = T_ab; 
+      }
+    }
+    numInliers = model_->ConsensusSize(dataA, dataB, assocBA,
+        idsInlier, maxT_ab, thr);
+    model_->Compute(dataA, dataB, assocBA, idsInlier, T_ab);
+
+    std::sort(idsInlier.begin(), idsInlier.end());
+    size_t j=0;
+    for (size_t i=0; i<assocBA.size(); ++i) {
+      if (i == idsInlier[j]) {
+        ++j;
+      } else {
+        assocBA[i] = -1;
+      }
+    }
+//    std::cout<<"Inliers of best model: " << maxInlier << std::endl
+//      << "Model: " << std::endl << maxT_ab << std::endl;
+    return T_ab;
+  }
+
 
   uint32_t getInlierCount() const { return mInlierCount;};
 

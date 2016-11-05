@@ -66,7 +66,7 @@ namespace tdp {
     int minId = -1;
     int minDist = 257;
     if (a.IsValid()) {
-      for (int i=0; i<bs.size(); ++i) {
+      for (int i=0; i<bs.size(); ++i) 
         if (bs[i]->IsValid()) {
           int dist = Distance(a.desc_, bs[i]->desc_);
           if (dist < minDist) {

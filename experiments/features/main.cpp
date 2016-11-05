@@ -51,8 +51,8 @@ struct BinaryKF {
 
   ManagedHostPyramid<uint8_t,3> pyrGrey;
   ManagedHostPyramid<Vector3fda,3> pyrPc;
-  ManagedHostImage<Brief> feats;
   ManagedLshForest<14> lsh;
+  ManagedHostImage<Brief> feats;
 
 };
 
@@ -66,10 +66,12 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
     kfB.lsh.PrintFillStatus();
 
     TICK("MatchKFs");
-    std::vector<uint32_t> assoc;
-    std::vector<Vector3fda> featB;
+    std::vector<int32_t> assoc;
+    std::vector<Brief> featB;
+    std::vector<Brief> featA;
     assoc.reserve(kfA.feats.w_);
     featB.reserve(kfA.feats.w_);
+    featA.reserve(kfA.feats.w_);
     for (size_t j=0; j<kfA.feats.w_; ++j) {
       Brief* feat;
       int dist;
@@ -77,7 +79,8 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
           && dist < briefMatchThr) {
         std::cout << dist << " ";
         assoc.push_back(j);
-        featB.push_back(feat->p_c_);
+        featB.push_back(*feat);
+        featA.push_back(kfA.feats(j,1));
       }
     }
     TOCK("MatchKFs");
@@ -87,18 +90,13 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
       << std::endl;
 
     TICK("RANSAC");
-    ManagedHostImage<Vector3fda> pcA(assoc.size());
-    ManagedHostImage<Vector2ida> assocAB(assoc.size());
-    Image<Vector3fda> pcB(featB.size(), 1, &featB[0]);
-    for (size_t i=0; i<assoc.size(); ++i) {
-      pcA[i] = kfA.feats(assoc[i],1).p_c_;
-      assocAB[i](0) = i;
-      assocAB[i](1) = i;
-    }
-    P3P p3p;
-    Ransac<Vector3fda> ransac(&p3p);
+//    Image<Brief> fA(featA.size(), 1, &featA[0]);
+//    Image<Brief> fB(featB.size(), 1, &featB[0]);
+    P3PBrief p3p;
+    Ransac<Brief> ransac(&p3p);
     size_t numInliers = 0;
-    SE3f T_ab = ransac.Compute(pcA, pcB, assocAB, ransacMaxIt,
+//    tdp::Image<int32_t> assocBA(assoc.size(), 1, &assoc[0]);
+    SE3f T_ab = ransac.Compute(featA, featB, assoc, ransacMaxIt,
         ransacThr, numInliers);
     TOCK("RANSAC");
     
@@ -107,7 +105,8 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
       << " after RANSAC "
       << numInliers << " " << numInliers/(float)assoc.size()
       << std::endl;
-    if (numInliers/(float)assoc.size() > ransacInlierPercThr) {
+//    if (numInliers/(float)assoc.size() > ransacInlierPercThr) {
+    if (numInliers > ransacInlierPercThr) {
       loopClosures.emplace_back(kfs.size()-1, i);
     }
   }
@@ -298,8 +297,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useRansac("ui.Use RANSAC", true, true);
   pangolin::Var<bool> runICP("ui.run ICP", true, true);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
-  pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
-  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.1,0.01,0.3);
+  pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
+  pangolin::Var<float> ransacInlierPercThr("ui.inlier thr",6,1,20);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> showKf("ui.showKf",0,0,1);
@@ -327,7 +326,6 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<int32_t> assoc;
 
-  tdp::ManagedHostImage<tdp::Vector2ida> assocAB;
 
   gui.verbose = false;
 
@@ -358,12 +356,13 @@ int main( int argc, char* argv[] )
       ns_m.CopyFrom(ns_c, cudaMemcpyDeviceToDevice);
       updatedEntropy = true;
 
+      std::cout << "adding KF " << kfs.size() << std::endl;
       kfs.emplace_back(wOrig,hOrig);
       kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
       kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
-      kfs.back().lsh.Insert(descsA);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
+      kfs.back().lsh.Insert(kfs.back().feats);
 
       tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr,
           ransacInlierPercThr, loopClosures);
@@ -456,7 +455,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "matching" << std::endl;
     TICK("Matching");
     int numMatches = 0;
-    assoc.Reinitialise(descsA.w_,1);
+    assoc.Reinitialise(descsA.w_);
     for (size_t i=0; i<descsA.w_; ++i) {
       int dist = 256;
       // match from current level 1 to all other levels
@@ -470,30 +469,22 @@ int main( int argc, char* argv[] )
       }
 
     }
-    int32_t j=0;
-    assocAB.Reinitialise(numMatches,1);
-    for (size_t i=0; i<assoc.Area(); ++i) {
-      if (assoc[i] >= 0) {
-        assocAB[j](0) = ptsA[i](0)+ptsA[i](1)*w;
-        assocAB[j++](1) = ptsB[assoc[i]](0)+ptsB[assoc[i]](1)*w;
-      }
-    }
     TOCK("Matching");
 
     tdp::SE3f T_ab;
-    if (useHuber && assocAB.Area() > 5) {
-      if (gui.verbose) std::cout << "huber" << std::endl;
-      tdp::Huber3D3D<float> huber(pc, pcB, assocAB, huberDelta);
-      huber.Compute(tdp::SE3f(), 1e-5, 100);
-      T_ab =  huber.GetMinimum().Inverse();
-      std::cout << T_ab << std::endl;
-    }
-    if (useRansac && assocAB.Area() > 5) {
+//    if (useHuber && numMatches > 5) {
+//      if (gui.verbose) std::cout << "huber" << std::endl;
+//      tdp::Huber3D3D<float> huber(pc, pcB, assoc, huberDelta);
+//      huber.Compute(tdp::SE3f(), 1e-5, 100);
+//      T_ab =  huber.GetMinimum().Inverse();
+//      std::cout << T_ab << std::endl;
+//    }
+    if (useRansac && numMatches > 5) {
       if (gui.verbose) std::cout << "ransac" << std::endl;
-      tdp::P3P p3p;
-      tdp::Ransac<tdp::Vector3fda> ransac(&p3p);
+      tdp::P3PBrief p3p;
+      tdp::Ransac<tdp::Brief> ransac(&p3p);
       size_t numInliers = 0;
-      T_ab = ransac.Compute(pc, pcB, assocAB, ransacMaxIt,
+      T_ab = ransac.Compute(descsA, descsB, assoc, ransacMaxIt,
           ransacThr, numInliers);
 
       std::vector<size_t> maxIt = {icpIter0, icpIter1, icpIter2};
@@ -518,18 +509,15 @@ int main( int argc, char* argv[] )
       tdp::Overlap(grey, greyB, pc, pcB, T_ab, cam, overlap, rmse);
 
       std::cout << "#inliers " << numInliers 
-        << " %: " << numInliers /(float)assocAB.Area() 
+        << " %: " << numInliers /(float)numMatches 
         << " overlap " <<  overlap << " rmse " << rmse 
         << " dH/dHkf " << dH/dHkf << std::endl;
 
       logdH.Log(dH/dHkf, dEntropyThr);
       logOverlap.Log(overlap);
       logRmse.Log(rmse);
-      logInliers.Log(numInliers/(float)assocAB.Area());
+      logInliers.Log(numInliers/(float)numMatches);
 
-//      if (numInliers < ransacInlierPercThr*assocAB.Area()) {
-//        T_ab = tdp::SE3f();
-//      }
     }
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     // Draw 3D stuff

@@ -5,19 +5,19 @@ using namespace tdp;
 
 TEST(lsh, init) {
   ManagedLshForest<14> lsh(1);
-  lsh.PrintHash();
+  lsh.PrintHashs();
 
   Brief brief, query;
   for (size_t i=0; i<100; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 0;
-    lsh.Insert(brief);
+    lsh.Insert(&brief);
   }
   std::vector<Brief> queries;
   for (size_t i=0; i<10; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 1;
-    lsh.Insert(brief);
+    lsh.Insert(&brief);
     queries.push_back(brief);
   }
   lsh.PrintFillStatus();
@@ -40,13 +40,13 @@ TEST(lshforest, init) {
   for (size_t i=0; i<100; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 0;
-    lsh.Insert(brief);
+    lsh.Insert(&brief);
   }
   std::vector<Brief> queries;
   for (size_t i=0; i<10; ++i) {
     brief.desc_ = Vector8uda::Random();
     brief.frame_ = 1;
-    lsh.Insert(brief);
+    lsh.Insert(&brief);
     queries.push_back(brief);
   }
   lsh.PrintFillStatus();
