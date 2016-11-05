@@ -15,7 +15,7 @@ namespace tdp {
 template<int H>
 class LSH {
  public:
-  LSH() : hashIds_(H), store_(1<<H, std::vector<Brief>()) {
+  LSH() : hashIds_(H), store_(1<<H, nullptr) {
     std::vector<uint32_t> ids(256);
     std::iota(ids.begin(), ids.end(), 0);
     std::random_shuffle(ids.begin(), ids.end());
@@ -23,29 +23,44 @@ class LSH {
     std::sort(hashIds_.begin(), hashIds_.end());
   }
 
-  void Insert(const Brief& feat) {
-    const uint32_t hash = Hash(feat.desc_);
-    store_[hash].emplace_back(feat);
+  ~LSH() {
+    for (size_t i=0; i<1<<H; ++i) {
+      if (store_[i]) delete store_[i];
+    }
   }
 
-  bool SearchBest(const Brief& feat, int& dist, Brief& brief) const {
-    const uint32_t hash = Hash(feat.desc_);
-    if (store_[hash].size() == 0) {
+  void Insert(const Brief* feat) {
+    if (feat->IsValid()) {
+      const uint32_t hash = Hash(feat->desc_);
+      if (!store_[hash]) {
+        store_[hash] = new std::vector<Brief*>(1,feat);
+      } else {
+        store_[hash]->push_back(feat);
+      }
+    }
+  }
+
+  bool SearchBest(const Brief& feat, int& dist, Brief*& brief) const {
+    if (!feat.IsValid()) {
       dist = 257;
       return false;
-    } else if (store_[hash].size() == 1) {
-      brief = store_[hash][0];
-      dist = Distance(brief.desc_, feat.desc_);
-    } else if (store_[hash].size() > 1) {
-      const Image<Brief> candidates(store_[hash].size(),1,
-        const_cast<Brief*>(&store_[hash][0]));
-      int idClosest = ClosestBrief(feat, candidates, &dist);
-      brief = store_[hash][idClosest]; 
+    }
+    const uint32_t hash = Hash(feat.desc_);
+    if (!store_[hash]) {
+      dist = 257;
+      return false;
+    } else if (store_[hash]->size() == 1) {
+      brief = store_[hash]->at(0);
+      dist = Distance(brief->desc_, feat.desc_);
+    } else if (store_[hash]->size() > 1) {
+      int idClosest = ClosestBrief(feat, *store_[hash], &dist);
+      brief = store_[hash]->at(idClosest);
     }
     return true;
   }
 
-  const std::vector<Brief>& SearchBucket(const Brief& feat) const {
+  /// this migth return nullptr
+  const std::vector<Brief*>& SearchBucket(const Brief& feat) const {
     const uint32_t hash = Hash(feat.desc_);
     assert(hash < (1<<H));
     return store_[hash];
@@ -81,10 +96,12 @@ class LSH {
     size_t avg = 0;
     size_t nBuckets = 0;
     for (size_t i=0; i<store_.size(); ++i) {
-      avg += store_[i].size();
-      min = store_[i].size() > 0 ? std::min(min, store_[i].size()) : min;
-      max = std::max(max, store_[i].size());
-      nBuckets += (store_[i].size() > 0 ? 1 : 0);
+      if (store_[i]) {
+        avg += store_[i]->size();
+        min = std::min(min, store_[i]->size());
+        max = std::max(max, store_[i]->size());
+        nBuckets ++;
+      }
     }
     std::cout << "# occupied buckets " << nBuckets << " of " << store_.size()
       << "\tper bucket avg " << (double)avg/(double)store_.size() 
@@ -94,7 +111,7 @@ class LSH {
 
  private:
   std::vector<uint32_t> hashIds_;
-  std::vector<std::vector<Brief>> store_;
+  std::vector<std::vector<Brief*>*> store_;
 
 };
 
@@ -104,22 +121,17 @@ class LshForest {
   LshForest(uint32_t N) : lshs_(N) {
   }
 
-  void Insert(const Brief& feat) {
+  void Insert(const Brief* feat) {
     for (auto& lsh : lshs_) {
       lsh.Insert(feat);
     }
   }
 
-  void Insert(const Image<Brief>& feats) {
-    for (size_t i=0; i<feats.Area(); ++i) {
-      Insert(feats[i]);
-    }
-  }
-
-  bool SearchBest(const Brief& feat, int& minDist, Brief& brief) const {
+  bool SearchBest(const Brief& feat, int& minDist, Brief* &brief) const {
     minDist = 257;
     int dist = 257;
-    Brief minFeat, bestFeat;
+    Brief* minFeat;
+    Brief* bestFeat;
     for (auto& lsh : lshs_) {
       if (lsh.SearchBest(feat, dist, bestFeat) && dist < minDist) {
         minDist = dist;
@@ -146,9 +158,35 @@ class LshForest {
     }
   }
 
- private:
+ protected:
   std::list<LSH<H>> lshs_;
 };
 
+template<int H>
+class ManagedLshForest : public LshForest<H> {
+ public:
+ 
+  ~ManagedLshForest() {
+    for (auto feat : feats_) 
+      delete feat;
+  }
+
+  /// overwrite the insert via pointer to make a copy of the input
+  void Insert(const Brief* feat) {
+    for (auto& lsh : this->lshs_) {
+      feats_.push_back(new Brief(*feat));
+      lsh.Insert(feats_.back());
+    }
+  }
+
+  void Insert(const Image<Brief>& feats) {
+    for (size_t i=0; i<feats.Area(); ++i) {
+      Insert(&feats[i]);
+    }
+  }
+
+ protected:
+  std::vector<Brief*> feats_;
+};
 
 }

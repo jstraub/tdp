@@ -62,6 +62,23 @@ namespace tdp {
     return minId;
   }
 
+  int ClosestBrief(const Brief& a, const std::vector<Brief*>& bs, int* dist) {
+    int minId = -1;
+    int minDist = 257;
+    if (a.IsValid()) {
+      for (int i=0; i<bs.size(); ++i) {
+        if (bs[i]->IsValid()) {
+          int dist = Distance(a.desc_, bs[i]->desc_);
+          if (dist < minDist) {
+            minDist = dist;
+            minId = i;
+          }
+        }
+    }
+    if (dist) *dist = minDist;
+    return minId;
+  }
+
   #include <tdp/features/orbRaw.h>
   bool ExtractOrb(const Image<uint8_t>& patch, Vector8uda& desc, 
       int orientation) {
