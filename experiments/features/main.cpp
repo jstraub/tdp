@@ -52,7 +52,7 @@ struct BinaryKF {
   ManagedHostPyramid<uint8_t,3> pyrGrey;
   ManagedHostPyramid<Vector3fda,3> pyrPc;
   ManagedHostImage<Brief> feats;
-  LshForest<14> lsh;
+  ManagedLshForest<14> lsh;
 
 };
 
@@ -71,13 +71,13 @@ void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
     assoc.reserve(kfA.feats.w_);
     featB.reserve(kfA.feats.w_);
     for (size_t j=0; j<kfA.feats.w_; ++j) {
-      Brief feat;
+      Brief* feat;
       int dist;
       if (kfB.lsh.SearchBest(kfA.feats(j,1),dist,feat)
           && dist < briefMatchThr) {
         std::cout << dist << " ";
         assoc.push_back(j);
-        featB.push_back(feat.p_c_);
+        featB.push_back(feat->p_c_);
       }
     }
     TOCK("MatchKFs");

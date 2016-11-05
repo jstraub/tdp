@@ -4,7 +4,7 @@
 using namespace tdp;
 
 TEST(lsh, init) {
-  LSH<14> lsh;
+  ManagedLshForest<14> lsh(1);
   lsh.PrintHash();
 
   Brief brief, query;
@@ -22,10 +22,9 @@ TEST(lsh, init) {
   }
   lsh.PrintFillStatus();
   for (auto& query : queries) {
-    brief.desc_ = Vector8uda::Random();
-    brief.frame_ = 1;
+    Brief* res;
     int dist = 0;
-    if(lsh.SearchBest(query,dist,brief)) {
+    if(lsh.SearchBest(query,dist,res)) {
       std::cout << "found " << dist << std::endl;
     } else {
       std::cout << "miss" << std::endl;
@@ -34,7 +33,7 @@ TEST(lsh, init) {
 }
 
 TEST(lshforest, init) {
-  LshForest<14> lsh(11);
+  ManagedLshForest<14> lsh(11);
   lsh.PrintHashs();
 
   Brief brief, query;
@@ -52,10 +51,9 @@ TEST(lshforest, init) {
   }
   lsh.PrintFillStatus();
   for (auto& query : queries) {
-    brief.desc_ = Vector8uda::Random();
-    brief.frame_ = 1;
+    Brief* res;
     int dist = 0;
-    if(lsh.SearchBest(query,dist,brief)) {
+    if(lsh.SearchBest(query,dist,res)) {
       std::cout << "found " << dist << std::endl;
     } else {
       std::cout << "miss" << std::endl;
