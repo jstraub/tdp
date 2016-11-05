@@ -21,6 +21,9 @@ class LSH {
     std::random_shuffle(ids.begin(), ids.end());
     hashIds_.assign(ids.begin(), ids.begin()+H);
     std::sort(hashIds_.begin(), hashIds_.end());
+    // make double sure that these are all null
+    for (size_t i=0; i<(1<<H); ++i) 
+      store_[i] = nullptr;
   }
 
   ~LSH() {
@@ -33,7 +36,9 @@ class LSH {
     if (feat->IsValid()) {
       const uint32_t hash = Hash(feat->desc_);
       if (!store_[hash]) {
+        std::cout << hash << " does not exist: " << store_[hash];
         store_[hash] = new std::vector<Brief*>();
+        std::cout << " added " << store_[hash] << std::endl;
       }
       if (hash >= 1<<H) 
         std::cout << "hash to big: " << hash << " " << (1<<H) << std::endl;
