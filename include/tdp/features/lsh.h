@@ -47,6 +47,7 @@ class LSH {
 
   const std::vector<Brief>& SearchBucket(const Brief& feat) const {
     const uint32_t hash = Hash(feat.desc_);
+    assert(hash < (1<<H));
     return store_[hash];
   }
 

@@ -213,6 +213,16 @@ int main( int argc, char* argv[] )
   viewClosures.AddDisplay(viewClosuresImg4);
   tdp::QuickView viewClosuresImg5(w/4,h/4);
   viewClosures.AddDisplay(viewClosuresImg5);
+  tdp::QuickView viewClosuresImg6(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg6);
+  tdp::QuickView viewClosuresImg7(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg7);
+  tdp::QuickView viewClosuresImg8(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg8);
+  tdp::QuickView viewClosuresImg9(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg9);
+  tdp::QuickView viewClosuresImg10(w/4,h/4);
+  viewClosures.AddDisplay(viewClosuresImg10);
   gui.container().AddDisplay(viewClosures);
 
   pangolin::View& plotters = pangolin::Display("plotters");
@@ -289,7 +299,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runICP("ui.run ICP", true, true);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.03,0.01,1.0);
-  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.15,0.1,1.0);
+  pangolin::Var<float> ransacInlierPercThr("ui.inlier % thr",0.1,0.01,0.3);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> showKf("ui.showKf",0,0,1);
@@ -327,6 +337,7 @@ int main( int argc, char* argv[] )
   float dHkf = 0.;
 
   std::vector<tdp::BinaryKF> kfs;
+  kfs.reserve(300);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -347,7 +358,7 @@ int main( int argc, char* argv[] )
       ns_m.CopyFrom(ns_c, cudaMemcpyDeviceToDevice);
       updatedEntropy = true;
 
-      kfs.emplace_back(wc,hc);
+      kfs.emplace_back(wOrig,hOrig);
       kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
       kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
       kfs.back().lsh.Insert(descsA);
@@ -622,7 +633,6 @@ int main( int argc, char* argv[] )
     if(viewClosures.IsShown() && kfs.size() > 0) {
       std::cout << "setting loop closure images" << std::endl;
       viewClosuresImg0.SetImage(kfs[showKf].pyrGrey.GetImage(2));
-      viewClosuresImg5.SetImage(pyrGrey.GetImage(2));
       size_t i=0;
       for (auto& loop : loopClosures) {
         if (loop.first == showKf) {
@@ -641,6 +651,21 @@ int main( int argc, char* argv[] )
               break;
             case 4:
               viewClosuresImg5.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 5:
+              viewClosuresImg6.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 6:
+              viewClosuresImg7.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 7:
+              viewClosuresImg8.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 8:
+              viewClosuresImg9.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              break;
+            case 9:
+              viewClosuresImg10.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
               break;
             default:
               std::cout << "not enough displays" << std::endl;
