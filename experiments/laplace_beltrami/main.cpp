@@ -360,6 +360,7 @@ void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L
         ann.Search(pc[i], knn, eps, nnIds, dists);
         alpha = dists.maxCoeff();
         for (int k=0; k<knn; ++k){
+            //todo: changes coeffRef to insert (seg fault)
             if (i==nnIds(k)) {
                 L.insert(i,nnIds(k)) = (-dists.array()/alpha).exp().sum();
             } else {
