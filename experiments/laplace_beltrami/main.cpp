@@ -60,7 +60,7 @@ float f_etoz(const tdp::Vector3fda& x){
 }
 
 tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds){
-  assert(pc.rows() == 1);
+  assert(pc.h_ == 1);
   tdp::Vector3fda mean(0,0,0);
   for (size_t i=0; i<nnIds.rows(); ++i){
       mean +=  pc(nnIds(i),0);
@@ -71,7 +71,7 @@ tdp::Vector3fda getMean(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::Vect
 
 tdp::Matrix3fda getCovariance(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::VectorXi& nnIds){
   // get covariance of the point cloud assuming no nan and pc of (nrows,1) size.
-  assert (pc.rows() == 1);
+  assert (pc.h_ == 1);
   tdp::Matrix3fda cov;
   cov.setZero(3,3);
 
@@ -353,22 +353,18 @@ void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L
            float alpha){
     assert(L.rows()==pc.Area() && L.cols()==pc.Area());
 
-    Eigen::VectorXi nnIds(knn);
-    Eigen::VectorXf dists(knn);
+    Eigen::VectorXi nnIds(knn,1);
+    Eigen::VectorXf dists(knn,1);
     L.reserve(Eigen::VectorXi::Constant(pc.Area(),2*knn)); //todo: better memory init
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
-
         alpha = dists.maxCoeff();
         for (int k=0; k<knn; ++k){
             if (i==nnIds(k)) {
-                L.insert(i,nnIds(k)) = (-1./alpha*dists.array()).exp().sum();
+                L.insert(i,nnIds(k)) = (-dists.array()/alpha).exp().sum();
             } else {
                 L.insert(i,nnIds(k)) = -exp(-dists(k)/alpha);
             }
-//            if (L.coeffRef(nnIds(k),i) <1e-10){
-//                L.insert(nnIds(k),i) = exp(-dists(k)/alpha);
-//            }
         }
         // show the current row
         // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
@@ -379,8 +375,6 @@ void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L
 //        }
     }
 }
-
-
 
 void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>& L,
                            Eigen::VectorXf& evector, int idEv){
@@ -594,7 +588,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
   // variables for KNN
-  pangolin::Var<int> knn("ui.knn", 0,1,100);
+  pangolin::Var<int> knn("ui.knn",10,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
 
   pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
