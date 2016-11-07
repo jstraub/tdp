@@ -8,7 +8,7 @@ TEST(cublas, dot) {
   const int N = 100000;
   tdp::ManagedHostImage<float> ah(N);
   tdp::ManagedHostImage<float> bh(N);
-  tdp::ManagedHostImage<float> dot(1);
+//  tdp::ManagedHostImage<float> dot(1);
   tdp::ManagedDeviceImage<float> a(N);
   tdp::ManagedDeviceImage<float> b(N);
   tdp::ManagedDeviceImage<float> dotd(1);
@@ -23,20 +23,22 @@ TEST(cublas, dot) {
 
   tdp::Timer t0;
 
+  float dot;
   for (size_t it=0; it<10; ++it) {
     doth = 0.f;
     for(size_t i=0; i<N; ++ i) {
       doth += ah[i]*bh[i];
     }
     t0.toctic("CPU dot dt");
-    cublasSdot(tdp::CuBlas::Instance()->handle_, N, a.ptr_, 1, b.ptr_, 1,
-        dotd.ptr_);
+//    cublasSdot(tdp::CuBlas::Instance()->handle_, N, a.ptr_, 1, b.ptr_, 1,
+//        dotd.ptr_);
+    dot = tdp::CuBlas::dot(a,b);
     t0.toctic("GPU dot dt");
   }
 
-  dot.CopyFrom(dotd, cudaMemcpyDeviceToHost);
+//  dot.CopyFrom(dotd, cudaMemcpyDeviceToHost);
   std::cout << "CPU dot " << doth << std::endl;
-  std::cout << "GPU dot " << dot[0] << std::endl;
+  std::cout << "GPU dot " << dot << std::endl;
 }
 
 int main(int argc, char **argv) {
