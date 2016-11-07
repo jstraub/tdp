@@ -48,6 +48,10 @@ if(CUDA_FOUND)
   cuda_add_library(tdp SHARED
     ${SRCS} ${CU_SRCS}
     )
+  list(APPEND LIBS 
+    ${CUDA_LIBRARIES}
+    ${CUDA_CUBLAS_LIBRARIES}
+    )
 else() 
   add_library(tdp SHARED
     ${SRCS}
