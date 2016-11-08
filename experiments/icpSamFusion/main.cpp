@@ -653,7 +653,7 @@ int main( int argc, char* argv[] )
       resetTSDF = true;
       runSlamFusion = true;
       recomputeBoundingBox = true;
-      trackClosestKf = false;
+      trackClosestKf = true;
     }
 
     if (pangolin::Pushed(recomputeBoundingBox)) {
