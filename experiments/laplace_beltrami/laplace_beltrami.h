@@ -1,6 +1,8 @@
 #ifndef LAPLACE_BELTRAMI_H
 #define LAPLACE_BELTRAMI_H
 
+#include <pangolin/gl/gldraw.h>
+
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
 #include <tdp/manifold/SE3.h>
@@ -70,6 +72,18 @@ Eigen::VectorXf getLaplacianEvector(const tdp::Image<tdp::Vector3fda>& pc,
 
 Eigen::MatrixXf getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
                                  const Eigen::SparseMatrix<float>& L);
+
+
+
+std::vector<tdp::Vector3fda> getLevelSetMeans(const tdp::Image<tdp::Vector3fda>& pc,
+                                              const Eigen::VectorXf& evector,
+                                              int nBins);
+namespace laplace{
+    inline void glDrawLine( const tdp::Vector3fda& p1, const tdp::Vector3fda& p2 )
+    {
+        pangolin::glDrawLine((GLfloat)p1(0), (GLfloat)p1(1), (GLfloat)p1(2), (GLfloat)p2(0), (GLfloat)p2(1), (GLfloat)p2(2));
+    }
+}
 
 //tests
 void test_getCylinder();

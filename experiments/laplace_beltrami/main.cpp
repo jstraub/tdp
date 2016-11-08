@@ -422,49 +422,40 @@ Eigen::MatrixXf getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
 
 }
 
-std::vector<float> getLevelSetMeans(const Eigen::VectorXf& evector, int nBins){
-
-    std::vector<std::vector<float> > bins;
-    bins.reserve(nBins);
-    //Initialize it with empty vectors
-    for (int i=0; i<nBins; ++i){
-        std::vector<float> row;
-        bins.push_back(row);
-    }
+std::vector<tdp::Vector3fda> getLevelSetMeans(const tdp::Image<tdp::Vector3fda>& pc,
+                                             const Eigen::VectorXf& evector,
+                                             int nBins){
 
     float minV, maxV, step;
     minV = evector.minCoeff();
     maxV = evector.maxCoeff();
     step = (maxV - minV)/nBins;
     //std::cout << "minV, maxV, step: " << minV << ", " << maxV << ", " << step << std::endl;
+    std::vector<tdp::Vector3fda> bins;
+    bins.reserve(nBins);
+    //Initialize bins with zero vectors
+    for (int i=0; i<nBins; ++i){
+        bins.push_back(tdp::Vector3fda(0,0,0));
+    }
+
+    std::vector<int> counts(nBins, 0);
+
     for (int i=0; i<evector.rows(); ++i){
         int bId = std::floor((evector(i)-minV)/step);
         if (evector(i)==maxV){
             bId -= 1;
         }
-        //std::cout << "curr i: " << i << ", bid: " << bId <<std::endl;
-        bins[bId].push_back(evector(i));
+        bins[bId] += pc[i];
+        counts[bId] += 1;
     }
 
     for (int i=0; i<bins.size(); ++i){
-      //std::cout << "\nrow i: " << i << std::endl;
-        for (int c=0; c<bins[i].size(); ++c){
-          //std::cout << bins[i][c] << ", ";
+        if(counts[i]!=0){
+            bins[i] /= (float)counts[i];
         }
     }
 
-    //Get the means of each bin
-    std::vector<float> means;
-    means.reserve(nBins);
-    for (int i=0; i<nBins; ++i){
-        float mean = 0;
-        for (int j=0; j<bins[i].size(); ++j){
-            mean+=bins[i][j];
-        }\
-        mean /=bins[i].size();
-        means.push_back(mean);
-    }
-    return means;
+    return bins;
 }
 
 //tests
@@ -581,12 +572,12 @@ void test_Laplacian(){
 
     //Test getLevelSets
     int nBins = 2;
-    std::vector<float> means;
-    means = getLevelSetMeans(evector, nBins);
-//    std::cout << "means----" << std::endl;
-//    for (int i = 0; i< means.size(); ++i){
-//        std::cout << means[i] << std::endl;
-//    }
+    std::vector<tdp::Vector3fda> means;
+    means = getLevelSetMeans(pc, evector, nBins);
+    std::cout << "means----" << std::endl;
+    for (int i = 0; i< means.size(); ++i){
+        std::cout << means[i] << std::endl;
+    }
 }
 
 void test_getCylinder(){
@@ -597,8 +588,8 @@ void test_getCylinder(){
 //end of test
 
 int main( int argc, char* argv[] ){
-//    test_Laplacian();
-//    return 1;
+    //test_Laplacian();
+   //return 1;
   // load pc and normal from the input paths
   tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
@@ -656,11 +647,11 @@ int main( int argc, char* argv[] ){
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
 
   pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
-  pangolin::Var<float> alpha("ui. alpha", 0.01, 0.001, 0.1); //variance of rbf kernel
+  pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
   // viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
-  pangolin::Var<int>nBins("ui. nBins", 100, 100,300);
+  pangolin::Var<int>nBins("ui. nBins", 50, 10,1000);
   // sampling
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
 
@@ -672,8 +663,8 @@ int main( int argc, char* argv[] ){
   Eigen::VectorXf evector(pc.Area(),1);
   Eigen::MatrixXf curvature(pc.Area(),3);
 
-  std::vector<float> means;
-  //means.reserve(nBins);
+  std::vector<tdp::Vector3fda> means;
+  means.reserve(nBins);
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -682,7 +673,7 @@ int main( int argc, char* argv[] ){
     glColor3f(1.0f, 1.0f, 1.0f);
 
     if (pangolin::Pushed(runSkinning) || knn.GuiChanged() || upsample.GuiChanged()
-            || idEv.GuiChanged() || alpha.GuiChanged()) {
+            || idEv.GuiChanged() || alpha.GuiChanged() || nBins.GuiChanged()) {
         //  processing of PC for skinning
       std::cout << "Running skinning..." << std::endl;
 
@@ -721,7 +712,13 @@ int main( int argc, char* argv[] ){
       //std::cout << "meanCurvature of a row: " << meanCurvature.transpose() << std::endl;
 
       // Get the means of the level sets
-      means = getLevelSetMeans(evector, nBins);
+      means = getLevelSetMeans(pc, evector, nBins);
+      for (int i=0; i<means.size(); ++i){
+          if(means[i](0)>1 || means[i](1) >1 || means[i](2)>2){
+              std::cout << "OH NO! this should never be printed!: \n" << means[i](0) << std::endl;
+          }
+      }
+      std::cout << std::endl;
 
 
       valuebo.Reinitialise(pangolin::GlArrayBuffer, evector.rows() ,
@@ -737,9 +734,9 @@ int main( int argc, char* argv[] ){
 //      getSamples(T_wls,thetas,zSamples,upsample);
 
       // put the estimated points to GLBuffer vboM
-      vboM.Reinitialise(pangolin::GlArrayBuffer, means.size() , GL_FLOAT, 1, GL_DYNAMIC_DRAW );
-      vboM.Upload(&means[0], sizeof(float)*means.size(), 0);
-      std::cout << "CENTERS drown" << std::endl;
+      //vboM.Reinitialise(pangolin::GlArrayBuffer, means.size() , GL_FLOAT, 1, GL_DYNAMIC_DRAW );
+      //vboM.Upload(&means[0], sizeof(float)*means.size(), 0);
+      // Draw lines connecting the centers
 
       std::cout << "<--DONE skinning-->" << std::endl;
     }
@@ -761,9 +758,18 @@ int main( int argc, char* argv[] ){
       glColor3f(1.0f, 1.0f, 0.0f);
       pangolin::RenderVbo(vboF);
 
-      glPointSize(5.);
-      glColor3f(.5f, .5f, .5f);
-      pangolin::RenderVbo(vboM);
+      //glPointSize(10.);
+      //glColor3f(.5f, 1.f, .5f);
+      //pangolin::RenderVbo(vboM);
+
+      glColor3f(.3,1.,.125);
+      glLineWidth(2);
+      tdp::Vector3fda m, m_prev;
+      for (size_t i=1; i<means.size(); ++i){
+          m_prev = means[i-1];
+          m = means[i];
+          laplace::glDrawLine(m_prev, m);
+      }
 
       glPointSize(1.);
       // draw the first arm pc
