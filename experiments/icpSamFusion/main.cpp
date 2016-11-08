@@ -193,7 +193,7 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
   plotters.AddDisplay(plotdH);
   pangolin::DataLog logEntropy;
-  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -70.f,-40.f, .1f, 0.1f);
+  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -80.f,-40.f, .1f, 0.1f);
   plotters.AddDisplay(plotH);
   gui.container().AddDisplay(plotters);
 
@@ -310,7 +310,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpRgb("ui.run ICP RGB", false, true);
+  pangolin::Var<bool>  icpRgb("ui.run ICP RGB", true, true);
 
   pangolin::Var<bool> useOptimizedPoses("ui.use opt poses", true,true);
   pangolin::Var<bool> tryLoopClose("ui.loop close", true,true);

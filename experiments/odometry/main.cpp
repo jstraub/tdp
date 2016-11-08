@@ -274,7 +274,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",1.,0.,1.);
+  pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",.1,0.,1.);
 
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 

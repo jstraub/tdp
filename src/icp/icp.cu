@@ -234,7 +234,7 @@ __global__ void KernelICPStep(
 //        bottom = n_mi;
         // right multiplication of error
         top = (pc_oi).cross(T_mo.rotation().Inverse()*n_mi);
-        bottom = n_mi.array();
+        bottom = n_mi;
         ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
         Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
         int k=0;
@@ -385,13 +385,21 @@ __global__ void KernelICPStep(
         Eigen::Map<Vector6fda> J(&(abI[0]));
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_o_in_m);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << -SO3mat<float>::invVee(pc_o_in_m), Eigen::Matrix3f::Identity();
+        // left multiplication
+//        Jse3 << -SO3mat<float>::invVee(pc_o_in_m), Eigen::Matrix3f::Identity();
+        // right multiplication
+        Jse3 << -(T_mo.rotation().matrix()*SO3mat<float>::invVee(pc_oi)), 
+             Eigen::Matrix3f::Identity();
         J = Jse3.transpose() * Jpi.transpose() * gradI_m;
         abI[6] = -I_m + I_o;
         float ab[7];      
         Eigen::Map<Vector3fda> top(&(ab[0]));
         Eigen::Map<Vector3fda> bottom(&(ab[3]));
-        top = (pc_o_in_m).cross(n_mi);
+        // left multiplication
+//        top = (pc_o_in_m).cross(n_mi);
+//        bottom = n_mi;
+        // right multiplication
+        top = (pc_oi).cross(T_mo.rotation().Inverse()*n_mi);
         bottom = n_mi;
         ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
         Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
