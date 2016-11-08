@@ -87,7 +87,7 @@ tdp::ManagedHostImage<tdp::Vector3fda> GetSimplePc(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc(7,1);
     for (size_t i=0; i<pc.Area(); ++i){
         tdp::Vector3fda pt;
-        pt << i,i,i;
+        pt << i,0,0;
         pc(i,0) = pt;
     }
     return pc;
@@ -348,23 +348,27 @@ Eigen::VectorXf real(Eigen::VectorXcf vec_c){
     return vec_r;
 }
 
-void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L,
-           tdp::ANN& ann, const int knn, const float eps,
-           float alpha){
-    assert(L.rows()==pc.Area() && L.cols()==pc.Area());
+Eigen::SparseMatrix<float> getLaplacian(tdp::Image<tdp::Vector3fda>& pc,
+                                        tdp::ANN& ann,
+                                        const int knn,
+                                        const float eps,
+                                        float alpha){
 
+    Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
     Eigen::VectorXi nnIds(knn,1);
     Eigen::VectorXf dists(knn,1);
+    float row_sum;
     L.reserve(Eigen::VectorXi::Constant(pc.Area(),2*knn)); //todo: better memory init
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
         alpha = dists.maxCoeff();
+        row_sum = (-dists.array()/alpha).exp().sum();
         for (int k=0; k<knn; ++k){
             //todo: changes coeffRef to insert (seg fault)
             if (i==nnIds(k)) {
-                L.insert(i,nnIds(k)) = (-dists.array()/alpha).exp().sum();
+                L.insert(i,nnIds(k)) = 1;//(-dists.array()/alpha).exp().sum();
             } else {
-                L.insert(i,nnIds(k)) = -exp(-dists(k)/alpha);
+                L.insert(i,nnIds(k)) = -(exp(-dists(k)/alpha)/row_sum);
             }
         }
         // show the current row
@@ -375,17 +379,19 @@ void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L
 //            std::cout << "val:" << it.value() <<std::endl;
 //        }
     }
+    return L;
 }
 
-void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>& L,
-                           Eigen::VectorXf& evector, int idEv){
+Eigen::VectorXf getLaplacianEvector(const tdp::Image<tdp::Vector3fda>& pc,
+                                    const Eigen::SparseMatrix<float>& L,
+                                    int idEv){
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
     // Retrieve results
     Eigen::VectorXcf evalues;
     Eigen::VectorXcf evector_complex;
-    // Construct eigen solver object, requesting the largest three eigenvalues
+    // Construct eigen solver object, requesting the largest idEv number of eigenvalues
     Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
             Spectra::SparseGenMatProd<float> > eigs(&op, idEv+1, 2*(idEv+1)+1);
 
@@ -396,23 +402,69 @@ void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMa
     if(eigs.info() == Spectra::SUCCESSFUL) {
         evalues = eigs.eigenvalues();
         evector_complex = eigs.eigenvectors().col(idEv);
-        evector = (evector_complex.real());
-        std::cout << "Eigenvalues found:\n" << evalues << std::endl; //check first should be zero
+        std::cout << "Eigenvalues found:\n" << evalues.real().transpose() << std::endl; //check first should be zero
     } else{
         std::cout << "failed" << std::endl;
     }
+    return evector_complex.real();
 }
 
 
-void getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc, const Eigen::SparseMatrix<float>&L,
-                      Eigen::MatrixXf curvature){
+Eigen::MatrixXf getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
+                                 const Eigen::SparseMatrix<float>& L){
     Eigen::MatrixXf pc_vec(pc.Area(),3);
     for (int i=0; i<pc.Area(); ++i){
         pc_vec(i,0) = pc[i](0); //x coordinate
         pc_vec(i,1) = pc[i](1); //y coordinate
         pc_vec(i,2) = pc[i](2);
     }
-    curvature = L*pc_vec;
+    return (Eigen::MatrixXf)L*pc_vec;//dense matrix
+
+}
+
+std::vector<float> getLevelSetMeans(const Eigen::VectorXf& evector, int nBins){
+
+    std::vector<std::vector<float> > bins;
+    bins.reserve(nBins);
+    //Initialize it with empty vectors
+    for (int i=0; i<nBins; ++i){
+        std::vector<float> row;
+        bins.push_back(row);
+    }
+
+    float minV, maxV, step;
+    minV = evector.minCoeff();
+    maxV = evector.maxCoeff();
+    step = (maxV - minV)/nBins;
+    //std::cout << "minV, maxV, step: " << minV << ", " << maxV << ", " << step << std::endl;
+    for (int i=0; i<evector.rows(); ++i){
+        int bId = std::floor((evector(i)-minV)/step);
+        if (evector(i)==maxV){
+            bId -= 1;
+        }
+        //std::cout << "curr i: " << i << ", bid: " << bId <<std::endl;
+        bins[bId].push_back(evector(i));
+    }
+
+    for (int i=0; i<bins.size(); ++i){
+      //std::cout << "\nrow i: " << i << std::endl;
+        for (int c=0; c<bins[i].size(); ++c){
+          //std::cout << bins[i][c] << ", ";
+        }
+    }
+
+    //Get the means of each bin
+    std::vector<float> means;
+    means.reserve(nBins);
+    for (int i=0; i<nBins; ++i){
+        float mean = 0;
+        for (int j=0; j<bins[i].size(); ++j){
+            mean+=bins[i][j];
+        }\
+        mean /=bins[i].size();
+        means.push_back(mean);
+    }
+    return means;
 }
 
 //tests
@@ -508,6 +560,7 @@ void test_real(){
 
 void test_Laplacian(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
 
@@ -515,15 +568,25 @@ void test_Laplacian(){
     Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
     float alpha = 1;
     int idEv = 0; int knn=5; float eps=1e-6;
-    getLaplacian(pc,L,ann,knn,eps,alpha);
-    //getLaplacianEvector(pc, L, evector, idEv);
-    //std::cout << evector << std::endl;
+    L = getLaplacian(pc,ann,knn,eps,alpha);
+    std::cout << "L: \n" << L << std::endl;
+    evector = getLaplacianEvector(pc, L, idEv);
+    std::cout << "evector: \n" << evector.transpose() << std::endl;
 
     //Test meancurvature
-    Eigen::VectorXf curvature(pc.Area());
-    getMeanCurvature(pc, L, curvature);
-    //std::cout << "mean curvature: \n" << curvature <<std::endl;
+    Eigen::MatrixXf curvature(pc.Area(),3);
+    curvature = getMeanCurvature(pc, L);
+    std::cout << "mean curvature: \n" << curvature <<std::endl;
     //should be all zeros for a linear pc
+
+    //Test getLevelSets
+    int nBins = 2;
+    std::vector<float> means;
+    means = getLevelSetMeans(evector, nBins);
+//    std::cout << "means----" << std::endl;
+//    for (int i = 0; i< means.size(); ++i){
+//        std::cout << means[i] << std::endl;
+//    }
 }
 
 void test_getCylinder(){
@@ -534,8 +597,8 @@ void test_getCylinder(){
 //end of test
 
 int main( int argc, char* argv[] ){
-    //test_Laplacian();
-    //return 1;
+//    test_Laplacian();
+//    return 1;
   // load pc and normal from the input paths
   tdp::ManagedHostImage<tdp::Vector3fda> pc(10000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns(10000,1);
@@ -580,7 +643,7 @@ int main( int argc, char* argv[] ){
   container.AddDisplay(viewN);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vboZ, vboS, vboF, valuebo;
+  pangolin::GlBuffer vbo, vboM, vboS, vboF, valuebo;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
 
@@ -589,7 +652,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
   pangolin::Var<bool> showBases("ui.show bases", true, true);
   // variables for KNN
-  pangolin::Var<int> knn("ui.knn",10,1,100);
+  pangolin::Var<int> knn("ui.knn",50,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
 
   pangolin::Var<int> idEv("ui.id EV", 1, 0, 10);
@@ -597,6 +660,7 @@ int main( int argc, char* argv[] ){
   // viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
+  pangolin::Var<int>nBins("ui. nBins", 100, 100,300);
   // sampling
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
 
@@ -607,6 +671,9 @@ int main( int argc, char* argv[] ){
   Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
   Eigen::VectorXf evector(pc.Area(),1);
   Eigen::MatrixXf curvature(pc.Area(),3);
+
+  std::vector<float> means;
+  //means.reserve(nBins);
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -640,13 +707,23 @@ int main( int argc, char* argv[] ){
       //vboF.Upload(fEstimates.ptr_, sizeof(tdp::Vector3fda) * fEstimates.Area(), 0);
 
       // get Laplacian operator and its eigenvectors
-      getLaplacian(pc,L,ann, knn, eps, alpha);
-      getLaplacianEvector(pc, L, evector, idEv);
-      // get Mean curvature
-      getMeanCurvature(pc, L, curvature);
-      for (int i=0; i<(int)curvature.rows(); i+= 100){
-              std::cout << "i: " << i << ", " <<curvature.row(i) << std::endl;
-      }
+      L = getLaplacian(pc, ann, knn, eps, alpha);
+      evector = getLaplacianEvector(pc, L, idEv);
+      //curvature = getMeanCurvature(pc, L);
+//      // debug getMeanCurvature
+//      for (int i=0; i<(int)curvature.rows(); ++i){
+//          if(curvature.row(i)(0)>1e-7 && curvature.row(i)(1)>1e-7 && curvature.row(i)(2)>1e-7){
+//            std::cout << "i: " << i << ", " <<curvature.row(i) << std::endl;
+//          }
+//      }
+      //Decompose curvature to get normals and mean curvature value
+      //Eigen::VectorXf meanCurvature = curvature.rowwise().norm();
+      //std::cout << "meanCurvature of a row: " << meanCurvature.transpose() << std::endl;
+
+      // Get the means of the level sets
+      means = getLevelSetMeans(evector, nBins);
+
+
       valuebo.Reinitialise(pangolin::GlArrayBuffer, evector.rows() ,
           GL_FLOAT,1, GL_DYNAMIC_DRAW);
       // TODO: upload values to visualize here
@@ -660,9 +737,9 @@ int main( int argc, char* argv[] ){
 //      getSamples(T_wls,thetas,zSamples,upsample);
 
       // put the estimated points to GLBuffer vboM
-//      vboS.Reinitialise(pangolin::GlArrayBuffer, zSamples.Area() , GL_FLOAT, 3, GL_DYNAMIC_DRAW ); //will later be knn*pc.Area()
-//      vboS.Upload(zSamples.ptr_, sizeof(tdp::Vector3fda) * zSamples.Area(), 0);
-
+      vboM.Reinitialise(pangolin::GlArrayBuffer, means.size() , GL_FLOAT, 1, GL_DYNAMIC_DRAW );
+      vboM.Upload(&means[0], sizeof(float)*means.size(), 0);
+      std::cout << "CENTERS drown" << std::endl;
 
       std::cout << "<--DONE skinning-->" << std::endl;
     }
@@ -684,9 +761,9 @@ int main( int argc, char* argv[] ){
       glColor3f(1.0f, 1.0f, 0.0f);
       pangolin::RenderVbo(vboF);
 
-//      glPointSize(1.);
-//      glColor3f(0.0f, 1.0f, 1.0f);
-//      pangolin::RenderVbo(vboS);
+      glPointSize(5.);
+      glColor3f(.5f, .5f, .5f);
+      pangolin::RenderVbo(vboM);
 
       glPointSize(1.);
       // draw the first arm pc

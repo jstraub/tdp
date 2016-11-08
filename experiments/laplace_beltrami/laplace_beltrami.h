@@ -1,5 +1,5 @@
-#ifndef SKINNING_H
-#define SKINNING_H
+#ifndef LAPLACE_BELTRAMI_H
+#define LAPLACE_BELTRAMI_H
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
@@ -51,21 +51,25 @@ void getFEstimates(const tdp::Image<tdp::Vector3fda>& pc_w,
 
 void  getSimpleLBEvector(tdp::Image<tdp::Vector3fda>& pc,
                          Eigen::VectorXf& evector_real,
-                         tdp::ANN& ann, const int knn, const float eps,
-                         float alpha, int idEv);
+                         tdp::ANN& ann,
+                         const int knn,
+                         const float eps,
+                         float alpha,
+                         int idEv);
 
-void getLaplacian(tdp::Image<tdp::Vector3fda>& pc, Eigen::SparseMatrix<float>& L,
-           tdp::ANN& ann, const int knn, const float eps,
-           float alpha);
+ Eigen::SparseMatrix<float> getLaplacian(tdp::Image<tdp::Vector3fda>& pc,
+                                         tdp::ANN& ann,
+                                         const int knn,
+                                         const float eps,
+                                         float alpha);
 
-void  getLaplacianEvector(tdp::Image<tdp::Vector3fda>& pc,
-                          const Eigen::SparseMatrix<float>& L,
-                          Eigen::VectorXf& evector, int idEv);
+Eigen::VectorXf getLaplacianEvector(const tdp::Image<tdp::Vector3fda>& pc,
+                                    const Eigen::SparseMatrix<float>& L,
+                                    int idEv);
 
 
-void getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
-                      const Eigen::SparseMatrix<float>&L,
-                      Eigen::MatrixXf curvature);
+Eigen::MatrixXf getMeanCurvature(const tdp::Image<tdp::Vector3fda>& pc,
+                                 const Eigen::SparseMatrix<float>& L);
 
 //tests
 void test_getCylinder();
@@ -77,6 +81,4 @@ void test_getThetas_F();
 void test_Laplacian();
 
 
-
-
-#endif // SKINNING_H
+#endif // LAPLACE_BELTRAMI_H
