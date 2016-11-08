@@ -229,9 +229,12 @@ __global__ void KernelICPStep(
         float ab[7];      
         Eigen::Map<Vector3fda> top(&(ab[0]));
         Eigen::Map<Vector3fda> bottom(&(ab[3]));
-        // as in mp3guy: 
-        top = (pc_o_in_m).cross(n_mi);
-        bottom = n_mi;
+        // as in mp3guy:  (left multiplication of error)
+//        top = (pc_o_in_m).cross(n_mi);
+//        bottom = n_mi;
+        // right multiplication of error
+        top = (pc_oi).cross(T_mo.rotation().Inverse()*n_mi);
+        bottom = n_mi.array();
         ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
         Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
         int k=0;

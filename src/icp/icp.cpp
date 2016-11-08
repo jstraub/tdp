@@ -396,7 +396,7 @@ void ICP::ComputeProjective(
       float kappat = ev.tail<3>().maxCoeff() / ev.tail<3>().minCoeff();
 
       // apply x to the transformation
-      T_mr = SE3f::Exp_(x)*T_mr;
+      T_mr = T_mr * SE3f::Exp_(x);
       if (verbose) {
       std::cout << std::setprecision(2) 
         << std::scientific << "lvl " << lvl << " it " << it 
