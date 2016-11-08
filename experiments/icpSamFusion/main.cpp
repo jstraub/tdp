@@ -48,6 +48,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+
 int main( int argc, char* argv[] )
 {
   std::string input_uri = "openni2://";
@@ -189,8 +190,11 @@ int main( int argc, char* argv[] )
 //  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,0.2f, 0.1f, 0.1f);
 //  plotters.AddDisplay(plotRmse);
   pangolin::DataLog logdH;
-  pangolin::Plotter plotdH(&logdH, -100.f,1.f, 0.f,2.f, .1f, 0.1f);
+  pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
   plotters.AddDisplay(plotdH);
+  pangolin::DataLog logEntropy;
+  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -70.f,-40.f, .1f, 0.1f);
+  plotters.AddDisplay(plotH);
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -333,7 +337,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> rmseChangeThr("ui.dRMSE thr", -0.05,-1.,1.);
   pangolin::Var<float> rmseThr("ui.RMSE thr", 0.11,0.,1.);
   pangolin::Var<float> icpLoopCloseErrThr("ui.err thr",0,-10,0.);
-  pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",1.,0.,1.);
+  pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",0.1,0.,1.);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
 
@@ -392,7 +396,7 @@ int main( int argc, char* argv[] )
 
   tdp::KeyframeSLAM kfSLAM;
   std::vector<tdp::KeyFrame> kfs;
-  std::vector<float> Hs;
+  std::vector<float> logHs;
   std::vector<tdp::SE3f> T_mos;
 
   std::list<std::pair<int,int>> loopClose;
@@ -649,7 +653,7 @@ int main( int argc, char* argv[] )
       resetTSDF = true;
       runSlamFusion = true;
       recomputeBoundingBox = true;
-      trackClosestKf = true;
+      trackClosestKf = false;
     }
 
     if (pangolin::Pushed(recomputeBoundingBox)) {
@@ -839,10 +843,6 @@ int main( int argc, char* argv[] )
 //      Sigma_ac += dSigma_ac;
       Sigma_ac = dSigma_ac;
 
-      // capture the entropy of the transformation right after
-      if (kfs.size() > numKfsPrev)
-        Hs.push_back(log(Sigma_ac.determinant()));
-
     }
 
     if (!runSlamFusion) {
@@ -850,8 +850,20 @@ int main( int argc, char* argv[] )
       float dH = 0.;
       if (kfs.size() > 0) {
         se3 = kfs[idActive].T_wk_.Log(T_mo);
-        dH = log(Sigma_ac.determinant()) / Hs[idActive];
+        float logH = ((Sigma_ac.eigenvalues()).array().log().sum()).real();
+        // capture the entropy of the transformation right after new KF
+        if (kfs.size() > numKfsPrev) {
+          logHs.push_back(logH);
+          numKfsPrev = kfs.size();
+        }
+//        std::cout <<  "idactive: " << idActive 
+//          << " " << logHs.size()
+//          << " : " << numKfsPrev 
+//          << " " << kfs.size() 
+//          << std::endl;
+        dH = logH / logHs[idActive];
         logdH.Log(dH, dEntropyThr);
+        logEntropy.Log(logH, logHs[idActive]);
       }
       if ( (kfs.size() == 0)
           || se3.head<3>().norm()*180./M_PI > keyFrameAngleThresh
@@ -1133,6 +1145,7 @@ int main( int argc, char* argv[] )
     }
 
     plotdH.ScrollView(1,0);
+    plotH.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
