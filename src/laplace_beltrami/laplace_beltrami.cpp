@@ -318,6 +318,38 @@ Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
     return L;
 }
 
+void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
+                          int numEv,
+                          eigen_vector<Eigen::VectorXf>& evectors){
+
+    assert(0<numEv && numEv<=L.rows());
+    // Construct matrix operation object using the wrapper class SparseGenMatProd
+    Spectra::SparseGenMatProd<float> op(L);
+
+    // Retrieve results
+    // Construct eigen solver object, requesting the largest idEv number of eigenvalues
+    Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
+            Spectra::SparseGenMatProd<float> > eigs(&op, numEv, 2*(numEv)+1);
+
+    // Initialize and compute
+    eigs.init();
+    int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
+
+    if(eigs.info() == Spectra::SUCCESSFUL) {
+        for (int i=0; i<numEv; ++i){
+            evectors[i] = eigs.eigenvectors().col(i).real();
+            //std::cout << "i, evec: " << i << ", " << evectors[i].transpose() << std::endl;
+        }
+    } else{
+        std::cout << "<----failed to get laplacian evectors--->" << std::endl;
+    }
+}
+
+inline Eigen::VectorXf getLaplacianEvector(const eigen_vector<Eigen::VectorXf>& evectors,
+                                           int idEv){
+    return evectors[idEv];
+}
+
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
                                     const Eigen::SparseMatrix<float>& L,
                                     int idEv){

@@ -89,20 +89,22 @@ void  getSimpleLBEvector(Image<Vector3fda>& pc,
                          float alpha,
                          int idEv);
 
- Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
+Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
                                          ANN& ann,
                                          const int knn,
                                          const float eps,
                                          float alpha);
 
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
-                                    const Eigen::SparseMatrix<float>& L,
-                                    int idEv);
+                         const Eigen::SparseMatrix<float>& L,
+                         int idEv);
 
+void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
+                          int numEv,
+                          eigen_vector<Eigen::VectorXf>& evectors);
 
 Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
                                  const Eigen::SparseMatrix<float>& L);
-
 
 
 eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
