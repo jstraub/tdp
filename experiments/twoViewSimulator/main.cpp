@@ -134,23 +134,21 @@ int main( int argc, char* argv[] )
       fillB = 0.;
       int it = 0;
       do {
-        Eigen::Matrix<float,6,1> w;
-        w.topRows(3) = Eigen::Vector3f::Random().normalized();
-        w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
-        w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
-        T_gcA = tdp::SE3f::Exp_(w);
-        w.topRows(3) = Eigen::Vector3f::Random().normalized();
-        w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
-        w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
-        T_gcB = tdp::SE3f::Exp_(w);
+        Eigen::Vector3f mean_t(0,0,0);
+        T_gcA = tdp::SE3f::Random(M_PI, mean_t, 0.3);
+        T_gcB = T_gcA* tdp::SE3f::Random(45./180.*M_PI, mean_t, 0.3);
         T_ab = T_gcA.Inverse() * T_gcB;
 
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
             cuN, T_gcA, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+        tdp::TransformPc(T_gcA.Inverse(), cuPc);
+        tdp::TransformPc(T_gcA.rotation().Inverse(), cuN);
         pcA.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         nA.CopyFrom(cuN, cudaMemcpyDeviceToHost);
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
             cuN, T_gcB, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+        tdp::TransformPc(T_gcB.Inverse(), cuPc);
+        tdp::TransformPc(T_gcB.rotation().Inverse(), cuN);
         pcB.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         nB.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
@@ -173,7 +171,10 @@ int main( int argc, char* argv[] )
         fillA /= pcA.Area();
         fillB /= pcB.Area();
 
-        tdp::Overlap(pcA, pcB, T_ab, cam, overlap);
+        float overlapAB, overlapBA;
+        tdp::Overlap(pcA, pcB, T_ab, cam, overlapAB);
+        tdp::Overlap(pcB, pcA, T_ab.Inverse(), cam, overlapBA);
+        overlap = std::min(overlapAB, overlapBA);
 
         std::cout << overlap << " " << fillA << " " << fillB << std::endl;
       } while (it++ < 0 && (overlap < 0.5 || fillA < 0.7 || fillB < 0.7));
@@ -255,12 +256,11 @@ int main( int argc, char* argv[] )
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, (T_wG*T_gcB).matrix(), 0.1f);
 
       glColor3f(1,0,0);
-      pangolin::glSetFrameOfReference((T_wG).matrix());
+      pangolin::glSetFrameOfReference((T_wG*T_gcA).matrix());
       pangolin::RenderVbo(vboA);
       pangolin::glUnsetFrameOfReference();
       glColor3f(0,1,0);
-      pangolin::glSetFrameOfReference((T_wG).matrix());
-      pangolin::RenderVbo(vboB);
+      pangolin::glSetFrameOfReference((T_wG*T_gcB).matrix()); pangolin::RenderVbo(vboB);
       pangolin::glUnsetFrameOfReference();
 
       pangolin::glSetFrameOfReference(T_wG.matrix());
