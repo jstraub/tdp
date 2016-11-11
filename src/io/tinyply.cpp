@@ -108,7 +108,7 @@ void SavePointCloud(
     const std::string& path,
     const Image<Vector3fda>& pc,
     const Image<Vector3fda>& n,
-    std::vector<std::string>& comments) {
+    std::vector<std::string> comments) {
   std::vector<float> verts;
   std::vector<float> norms;
   verts.reserve(pc.Area()*3);

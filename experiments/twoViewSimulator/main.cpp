@@ -15,16 +15,22 @@
 #include <pangolin/image/image_io.h>
 
 #include <tdp/eigen/dense.h>
+#include <tdp/camera/camera.h>
+#include <tdp/camera/photometric.h>
+#include <tdp/data/managed_volume.h>
 #include <tdp/data/managed_image.h>
+#include <tdp/gui/quickView.h>
+#include <tdp/tsdf/tsdf.h>
+
+#include <tdp/gl/shaders.h>
+
+#include <tdp/io/tinyply.h>
+#include <tdp/marching_cubes/marching_cubes.h>
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
-#include <tdp/camera/camera.h>
-#include <tdp/gui/quickView.h>
-#include <tdp/eigen/dense.h>
 #include <tdp/preproc/normals.h>
 
-#include <tdp/gui/gui.hpp>
 
 int main( int argc, char* argv[] )
 {
@@ -97,6 +103,8 @@ int main( int argc, char* argv[] )
 
   tdp::SE3f T_mcA;
   tdp::SE3f T_mcB;
+  tdp::SE3f T_wG;
+  tdp::SE3f T_ab;
 
     float overlap = 0.;
     float fillA = 0.;
@@ -106,9 +114,9 @@ int main( int argc, char* argv[] )
   while(!pangolin::ShouldQuit())
   {
     if (meshVbo.num_elements == 0) {
-      TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
-      tdp::ComputeMesh(TSDF, grid0, dGrid,
-          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
+      tsdf.CopyFrom(cuTsdf, cudaMemcpyDeviceToHost);
+      tdp::ComputeMesh(tsdf, grid0, dGrid,
+          T_wG, meshVbo, meshCbo, meshIbo, 5, 0.);      
     }
 
     if (pangolin::Pushed(nextFrame)) {
@@ -118,7 +126,7 @@ int main( int argc, char* argv[] )
       do {
         T_mcA = tdp::SE3f::Random();
         T_mcB = tdp::SE3f::Random();
-        tdp::SE3f T_ab = T_mcA.Inverse() * T_mcB;
+        T_ab = T_mcA.Inverse() * T_mcB;
 
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
             cuN, T_mcA, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
@@ -130,8 +138,8 @@ int main( int argc, char* argv[] )
         nB.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
         tdp::Overlap(pcA, pcB, T_ab, cam, overlap);
-        for (size_t i=0; i<pcA.Area(); ++i) if (IsValidData(pcA[i])) fillA++;
-        for (size_t i=0; i<pcB.Area(); ++i) if (IsValidData(pcB[i])) fillB++;
+        for (size_t i=0; i<pcA.Area(); ++i) if (tdp::IsValidData(pcA[i])) fillA++;
+        for (size_t i=0; i<pcB.Area(); ++i) if (tdp::IsValidData(pcB[i])) fillB++;
         fillA /= pcA.Area();
         fillB /= pcB.Area();
 
@@ -220,11 +228,6 @@ int main( int argc, char* argv[] )
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
-    // if we are recording
-    if(video.IsRecording()) {
-      pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
-          pangolin::DisplayBase().v.h-14.0f, 7.0f);
-    }
     // finish this frame
     pangolin::FinishFrame();
   }

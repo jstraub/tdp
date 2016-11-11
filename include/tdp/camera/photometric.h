@@ -5,7 +5,7 @@
 
 namespace tdp {
 
-template <int D, class Derived, typename T>
+template <int D, class Derived>
 void Overlap(const Image<Vector3fda>& pcA, 
     const Image<Vector3fda>& pcB, 
     const SE3f& T_ab, 

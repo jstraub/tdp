@@ -37,12 +37,12 @@ int main( int argc, char* argv[] )
   }
 
   // Open Video by URI
-  pangolin::VideoRecordRepeat video(input_uri, output_uri);
+  pangolin::VideoRecordRepeat video(input_uri, "./video.pango");
   const size_t num_streams = video.Streams().size();
 
   if(num_streams == 0) {
     pango_print_error("No video streams from device.\n");
-    return;
+    return 1;
   }
 
   tdp::GUI gui(1200,800,video);
