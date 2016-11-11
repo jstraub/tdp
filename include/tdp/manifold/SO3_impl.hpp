@@ -134,10 +134,16 @@ Eigen::Matrix<T,3,1> SO3<T,Options>::operator*(const Eigen::Matrix<T,3,1>& x) co
 
 template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::Random() {
-  //TODO
-  Eigen::Matrix<T,4,1> w = Eigen::Matrix<T,4,1>::Random(); 
-  w.normalize();
+  Eigen::Matrix<T,4,1> w = Eigen::Matrix<T,4,1>::Random().normalized(); 
   return SO3<T,Options>(Eigen::Quaternion<T,Options>(w(0),w(1),w(2),w(3)));
+}
+template<typename T, int Options>
+SO3<T,Options> SO3<T,Options>::Random(T maxAngle_rad) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<T> unif(0,maxAngle_rad);
+  Eigen::Matrix<T,3,1> axis = Eigen::Matrix<T,3,1>::Random().normalized(); 
+  return SO3<T,Options>::FromAxisAngle(axis, unif(gen));
 }
 
 template<typename T, int Options>

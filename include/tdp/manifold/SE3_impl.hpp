@@ -142,9 +142,21 @@ Eigen::Matrix<T,3,4> SE3<T,Options>::matrix3x4() const {
 }
 
 template<typename T, int Options>
+SE3<T,Options> SE3<T,Options>::Random(T maxAngle_rad, 
+      const Eigen::Matrix<T,3,1,Options>& mean_t, T std_t) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::normal_distribution<T> normal(0,std_t);
+  Eigen::Matrix<T,3,1,Options> t(normal(gen), normal(gen), normal(gen));
+  t += mean_t;
+  return SE3<T,Options>(SO3<T,Options>::Random(maxAngle_rad), t);
+}
+
+template<typename T, int Options>
 std::ostream& operator<<(std::ostream& out, const SE3<T,Options>& se3) {
   out << se3.matrix3x4();
   return out;
 }
+
 
 }

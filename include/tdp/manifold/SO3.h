@@ -81,6 +81,7 @@ class SO3 : Manifold<T,3> {
   static Eigen::Matrix<T,3,1,Options> Log_(const SO3<T,Options>& R);
 
   static SO3<T,Options> Random();
+  static SO3<T,Options> Random(T maxAngle_rad);
 
   /// Elementary rotation matrices about the x,y,z axis by angle alpha
   /// [rad]

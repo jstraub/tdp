@@ -88,6 +88,8 @@ class SE3 : Manifold<T,6> {
     return SE3<T,Options>(SO3<T,Options>::Random(),
       Eigen::Matrix<T,3,1,Options>::Random());
   }
+  static SE3<T,Options> Random(T maxAngle_rad, 
+      const Eigen::Matrix<T,3,1,Options>& mean_t, T std_t);
 
  private:
   SO3<T,Options> R_;
