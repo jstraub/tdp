@@ -33,6 +33,7 @@
 #include <pangolin/utils/timer.h>
 
 #include <tdp/io/tinyply.h>
+#include <tdp/gl/shaders.h>
 
 int main( int argc, char* argv[] )
 {
@@ -101,7 +102,7 @@ int main( int argc, char* argv[] )
 
   // Add some variables to GUI
   pangolin::Var<float> wThr("ui.weight thr",1,1,100);
-  pangolin::Var<float> fThr("ui.tsdf value thr",0.2,0.01,0.5);
+  pangolin::Var<float> fThr("ui.tsdf value thr",1.,0.01,0.5);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
@@ -202,33 +203,36 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
 
-    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
-    pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
-    // vbo.Bind();
-    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-    // cbo.Bind();
-    // glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+//    pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
+    if (vbo.IsValid() && cbo.IsValid() && ibo.IsValid()) { 
+      vbo.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      cbo.Bind();
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
 
-    // glEnableVertexAttribArray(0);                                               
-    // glEnableVertexAttribArray(1);                                               
+      pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+      pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+      auto& shader = tdp::Shaders::Instance()->normalMeshShader_;   
+      shader.Bind();
+      shader.SetUniform("P",P);
+      shader.SetUniform("MV",MV);
 
-    // //colorPc.Bind();
-    // //colorPc.SetUniform("P",P);
-    // //colorPc.SetUniform("MV",MV);
+      ibo.Bind();
+      glDrawElements(GL_TRIANGLES, ibo.num_elements*3,
+          ibo.datatype, 0);
+      ibo.Unbind();
 
-    // ibo.Bind();
-    // glDrawElements(GL_TRIANGLES, ibo.num_elements*3, ibo.datatype, 0);
-    // ibo.Unbind();
-
-    // //colorPc.Unbind();
-    // glDisableVertexAttribArray(1);
-    // glDisableVertexAttribArray(0);
-    // cbo.Unbind();
-    // vbo.Unbind();
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      glDisableVertexAttribArray(0);
+      cbo.Unbind();
+      vbo.Unbind();
+    }
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
