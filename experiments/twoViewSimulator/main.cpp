@@ -80,7 +80,13 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
 
-  pangolin::Var<bool> nextFrame("ui.next frame", true, true);
+  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
+  pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
+  pangolin::Var<float> wThr("ui.weight thr",1,1,100);
+  pangolin::Var<float> fThr("ui.tsdf value thr",0.2,0.01,0.5);
+  pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
+  pangolin::Var<bool> nextFrame("ui.next frame", true, false);
+  pangolin::Var<bool> continuousMode("ui.continuous", false, true);
 
   pangolin::GlBuffer meshVbo;
   pangolin::GlBuffer meshCbo;
@@ -101,31 +107,42 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
 
+  tdp::SE3f T_wm;
+  T_wm.translation() = grid0 + 256*dGrid;
+
   tdp::SE3f T_mcA;
   tdp::SE3f T_mcB;
   tdp::SE3f T_wG;
   tdp::SE3f T_ab;
 
-    float overlap = 0.;
-    float fillA = 0.;
-    float fillB = 0.;
+  float overlap = 0.;
+  float fillA = 0.;
+  float fillB = 0.;
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    if (meshVbo.num_elements == 0) {
+    if (meshVbo.num_elements == 0 || pangolin::Pushed(recomputeMesh)) {
       tsdf.CopyFrom(cuTsdf, cudaMemcpyDeviceToHost);
       tdp::ComputeMesh(tsdf, grid0, dGrid,
-          T_wG, meshVbo, meshCbo, meshIbo, 5, 0.);      
+          T_wG, meshVbo, meshCbo, meshIbo, wThr, fThr);      
     }
 
-    if (pangolin::Pushed(nextFrame)) {
+    if (pangolin::Pushed(nextFrame) || continuousMode) {
       overlap = 0.;
       fillA = 0.;
       fillB = 0.;
+      int it = 0;
       do {
-        T_mcA = tdp::SE3f::Random();
-        T_mcB = tdp::SE3f::Random();
+        Eigen::Matrix<float,6,1> w;
+        w.topRows(3) = Eigen::Vector3f::Random().normalized();
+        w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
+        w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
+        T_mcA = T_wm.Exp(w);
+        w.topRows(3) = Eigen::Vector3f::Random().normalized();
+        w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
+        w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
+        T_mcB = T_wm.Exp(w);
         T_ab = T_mcA.Inverse() * T_mcB;
 
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
@@ -137,42 +154,56 @@ int main( int argc, char* argv[] )
         pcB.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         nB.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
-        tdp::Overlap(pcA, pcB, T_ab, cam, overlap);
-        for (size_t i=0; i<pcA.Area(); ++i) if (tdp::IsValidData(pcA[i])) fillA++;
-        for (size_t i=0; i<pcB.Area(); ++i) if (tdp::IsValidData(pcB[i])) fillB++;
+        for (size_t i=0; i<pcA.Area(); ++i) 
+          if (tdp::IsValidData(pcA[i])) 
+            if (dMin < pcA[i](2) && pcA[i](2) < dMax)
+              fillA++;
+            else 
+              pcA[i] << NAN, NAN, NAN;
+        for (size_t i=0; i<pcB.Area(); ++i) 
+          if (tdp::IsValidData(pcB[i]))
+            if (dMin < pcB[i](2) && pcB[i](2) < dMax)
+              fillB++;
+            else 
+              pcB[i] << NAN, NAN, NAN;
         fillA /= pcA.Area();
         fillB /= pcB.Area();
 
+        tdp::Overlap(pcA, pcB, T_ab, cam, overlap);
+
         std::cout << overlap << " " << fillA << " " << fillB << std::endl;
-      } while (overlap < 0.5 || fillA < 0.7 || fillB < 0.7);
+      } while (it++ < 0 && (overlap < 0.5 || fillA < 0.7 || fillB < 0.7));
 
-      std::stringstream pathA;
-      std::stringstream pathB;
-      pathA << output_uri << "/frameA_" << frame;
-      pathB << output_uri << "/frameB_" << frame;
-      tdp::SavePointCloud(pathA.str(), pcA, nA);
-      tdp::SavePointCloud(pathB.str(), pcB, nB);
+      if (overlap >= 0.5 && fillA >= 0.7 && fillB >= 0.7) {
+        std::stringstream pathA;
+        std::stringstream pathB;
+        pathA << output_uri << "/frameA_" << frame << ".ply";
+        pathB << output_uri << "/frameB_" << frame << ".ply";
+        tdp::SavePointCloud(pathA.str(), pcA, nA);
+        tdp::SavePointCloud(pathB.str(), pcB, nB);
 
-      vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
-      vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
+        vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
+        vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
 
-      std::stringstream pathConfig;
-      pathConfig << output_uri << "/config_" << frame;
-      std::ofstream fout(pathConfig.str());
-      fout << pathA.str() << std::endl;
-      fout << pathB.str() << std::endl;
-      fout << "q_abx q_aby q_abz q_abw t_abx t_aby t_abz overlap fillA fillB" << std::endl;
-      fout << T_ab.rotation().vector()(0) << " " 
-        << T_ab.rotation().vector()(1) << " " 
-        << T_ab.rotation().vector()(2) << " " 
-        << T_ab.rotation().vector()(3) << " " 
-        << T_ab.translation()(0) << " "
-        << T_ab.translation()(1) << " "
-        << T_ab.translation()(2) << " " 
-        << overlap << " " << fillA << " " << fillB << std::endl;
-      fout.close();
+        std::stringstream pathConfig;
+        pathConfig << output_uri << "/config_" << frame << ".txt";
+        std::ofstream fout(pathConfig.str());
+        fout << pathA.str() << std::endl;
+        fout << pathB.str() << std::endl;
+        fout << "q_abx q_aby q_abz q_abw t_abx t_aby t_abz overlap fillA fillB" << std::endl;
+        fout << T_ab.rotation().vector()(0) << " " 
+          << T_ab.rotation().vector()(1) << " " 
+          << T_ab.rotation().vector()(2) << " " 
+          << T_ab.rotation().vector()(3) << " " 
+          << T_ab.translation()(0) << " "
+          << T_ab.translation()(1) << " "
+          << T_ab.translation()(2) << " " 
+          << overlap << " " << fillA << " " << fillB << std::endl;
+        fout.close();
 
-      std::cout << pathA.str() << std::endl << pathB.str() << std::endl;
+        std::cout << pathA.str() << std::endl << pathB.str() << std::endl;
+        ++frame;
+      }
     }
 
     // clear the OpenGL render buffers
@@ -219,7 +250,9 @@ int main( int argc, char* argv[] )
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_mcA.matrix(), 0.1f);
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_mcB.matrix(), 0.1f);
 
+      glColor3f(1,0,0);
       pangolin::RenderVbo(vboA);
+      glColor3f(0,1,0);
       pangolin::RenderVbo(vboB);
     }
 
