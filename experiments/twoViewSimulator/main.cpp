@@ -37,14 +37,16 @@ int main( int argc, char* argv[] )
   const std::string input_uri = std::string(argv[1]);
   const std::string output_uri = (argc > 2) ? std::string(argv[2]) : "./";
 
-
-  tdp::Vector3fda grid0, dGrid;
+  tdp::SE3f T_wG;
+  tdp::Vector3fda grid0, dGrid, gridE;
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
-  if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, grid0, dGrid)) {
+  if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, T_wG, grid0, dGrid)) {
 //  if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
     pango_print_error("Unable to load volume");
     return 1;
   }
+  tdp::Vector3fda numGrid(tsdf.w_, tsdf.h_, tsdf.d_);
+  gridE = grid0+(dGrid.array()*numGrid.array()).matrix();
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x" 
     << tsdf.h_ << "x" << tsdf.d_ << std::endl;
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTsdf(tsdf.w_, tsdf.h_, tsdf.d_);
@@ -83,10 +85,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
   pangolin::Var<float> wThr("ui.weight thr",1,1,100);
-  pangolin::Var<float> fThr("ui.tsdf value thr",0.2,0.01,0.5);
+  pangolin::Var<float> fThr("ui.tsdf value thr",1.,0.01,0.5);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> nextFrame("ui.next frame", true, false);
-  pangolin::Var<bool> continuousMode("ui.continuous", false, true);
+  pangolin::Var<bool> continuousMode("ui.continuous", true, true);
 
   pangolin::GlBuffer meshVbo;
   pangolin::GlBuffer meshCbo;
@@ -107,12 +109,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(w, h);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(w, h);
 
-  tdp::SE3f T_wm;
-  T_wm.translation() = grid0 + 256*dGrid;
+//  tdp::SE3f T_wm;
+//  T_wm.translation() = grid0 + 256*dGrid;
 
-  tdp::SE3f T_mcA;
-  tdp::SE3f T_mcB;
-  tdp::SE3f T_wG;
+  tdp::SE3f T_gcA;
+  tdp::SE3f T_gcB;
   tdp::SE3f T_ab;
 
   float overlap = 0.;
@@ -123,7 +124,6 @@ int main( int argc, char* argv[] )
   while(!pangolin::ShouldQuit())
   {
     if (meshVbo.num_elements == 0 || pangolin::Pushed(recomputeMesh)) {
-      tsdf.CopyFrom(cuTsdf, cudaMemcpyDeviceToHost);
       tdp::ComputeMesh(tsdf, grid0, dGrid,
           T_wG, meshVbo, meshCbo, meshIbo, wThr, fThr);      
     }
@@ -138,34 +138,38 @@ int main( int argc, char* argv[] )
         w.topRows(3) = Eigen::Vector3f::Random().normalized();
         w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
         w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
-        T_mcA = T_wm.Exp(w);
+        T_gcA = tdp::SE3f::Exp_(w);
         w.topRows(3) = Eigen::Vector3f::Random().normalized();
         w.topRows(3) *= M_PI*Eigen::Vector3f::Random()(0);
         w.bottomRows(3) = 0.5*Eigen::Vector3f::Random();
-        T_mcB = T_wm.Exp(w);
-        T_ab = T_mcA.Inverse() * T_mcB;
+        T_gcB = tdp::SE3f::Exp_(w);
+        T_ab = T_gcA.Inverse() * T_gcB;
 
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
-            cuN, T_mcA, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+            cuN, T_gcA, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
         pcA.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         nA.CopyFrom(cuN, cudaMemcpyDeviceToHost);
         tdp::TSDF::RayTraceTSDF(cuTsdf, cuPc,
-            cuN, T_mcB, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
+            cuN, T_gcB, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
         pcB.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         nB.CopyFrom(cuN, cudaMemcpyDeviceToHost);
 
         for (size_t i=0; i<pcA.Area(); ++i) 
-          if (tdp::IsValidData(pcA[i])) 
-            if (dMin < pcA[i](2) && pcA[i](2) < dMax)
+          if (tdp::IsValidData(pcA[i])) {
+            if (dMin < pcA[i](2) && pcA[i](2) < dMax) {
               fillA++;
-            else 
+            } else  {
               pcA[i] << NAN, NAN, NAN;
+            }
+          }
         for (size_t i=0; i<pcB.Area(); ++i) 
-          if (tdp::IsValidData(pcB[i]))
-            if (dMin < pcB[i](2) && pcB[i](2) < dMax)
+          if (tdp::IsValidData(pcB[i])) {
+            if (dMin < pcB[i](2) && pcB[i](2) < dMax) {
               fillB++;
-            else 
+            } else {
               pcB[i] << NAN, NAN, NAN;
+            }
+          }
         fillA /= pcA.Area();
         fillB /= pcB.Area();
 
@@ -174,6 +178,9 @@ int main( int argc, char* argv[] )
         std::cout << overlap << " " << fillA << " " << fillB << std::endl;
       } while (it++ < 0 && (overlap < 0.5 || fillA < 0.7 || fillB < 0.7));
 
+      vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
+      vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
+
       if (overlap >= 0.5 && fillA >= 0.7 && fillB >= 0.7) {
         std::stringstream pathA;
         std::stringstream pathB;
@@ -181,9 +188,6 @@ int main( int argc, char* argv[] )
         pathB << output_uri << "/frameB_" << frame << ".ply";
         tdp::SavePointCloud(pathA.str(), pcA, nA);
         tdp::SavePointCloud(pathB.str(), pcB, nB);
-
-        vboA.Upload(pcA.ptr_, pcA.SizeBytes(), 0);
-        vboB.Upload(pcB.ptr_, pcB.SizeBytes(), 0);
 
         std::stringstream pathConfig;
         pathConfig << output_uri << "/config_" << frame << ".txt";
@@ -245,15 +249,25 @@ int main( int argc, char* argv[] )
       }
 
       // draw the axis
-      pangolin::glDrawAxis(T_mcA.matrix(),0.1f);
-      pangolin::glDrawAxis(T_mcB.matrix(),0.1f);
-      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_mcA.matrix(), 0.1f);
-      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_mcB.matrix(), 0.1f);
+      pangolin::glDrawAxis((T_wG*T_gcA).matrix(),0.1f);
+      pangolin::glDrawAxis((T_wG*T_gcB).matrix(),0.1f);
+      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, (T_wG*T_gcA).matrix(), 0.1f);
+      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, (T_wG*T_gcB).matrix(), 0.1f);
 
       glColor3f(1,0,0);
+      pangolin::glSetFrameOfReference((T_wG).matrix());
       pangolin::RenderVbo(vboA);
+      pangolin::glUnsetFrameOfReference();
       glColor3f(0,1,0);
+      pangolin::glSetFrameOfReference((T_wG).matrix());
       pangolin::RenderVbo(vboB);
+      pangolin::glUnsetFrameOfReference();
+
+      pangolin::glSetFrameOfReference(T_wG.matrix());
+      Eigen::AlignedBox3f box(grid0,gridE);
+      glColor4f(1,0,0,0.5f);
+      pangolin::glDrawAlignedBox(box);
+      pangolin::glUnsetFrameOfReference();
     }
 
     glDisable(GL_DEPTH_TEST);

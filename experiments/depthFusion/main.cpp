@@ -291,6 +291,8 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
 
+  tdp::SE3f T_wG;
+
   tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
   tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
   tdp::Vector3fda dGrid = gridE - grid0;
@@ -302,7 +304,7 @@ int main( int argc, char* argv[] )
             tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
             tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::TSDF::SaveTSDF(tmpTSDF, grid0, dGrid, tsdfOutputPath);
+            tdp::TSDF::SaveTSDF(tmpTSDF, grid0, dGrid, T_wG, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
           }
           std::this_thread::sleep_for(std::chrono::microseconds(100));

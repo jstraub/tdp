@@ -47,15 +47,17 @@ int main( int argc, char* argv[] )
   std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("/mesh.ply");
   std::cout << meshOutputPath << std::endl;
 
+  tdp::SE3f T_wG;
   tdp::Vector3fda grid0, dGrid;
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
-  if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, grid0, dGrid)) {
+  if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, T_wG, grid0, dGrid)) {
 //  if (!tdp::LoadVolume<tdp::TSDFval>(tsdf, input_uri)) {
     pango_print_error("Unable to load volume");
     return 1;
   }
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x" 
-    << tsdf.h_ << "x" << tsdf.d_ << std::endl;
+    << tsdf.h_ << "x" << tsdf.d_ << std::endl
+    << T_wG << std::endl;
 
 //  float test[27] = {
 //        -1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,-1.0f, 1.0f, 2.0f,

@@ -374,22 +374,10 @@ int main( int argc, char* argv[] )
   tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
   tdp::Vector3fda dGrid = gridE - grid0;
 
-  tdp::ThreadedValue<bool> runSave(true);
-  std::thread workThread([&]() {
-        while(runSave.Get()) {
-          if (pangolin::Pushed(saveTSDF)) {
-            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
-            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, tsdfOutputPath);
-            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
-          }
-          std::this_thread::sleep_for(std::chrono::microseconds(100));
-        }
-      });
-
   size_t numKfsPrev = 0;
   tdp::SE3f T_mo_0;
   tdp::SE3f T_mo = T_mo_0;
+  tdp::SE3f T_wG;  // from grid to world
 
   tdp::SE3f T_ac; // current to active KF
   Eigen::Matrix<float,6,6> Sigma_ac = Eigen::Matrix<float,6,6>::Zero();
@@ -405,6 +393,19 @@ int main( int argc, char* argv[] )
   gui.verbose = false;
 
   int idActive = 0;
+
+  tdp::ThreadedValue<bool> runSave(true);
+  std::thread workThread([&]() {
+        while(runSave.Get()) {
+          if (pangolin::Pushed(saveTSDF)) {
+            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
+            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, T_wG, tsdfOutputPath);
+            std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
+          }
+          std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+      });
 
   tdp::ThreadedValue<bool> runLoopClosure(true);
   std::mutex mut;
@@ -625,7 +626,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
   pangolin::GlBuffer vboNMmf(pangolin::GlArrayBuffer,Nmmf,GL_FLOAT,3);
 
-  tdp::SE3f T_wG;  // from grid to world
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -679,6 +679,7 @@ int main( int argc, char* argv[] )
       }
       mmfId = idMax;
       T_wG.rotation() = mmf.Rs_[mmfId];
+//      T_wG.translation() = T_mos[0].translation();
 
       grid0.fill(1e9);
       gridE.fill(-1e9);

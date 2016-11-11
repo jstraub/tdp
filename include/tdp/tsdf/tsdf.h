@@ -61,12 +61,14 @@ struct TSDF {
 
   static void SaveTSDF(const Volume<TSDFval>& tsdf, 
         Vector3fda grid0, Vector3fda dGrid, 
+        const SE3f& T_wG,
         const std::string& path) {
 
     std::ofstream out;
     out.open(path, std::ios::out | std::ios::binary);
     out.write((const char*)&grid0(0),sizeof(Vector3fda));
     out.write((const char*)&dGrid(0),sizeof(Vector3fda));
+    out.write((const char*)&T_wG,sizeof(SE3f));
     SaveVolume(tsdf, out);
     out.close();
 
@@ -74,6 +76,7 @@ struct TSDF {
 
   static bool LoadTSDF(const std::string& path,
       ManagedHostVolume<TSDFval>& tsdf, 
+      SE3f& T_wG,
       Vector3fda& grid0, Vector3fda& dGrid) {
     std::ifstream in;
     in.open(path, std::ios::in | std::ios::binary);
@@ -82,6 +85,7 @@ struct TSDF {
 
     in.read((char *)&grid0(0),sizeof(Vector3fda));
     in.read((char *)&dGrid(0),sizeof(Vector3fda));
+    in.read((char *)&T_wG,sizeof(SE3f));
 
     LoadVolume(tsdf, in);
 

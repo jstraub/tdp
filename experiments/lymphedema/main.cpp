@@ -176,6 +176,8 @@ int main( int argc, char* argv[] )
   tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
   tdp::Vector3fda dGrid = gridE - grid0;
 
+  tdp::SE3f T_mr;
+  tdp::SE3f T_wG;
 
   tdp::ThreadedValue<bool> runSave(true);
   std::thread workThread([&]() {
@@ -183,7 +185,7 @@ int main( int argc, char* argv[] )
           if (pangolin::Pushed(saveTSDF)) {
             TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
-            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, tsdfOutputPath);
+            tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, T_wG, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
           }
           std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -199,8 +201,6 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
 
-  tdp::SE3f T_mr = tdp::SE3f();
-  tdp::SE3f T_wG = tdp::SE3f();
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
