@@ -174,7 +174,7 @@ void ICP::ComputeProjective(
 
       // apply x to the transformation
 //      std::cout << T_mo << std::endl;
-      T_mo = SE3f::Exp_(x) * T_mo;
+      T_mo = T_mo * SE3f::Exp_(x);
 //      T_mo = SE3f(SE3f::Exp_(x).matrix() * T_mo.matrix());
 //      std::cout << SE3f::Exp_(x) << std::endl;
 //      std::cout << T_mo << std::endl;

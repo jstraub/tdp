@@ -349,7 +349,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
-  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfMu("ui.mu",0.05,0.,0.05);
   pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<float> grid0x("ui.grid0 x",-3.0,-2.,0);

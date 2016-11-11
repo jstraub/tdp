@@ -229,7 +229,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
 
-  pangolin::Var<float> tsdfMu("ui.mu",0.5,0.,1.);
+  pangolin::Var<float> tsdfMu("ui.mu",0.05,0.01,0.5);
   pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",dTSDF/2,0,dTSDF-1);
