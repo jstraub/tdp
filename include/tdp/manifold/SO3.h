@@ -32,6 +32,7 @@ class SO3 : Manifold<T,3> {
   Eigen::Matrix<T,3,3,Options> matrix() const { 
     return q_.matrix();
   }
+  /// (x,y,z,w)
   TDP_HOST_DEVICE
   Eigen::Matrix<T,4,1,Options> vector() const { 
     return q_.coeffs();

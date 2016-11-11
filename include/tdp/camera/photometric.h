@@ -6,6 +6,25 @@
 namespace tdp {
 
 template <int D, class Derived, typename T>
+void Overlap(const Image<Vector3fda>& pcA, 
+    const Image<Vector3fda>& pcB, 
+    const SE3f& T_ab, 
+    const CameraBase<float,D,Derived>& camA, float& overlap) {
+  float N = 0.f;
+  overlap = 0.f;
+  for (size_t i=0; i<pcB.Area(); ++i) {
+    if (IsValidData(pcB[i])) {
+      Eigen::Vector2f x = camA.Project(T_ab*pcB[i]);
+      if (pcA.Inside(x)) {
+        ++overlap;
+      }
+      ++N;
+    }
+  }
+  overlap /= N;
+}
+
+template <int D, class Derived, typename T>
 void Overlap(const Image<T>& greyA, const Image<T>& greyB,
     const Image<Vector3fda>& pcA, 
     const Image<Vector3fda>& pcB, 

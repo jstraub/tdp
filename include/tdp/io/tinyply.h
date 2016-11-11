@@ -43,7 +43,7 @@ void SavePointCloud(
     const std::string& path,
     const Image<Vector3fda>& verts,
     const Image<Vector3fda>& ns,
-    std::vector<std::string>& comments);
+    std::vector<std::string> comments = std::vector<std::string>());
 
 }
 

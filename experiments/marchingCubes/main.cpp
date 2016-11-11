@@ -46,7 +46,6 @@ int main( int argc, char* argv[] )
   std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("/mesh.ply");
   std::cout << meshOutputPath << std::endl;
 
-  // TODO: use LoadTSDF to also get grid0 and dGrid
   tdp::Vector3fda grid0, dGrid;
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
   if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, grid0, dGrid)) {
