@@ -68,11 +68,15 @@ int main( int argc, char* argv[] )
 //    std::cout << uri.scheme << std::endl;
 //    std::cout << uri.url << std::endl;
     pangolin::FilesMatchingWildcard(uri.url, files);
-//    for (auto& file : files) 
-//      std::cout << file << std::endl;
+    for (auto& file : files) 
+      std::cout << file << std::endl;
   } else {
     std::cout << "only supporting files:// uri so far" << std::endl;
     return 1;
+  }
+  if (files.size() == 0) {
+    std::cout << "no files found" << std::endl;
+    return 2;
   }
   
   size_t W = 2;
