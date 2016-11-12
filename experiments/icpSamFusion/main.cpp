@@ -75,6 +75,7 @@ int main( int argc, char* argv[] )
       input_uri = input_uri + std::string("video.pango");
     } else if (pangolin::FileExists(uri.url+std::string("video.pango"))) {
       input_uri = input_uri + std::string("video.pango");
+      tsdfOutputPath = uri.url + tsdfOutputPath;
     } 
   }
 
@@ -620,7 +621,7 @@ int main( int argc, char* argv[] )
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
 
-  tdp::vMFMMF<3> mmf(10.);
+  tdp::vMFMMF<6> mmf(30.);
   size_t Nmmf = 1000000;
   tdp::ManagedHostImage<tdp::Vector3fda> nMmf(Nmmf,1);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
@@ -669,7 +670,7 @@ int main( int argc, char* argv[] )
         nMmf[i] = ni;
       }
       cuNMmf.CopyFrom(nMmf, cudaMemcpyHostToDevice);
-      mmf.Compute(cuNMmf, 10, true);
+      mmf.Compute(cuNMmf, 100, true);
       size_t idMax = std::distance(mmf.Ns_.begin(),
           std::max_element(mmf.Ns_.begin(), mmf.Ns_.end()));
       std::cout << "largest MF: " << mmf.Ns_[idMax] << std::endl;

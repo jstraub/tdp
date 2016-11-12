@@ -108,6 +108,7 @@ void SavePointCloud(
     const std::string& path,
     const Image<Vector3fda>& pc,
     const Image<Vector3fda>& n,
+    bool binary,
     std::vector<std::string> comments) {
   std::vector<float> verts;
   std::vector<float> norms;
@@ -132,7 +133,7 @@ void SavePointCloud(
   for (auto& comment : comments) 
     plyFile.comments.push_back(comment);
   std::ostringstream outStream;
-  plyFile.write(outStream, true);
+  plyFile.write(outStream, binary);
   std::ofstream out(path);
   out << outStream.str();
   out.close();

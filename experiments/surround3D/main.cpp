@@ -516,7 +516,7 @@ int main( int argc, char* argv[] )
       comments.push_back(ss.str());
 
       SavePointCloud(uri.url+ss.str()+std::string(".ply"),
-          pc, n, comments);
+          pc, n, true, comments);
     }
 
     if (odomFrame2Frame) {

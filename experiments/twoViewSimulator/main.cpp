@@ -187,8 +187,8 @@ int main( int argc, char* argv[] )
         std::stringstream pathB;
         pathA << output_uri << "/frameA_" << frame << ".ply";
         pathB << output_uri << "/frameB_" << frame << ".ply";
-        tdp::SavePointCloud(pathA.str(), pcA, nA);
-        tdp::SavePointCloud(pathB.str(), pcB, nB);
+        tdp::SavePointCloud(pathA.str(), pcA, nA, false);
+        tdp::SavePointCloud(pathB.str(), pcB, nB, false);
 
         std::stringstream pathConfig;
         pathConfig << output_uri << "/config_" << frame << ".txt";
@@ -260,7 +260,8 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(vboA);
       pangolin::glUnsetFrameOfReference();
       glColor3f(0,1,0);
-      pangolin::glSetFrameOfReference((T_wG*T_gcB).matrix()); pangolin::RenderVbo(vboB);
+      pangolin::glSetFrameOfReference((T_wG*T_gcB).matrix()); 
+      pangolin::RenderVbo(vboB);
       pangolin::glUnsetFrameOfReference();
 
       pangolin::glSetFrameOfReference(T_wG.matrix());
