@@ -75,8 +75,8 @@ int main( int argc, char* argv[] )
     return 1;
   }
   
-  size_t W = 3;
-  size_t H = 3;
+  size_t W = 4;
+  size_t H = 4;
 
   if (files.size() < 3) {
     H = 1;
@@ -105,14 +105,22 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<tdp::Vector3fda> verts;
   tdp::ManagedHostImage<tdp::Vector3fda> ns;
-  int frame=0;
-  int sliderPrev = 0;
+  int sliderPrev = -W*H;
   pangolin::Var<int> slider("ui.slide", 0, 0, files.size()-W*H);
   pangolin::Var<int> matcapId("ui.matcap", 4, 0, 10);
+
+  pangolin::RegisterKeyPressCallback('l', [&](){
+      slider = slider+1;
+  });
+  pangolin::RegisterKeyPressCallback('h', [&](){
+      slider = slider-1;
+  });
 
   std::vector<pangolin::GlBuffer*> vbos(W*H, nullptr);
   std::vector<pangolin::GlBuffer*> nbos(W*H, nullptr);
 
+
+  int frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -120,18 +128,46 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (frame == 0 || slider.GuiChanged()) {
-      //TODO be smarter about loading
-      for (size_t i=slider; i<slider+W*H; ++i) {
-        tdp::LoadPointCloud(files[i], verts, ns);
-        if (vbos[i]) delete vbos[i];
-        vbos[i] = new pangolin::GlBuffer(pangolin::GlArrayBuffer,
-            verts.w_,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-        vbos[i]->Upload(verts.ptr_, verts.SizeBytes(), 0);
-        if (nbos[i]) delete nbos[i];
-        nbos[i] = new pangolin::GlBuffer(pangolin::GlArrayBuffer,
-            ns.w_,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-        nbos[i]->Upload(ns.ptr_, ns.SizeBytes(), 0);
+    if (slider.GuiChanged() || slider != sliderPrev || frame==0) {
+      int i0=0;
+      int iE=W*H-1;
+      int iInc=1;
+      if (slider > sliderPrev) {
+        std::swap(i0,iE);
+        iInc=-1;
+      }
+      for (int i=i0; i!=iE; i+=iInc) {
+        int j = sliderPrev-slider+i;
+        if (0 <= j && j < W*H) {
+//          std::cout << "reusing loaded one "<< j << " -> " << i << std::endl;
+          vbos[i] = vbos[j];
+          nbos[i] = nbos[j];
+          if (i!=j) {
+            nbos[j] = nullptr;
+            vbos[j] = nullptr;
+          }
+        }
+      }
+      pangolin::GlBuffer* vbo;
+      pangolin::GlBuffer* nbo;
+      std::cout << "---- reloading ----" << std::endl;
+      for (int i=0; i<W*H; ++i) {
+        std::cout << files[slider+i] << std::endl;
+        int j = sliderPrev-slider+i;
+        if (j < 0 || j >= W*H) {
+//          std::cout << "loading " << files[slider+i] << " for " << i << std::endl;
+          tdp::LoadPointCloud(files[slider+i], verts, ns);
+          vbo = new pangolin::GlBuffer(pangolin::GlArrayBuffer,
+              verts.w_,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+          vbo->Upload(verts.ptr_, verts.SizeBytes(), 0);
+          nbo = new pangolin::GlBuffer(pangolin::GlArrayBuffer,
+              ns.w_,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+          nbo->Upload(ns.ptr_, ns.SizeBytes(), 0);
+          if (vbos[i]) delete vbos[i];
+          if (nbos[i]) delete nbos[i];
+          vbos[i] = vbo;
+          nbos[i] = nbo;
+        }
       }
       sliderPrev = slider;
     }
@@ -175,7 +211,7 @@ int main( int argc, char* argv[] )
     pangolin::DisplayBase().ActivatePixelOrthographic();
     // finish this frame
     pangolin::FinishFrame();
-    frame++;
+    ++frame;
   }
   return 0;
 }

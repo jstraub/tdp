@@ -1,6 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
+#include <iomanip>
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
 #include <pangolin/gl/gltexturecache.h>
@@ -185,13 +186,16 @@ int main( int argc, char* argv[] )
       if (overlap >= 0.5 && fillA >= 0.7 && fillB >= 0.7) {
         std::stringstream pathA;
         std::stringstream pathB;
-        pathA << output_uri << "/frameA_" << frame << ".ply";
-        pathB << output_uri << "/frameB_" << frame << ".ply";
+        pathA << output_uri << "frame_" << std::setfill('0') << std::setw(10) 
+          << frame << "_A.ply";
+        pathB << output_uri << "frame_" << std::setfill('0') << std::setw(10) 
+          << frame << "_B.ply";
         tdp::SavePointCloud(pathA.str(), pcA, nA, false);
         tdp::SavePointCloud(pathB.str(), pcB, nB, false);
 
         std::stringstream pathConfig;
-        pathConfig << output_uri << "/config_" << frame << ".txt";
+        pathConfig << output_uri << "/config_" << std::setfill('0') 
+          << std::setw(10) << frame << ".txt";
         std::ofstream fout(pathConfig.str());
         fout << pathA.str() << std::endl;
         fout << pathB.str() << std::endl;

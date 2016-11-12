@@ -38,22 +38,24 @@ void LoadPointCloud(
 void LoadPointCloud(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,
-    ManagedHostImage<Vector3fda>& ns) {
+    ManagedHostImage<Vector3fda>& ns, bool verbose) {
 
   std::vector<float> vertices;
   std::vector<float> normals;
   std::ifstream in(path, std::ios::binary);
   tinyply::PlyFile ply(in);
 
-  for (auto e : ply.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" 
-      << std::endl;
-    for (auto p : e.properties) {
-      std::cout << "\tproperty - " << p.name << " (" 
-        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+  if (verbose) {
+    for (auto e : ply.get_elements()) {
+      std::cout << "element - " << e.name << " (" << e.size << ")" 
+        << std::endl;
+      for (auto p : e.properties) {
+        std::cout << "\tproperty - " << p.name << " (" 
+          << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+      }
     }
+    std::cout << std::endl;
   }
-  std::cout << std::endl;
   ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
   ply.request_properties_from_element("vertex", {"nx", "ny", "nz"}, normals);
   ply.read(in);
