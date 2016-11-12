@@ -28,6 +28,9 @@ target_link_libraries(lsh tdp ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(cublas cublas.cpp)
 target_link_libraries(cublas tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+add_executable(vmfmmf vmfmmf.cpp)
+target_link_libraries(vmfmmf tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
   add_executable(sl3 SL3.cpp)
   target_link_libraries(sl3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 

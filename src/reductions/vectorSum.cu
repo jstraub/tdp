@@ -28,10 +28,7 @@ __global__ void KernelVectorSum(Image<Vector3fda> x,
 #pragma unroll
   for(int s=0; s<K; ++s) {
     // this is almost certainly bad ordering
-    xSSs[tid*K+s](0) = 0.0f;
-    xSSs[tid*K+s](1) = 0.0f;
-    xSSs[tid*K+s](2) = 0.0f;
-    xSSs[tid*K+s](3) = 0.0f;
+    xSSs[tid*K+s] = Vector4fda::Zero();
   }
   __syncthreads(); // make sure that ys have been cached
 
@@ -77,25 +74,25 @@ void VectorSum(Image<Vector3fda> cuX,
 {
   const int N_PER_T = 16;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,cuX.Area(),256,N_PER_T);
+  ComputeKernelParamsForArray(blocks,threads,cuX.Area(),64,N_PER_T);
   if(K == 1){
-    KernelVectorSum<1,256><<<blocks,threads,
-      1*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<1,64><<<blocks,threads,
+      1*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==2){
-    KernelVectorSum<2,256><<<blocks,threads,
-      2*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<2,64><<<blocks,threads,
+      2*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==3){
-    KernelVectorSum<3,256><<<blocks,threads,
-      3*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<3,64><<<blocks,threads,
+      3*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==4){
-    KernelVectorSum<4,256><<<blocks,threads,
-      4*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<4,64><<<blocks,threads,
+      4*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==5){
-    KernelVectorSum<5,256><<<blocks,threads,
-      5*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<5,64><<<blocks,threads,
+      5*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else if(K==6){
-    KernelVectorSum<6,256><<<blocks,threads,
-      6*256*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
+    KernelVectorSum<6,64><<<blocks,threads,
+      6*64*sizeof(Vector4fda)>>>(cuX,cuZ,k0,N_PER_T,cuSSs);
   }else{
     assert(false);
   }

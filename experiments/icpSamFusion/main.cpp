@@ -21,6 +21,7 @@
 #include <tdp/data/managed_volume.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/data/volume.h>
+#include <tdp/directional/hist.h>
 #include <tdp/gl/gl_draw.h>
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
@@ -347,6 +348,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
   pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
+  pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
@@ -621,7 +623,8 @@ int main( int argc, char* argv[] )
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
 
-  tdp::vMFMMF<6> mmf(30.);
+  tdp::GeodesicHist<4> normalHist;
+  tdp::vMFMMF<1> mmf(30.);
   size_t Nmmf = 1000000;
   tdp::ManagedHostImage<tdp::Vector3fda> nMmf(Nmmf,1);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
@@ -707,6 +710,9 @@ int main( int argc, char* argv[] )
       dGrid(1) /= (hTSDF-1);
       dGrid(2) /= (dTSDF-1);
       vboNMmf.Upload(nMmf.ptr_,nMmf.SizeBytes(), 0);
+
+      normalHist.Reset();
+      normalHist.ComputeGpu(cuNMmf);
     }
 
 
@@ -1087,8 +1093,10 @@ int main( int argc, char* argv[] )
 
       for (size_t i=0; i<mmf.Rs_.size(); ++i) {
         tdp::SE3f T_wmmf(tdp::SO3f(mmf.Rs_[i]));
-        pangolin::glDrawAxis(T_wmmf.matrix(),0.2f);
+        pangolin::glDrawAxis(T_wmmf.matrix(),1.f);
       }
+      normalHist.geoGrid_.Render3D();
+      normalHist.Render3D(histScale, false);
     }
 
     if (viewLoopClose.IsShown() && kfs.size() > 1) {

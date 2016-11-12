@@ -137,8 +137,8 @@ void GeodesicGrid<D>::RefreshCenters() {
 template<uint32_t D>
 void GeodesicGrid<D>::Render3D(void) {
   size_t N = NTri();
-  std::cout << "rendering " << N << " geodesic grid triangles and centers" 
-    << std::endl;
+//  std::cout << "rendering " << N << " geodesic grid triangles and centers" 
+//    << std::endl;
   if (vbo_.num_elements == 0) {
     vbo_.Reinitialise(pangolin::GlBufferType::GlArrayBuffer,pts_.size(),
         GL_FLOAT,3,GL_DYNAMIC_DRAW);
@@ -168,7 +168,7 @@ void GeodesicGrid<D>::Render3D(void) {
 
   ibo_.Bind();
   glDrawElements(GL_TRIANGLES,ibo_.num_elements*3, ibo_.datatype, 0);
-  std::cout <<  ibo_.num_elements << std::endl;
+//  std::cout <<  ibo_.num_elements << std::endl;
   ibo_.Unbind();
   glColor3f(1.,0.,1.);
   glPointSize(4.);

@@ -35,20 +35,22 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   // caching 
   if(tid < K*6) mui[tid] = mu[tid];
-  if(K*6 < tid && tid < 2*K*6) pik[tid-K*6] = pi[tid-K*6];
+  if(K*6 <= tid && tid < 2*K*6) pik[tid-K*6] = pi[tid-K*6];
   rho[tid] = 0.0f;
   Wi[tid] = 0;
 
   __syncthreads(); // make sure that ys have been cached
-  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)                      
+  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)
   {
     Vector3fda ni = n[id];
     float err_max = -1e7f;
     uint32_t k_max = 6*K+1;
-    if(ni[0]==ni[0] && ni[1]==ni[1] && ni[2]==ni[2] && ni.norm() > 0.95f) {
+    if(IsValidNormal(ni)) {
 #pragma unroll
       for (uint32_t k=0; k<6*K; ++k) {
         float err = pik[k] + ni.dot(mui[k]);
+//        if (id%5 == 0)
+//          printf("%d: err %f pi %f dot %f\n",k,err,pik[k],ni.dot(mui[k]));
         if(err_max < err) {
           err_max = err;
           k_max = k;
@@ -106,13 +108,13 @@ __global__ void MMFvMFCostFctAssignment(Image<Vector3fda> n,
   Wi[tid] = 0;
 
   __syncthreads(); // make sure that ys have been cached
-  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)                      
+  for(int id=idx*N_PER_T; id<min((int)n.Area(),(idx+1)*N_PER_T); ++id)
   {
     Vector3fda ni = n[id];
     float weight = weights[id];
     float err_max = -1e7f;
     uint32_t k_max = 6*K+1;
-    if(ni[0]==ni[0] && ni[1]==ni[1] && ni[2]==ni[2] && ni.norm() > 0.95f) {
+    if(IsValidNormal(ni)) {
 #pragma unroll
       for (uint32_t k=0; k<6*K; ++k) {
         float err = pik[k] + ni.dot(mui[k]);
@@ -146,7 +148,7 @@ void MMFvMFCostFctAssignmentGPU( Image<Vector3fda> cuN,
 
   const int N_PER_T = 16;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256);
+  ComputeKernelParamsForArray(blocks,threads,cuN.Area(),256, N_PER_T);
   const size_t memsize_bytes = (256*2 + K*6)*sizeof(float)+K*6*sizeof(Vector3fda);
 
   if (K==1) {
