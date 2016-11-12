@@ -75,8 +75,8 @@ int main( int argc, char* argv[] )
     return 1;
   }
   
-  size_t W = 4;
-  size_t H = 4;
+  size_t W = 2;
+  size_t H = 2;
 
   if (files.size() < 3) {
     H = 1;
@@ -110,10 +110,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> matcapId("ui.matcap", 4, 0, 10);
 
   pangolin::RegisterKeyPressCallback('l', [&](){
-      slider = slider+1;
+      slider = std::min((int)(files.size())-1,slider+1);
   });
   pangolin::RegisterKeyPressCallback('h', [&](){
-      slider = slider-1;
+      slider = std::max(0,slider-1);
   });
 
   std::vector<pangolin::GlBuffer*> vbos(W*H, nullptr);
@@ -132,14 +132,16 @@ int main( int argc, char* argv[] )
       int i0=0;
       int iE=W*H-1;
       int iInc=1;
-      if (slider > sliderPrev) {
-        std::swap(i0,iE);
+      if (slider < sliderPrev) {
+        iE = -1;
+        i0 = W*H-1;
         iInc=-1;
       }
+      std::cout << "---- reloading ----" << std::endl;
       for (int i=i0; i!=iE; i+=iInc) {
-        int j = sliderPrev-slider+i;
+        int j = -sliderPrev+slider+i;
         if (0 <= j && j < W*H) {
-//          std::cout << "reusing loaded one "<< j << " -> " << i << std::endl;
+          std::cout << "reusing loaded one "<< j << " -> " << i << std::endl;
           vbos[i] = vbos[j];
           nbos[i] = nbos[j];
           if (i!=j) {
@@ -150,10 +152,9 @@ int main( int argc, char* argv[] )
       }
       pangolin::GlBuffer* vbo;
       pangolin::GlBuffer* nbo;
-      std::cout << "---- reloading ----" << std::endl;
       for (int i=0; i<W*H; ++i) {
         std::cout << files[slider+i] << std::endl;
-        int j = sliderPrev-slider+i;
+        int j = -sliderPrev+slider+i;
         if (j < 0 || j >= W*H) {
 //          std::cout << "loading " << files[slider+i] << " for " << i << std::endl;
           tdp::LoadPointCloud(files[slider+i], verts, ns);
