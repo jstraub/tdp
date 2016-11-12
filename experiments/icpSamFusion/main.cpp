@@ -345,7 +345,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> computePhotometricError("ui.comp Phot Err",false,true);
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
-  pangolin::Var<float> marchCubesfThr("ui.f Thr", 0.5,0.,1.);
+  pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
