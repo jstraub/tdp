@@ -44,6 +44,7 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/rtmf/vMFMMF.h>
 #include <tdp/utils/colorMap.h>
+#include <tdp/io/tinyply.h>
 #include <tdp/marching_cubes/marching_cubes.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -327,7 +328,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.75, 0.35, 0.5);
   pangolin::Var<float> keyFrameAngleThresh("ui.KF angle thr", 35, 15, 50);
-  pangolin::Var<float> dEntropyThr("ui.dH Thr", 0.90, 0.5, 1.);
+  pangolin::Var<float> dEntropyThr("ui.dH Thr", 0.95, 0.5, 1.);
   pangolin::Var<int>   icpDownSample("ui.ICP downsample",100,1,200);
   pangolin::Var<float> loopCloseDistThresh( "ui.loop dist thr", 0.80, 0.01, 0.5);
   pangolin::Var<float> loopCloseAngleThresh("ui.loop angle thr", 140, 1, 180);
@@ -342,6 +343,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpRgbLambda("ui.icp rgb lamb",0.1,0.,1.);
 
   pangolin::Var<bool> runKfOnlyFusion("ui.run KF Fusion",true,false);
+  pangolin::Var<bool> saveKfs("ui.save KFs",true,false);
 
   pangolin::Var<bool> computePhotometricError("ui.comp Phot Err",false,true);
 
@@ -915,8 +917,6 @@ int main( int argc, char* argv[] )
         }
 
         idActive = kfs.size()-1;
-        T_ac = tdp::SE3f();
-        Sigma_ac.fill(0.);
 
         // sort to loop close closest frames (temporally) first
         loopClose.sort( 
@@ -929,6 +929,41 @@ int main( int argc, char* argv[] )
           << std::endl;
 
         viewKf.SetImage(kfs[idActive].rgb_);
+
+        if (saveKfs) {
+          float overlap = 0.;
+          if (idActive > 0) {
+            const auto& kfA = kfs[idActive-1];
+            const auto& kfB = kfs[idActive];
+            float rmse = 0.;
+            tdp::Overlap(kfA, kfB, rig, 0, overlap, rmse, &T_ac);
+          }
+
+          tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
+          pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
+          tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
+          n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
+          std::stringstream plyPath;
+          plyPath << "./frame_" << std::setfill('0') << std::setw(10) 
+            << idActive << ".ply";
+          tdp::SavePointCloud(plyPath.str(), pc, n, false);
+          std::stringstream cfgPath;
+          cfgPath << "./config_" << std::setfill('0') << std::setw(10) 
+            << idActive << ".txt";
+          std::ofstream fout(cfgPath.str());
+          fout << "q_abx q_aby q_abz q_abw t_abx t_aby t_abz overlap fillA fillB" << std::endl;
+          fout << T_ac.rotation().vector()(0) << " " 
+            << T_ac.rotation().vector()(1) << " " 
+            << T_ac.rotation().vector()(2) << " " 
+            << T_ac.rotation().vector()(3) << " " 
+            << T_ac.translation()(0) << " "
+            << T_ac.translation()(1) << " "
+            << T_ac.translation()(2) << " " 
+            << overlap << " " << 1. << " " << 1. << std::endl;
+          fout.close();
+        }
+        T_ac = tdp::SE3f();
+        Sigma_ac.fill(0.);
       }
       if (tryLoopClose) {
         computeLoopClosures();
