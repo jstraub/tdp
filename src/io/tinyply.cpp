@@ -118,12 +118,10 @@ void SavePointCloud(
   norms.reserve(n.Area()*3);
   // filter out NAN points.
   for (size_t i=0; i<pc.Area(); ++i)  {
-    if (IsValidData(pc[i])) {
+    if (IsValidData(pc[i]) && IsValidNormal(n[i])) {
       verts.push_back(pc[i](0));
       verts.push_back(pc[i](1));
       verts.push_back(pc[i](2));
-    }
-    if (IsValidData(n[i])) {
       norms.push_back(n[i](0));
       norms.push_back(n[i](1));
       norms.push_back(n[i](2));
