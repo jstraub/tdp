@@ -122,7 +122,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<bool> recomputeEvector("ui.compute evector", true, false);
 
   pangolin::Var<bool> recomputeMeans("ui.compute means", true, false);
-  pangolin::Var<int>nBins("ui. nBins", 1, 10,100);
+  pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
   // sampling
   pangolin::Var<int> upsample("ui.upsample", 10,1,100);
 

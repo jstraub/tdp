@@ -345,6 +345,36 @@ void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
     }
 }
 
+//todo: clean these functions (getLaplacianEvectors and getLaplacianBasis can be one function)
+void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
+                       int numEv,
+                       Eigen::MatrixXf& basis){
+    // Each row contains an evector
+    // returns numEv by L.rows() matrix
+
+    assert(0<numEv && numEv<=L.rows());
+    // Construct matrix operation object using the wrapper class SparseGenMatProd
+    Spectra::SparseGenMatProd<float> op(L);
+
+    // Retrieve results
+    // Construct eigen solver object, requesting the largest idEv number of eigenvalues
+    Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
+            Spectra::SparseGenMatProd<float> > eigs(&op, numEv, 2*(numEv)+1);
+
+    // Initialize and compute
+    eigs.init();
+    int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
+
+    if(eigs.info() == Spectra::SUCCESSFUL) {
+        for (int i=0; i<numEv; ++i){
+            basis.row(i) = eigs.eigenvectors().col(i).real();
+            //std::cout << "i, evec: " << i << ", " << evectors[i].transpose() << std::endl;
+        }
+    } else{
+        std::cout << "<----failed to get laplacian evectors--->" << std::endl;
+    }
+}
+
 inline Eigen::VectorXf getLaplacianEvector(const eigen_vector<Eigen::VectorXf>& evectors,
                                            int idEv){
     return evectors[idEv];
@@ -392,8 +422,8 @@ Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
 }
 
 eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
-                                             const Eigen::VectorXf& evector,
-                                             int nBins){
+                                          const Eigen::VectorXf& evector,
+                                          int nBins){
 
     float minV, maxV, step;
     minV = evector.minCoeff();
@@ -426,5 +456,28 @@ eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
     return bins;
 }
 
+
+
+Eigen::VectorXf f_rbf(const Image<Vector3fda>& pc,
+                      const Vector3fda& p,
+                      const float alpha){
+    Eigen::VectorXf f_(pc.Area(),1);
+    for (int i=0; i<pc.Area(); ++i){
+        f_(i) = (exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
+        std::cout << "f_i:  " << f_(i) << std::endl;
+    }
+}
+
+//std::vector<float> f_rbf(const Image<Vector3fda>& pc,
+//                         const Vector3fda& p,
+//                         const float alpha){
+//    std::vector<float> f;
+//    f.reserve(pc.Area());
+
+//    for (int i=0; i<pc.Area(); ++i){
+//        f.push_back(exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
+//        std::cout << "f_i:  " << f[i] << std::endl;
+//    }
+//}
 
 }

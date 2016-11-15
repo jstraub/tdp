@@ -103,6 +103,11 @@ void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
                           int numEv,
                           eigen_vector<Eigen::VectorXf>& evectors);
 
+void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
+                       int numEv,
+                       Eigen::MatrixXf& basis);
+
+
 Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
                                  const Eigen::SparseMatrix<float>& L);
 
@@ -110,5 +115,17 @@ Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
 eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
                                               const Eigen::VectorXf& evector,
                                               int nBins);
+inline float rbf(const Vector3fda& p1,
+                 const Vector3fda& p2,
+                 const float alpha);
+
+
+Eigen::VectorXf f_rbf(const Image<Vector3fda>& pc,
+                      const Vector3fda& p,
+                      const float alpha);
+
+//std::vector<float> f_rbf(const Image<Vector3fda>& pc,
+//           const Vector3fda& p,
+//           const float alpha);
 
 }

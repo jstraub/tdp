@@ -116,21 +116,25 @@ int main( int argc, char* argv[] ){
   // Add variables to pangolin GUI
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
   // pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
-  // variables for KNN
+  //-- variables for KNN
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
-  pangolin::Var<int> numEv("ui.numEv",3,1,300);
-
-  // viz color coding
+  pangolin::Var<int> numEv("ui.numEv",20,10,300);
+  pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
+  //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
   float minVal_t, maxVal_t;
 
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
   Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
-  tdp::eigen_vector<Eigen::VectorXf> basis_s(numEv, Eigen::VectorXf::Zero(L_s.rows()));
-  tdp::eigen_vector<Eigen::VectorXf> basis_t(numEv, Eigen::VectorXf::Zero(L_s.rows()));
+  Eigen::MatrixXf basis_s((int)numEv, L_s.rows());
+  Eigen::MatrixXf basis_t((int)numEv, L_t.rows());
+  Eigen::VectorXf evector_s(L_s.rows(),1);
+  Eigen::VectorXf evector_t(L_t.rows(),1);
+  tdp::eigen_vector<tdp::Vector3fda> means_s(nBins, tdp::Vector3fda(0,0,0));
+  tdp::eigen_vector<tdp::Vector3fda> means_t(nBins, tdp::Vector3fda(0,0,0));
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -148,22 +152,44 @@ int main( int argc, char* argv[] ){
       L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
       L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
       t0.toctic("GetLaplacians");
-      tdp::getLaplacianEvectors(L_s, numEv, basis_s);
-      tdp::getLaplacianEvectors(L_t, numEv, basis_t);
-      t0.toctic("GetEigenVectors");
+
+      tdp::getLaplacianBasis(L_s, numEv, basis_s);
+      evector_s = basis_s.row(1); // first non-trivial evector
+      means_s = tdp::getLevelSetMeans(pc_s, evector_s, nBins); //means based on the evector_s's nBins level sets
+
+      tdp::getLaplacianBasis(L_t, numEv, basis_t);
+      evector_t = basis_t.row(1); // first non-trivial evector
+      means_t = tdp::getLevelSetMeans(pc_t, evector_t, nBins);
+      t0.toctic("GetEigenVectors & GetMeans");
 
       // color-coding on the surface
-      valuebo_s.Reinitialise(pangolin::GlArrayBuffer, basis_s[1].rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_s.Upload(&basis_s[1](0), sizeof(float)*basis_s[1].rows(), 0);
-      std::cout << basis_s[1].minCoeff() << " " << basis_s[1].maxCoeff() << std::endl;
-      minVal = basis_s[1].minCoeff()-1e-3;
-      maxVal = basis_s[1].maxCoeff();
+      valuebo_s.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_s.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
+      std::cout << evector_s.minCoeff() << " " << evector_s.maxCoeff() << std::endl;
+      minVal = evector_s.minCoeff()-1e-3;
+      maxVal = evector_s.maxCoeff();
 
-      valuebo_t.Reinitialise(pangolin::GlArrayBuffer, basis_t[1].rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_t.Upload(&basis_t[1](0), sizeof(float)*basis_t[1].rows(), 0);
-      std::cout << basis_t[1].minCoeff() << " " << basis_t[1].maxCoeff() << std::endl;
-      minVal_t = basis_t[1].minCoeff()-1e-3;
-      maxVal_t = basis_t[1].maxCoeff();
+      valuebo_t.Reinitialise(pangolin::GlArrayBuffer, evector_t.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_t.Upload(&evector_t(0), sizeof(float)*evector_t.rows(), 0);
+      std::cout << evector_t.minCoeff() << " " << evector_t.maxCoeff() << std::endl;
+      minVal_t = evector_t.minCoeff()-1e-3;
+      maxVal_t = evector_t.maxCoeff();
+
+      //--playing around here
+      tdp::Vector3fda mean_s, mean_t;
+      Eigen::VectorXf f(pc_s.Area(),1),g(pc_t.Area(),1);
+      float alpha = 0.1;
+
+      mean_s = means_s[0];
+      mean_t = means_s[1];
+
+      f = tdp::f_rbf(pc_s, mean_s, alpha);
+      g = tdp::f_rbf(pc_t, mean_t, alpha);
+
+      std::cout << "f: " << f.transpose() << std::endl;
+      std::cout << "g: " << g.transpose() << std::endl;
+
+      //--end of playing
 
       std::cout << "<--DONE fMap-->" << std::endl;
     }
@@ -175,6 +201,17 @@ int main( int argc, char* argv[] ){
     if (viewPc.IsShown()) {
       viewPc.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
+
+      // draw lines connecting the means
+      glColor3f(.3,1.,.125);
+      glLineWidth(2);
+      tdp::Vector3fda m, m_prev;
+      for (size_t i=1; i<means_s.size(); ++i){
+          m_prev = means_s[i-1];
+          m = means_s[i];
+          tdp::glDrawLine(m_prev, m);
+      }
+
 
       glPointSize(2.);
       glColor3f(1.0f, 1.0f, 0.0f);
@@ -205,6 +242,16 @@ int main( int argc, char* argv[] ){
     if (viewPc_t.IsShown()){
         viewPc_t.Activate(s_cam);
         pangolin::glDrawAxis(0.1);
+
+        // draw lines connecting the means
+        glColor3f(.3,1.,.125);
+        glLineWidth(2);
+        tdp::Vector3fda m, m_prev;
+        for (size_t i=1; i<means_t.size(); ++i){
+            m_prev = means_t[i-1];
+            m = means_t[i];
+            tdp::glDrawLine(m_prev, m);
+        }
 
         glPointSize(2.);
         glColor3f(1.0f, 1.0f, 0.0f);

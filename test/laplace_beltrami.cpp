@@ -140,6 +140,13 @@ TEST(laplace_beltrami, LaplacianEvectors) {
     evector = getLaplacianEvector(pc, L, idEv);
     std::cout << "evector: \n" << evector.transpose() << std::endl;
 
+    //--Test getLaplacianBasis
+    std::cout << "numEv: " << numEv << std::endl;
+    Eigen::MatrixXf basis(numEv, pc.Area());
+    getLaplacianBasis(L,numEv, basis);
+    std::cout << "basis: \n" << basis << std::endl;
+
+
 }
 
 TEST(laplace_beltrami, getCylinder) {
@@ -147,6 +154,26 @@ TEST(laplace_beltrami, getCylinder) {
     tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
     GetCylindricalPc(pc);
 }
+
+TEST(laplace_beltrami, RbfKernels){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+//    std::vector<float> f;
+//    float alpha = 0.1;
+
+//    std::cout << "RBF kernel..." << std::endl;
+//    f = f_rbf(pc, pc[0], alpha);
+//    for (int i=0; i < f.size(); ++i){
+//        std::cout << f[i] << std::endl;
+//    }
+
+    float alpha = 0.1;
+    Eigen::VectorXf f(pc.Area(), 1);
+    std::cout << "RBF kernel..." << std::endl;
+    f = f_rbf(pc, pc[0], alpha);
+    //std::cout << f_rbf(pc, pc[0], alpha) << std::endl;
+
+}
+
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
