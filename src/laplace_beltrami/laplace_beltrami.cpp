@@ -64,6 +64,13 @@ void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc){
     }
 }
 
+void GetMtxPc(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h){
+    for(int r=0; r<h; ++r){
+        for (int c=0; c<w; ++c){
+            pc[r*w+c] = tdp::Vector3fda(r,c,0);
+        }
+    }
+}
 
 Eigen::Matrix3f getLocalRot(const Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<Matrix3fda>& es){
 
@@ -465,9 +472,9 @@ void f_rbf(const Image<Vector3fda>& pc,
 
     for (int i=0; i<pc.Area(); ++i){
         f(i) = (exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
-        std::cout << "f(i):  " << f(i) << std::endl;
+        //std::cout << "f(i):  " << f(i) << std::endl;
     }
-    std::cout << "f_rbf done" << std::endl;
+    //std::cout << "f_rbf done" << std::endl;
 }
 
 //std::vector<float> f_rbf(const Image<Vector3fda>& pc,
