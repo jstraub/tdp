@@ -458,14 +458,16 @@ eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
 
 
 
-Eigen::VectorXf f_rbf(const Image<Vector3fda>& pc,
+void f_rbf(const Image<Vector3fda>& pc,
                       const Vector3fda& p,
-                      const float alpha){
-    Eigen::VectorXf f_(pc.Area(),1);
+                      const float alpha,
+           Eigen::VectorXf& f){
+
     for (int i=0; i<pc.Area(); ++i){
-        f_(i) = (exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
-        std::cout << "f_i:  " << f_(i) << std::endl;
+        f(i) = (exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
+        std::cout << "f(i):  " << f(i) << std::endl;
     }
+    std::cout << "f_rbf done" << std::endl;
 }
 
 //std::vector<float> f_rbf(const Image<Vector3fda>& pc,

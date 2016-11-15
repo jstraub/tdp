@@ -120,9 +120,10 @@ inline float rbf(const Vector3fda& p1,
                  const float alpha);
 
 
-Eigen::VectorXf f_rbf(const Image<Vector3fda>& pc,
+void f_rbf(const Image<Vector3fda>& pc,
                       const Vector3fda& p,
-                      const float alpha);
+                      const float alpha,
+           Eigen::VectorXf& f );
 
 //std::vector<float> f_rbf(const Image<Vector3fda>& pc,
 //           const Vector3fda& p,

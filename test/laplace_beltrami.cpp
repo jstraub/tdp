@@ -167,10 +167,11 @@ TEST(laplace_beltrami, RbfKernels){
 //    }
 
     float alpha = 0.1;
-    Eigen::VectorXf f(pc.Area(), 1);
+    //Eigen::VectorXf f(pc.Area()); //q: why can't i declare it here and assign two lines later??
     std::cout << "RBF kernel..." << std::endl;
-    f = f_rbf(pc, pc[0], alpha);
-    //std::cout << f_rbf(pc, pc[0], alpha) << std::endl;
+    Eigen::VectorXf f(pc.Area());
+    f_rbf(pc, pc[0], alpha,f);
+    //std::cout << f.transpose() << std::endl; //q: why segfault???
 
 }
 

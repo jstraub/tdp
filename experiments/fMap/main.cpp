@@ -177,17 +177,17 @@ int main( int argc, char* argv[] ){
 
       //--playing around here
       tdp::Vector3fda mean_s, mean_t;
-      Eigen::VectorXf f(pc_s.Area(),1),g(pc_t.Area(),1);
+      Eigen::VectorXf f(pc_s.Area()), g(pc_t.Area());
       float alpha = 0.1;
 
       mean_s = means_s[0];
       mean_t = means_s[1];
 
-      f = tdp::f_rbf(pc_s, mean_s, alpha);
-      g = tdp::f_rbf(pc_t, mean_t, alpha);
+      tdp::f_rbf(pc_s, mean_s, alpha, f);
+      tdp::f_rbf(pc_t, mean_t, alpha, g);
 
-      std::cout << "f: " << f.transpose() << std::endl;
-      std::cout << "g: " << g.transpose() << std::endl;
+      //std::cout << "f: " << f.transpose() << std::endl;
+      //std::cout << "g: " << g.transpose() << std::endl;
 
       //--end of playing
 
