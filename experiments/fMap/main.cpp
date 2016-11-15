@@ -186,8 +186,20 @@ int main( int argc, char* argv[] ){
       tdp::f_rbf(pc_s, mean_s, alpha, f);
       tdp::f_rbf(pc_t, mean_t, alpha, g);
 
-      //std::cout << "f: " << f.transpose() << std::endl;
-      //std::cout << "g: " << g.transpose() << std::endl;
+      std::cout << "f: " << f.transpose() << std::endl;
+      std::cout << "g: " << g.transpose() << std::endl;
+
+      //todo: do f_rbf for all the means_s and means_t
+      //    : apply basis_s for each f
+      //    : return F matrix (same as X, data matrix)
+      //    : do the same for G matrix
+      //    : solve the least square to get C
+      //    : Get the discrete version of C
+      //    : Plot some points and check if their transformation makes sense
+      //Start here!
+
+
+
 
       //--end of playing
 
