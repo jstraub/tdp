@@ -34,7 +34,7 @@ void GetSphericalPc(ManagedHostImage<Vector3fda>& pc);
 
 void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc);
 
-void GetMtxPc(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h);
+void GetMtxPc(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h, float step=0.1);
 
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){

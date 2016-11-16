@@ -51,6 +51,24 @@
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
+//Given C mtx, x (index to pc_s, Source Manifold) , find y (index to pc_t) the correspondence in the Target Manifold
+int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
+                      const tdp::Image<tdp::Vector3fda>& pc_t,
+                      const Eigen::MatrixXf& S_lw,
+                      const Eigen::MatrixXf& T_lw,
+                      const Eigen::MatrixXf& C,
+                      const float alpha,
+                      const int query){
+    Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
+    Eigen::VectorXf f_l(C.rows()), g_l(C.rows());
+    int target_r, target_c;
+    tdp::f_rbf(pc_s, pc_s[query], alpha, f_w);
+    f_l = S_lw*f_w;
+    g_l = C*f_l;
+    g_w = T_lw.transpose()*f_l;
+    g_w.maxCoeff(&target_r,&target_c);
+    return target_r;
+}
 
 int main( int argc, char* argv[] ){
 
@@ -97,15 +115,23 @@ int main( int argc, char* argv[] ){
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
+  pangolin::OpenGlRenderState t_cam(
+      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      );
+  pangolin::OpenGlRenderState mtx_cam(
+      pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& viewPc = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewPc);
   pangolin::View& viewPc_t = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
+    .SetHandler(new pangolin::Handler3D(t_cam));
   container.AddDisplay(viewPc_t);
   pangolin::View& viewMtx = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
+    .SetHandler(new pangolin::Handler3D(mtx_cam));
   container.AddDisplay(viewMtx);
 
   // Add variables to pangolin GUI
@@ -115,7 +141,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
-  pangolin::Var<int> numEv("ui.numEv",10,10,300);
+  pangolin::Var<int> numEv("ui.numEv",50,10,300);
   pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
@@ -125,8 +151,14 @@ int main( int argc, char* argv[] ){
   // get the matrix pc for visualizing C
   tdp::ManagedHostImage<tdp::Vector3fda> pc_mtx((int)numEv*(int)numEv,1);
   GetMtxPc(pc_mtx, (int)numEv, (int)numEv);
-  std::cout << "pc mtx: "<< std::endl;
-
+//  std::cout << "pc mtx: "<< std::endl;
+//  for (int r=0; r<(int)numEv; ++r){
+//      std::cout << "r: " << r << std::endl;
+//      for (int c=0; c<(int)numEv; ++c){
+//          std::cout << pc_mtx[r*(int)numEv + c] << std::endl;
+//      }
+//      std::cout << std::endl;
+//  }
   // use those OpenGL buffers
   pangolin::GlBuffer vbo,vbo_t, vbo_c, valuebo_s,valuebo_t, valuebo_c;
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
@@ -140,8 +172,8 @@ int main( int argc, char* argv[] ){
   Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
   Eigen::MatrixXf S_lw((int)numEv, L_s.rows());
   Eigen::MatrixXf T_lw((int)numEv, L_t.rows());
-  Eigen::VectorXf evector_s(L_s.rows(),1);
-  Eigen::VectorXf evector_t(L_t.rows(),1);
+  Eigen::VectorXf evector_s(L_s.rows());
+  Eigen::VectorXf evector_t(L_t.rows());
   tdp::eigen_vector<tdp::Vector3fda> means_s(nBins, tdp::Vector3fda(0,0,0));
   tdp::eigen_vector<tdp::Vector3fda> means_t(nBins, tdp::Vector3fda(0,0,0));
 
@@ -190,7 +222,6 @@ int main( int argc, char* argv[] ){
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
       Eigen::MatrixXf F((int)numEv, (int)numEv), G((int)numEv, (int)numEv);
       Eigen::MatrixXf C((int)numEv, (int)numEv);
-      float alpha = 0.1;
 
       // construct F (design matrix)
       // -- each row contains coordinates of f in new smaller basis
@@ -201,12 +232,11 @@ int main( int argc, char* argv[] ){
       //    : solve the least square to get C
       //    : Get the discrete version of C
       //    : Plot some points and check if their transformation makes sense
-      //Start here!
       for (int i=0; i< means_s.size(); ++i){
           mean_s = means_s[i];
           mean_t = means_t[i];
 
-          tdp::f_rbf(pc_s, mean_s, alpha, f_w);
+          tdp::f_rbf(pc_s, mean_s, alpha, f_w); //todo: check if I can use this same alpha?
           tdp::f_rbf(pc_t, mean_t, alpha, g_w);
 
           f_l = S_lw*f_w; //a
@@ -223,9 +253,21 @@ int main( int argc, char* argv[] ){
       Eigen::FullPivLU<Eigen::MatrixXf> F_lu;
       F_lu.compute(F.transpose()*F);
       C = F_lu.solve(F.transpose()*G);
-      std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
-      std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
-      std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
+//      for (int r=0; r<numEv; ++r){
+//          for (int c=0; c< numEv; ++c){
+//              C(r,c) = float(r);
+//          }
+//      }
+      //std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
+      //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
+      //std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
+
+      // Get the point-wise correspondence
+      int x =0;
+      std::cout << "query: \n" << pc_s[x]<<std::endl;
+      int y = getCorrespondence(pc_s, pc_t, S_lw, T_lw, C, alpha, x);
+      std::cout << "target: \n " << pc_t[y] << std::endl;
+
 
       //color coding of the C matrix
       Eigen::VectorXf cvec(pc_mtx.Area());
@@ -234,7 +276,6 @@ int main( int argc, char* argv[] ){
               cvec(r*C.cols()+c) = C(r,c);
           }
       }
-      std::cout << "cvec: " << cvec.transpose() << std::endl;
 
       valuebo_c.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
       valuebo_c.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
@@ -242,8 +283,17 @@ int main( int argc, char* argv[] ){
       minVal_c = cvec.minCoeff()-1e-3;
       maxVal_c = cvec.maxCoeff();
 
-      //--end of playing
+      //TODO: segment correspondence
+      //    : operator commutativity constraint?
+      //    : any other constraint to add to the least square?
+      //TODO: add a handler to choose correponding points from each point cloud by clicking on the gui
+      //    : use the points to construct least-square
+      //    : check how well that works
+      //START HERE!
 
+
+
+      //--end of playing
       std::cout << "<--DONE fMap-->" << std::endl;
     }
 
@@ -291,7 +341,7 @@ int main( int argc, char* argv[] ){
     }
 
     if (viewPc_t.IsShown()){
-        viewPc_t.Activate(s_cam);
+        viewPc_t.Activate(t_cam);
         pangolin::glDrawAxis(0.1);
 
         // draw lines connecting the means
@@ -310,8 +360,8 @@ int main( int argc, char* argv[] ){
         // renders the vbo with colors from valuebo
         auto& shader_t = tdp::Shaders::Instance()->valueShader_;
         shader_t.Bind();
-        shader_t.SetUniform("P",  s_cam.GetProjectionMatrix());
-        shader_t.SetUniform("MV", s_cam.GetModelViewMatrix());
+        shader_t.SetUniform("P",  t_cam.GetProjectionMatrix());
+        shader_t.SetUniform("MV", t_cam.GetModelViewMatrix());
         shader_t.SetUniform("minValue", minVal_t);
         shader_t.SetUniform("maxValue", maxVal_t);
         valuebo_t.Bind();
@@ -331,17 +381,18 @@ int main( int argc, char* argv[] ){
     }
 
     if (viewMtx.IsShown()){
-        viewMtx.Activate(s_cam);
+        viewMtx.Activate(mtx_cam);
+        pangolin::glDrawAxis(0.1);
 
         // plots dots with the same number of rows and cols of C
-        glPointSize(2.);
+        glPointSize(5.);
         glColor3f(1.0f, 1.0f, 0.0f);
 
         // renders the vbo with colors from valuebo
         auto& shader = tdp::Shaders::Instance()->valueShader_;
         shader.Bind();
-        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
-        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+        shader.SetUniform("P",  mtx_cam.GetProjectionMatrix());
+        shader.SetUniform("MV", mtx_cam.GetModelViewMatrix());
         shader.SetUniform("minValue", minVal_c);
         shader.SetUniform("maxValue", maxVal_c);
         valuebo_c.Bind();
