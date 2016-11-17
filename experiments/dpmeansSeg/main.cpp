@@ -18,6 +18,7 @@
 #include <tdp/data/managed_image.h>
 
 #include <tdp/preproc/depth.h>
+#include <tdp/preproc/lab.h>
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
@@ -26,6 +27,8 @@
 #include <tdp/preproc/lab.h>
 
 #include <tdp/gui/gui.hpp>
+#include <tdp/clustering/dpmeans.hpp>
+
 
 int main( int argc, char* argv[] )
 {
@@ -72,6 +75,8 @@ int main( int argc, char* argv[] )
 
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
+
+  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -91,8 +96,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<float> lambda("ui.lambda",0.3,0.01,1.);
-  pangolin::Var<int> maxIt("ui.max it",10,1,100);
-  pangolin::Var<int> minNchangePerc("ui.min N change perc",0.05, 0.01, 0.1);
+  pangolin::Var<int> maxIt("ui.max it",30,1,100);
+  pangolin::Var<float> minNchangePerc("ui.min N change perc",0.05, 0.01, 0.1);
+  pangolin::Var<bool> recomputeMeans("ui.recomp means", true, true);
 
   tdp::DPmeans dpMeans(lambda);
 
@@ -108,7 +114,7 @@ int main( int argc, char* argv[] )
     // get rgb image
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
-    tdp::Rgb2Lab(rgb, lab);
+    tdp::Rgb2LabCpu(rgb, lab);
     // get depth image
     tdp::Image<uint16_t> dRaw;
     if (!gui.ImageD(dRaw)) continue;
@@ -119,25 +125,48 @@ int main( int argc, char* argv[] )
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
 
-    for (size_t i=0; i<abd.Area(); ++i) {
-      abd[i](0) = lab[i](1);
-      abd[i](1) = lab[i](2);
-      abd[i](2) = (d[i]-dMin)/(dMax-dMin);
+    if (recomputeMeans) {
+      for (size_t i=0; i<abd.Area(); ++i) {
+        if (d[i]==d[i]) {
+          abd[i](0) = lab[i](1)/128.;
+          abd[i](1) = lab[i](2)/128.;
+          abd[i](2) = (d[i]-dMin)/(dMax-dMin);
+        } else {
+          abd[i] << NAN,NAN,NAN;
+        }
+      }
+      vbo.Upload(abd.ptr_,abd.SizeBytes(), 0);
+      cuAbd.CopyFrom(abd, cudaMemcpyHostToDevice);
+      dpMeans.lambda_ = lambda;
+      dpMeans.Compute(abd, cuAbd, cuZ, maxIt, minNchangePerc);
+      std::pair<double,double> minMax = abd.MinMax();
+      std::cout << minMax.first << " " << minMax.second << std::endl;
     }
-    cuAbd.CopyFrom(abd, cudaMemcpyHostToDevice);
-    dpMeans.lambda_ = lambda;
-    dpMeans.Compute(abd, cuAbd, cuZ, maxIt, minNchangePerc);
+
+    // Draw 3D stuff
+    glEnable(GL_DEPTH_TEST);
+    if (d_cam.IsShown()) {
+      d_cam.Activate(s_cam);
+      // draw the axis
+      pangolin::glDrawAxis(0.1);
+      // render point cloud
+      pangolin::RenderVbo(vbo);
+    }
+    glDisable(GL_DEPTH_TEST);
 
     // Draw 2D stuff
     // SHowFrames renders the raw input streams (in our case RGB and D)
     gui.ShowFrames();
 
     if (viewLab.IsShown()) {
-      tdp::Rgb2Lab(rgb, lab8);
+      tdp::Rgb2LabCpu(rgb, lab8);
       viewLab.SetImage(lab8);
     }
     if (viewZ.IsShown()) {
       z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
+      for (size_t i=0; i<z.Area(); ++i)
+        if (z[i] > dpMeans.K_)
+          z[i] = dpMeans.K_;
       viewZ.SetImage(z);
     }
 

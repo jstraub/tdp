@@ -14,19 +14,21 @@ inline void Rgb2Lab(const Vector3bda& rgb, Vector3fda& lab) {
       0.019334*rgb_(0) + 0.119193*rgb_(1) + 0.950227*rgb_(2));
   xyz(0) /= 0.950456;
   xyz(2) /= 1.088754;
+//  std::cout << rgb_.transpose() << " -> " << xyz.transpose();
   if (xyz(1) > 0.008856)
-    lab(0) = 116*cprt(xyz(1))-16;
+    lab(0) = 116*cbrt(xyz(1))-16;
   else
-    lab(0) = 903.3*cprt(xyz(1));
+    lab(0) = 903.3*xyz(1);
 #pragma unroll
   for (size_t i=0 ; i<3; ++i) {
     if (xyz(i) > 0.008856)
-      xyz(i) = qbrt(xyz(i));
+      xyz(i) = cbrt(xyz(i));
     else
       xyz(i) = 7.787*xyz(i)+16./116.;
   }
   lab(1) = 500.*(xyz(0)-xyz(1));
   lab(2) = 200.*(xyz(1)-xyz(2));
+//  std::cout << " -> " << xyz.transpose() << " -> " << lab.transpose() << std::endl;
 }
 
 TDP_HOST_DEVICE
@@ -38,15 +40,15 @@ inline void Rgb2Lab(const Vector3bda& rgb, Vector3bda& lab) {
   lab(2) = static_cast<uint8_t>(lab_(2)+128.);
 }
 
-void Rgb2GreyCpu(const Image<Vector3bda>& rgb,
+void Rgb2LabCpu(const Image<Vector3bda>& rgb,
     Image<Vector3fda>& lab) {
   for (size_t i=0; i<rgb.Area(); ++i)
-    lab[i] = Rgb2Lab(rgb[i]);
+    Rgb2Lab(rgb[i], lab[i]);
 }
-void Rgb2GreyCpu(const Image<Vector3bda>& rgb,
+void Rgb2LabCpu(const Image<Vector3bda>& rgb,
     Image<Vector3bda>& lab) {
   for (size_t i=0; i<rgb.Area(); ++i)
-    lab[i] = Rgb2Lab(rgb[i]);
+    Rgb2Lab(rgb[i], lab[i]);
 }
 
 }
