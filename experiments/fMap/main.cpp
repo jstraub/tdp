@@ -54,8 +54,8 @@
 //Given C mtx, x (index to pc_s, Source Manifold) , find y (index to pc_t) the correspondence in the Target Manifold
 int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
                       const tdp::Image<tdp::Vector3fda>& pc_t,
-                      const Eigen::MatrixXf& S_lw,
-                      const Eigen::MatrixXf& T_lw,
+                      const Eigen::MatrixXf& S_wl,
+                      const Eigen::MatrixXf& T_wl,
                       const Eigen::MatrixXf& C,
                       const float alpha,
                       const int query){
@@ -63,20 +63,20 @@ int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
     Eigen::VectorXf f_l(C.rows()), g_l(C.rows());
     int target_r, target_c;
     tdp::f_rbf(pc_s, pc_s[query], alpha, f_w);
-    f_l = S_lw*f_w;
+    f_l = (f_w.transpose()*S_wl).transpose();
     g_l = C*f_l;
-    g_w = T_lw.transpose()*f_l;
+    g_w = T_wl*g_l;
     g_w.maxCoeff(&target_r,&target_c);
     return target_r;
 }
 
 int main( int argc, char* argv[] ){
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(1000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(10000,1);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(1000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(10000,1);
 
 
   if (argc > 1) {
@@ -141,7 +141,7 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
-  pangolin::Var<int> numEv("ui.numEv",50,10,300);
+  pangolin::Var<int> numEv("ui.numEv",10,10,300);
   pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
@@ -170,8 +170,8 @@ int main( int argc, char* argv[] ){
 
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
   Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
-  Eigen::MatrixXf S_lw((int)numEv, L_s.rows());
-  Eigen::MatrixXf T_lw((int)numEv, L_t.rows());
+  Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
+  Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
   Eigen::VectorXf evector_s(L_s.rows());
   Eigen::VectorXf evector_t(L_t.rows());
   tdp::eigen_vector<tdp::Vector3fda> means_s(nBins, tdp::Vector3fda(0,0,0));
@@ -194,12 +194,12 @@ int main( int argc, char* argv[] ){
       L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
       t0.toctic("GetLaplacians");
 
-      tdp::getLaplacianBasis(L_s, numEv, S_lw);
-      evector_s = S_lw.row(1); // first non-trivial evector
+      tdp::getLaplacianBasis(L_s, numEv, S_wl);
+      evector_s = S_wl.col(1); // first non-trivial evector
       means_s = tdp::getLevelSetMeans(pc_s, evector_s, nBins); //means based on the evector_s's nBins level sets
 
-      tdp::getLaplacianBasis(L_t, numEv, T_lw);
-      evector_t = T_lw.row(1); // first non-trivial evector
+      tdp::getLaplacianBasis(L_t, numEv, T_wl);
+      evector_t = T_wl.col(1); // first non-trivial evector
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, nBins);
       t0.toctic("GetEigenVectors & GetMeans");
 
@@ -216,57 +216,67 @@ int main( int argc, char* argv[] ){
       minVal_t = evector_t.minCoeff()-1e-3;
       maxVal_t = evector_t.maxCoeff();
 
+
       //--playing around here
+      int numCst = 2*(int)numEv;
       tdp::Vector3fda mean_s, mean_t;
       Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
-      Eigen::MatrixXf F((int)numEv, (int)numEv), G((int)numEv, (int)numEv);
+      Eigen::MatrixXf F(numCst, (int)numEv), G(numCst, (int)numEv);
       Eigen::MatrixXf C((int)numEv, (int)numEv);
+      // solve least-square
+      Eigen::FullPivLU<Eigen::MatrixXf> B_lu;
 
-      // construct F (design matrix)
-      // -- each row contains coordinates of f in new smaller basis
-      //todo: do f_rbf for all the means_s and means_t
-      //    : apply basis_s for each f
-      //    : return F matrix (same as X, data matrix)
-      //    : do the same for G matrix
-      //    : solve the least square to get C
-      //    : Get the discrete version of C
-      //    : Plot some points and check if their transformation makes sense
-      for (int i=0; i< means_s.size(); ++i){
-          mean_s = means_s[i];
-          mean_t = means_t[i];
 
-          tdp::f_rbf(pc_s, mean_s, alpha, f_w); //todo: check if I can use this same alpha?
-          tdp::f_rbf(pc_t, mean_t, alpha, g_w);
+      // construct F(design matrix) using point correspondences
+      Eigen::VectorXi nnIds(1);
+      Eigen::VectorXf dists(1);
+      for (int i=0; i< (int)numEv; ++i){
+          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+          //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
+          tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
+          tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
+          //std::cout << "f_w: " /*<< f_w.transpose() */<< std::endl;
+          //std::cout << "g_w: " /*<< g_w.transpose()*/ << std::endl;
 
-          f_l = S_lw*f_w; //a
-          g_l = T_lw*g_w; //b
+          f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+          //std::cout << "f_l: " << f_l.transpose() << std::endl;
+          g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+          //std::cout << "g_l: " << g_l.transpose() << std::endl;
           F.row(i) = f_l;
           G.row(i) = g_l;
-//          std::cout << "f_w: " << f_w.transpose() << std::endl;
-//          std::cout << "f_l: " << f_l.transpose() << std::endl;
-//          std::cout << "g_w: " << g_w.transpose() << std::endl;
-//          std::cout << "g_l: " << g_l.transpose() << std::endl;
+      }
+
+      // adds more constraints
+      for (int i=(int)numEv; i< numCst; ++i){
+          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+          //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
+          tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
+          tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
+          //std::cout << "f_w: " /*<< f_w.transpose() */<< std::endl;
+          //std::cout << "g_w: " /*<< g_w.transpose()*/ << std::endl;
+
+          f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+          //std::cout << "f_l: " << f_l.transpose() << std::endl;
+          g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+          //std::cout << "g_l: " << g_l.transpose() << std::endl;
+          F.row(i) = f_l;
+          G.row(i) = g_l;
       }
 
       // solve least-square
-      Eigen::FullPivLU<Eigen::MatrixXf> F_lu;
-      F_lu.compute(F.transpose()*F);
-      C = F_lu.solve(F.transpose()*G);
-//      for (int r=0; r<numEv; ++r){
-//          for (int c=0; c< numEv; ++c){
-//              C(r,c) = float(r);
-//          }
-//      }
+      C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
       //std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
       //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
       //std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
 
       // Get the point-wise correspondence
-      int x =0;
+      int x = 0;
       std::cout << "query: \n" << pc_s[x]<<std::endl;
-      int y = getCorrespondence(pc_s, pc_t, S_lw, T_lw, C, alpha, x);
-      std::cout << "target: \n " << pc_t[y] << std::endl;
+      int y = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, x);
+      ann_t.Search(pc_s[x], 1, 1e-9, nnIds, dists);
+      std::cout << "guess: \n" << pc_t[y] << std::endl;
+      std::cout << "true: \n" << nnIds(0) << std::endl;
 
 
       //color coding of the C matrix
@@ -296,8 +306,6 @@ int main( int argc, char* argv[] ){
       //--end of playing
       std::cout << "<--DONE fMap-->" << std::endl;
     }
-
-
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 1.0f);

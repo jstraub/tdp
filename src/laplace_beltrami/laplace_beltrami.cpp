@@ -374,7 +374,7 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
 
     if(eigs.info() == Spectra::SUCCESSFUL) {
         for (int i=0; i<numEv; ++i){
-            basis.row(i) = eigs.eigenvectors().col(i).real();
+            basis.col(i) = eigs.eigenvectors().col(i).real();
             //std::cout << "i, evec: " << i << ", " << evectors[i].transpose() << std::endl;
         }
     } else{
@@ -466,8 +466,8 @@ eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
 
 
 void f_rbf(const Image<Vector3fda>& pc,
-                      const Vector3fda& p,
-                      const float alpha,
+           const Vector3fda& p,
+           const float alpha,
            Eigen::VectorXf& f){
 
     for (int i=0; i<pc.Area(); ++i){
@@ -477,16 +477,5 @@ void f_rbf(const Image<Vector3fda>& pc,
     //std::cout << "f_rbf done" << std::endl;
 }
 
-//std::vector<float> f_rbf(const Image<Vector3fda>& pc,
-//                         const Vector3fda& p,
-//                         const float alpha){
-//    std::vector<float> f;
-//    f.reserve(pc.Area());
-
-//    for (int i=0; i<pc.Area(); ++i){
-//        f.push_back(exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
-//        std::cout << "f_i:  " << f[i] << std::endl;
-//    }
-//}
 
 }
