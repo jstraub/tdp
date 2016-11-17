@@ -96,6 +96,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<float> lambda("ui.lambda",0.3,0.01,1.);
+  pangolin::Var<float> alpha("ui.alpha",0.8,0.01,1.);
+
   pangolin::Var<int> maxIt("ui.max it",30,1,100);
   pangolin::Var<float> minNchangePerc("ui.min N change perc",0.05, 0.01, 0.1);
   pangolin::Var<bool> recomputeMeans("ui.recomp means", true, true);
@@ -124,13 +126,13 @@ int main( int argc, char* argv[] )
     // convet depth image from uint16_t to float [m]
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-
     if (recomputeMeans) {
+      std::pair<double,double> minMax = d.MinMax();
       for (size_t i=0; i<abd.Area(); ++i) {
         if (d[i]==d[i]) {
           abd[i](0) = lab[i](1)/128.;
           abd[i](1) = lab[i](2)/128.;
-          abd[i](2) = (d[i]-dMin)/(dMax-dMin);
+          abd[i](2) = alpha*(d[i]-minMax.first)/(minMax.second-minMax.first);
         } else {
           abd[i] << NAN,NAN,NAN;
         }
@@ -139,8 +141,8 @@ int main( int argc, char* argv[] )
       cuAbd.CopyFrom(abd, cudaMemcpyHostToDevice);
       dpMeans.lambda_ = lambda;
       dpMeans.Compute(abd, cuAbd, cuZ, maxIt, minNchangePerc);
-      std::pair<double,double> minMax = abd.MinMax();
-      std::cout << minMax.first << " " << minMax.second << std::endl;
+//      std::pair<double,double> minMax = abd.MinMax();
+//      std::cout << minMax.first << " " << minMax.second << std::endl;
     }
 
     // Draw 3D stuff
@@ -166,7 +168,7 @@ int main( int argc, char* argv[] )
       z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
       for (size_t i=0; i<z.Area(); ++i)
         if (z[i] > dpMeans.K_)
-          z[i] = dpMeans.K_;
+          z[i] = dpMeans.K_+1;
       viewZ.SetImage(z);
     }
 
