@@ -58,11 +58,11 @@ int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
                       const Eigen::MatrixXf& T_wl,
                       const Eigen::MatrixXf& C,
                       const float alpha,
-                      const int query){
+                      const int qId){
     Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
     Eigen::VectorXf f_l(C.rows()), g_l(C.rows());
     int target_r, target_c;
-    tdp::f_rbf(pc_s, pc_s[query], alpha, f_w);
+    tdp::f_rbf(pc_s, pc_s[qId], alpha, f_w);
     f_l = (f_w.transpose()*S_wl).transpose();
     g_l = C*f_l;
     g_w = T_wl*g_l;
@@ -72,11 +72,11 @@ int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
 
 int main( int argc, char* argv[] ){
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(10000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(3000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(3000,1);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(10000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(10000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(3000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(3000,1);
 
 
   if (argc > 1) {
@@ -133,6 +133,12 @@ int main( int argc, char* argv[] ){
   pangolin::View& viewMtx = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(mtx_cam));
   container.AddDisplay(viewMtx);
+  pangolin::View& viewF = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  container.AddDisplay(viewF);
+  pangolin::View& viewG = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(t_cam));
+  container.AddDisplay(viewG);
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
@@ -146,7 +152,8 @@ int main( int argc, char* argv[] ){
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
-  float minVal_t, maxVal_t, minVal_c, maxVal_c;
+  pangolin::Var<int>numQ("ui. num Quereis", 100, 100, 1000);
+  float minVal_t, maxVal_t, minVal_c, maxVal_c, minCValue, maxCValue;
 
   // get the matrix pc for visualizing C
   tdp::ManagedHostImage<tdp::Vector3fda> pc_mtx((int)numEv*(int)numEv,1);
@@ -160,14 +167,20 @@ int main( int argc, char* argv[] ){
 //      std::cout << std::endl;
 //  }
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo,vbo_t, vbo_c, valuebo_s,valuebo_t, valuebo_c;
+  pangolin::GlBuffer vbo, vbo_t, vbo_mtx,
+                     vbo_f, vbo_g,  //point clouds
+                     valuebo_s, valuebo_t, valuebo_mtx, //colorings: source manifold, target manifod, c_mtx
+                     valuebo_color, valuebo_g;
+
+  //-- upload point cloud positions
   vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
   vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
   vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
-  vbo_c.Reinitialise(pangolin::GlArrayBuffer, pc_mtx.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo_c.Upload(pc_mtx.ptr_, pc_mtx.SizeBytes(), 0);
+  vbo_mtx.Reinitialise(pangolin::GlArrayBuffer, pc_mtx.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vbo_mtx.Upload(pc_mtx.ptr_, pc_mtx.SizeBytes(), 0);
 
+  // Declare variables
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
   Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
   Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
@@ -176,16 +189,24 @@ int main( int argc, char* argv[] ){
   Eigen::VectorXf evector_t(L_t.rows());
   tdp::eigen_vector<tdp::Vector3fda> means_s(nBins, tdp::Vector3fda(0,0,0));
   tdp::eigen_vector<tdp::Vector3fda> means_t(nBins, tdp::Vector3fda(0,0,0));
+  //---color scheme
+  Eigen::VectorXf colors((int)numQ);
+  for (int i=0; i<(int)numQ; ++i){
+      colors(i) = (i*0.001);
+  }
+  minCValue = colors.minCoeff()-1e-3;
+  maxCValue = colors.maxCoeff();
+  std::cout << "mincolor: " << minCValue << std::endl;
+  std::cout << "maxcolor: " << maxCValue << std::endl;
 
   // Stream and display video
-  while(!pangolin::ShouldQuit())
-  {
+  while(!pangolin::ShouldQuit()){
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
     if (pangolin::Pushed(showFMap) || knn.GuiChanged() || alpha.GuiChanged() ||
-            numEv.GuiChanged() || nBins.GuiChanged()){
+            numEv.GuiChanged() || nBins.GuiChanged() || numQ.GuiChanged()){
       std::cout << "Running fMap..." << std::endl;
 
       // get Laplacian operator and its eigenvectors
@@ -204,6 +225,9 @@ int main( int argc, char* argv[] ){
       t0.toctic("GetEigenVectors & GetMeans");
 
       // color-coding on the surface
+//      for(int i=0; i< evector_s.rows(); ++i){
+//          std::cout << evector_s.transpose() << std::endl;
+//      }
       valuebo_s.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
       valuebo_s.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
       std::cout << evector_s.minCoeff() << " " << evector_s.maxCoeff() << std::endl;
@@ -216,7 +240,6 @@ int main( int argc, char* argv[] ){
       minVal_t = evector_t.minCoeff()-1e-3;
       maxVal_t = evector_t.maxCoeff();
 
-
       //--playing around here
       int numCst = 2*(int)numEv;
       tdp::Vector3fda mean_s, mean_t;
@@ -224,9 +247,6 @@ int main( int argc, char* argv[] ){
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
       Eigen::MatrixXf F(numCst, (int)numEv), G(numCst, (int)numEv);
       Eigen::MatrixXf C((int)numEv, (int)numEv);
-      // solve least-square
-      Eigen::FullPivLU<Eigen::MatrixXf> B_lu;
-
 
       // construct F(design matrix) using point correspondences
       Eigen::VectorXi nnIds(1);
@@ -270,15 +290,6 @@ int main( int argc, char* argv[] ){
       //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
       //std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
 
-      // Get the point-wise correspondence
-      int x = 0;
-      std::cout << "query: \n" << pc_s[x]<<std::endl;
-      int y = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, x);
-      ann_t.Search(pc_s[x], 1, 1e-9, nnIds, dists);
-      std::cout << "guess: \n" << pc_t[y] << std::endl;
-      std::cout << "true: \n" << nnIds(0) << std::endl;
-
-
       //color coding of the C matrix
       Eigen::VectorXf cvec(pc_mtx.Area());
       for (int r=0; r<C.rows(); ++r){
@@ -287,11 +298,36 @@ int main( int argc, char* argv[] ){
           }
       }
 
-      valuebo_c.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_c.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
+      valuebo_mtx.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_mtx.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
       std::cout << cvec.minCoeff() << " " << cvec.maxCoeff() << std::endl;
       minVal_c = cvec.minCoeff()-1e-3;
       maxVal_c = cvec.maxCoeff();
+
+      // Get the point-wise correspondence
+      int  tId;
+      int numQ = 50;
+      tdp::ManagedHostImage<tdp::Vector3fda> queries(numQ,1);
+      tdp::ManagedHostImage<tdp::Vector3fda> estimates(numQ,1);
+      for (int i=0; i<numQ; ++i){
+          //todo: random i
+          tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, i); //guessed id in second manifold
+          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+          queries[i] = pc_s[i];
+          estimates[i] = pc_t[tId];
+          std::cout << "query: \n" << pc_s[i]<<std::endl;
+          std::cout << "guess: \n" << pc_t[tId] << std::endl;
+          std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
+      }
+      //--visualization
+      vbo_f.Reinitialise(pangolin::GlArrayBuffer, queries.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+      vbo_f.Upload(queries.ptr_, queries.SizeBytes(), 0);
+
+      vbo_g.Reinitialise(pangolin::GlArrayBuffer, estimates.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+      vbo_g.Upload(estimates.ptr_, estimates.SizeBytes(), 0);
+
+      valuebo_color.Reinitialise(pangolin::GlArrayBuffer, colors.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_color.Upload(&colors(0), sizeof(float)*colors.rows(), 0);
 
       //TODO: segment correspondence
       //    : operator commutativity constraint?
@@ -403,22 +439,120 @@ int main( int argc, char* argv[] ){
         shader.SetUniform("MV", mtx_cam.GetModelViewMatrix());
         shader.SetUniform("minValue", minVal_c);
         shader.SetUniform("maxValue", maxVal_c);
-        valuebo_c.Bind();
+        valuebo_mtx.Bind();
         glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-        vbo_c.Bind();
+        vbo_mtx.Bind();
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glPointSize(4.);
-        glDrawArrays(GL_POINTS, 0, vbo_c.num_elements);
+        glDrawArrays(GL_POINTS, 0, vbo_mtx.num_elements);
         shader.Unbind();
         glDisableVertexAttribArray(1);
-        valuebo_c.Unbind();
+        valuebo_mtx.Unbind();
         glDisableVertexAttribArray(0);
-        vbo_c.Unbind();
+        vbo_mtx.Unbind();
 
     }
+
+    if (viewF.IsShown()){
+
+        viewF.Activate(s_cam);
+        pangolin::glDrawAxis(0.1);
+
+        // draw lines connecting the means
+        glColor3f(.3,1.,.125);
+        glLineWidth(2);
+        tdp::Vector3fda m, m_prev;
+        for (size_t i=1; i<means_s.size(); ++i){
+            m_prev = means_s[i-1];
+            m = means_s[i];
+            tdp::glDrawLine(m_prev, m);
+        }
+
+        glPointSize(2.);
+        glColor3f(1.0f, 1.0f, 0.0f);
+        // renders the vbo with colors from valuebo
+        auto& shader = tdp::Shaders::Instance()->valueShader_;
+        shader.Bind();
+        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+        shader.SetUniform("minValue", minVal);
+        shader.SetUniform("maxValue", maxVal);
+        valuebo_s.Bind();
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+        vbo.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glPointSize(4.);
+        glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+        shader.Unbind();
+        glDisableVertexAttribArray(1);
+        valuebo_s.Unbind();
+        glDisableVertexAttribArray(0);
+        vbo.Unbind();
+
+
+//        viewF.Activate(s_cam);
+//        pangolin::glDrawAxis(0.1);
+
+//        glPointSize(2.);
+//        glColor3f(1.0f, 1.0f, 0.0f);
+//        // renders the vbo with colors from valuebo
+//        auto& shader = tdp::Shaders::Instance()->valueShader_;
+//        shader.Bind();
+//        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+//        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+//        shader.SetUniform("minValue", minCValue);
+//        shader.SetUniform("maxValue", maxCValue);
+//        valuebo_color.Bind();
+//        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+//        vbo_f.Bind();
+//        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+//        glEnableVertexAttribArray(0);
+//        glEnableVertexAttribArray(1);
+//        glPointSize(4.);
+//        glDrawArrays(GL_POINTS, 0, vbo_f.num_elements);
+//        shader.Unbind();
+//        glDisableVertexAttribArray(1);
+//        valuebo_color.Unbind();
+//        glDisableVertexAttribArray(0);
+//        vbo_f.Unbind();
+    }
+
+    if (viewG.IsShown()){
+        viewG.Activate(t_cam);
+        pangolin::glDrawAxis(0.1);
+
+        glPointSize(2.);
+        glColor3f(1.0f, 1.0f, 0.0f);
+        // renders the vbo with colors from valuebo
+        auto& shader = tdp::Shaders::Instance()->valueShader_;
+        shader.Bind();
+        shader.SetUniform("P",  t_cam.GetProjectionMatrix());
+        shader.SetUniform("MV", t_cam.GetModelViewMatrix());
+        shader.SetUniform("minValue", minCValue);
+        shader.SetUniform("maxValue", maxCValue);
+        valuebo_color.Bind();
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+        vbo_g.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glPointSize(4.);
+        glDrawArrays(GL_POINTS, 0, vbo_g.num_elements);
+        shader.Unbind();
+        glDisableVertexAttribArray(1);
+        valuebo_color.Unbind();
+        glDisableVertexAttribArray(0);
+        vbo_g.Unbind();
+    }
+
     glDisable(GL_DEPTH_TEST);
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
