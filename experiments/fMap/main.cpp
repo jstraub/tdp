@@ -70,8 +70,47 @@ int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
     return target_r;
 }
 
-int main( int argc, char* argv[] ){
 
+void Test_simplePc(){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
+    tdp::ManagedHostImage<tdp::Vector3fda> pc_t = tdp::GetSimplePc();
+    // parameters
+    int numEv = pc_s.Area()-3; //get ALL eigenvectors of L
+    int knn = pc_s.Area(); // use all points as neighbors
+    float eps = 1e-6;
+    float alpha = 0.01;
+    int numCst = pc_s.Area();
+
+    // build kd tree
+    tdp::ANN ann_s, ann_t;
+    ann_s.ComputeKDtree(pc_s);
+    ann_t.ComputeKDtree(pc_t);
+
+    // construct laplacian matrices
+    Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
+    Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
+    Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
+    Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
+
+    L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
+    L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
+    tdp::getLaplacianBasis(L_s, numEv, S_wl);
+    tdp::getLaplacianBasis(L_t, numEv, T_wl);
+
+    std::cout << "Laplacians------" << std::endl;
+    std::cout << L_s << " \n" << L_t<< std::endl;
+
+    std::cout << "Basis ---" << std::endl;
+    std::cout << S_wl << std::endl;
+    std::cout << "-----------------" << std::endl;
+    std::cout << T_wl << std::endl;
+
+
+}
+
+int main( int argc, char* argv[] ){
+  Test_simplePc();
+  return 1;
   tdp::ManagedHostImage<tdp::Vector3fda> pc_s(3000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns_s(3000,1);
 
@@ -86,7 +125,8 @@ int main( int argc, char* argv[] ){
   } else {
       std::srand(101);
       GetSphericalPc(pc_s);
-      std::srand(200);
+//      std::srand(200);
+      std::srand(101);
       GetSphericalPc(pc_t);
       //GetCylindricalPc(pc);
   }
@@ -147,12 +187,13 @@ int main( int argc, char* argv[] ){
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
-  pangolin::Var<int> numEv("ui.numEv",10,10,300);
+  pangolin::Var<int> numEv("ui.numEv",100,10,300);
+  pangolin::Var<int> numCst("ui.numCst",20*numEv,numEv,pc_s.Area());
   pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
-  pangolin::Var<int>numQ("ui. num Quereis", 100, 100, 1000);
+  pangolin::Var<int>numQ("ui. num Quereis", 100, 100, pc_s.Area());
   float minVal_t, maxVal_t, minVal_c, maxVal_c, minCValue, maxCValue;
 
   // get the matrix pc for visualizing C
@@ -187,8 +228,8 @@ int main( int argc, char* argv[] ){
   Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
   Eigen::VectorXf evector_s(L_s.rows());
   Eigen::VectorXf evector_t(L_t.rows());
-  tdp::eigen_vector<tdp::Vector3fda> means_s(nBins, tdp::Vector3fda(0,0,0));
-  tdp::eigen_vector<tdp::Vector3fda> means_t(nBins, tdp::Vector3fda(0,0,0));
+  tdp::eigen_vector<tdp::Vector3fda> means_s((int)nBins, tdp::Vector3fda(0,0,0));
+  tdp::eigen_vector<tdp::Vector3fda> means_t((int)nBins, tdp::Vector3fda(0,0,0));
   //---color scheme
   Eigen::VectorXf colors((int)numQ);
   for (int i=0; i<(int)numQ; ++i){
@@ -217,11 +258,11 @@ int main( int argc, char* argv[] ){
 
       tdp::getLaplacianBasis(L_s, numEv, S_wl);
       evector_s = S_wl.col(1); // first non-trivial evector
-      means_s = tdp::getLevelSetMeans(pc_s, evector_s, nBins); //means based on the evector_s's nBins level sets
+      means_s = tdp::getLevelSetMeans(pc_s, evector_s, (int)nBins); //means based on the evector_s's nBins level sets
 
       tdp::getLaplacianBasis(L_t, numEv, T_wl);
       evector_t = T_wl.col(1); // first non-trivial evector
-      means_t = tdp::getLevelSetMeans(pc_t, evector_t, nBins);
+      means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
 
       // color-coding on the surface
@@ -241,45 +282,54 @@ int main( int argc, char* argv[] ){
       maxVal_t = evector_t.maxCoeff();
 
       //--playing around here
-      int numCst = 2*(int)numEv;
-      tdp::Vector3fda mean_s, mean_t;
       Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
-      Eigen::MatrixXf F(numCst, (int)numEv), G(numCst, (int)numEv);
+      Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
       Eigen::MatrixXf C((int)numEv, (int)numEv);
 
-      // construct F(design matrix) using point correspondences
+      // Automatic correspondence construction using one point
+      // as the center and getting numCst (closest) points around it
+      Eigen::VectorXi sIds((int)numCst), tIds((int)numCst);
+      Eigen::VectorXf sDists((int)numCst), tDists((int)numCst);
+      ann_s.Search(pc_s[0], (int)numCst, 1e-9, sIds, sDists);
+      ann_t.Search(pc_t[0], (int)numCst, 1e-9, tIds, tDists);
+
+      // --construct F(design matrix) using point correspondences
       Eigen::VectorXi nnIds(1);
       Eigen::VectorXf dists(1);
       for (int i=0; i< (int)numEv; ++i){
-          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+          //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
           //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
-          tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
-          tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
+          //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
+          //tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
           //std::cout << "f_w: " /*<< f_w.transpose() */<< std::endl;
           //std::cout << "g_w: " /*<< g_w.transpose()*/ << std::endl;
 
-          f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+          //f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
           //std::cout << "f_l: " << f_l.transpose() << std::endl;
-          g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+          //g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
           //std::cout << "g_l: " << g_l.transpose() << std::endl;
+
+          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha, f_w); //todo: check if I can use this same alpha?
+          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha, g_w);
+          f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+          g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+
           F.row(i) = f_l;
           G.row(i) = g_l;
       }
 
       // adds more constraints
-      for (int i=(int)numEv; i< numCst; ++i){
-          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
-          //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
-          tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
-          tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
-          //std::cout << "f_w: " /*<< f_w.transpose() */<< std::endl;
-          //std::cout << "g_w: " /*<< g_w.transpose()*/ << std::endl;
+      for (int i=(int)numEv; i< (int)numCst; ++i){
+          //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+          //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
+          //tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
+
+          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha, f_w); //todo: check if I can use this same alpha?
+          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha, g_w);
 
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
-          //std::cout << "f_l: " << f_l.transpose() << std::endl;
           g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
-          //std::cout << "g_l: " << g_l.transpose() << std::endl;
           F.row(i) = f_l;
           G.row(i) = g_l;
       }
@@ -305,17 +355,23 @@ int main( int argc, char* argv[] ){
       maxVal_c = cvec.maxCoeff();
 
       // Get the point-wise correspondence
-      int  tId;
-      int numQ = 50;
-      tdp::ManagedHostImage<tdp::Vector3fda> queries(numQ,1);
-      tdp::ManagedHostImage<tdp::Vector3fda> estimates(numQ,1);
-      for (int i=0; i<numQ; ++i){
+      //--Query 100 closest points to pc_s[0]
+      //--The result points should also be close to each other
+      Eigen::VectorXi qIds((int)numQ);
+      Eigen::VectorXf qDists((int)numQ);
+      ann_s.Search(pc_s[0], (int)numQ, 1e-9, qIds, qDists);
+
+
+      tdp::ManagedHostImage<tdp::Vector3fda> queries((int)numQ,1);
+      tdp::ManagedHostImage<tdp::Vector3fda> estimates((int)numQ,1);
+      for (int i=0; i<(int)numQ; ++i){
           //todo: random i
-          tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, i); //guessed id in second manifold
-          ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
-          queries[i] = pc_s[i];
+          int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, i); //guessed id in second manifold
+          ann_t.Search(pc_s[qIds[i]], 1, 1e-9, nnIds, dists);
+
+          queries[i] = pc_s[qIds[i]];
           estimates[i] = pc_t[tId];
-          std::cout << "query: \n" << pc_s[i]<<std::endl;
+          std::cout << "query: \n" << pc_s[qIds[i]]<<std::endl;
           std::cout << "guess: \n" << pc_t[tId] << std::endl;
           std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
       }
@@ -458,46 +514,18 @@ int main( int argc, char* argv[] ){
 
     if (viewF.IsShown()){
 
-        viewF.Activate(s_cam);
-        pangolin::glDrawAxis(0.1);
-
-        // draw lines connecting the means
-        glColor3f(.3,1.,.125);
-        glLineWidth(2);
-        tdp::Vector3fda m, m_prev;
-        for (size_t i=1; i<means_s.size(); ++i){
-            m_prev = means_s[i-1];
-            m = means_s[i];
-            tdp::glDrawLine(m_prev, m);
-        }
-
-        glPointSize(2.);
-        glColor3f(1.0f, 1.0f, 0.0f);
-        // renders the vbo with colors from valuebo
-        auto& shader = tdp::Shaders::Instance()->valueShader_;
-        shader.Bind();
-        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
-        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
-        shader.SetUniform("minValue", minVal);
-        shader.SetUniform("maxValue", maxVal);
-        valuebo_s.Bind();
-        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-        vbo.Bind();
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glPointSize(4.);
-        glDrawArrays(GL_POINTS, 0, vbo.num_elements);
-        shader.Unbind();
-        glDisableVertexAttribArray(1);
-        valuebo_s.Unbind();
-        glDisableVertexAttribArray(0);
-        vbo.Unbind();
-
-
 //        viewF.Activate(s_cam);
 //        pangolin::glDrawAxis(0.1);
+
+//        // draw lines connecting the means
+//        glColor3f(.3,1.,.125);
+//        glLineWidth(2);
+//        tdp::Vector3fda m, m_prev;
+//        for (size_t i=1; i<means_s.size(); ++i){
+//            m_prev = means_s[i-1];
+//            m = means_s[i];
+//            tdp::glDrawLine(m_prev, m);
+//        }
 
 //        glPointSize(2.);
 //        glColor3f(1.0f, 1.0f, 0.0f);
@@ -506,22 +534,50 @@ int main( int argc, char* argv[] ){
 //        shader.Bind();
 //        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
 //        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
-//        shader.SetUniform("minValue", minCValue);
-//        shader.SetUniform("maxValue", maxCValue);
-//        valuebo_color.Bind();
+//        shader.SetUniform("minValue", minVal);
+//        shader.SetUniform("maxValue", maxVal);
+//        valuebo_s.Bind();
 //        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-//        vbo_f.Bind();
+//        vbo.Bind();
 //        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 //        glEnableVertexAttribArray(0);
 //        glEnableVertexAttribArray(1);
 //        glPointSize(4.);
-//        glDrawArrays(GL_POINTS, 0, vbo_f.num_elements);
+//        glDrawArrays(GL_POINTS, 0, vbo.num_elements);
 //        shader.Unbind();
 //        glDisableVertexAttribArray(1);
-//        valuebo_color.Unbind();
+//        valuebo_s.Unbind();
 //        glDisableVertexAttribArray(0);
-//        vbo_f.Unbind();
+//        vbo.Unbind();
+
+
+        viewF.Activate(s_cam);
+        pangolin::glDrawAxis(0.1);
+
+        glPointSize(2.);
+        glColor3f(1.0f, 1.0f, 0.0f);
+        // renders the vbo with colors from valuebo
+        auto& shader = tdp::Shaders::Instance()->valueShader_;
+        shader.Bind();
+        shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+        shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+        shader.SetUniform("minValue", minCValue);
+        shader.SetUniform("maxValue", maxCValue);
+        valuebo_color.Bind();
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+        vbo_f.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glPointSize(4.);
+        glDrawArrays(GL_POINTS, 0, vbo_f.num_elements);
+        shader.Unbind();
+        glDisableVertexAttribArray(1);
+        valuebo_color.Unbind();
+        glDisableVertexAttribArray(0);
+        vbo_f.Unbind();
     }
 
     if (viewG.IsShown()){

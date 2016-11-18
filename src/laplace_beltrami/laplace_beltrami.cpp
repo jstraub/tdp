@@ -37,11 +37,11 @@ Matrix3fda getCovariance(const Image<Vector3fda>& pc, const Eigen::VectorXi& nnI
 }
 
 ManagedHostImage<Vector3fda> GetSimplePc(){
-    ManagedHostImage<Vector3fda> pc(7,1);
+    ManagedHostImage<Vector3fda> pc(10,1);
     for (size_t i=0; i<pc.Area(); ++i){
         Vector3fda pt;
-        pt << i,0,0;
-        pc(i,0) = pt;
+        pt << i+1,0,0;
+        pc[i] = pt;
     }
     return pc;
 }
@@ -299,8 +299,8 @@ Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
 //    tripletList.reserve(estimation_of_entries);
 
     Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
-    Eigen::VectorXi nnIds(knn,1);
-    Eigen::VectorXf dists(knn,1);
+    Eigen::VectorXi nnIds(knn);
+    Eigen::VectorXf dists(knn);
     L.reserve(Eigen::VectorXi::Constant(pc.Area(),knn)); //todo: better memory init
     for (int i=0; i<pc.Area(); ++i){
         ann.Search(pc[i], knn, eps, nnIds, dists);
@@ -366,7 +366,7 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
     // Retrieve results
     // Construct eigen solver object, requesting the largest idEv number of eigenvalues
     Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
-            Spectra::SparseGenMatProd<float> > eigs(&op, numEv, 2*(numEv)+1);
+            Spectra::SparseGenMatProd<float> > eigs(&op, numEv, std::min(2*(numEv)+1, (int)L.rows()));
 
     // Initialize and compute
     eigs.init();
