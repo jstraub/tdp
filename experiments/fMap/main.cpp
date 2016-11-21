@@ -75,12 +75,14 @@ void Test_simplePc(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
     tdp::ManagedHostImage<tdp::Vector3fda> pc_t = tdp::GetSimplePc();
     // parameters
-    int numEv = pc_s.Area()-3; //get ALL eigenvectors of L
+    int numEv = pc_s.Area()/2;//pc_s.Area()-2; //get ALL eigenvectors of L
     int knn = pc_s.Area(); // use all points as neighbors
     float eps = 1e-6;
     float alpha = 0.01;
-    int numCst = pc_s.Area();
+    float alpha2 = 0.1;
 
+    int numCst = numEv;//pc_s.Area();
+    int numQ = pc_s.Area();
     // build kd tree
     tdp::ANN ann_s, ann_t;
     ann_s.ComputeKDtree(pc_s);
@@ -97,25 +99,62 @@ void Test_simplePc(){
     tdp::getLaplacianBasis(L_s, numEv, S_wl);
     tdp::getLaplacianBasis(L_t, numEv, T_wl);
 
-    std::cout << "Laplacians------" << std::endl;
-    std::cout << L_s << " \n" << L_t<< std::endl;
-
     std::cout << "Basis ---" << std::endl;
     std::cout << S_wl << std::endl;
     std::cout << "-----------------" << std::endl;
     std::cout << T_wl << std::endl;
 
+    //--playing around here
+    Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
+    Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
+    Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
+    Eigen::MatrixXf C((int)numEv, (int)numEv);
+
+    // --construct F(design matrix) using point correspondences
+
+    for (int i=0; i< (int)numCst; ++i){
+
+        tdp::f_rbf(pc_s, pc_s[i], alpha2, f_w); //todo: check if I can use this same alpha?
+        tdp::f_rbf(pc_t, pc_t[i], alpha2, g_w);
+        f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+        g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+
+        F.row(i) = f_l;
+        G.row(i) = g_l;
+    }
+
+    // solve least-square
+    C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
+    //std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
+    //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
+    std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
+
+    //Get correspondences
+    Eigen::VectorXi nnIds(1);
+    Eigen::VectorXf dists(1);
+    tdp::ManagedHostImage<tdp::Vector3fda> queries((int)numQ,1);
+    tdp::ManagedHostImage<tdp::Vector3fda> estimates((int)numQ,1);
+    for (int i=0; i<(int)numQ; ++i){
+        int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
+        ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
+        queries[i] = pc_s[i];
+        estimates[i] = pc_t[tId];
+        std::cout << "query: \n" << pc_s[i].transpose()<<std::endl;
+        std::cout << "guess: \n" << pc_t[tId].transpose() << std::endl;
+        std::cout << "true: \n" << pc_t[nnIds(0)].transpose() << std::endl;
+    }
+
 
 }
 
 int main( int argc, char* argv[] ){
-  Test_simplePc();
-  return 1;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(3000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(3000,1);
+  //Test_simplePc();
+  //return 1;
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_s(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_s(1000,1);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(3000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(3000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(1000,1);
 
 
   if (argc > 1) {
@@ -186,10 +225,14 @@ int main( int argc, char* argv[] ){
   //-- variables for KNN
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
-  pangolin::Var<float> alpha("ui. alpha", 0.01, 0.005, 0.3); //variance of rbf kernel
-  pangolin::Var<int> numEv("ui.numEv",100,10,300);
-  pangolin::Var<int> numCst("ui.numCst",20*numEv,numEv,pc_s.Area());
+  pangolin::Var<float> alpha("ui. alpha", 0.01, 0.001, 0.3); //variance of rbf kernel for laplacian
+  pangolin::Var<float> alpha2("ui. alpha2", 0.01, 0.01, 0.5); //variance of rbf kernel for defining function on manifold
+
   pangolin::Var<int>nBins("ui. nBins", 10, 10,100);
+  //--Correspondence Matrix C estimation
+  pangolin::Var<int> numEv("ui.numEv",30,10,300); //min=1, max=pc_s.Area()
+  pangolin::Var<int> numCst("ui.numCst",numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,pc_s.Area());
+
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
@@ -224,21 +267,17 @@ int main( int argc, char* argv[] ){
   // Declare variables
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
   Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
-  Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
-  Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
-  Eigen::VectorXf evector_s(L_s.rows());
-  Eigen::VectorXf evector_t(L_t.rows());
+//  Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);
+//  Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
   tdp::eigen_vector<tdp::Vector3fda> means_s((int)nBins, tdp::Vector3fda(0,0,0));
   tdp::eigen_vector<tdp::Vector3fda> means_t((int)nBins, tdp::Vector3fda(0,0,0));
+  Eigen::VectorXf evector_s(L_s.rows());
+  Eigen::VectorXf evector_t(L_t.rows());
   //---color scheme
   Eigen::VectorXf colors((int)numQ);
   for (int i=0; i<(int)numQ; ++i){
       colors(i) = (i*0.001);
   }
-  minCValue = colors.minCoeff()-1e-3;
-  maxCValue = colors.maxCoeff();
-  std::cout << "mincolor: " << minCValue << std::endl;
-  std::cout << "maxcolor: " << maxCValue << std::endl;
 
   // Stream and display video
   while(!pangolin::ShouldQuit()){
@@ -246,14 +285,35 @@ int main( int argc, char* argv[] ){
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (pangolin::Pushed(showFMap) || knn.GuiChanged() || alpha.GuiChanged() ||
-            numEv.GuiChanged() || nBins.GuiChanged() || numQ.GuiChanged()){
+    if (pangolin::Pushed(showFMap) || knn.GuiChanged() || alpha.GuiChanged() ||alpha2.GuiChanged() ||
+            numEv.GuiChanged() || nBins.GuiChanged() || numQ.GuiChanged() || numCst.GuiChanged()){
       std::cout << "Running fMap..." << std::endl;
+      Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);
+      Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
+
+
+//      S_wl = Eigen::MatrixXf(L_s.rows(),(int)numEv);//cols are evectors
+//      T_wl = Eigen::MatrixXf(L_t.rows(),(int)numEv);
+      std::cout << "s_wl size: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
+      std::cout << "t_wl size: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
+
+      //---color scheme
+      colors = Eigen::VectorXf((int)numQ);
+      for (int i=0; i<(int)numQ; ++i){
+          colors(i) = (i*0.001);
+      }
+      minCValue = colors.minCoeff()-1e-3;
+      maxCValue = colors.maxCoeff();
+      std::cout << "NumQ changed: " << colors.rows() << std::endl;
+      std::cout << "mincolor: " << minCValue << std::endl;
+      std::cout << "maxcolor: " << maxCValue << std::endl;
+
 
       // get Laplacian operator and its eigenvectors
       tdp::Timer t0;
       L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
       L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
+      std::cout << "l changed: " << alpha << std::endl;
       t0.toctic("GetLaplacians");
 
       tdp::getLaplacianBasis(L_s, numEv, S_wl);
@@ -297,7 +357,7 @@ int main( int argc, char* argv[] ){
       // --construct F(design matrix) using point correspondences
       Eigen::VectorXi nnIds(1);
       Eigen::VectorXf dists(1);
-      for (int i=0; i< (int)numEv; ++i){
+      for (int i=0; i< (int)numCst; ++i){
           //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
           //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
           //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
@@ -310,35 +370,16 @@ int main( int argc, char* argv[] ){
           //g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
           //std::cout << "g_l: " << g_l.transpose() << std::endl;
 
-          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha, f_w); //todo: check if I can use this same alpha?
-          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha, g_w);
+          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha2, f_w); //todo: check if I can use this same alpha2?
+          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha2, g_w);
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
           g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
 
           F.row(i) = f_l;
           G.row(i) = g_l;
       }
-
-      // adds more constraints
-      for (int i=(int)numEv; i< (int)numCst; ++i){
-          //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
-          //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
-          //tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
-
-          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha, f_w); //todo: check if I can use this same alpha?
-          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha, g_w);
-
-          f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
-          g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
-          F.row(i) = f_l;
-          G.row(i) = g_l;
-      }
-
       // solve least-square
       C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
-      //std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
-      //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
-      //std::cout << "\nC: \n" << C << /*C.rows() << C.cols() <<*/ std::endl;
 
       //color coding of the C matrix
       Eigen::VectorXf cvec(pc_mtx.Area());
@@ -360,21 +401,22 @@ int main( int argc, char* argv[] ){
       Eigen::VectorXi qIds((int)numQ);
       Eigen::VectorXf qDists((int)numQ);
       ann_s.Search(pc_s[0], (int)numQ, 1e-9, qIds, qDists);
-
+      std::cout << "current numQ: " << numQ<< std::endl;
 
       tdp::ManagedHostImage<tdp::Vector3fda> queries((int)numQ,1);
       tdp::ManagedHostImage<tdp::Vector3fda> estimates((int)numQ,1);
       for (int i=0; i<(int)numQ; ++i){
           //todo: random i
-          int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha, i); //guessed id in second manifold
+          int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
           ann_t.Search(pc_s[qIds[i]], 1, 1e-9, nnIds, dists);
 
           queries[i] = pc_s[qIds[i]];
           estimates[i] = pc_t[tId];
-          std::cout << "query: \n" << pc_s[qIds[i]]<<std::endl;
-          std::cout << "guess: \n" << pc_t[tId] << std::endl;
-          std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
+//          std::cout << "query: \n" << pc_s[qIds[i]]<<std::endl;
+//          std::cout << "guess: \n" << pc_t[tId] << std::endl;
+//          std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
       }
+      std::cout <<"num points in estimates: " << estimates.Area() << std::endl;
       //--visualization
       vbo_f.Reinitialise(pangolin::GlArrayBuffer, queries.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
       vbo_f.Upload(queries.ptr_, queries.SizeBytes(), 0);
@@ -392,9 +434,6 @@ int main( int argc, char* argv[] ){
       //    : use the points to construct least-square
       //    : check how well that works
       //START HERE!
-
-
-
       //--end of playing
       std::cout << "<--DONE fMap-->" << std::endl;
     }
@@ -581,6 +620,7 @@ int main( int argc, char* argv[] ){
     }
 
     if (viewG.IsShown()){
+
         viewG.Activate(t_cam);
         pangolin::glDrawAxis(0.1);
 
