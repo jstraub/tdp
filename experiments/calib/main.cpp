@@ -362,7 +362,9 @@ int main( int argc, char** argv)
     pangolin::Var<double> disp_mse("ui.MSE");
     pangolin::Var<int> disp_frame("ui.frame");
 
-    pangolin::Var<bool> add("ui.Add Frames", true, true);
+    pangolin::Var<bool> add("ui.add current frame", false, false);
+    pangolin::Var<bool> addContinuous("ui.Add Frames", false, true);
+
 
     pangolin::Var<bool> disp_thresh("ui.Display Thresh",false,true);
     pangolin::Var<bool> disp_lines("ui.Display Lines",true,true);
@@ -419,13 +421,15 @@ int main( int argc, char** argv)
 
       if( go ) {
         if( video.Grab(image_buffer, images, true, true) ) {
-          if(add) {
-            calib_frame = calibrator.AddFrame(Sophus::SE3d(Sophus::SO3d(), Eigen::Vector3d(0,0,1000)) );
-          }
+
           ++frame;
         }else{
           run = false;
         }
+      }
+
+      if(pangolin::Pushed(add) || addContinuous) {
+        calib_frame = calibrator.AddFrame(Sophus::SE3d(Sophus::SO3d(), Eigen::Vector3d(0,0,1000)) );
       }
 
       glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);

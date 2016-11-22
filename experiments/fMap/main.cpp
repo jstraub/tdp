@@ -279,6 +279,7 @@ int main( int argc, char* argv[] ){
       colors(i) = (i*0.001);
   }
 
+
   // Stream and display video
   while(!pangolin::ShouldQuit()){
     // clear the OpenGL render buffers
@@ -298,13 +299,13 @@ int main( int argc, char* argv[] ){
       std::cout << "t_wl size: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
       //---color scheme
+      std::cout << "before rerunning: " << colors.rows() << std::endl;
       colors = Eigen::VectorXf((int)numQ);
       for (int i=0; i<(int)numQ; ++i){
           colors(i) = (i*0.001);
       }
       minCValue = colors.minCoeff()-1e-3;
       maxCValue = colors.maxCoeff();
-      std::cout << "NumQ changed: " << colors.rows() << std::endl;
       std::cout << "mincolor: " << minCValue << std::endl;
       std::cout << "maxcolor: " << maxCValue << std::endl;
 
