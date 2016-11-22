@@ -52,6 +52,7 @@ int main( int argc, char* argv[] )
   std::string tsdfOutputPath = "tsdf.raw";
 
   std::cout << input_uri << std::endl;
+  std::cout << configPath << std::endl;
 
   // Read rig file
   tdp::Rig<CameraT> rig;
@@ -82,7 +83,7 @@ int main( int argc, char* argv[] )
   wSingle += wSingle%64;
   hSingle += hSingle%64;
   size_t w = wSingle;
-  size_t h = 3*hSingle;
+  size_t h = rig.NumCams()*hSingle;
 
   size_t dTSDF = 512;
   size_t wTSDF = 512;
@@ -193,7 +194,7 @@ int main( int argc, char* argv[] )
       });
 
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
-  uint8_t buffer[640*480*(2+3)];
+  uint8_t buffer[640*480*(2+rig.NumCams())];
 
   tdp::Image<uint16_t> _d(640,480,(uint16_t*)buffer);
   tdp::Image<tdp::Vector3bda> _rgb(640,480,(tdp::Vector3bda*)&buffer[640*480*2]);

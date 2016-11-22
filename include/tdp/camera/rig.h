@@ -90,7 +90,7 @@ struct Rig {
               if (cam.FromJson(file_json[i]["camera"])) {
                 if (verbose) 
                   std::cout << "found camera model" << std::endl ;
-                std::cout << file_json[i]["camera"].serialize(true) << std::endl;
+//                std::cout << file_json[i]["camera"].serialize(true) << std::endl;
               }
               cams_.push_back(cam);
               if (file_json[i]["camera"].contains("depthScale")) {
@@ -308,7 +308,7 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
     dStream2cam_.push_back(camId+1); // ir/depth
     rgbdStream2cam_.push_back(camId/2); // rgbd
   }
-  std::cout << "Found " << NumStreams() 
+  std::cout << "Found " << NumStreams()
     << " stream paired them with " << NumCams()
     << " cams" << std::endl;
   return true;
