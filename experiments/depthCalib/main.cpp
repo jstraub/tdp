@@ -147,6 +147,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> numScaleObs("ui.# obs",1000.f,100.f,2000.f);
   pangolin::Var<bool> saveScaleCalib("ui.save scale est",false,false);
   pangolin::Var<bool> logScaleVsDist("ui.log scale vs dist",false,true);
+  pangolin::Var<bool> isSmall("ui. small target", true, true);
 
 
   int grid_rows = 12;
@@ -160,8 +161,12 @@ int main( int argc, char* argv[] )
     grid_rows = 12;
     grid_cols = 16;
     grid_seed = 76;
-//    grid_spacing = 0.0165; // small target
-    grid_spacing = 0.03373; // large target
+    if (isSmall){
+        grid_spacing = 0.0165;
+    }else{
+        grid_spacing = 0.03373; // large target
+    }
+    std::cout << "target size: " << grid_spacing << std::endl;
     depthSensorScale = 1e-4;
   }
 
@@ -195,6 +200,14 @@ int main( int argc, char* argv[] )
         scaleN.Fill(1.f);
         std::cout << "loaded scale from file" << std::endl;
       }
+    }
+    if (isSmall.GuiChanged()){
+        if(isSmall){
+            grid_spacing = 0.0165; //small target
+        }else{
+            grid_spacing = 0.03373; //large target
+        }
+        std::cout << "updated target size to: " << grid_spacing << std::endl;
     }
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);

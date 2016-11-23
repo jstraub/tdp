@@ -380,7 +380,7 @@ int main( int argc, char** argv)
     pangolin::Var<bool> calibrate("ui.calibrate",false,true);
 
     pangolin::Var<float> conic__("ui.conic:",0.,0.,0.);
-    pangolin::Var<float> conicMinArea("ui.min area",4.,1.,10.);
+    pangolin::Var<float> conicMinArea("ui.min area",4.,1.,60.);
     pangolin::Var<float> conicMinDensity("ui.min density",0.1,0.6,1.);
     pangolin::Var<float> conicMinAspect("ui.min aspect",0.1,0.2,1.);
 
