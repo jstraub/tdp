@@ -58,6 +58,7 @@ public:
     void getVertices(float* vertexStore) const;
     void getIndices(unsigned int* indexStore) const;
     void getColors(uint8_t* colorStore) const;
+    float getVolume() const;
 
 protected:
 	// The number of vertices which make up the isosurface.

@@ -820,3 +820,19 @@ void CIsoSurface::getColors(uint8_t* colorStore) const {
         colorStore[3*i + 2] = m_ppt3dColors[i][2];
 	}
 }
+
+float CIsoSurface::getVolume() const {
+	for (size_t i = 0; i < m_nTriangles; i++) {
+        float * p1 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 0]];
+        float * p2 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 1]];
+        float * p3 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 2]];
+
+        float v321 = p3[0]*p2[1]*p1[2];
+        float v231 = p2[0]*p3[1]*p1[2];
+        float v312 = p3[0]*p1[1]*p2[2];
+        float v132 = p1[0]*p3[1]*p2[2];
+        float v213 = p2[0]*p1[1]*p3[2];
+        float v123 = p1[0]*p2[1]*p3[2];
+        return (1.0f / 6.0f) *(-v321 + v231 + v312 - v132 - v213 + v123);
+	}
+}
