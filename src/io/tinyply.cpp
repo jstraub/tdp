@@ -139,6 +139,46 @@ void SavePointCloud(
   out.close();
 }
 
+void SavePointCloud(
+    const std::string& path,
+    const Image<Vector3fda>& pc,
+    const Image<Vector3fda>& n,
+    const Image<Vector3bda>& rgb,
+    bool binary,
+    std::vector<std::string> comments) {
+  std::vector<float> verts;
+  std::vector<float> norms;
+  std::vector<uint8_t> rgbs;
+  verts.reserve(pc.Area()*3);
+  norms.reserve(n.Area()*3);
+  rgbs.reserve(rgb.Area()*3);
+  // filter out NAN points.
+  for (size_t i=0; i<pc.Area(); ++i)  {
+    if (IsValidData(pc[i]) && IsValidNormal(n[i])) {
+      verts.push_back(pc[i](0));
+      verts.push_back(pc[i](1));
+      verts.push_back(pc[i](2));
+      norms.push_back(n[i](0));
+      norms.push_back(n[i](1));
+      norms.push_back(n[i](2));
+      rgbs.push_back(rgb[i](0));
+      rgbs.push_back(rgb[i](1));
+      rgbs.push_back(rgb[i](2));
+    }
+  }
+  tinyply::PlyFile plyFile;
+  plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+  plyFile.add_properties_to_element("vertex", {"nx", "ny", "nz"}, norms);
+  plyFile.add_properties_to_element("vertex", {"red", "green", "blue"}, rgbs);
+  for (auto& comment : comments) 
+    plyFile.comments.push_back(comment);
+  std::ostringstream outStream;
+  plyFile.write(outStream, binary);
+  std::ofstream out(path);
+  out << outStream.str();
+  out.close();
+}
+
 }
 
 using namespace tinyply;

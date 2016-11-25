@@ -946,7 +946,7 @@ int main( int argc, char* argv[] )
           std::stringstream plyPath;
           plyPath << "./frame_" << std::setfill('0') << std::setw(10) 
             << idActive << ".ply";
-          tdp::SavePointCloud(plyPath.str(), pc, n, false);
+          tdp::SavePointCloud(plyPath.str(), pc, n, rgb, false);
           std::stringstream cfgPath;
           cfgPath << "./config_" << std::setfill('0') << std::setw(10) 
             << idActive << ".txt";
