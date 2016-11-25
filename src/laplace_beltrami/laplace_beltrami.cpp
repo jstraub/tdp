@@ -203,7 +203,7 @@ void getSamples(const Image<SE3f>& T_wl,
 }
 
 void getThetas_F(const Image<Vector3fda>& pc_w,
-               const Image<SE3f>& T_wls, const auto& f,
+               const Image<SE3f>& T_wls, float (&f)(const Vector3fda&),
                Image<Vector6fda>& thetas, ANN& ann, int knn, float eps){
     assert(pc_w.w_ == T_wls.w_&&pc_w.w_==thetas.w_);
     Eigen::VectorXi nnIds(knn);

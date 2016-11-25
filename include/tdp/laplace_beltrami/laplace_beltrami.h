@@ -75,7 +75,7 @@ void getZEstimates(const Image<Vector3fda>& pc, const Image<SE3f>& locals,
                    const Image<Vector6fda>& thetas, Image<Vector3fda>& estimates);
 
 void getThetas_F(const Image<Vector3fda>& pc_w,const Image<SE3f>& T_wls,
-                  const auto& f, Image<Vector6fda>& thetas, ANN& ann,
+                 float (&f)(const Vector3fda&), Image<Vector6fda>& thetas, ANN& ann,
                  int knn, float eps);
 
 void getFEstimates(const Image<Vector3fda>& pc_w,
