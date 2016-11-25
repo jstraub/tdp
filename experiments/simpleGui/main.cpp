@@ -90,6 +90,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+  pangolin::Var<bool> binaryPly("ui.binary ply file",false,true);
   pangolin::Var<bool> savePC("ui.save current PC",false,false);
 
   // Stream and display video
@@ -145,7 +146,7 @@ int main( int argc, char* argv[] )
       std::vector<std::string> comments;
       comments.push_back("generated from simpleGui");
       tdp::SavePointCloud(pangolin::MakeUniqueFilename("mesh.ply"),
-          pc, n, comments);
+          pc, n, rgb, binaryPly, comments);
     }
 
     // leave in pixel orthographic for slider to render.
