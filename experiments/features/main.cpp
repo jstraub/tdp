@@ -357,13 +357,19 @@ int main( int argc, char* argv[] )
       updatedEntropy = true;
 
       std::cout << "adding KF " << kfs.size() << std::endl;
-      kfs.emplace_back(wOrig,hOrig);
+//      kfs.emplace_back(wOrig,hOrig);
+      kfs.emplace_back(wc,hc);
       kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
       kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
+
+      kfs.back().lsh.PrintHashs();
+      kfs.back().lsh.PrintFillStatus();
+      
       kfs.back().lsh.Insert(kfs.back().feats);
 
+      std::cout << "matching KFs " << std::endl;
       tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr,
           ransacInlierPercThr, loopClosures);
 
@@ -405,15 +411,6 @@ int main( int argc, char* argv[] )
     rig.ComputePc(cuD, true, pcs_c);
     rig.ComputeNormals(cuD, true, ns_c);
 
-    // copy raw image to gpu
-//    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
-    // convet depth image from uint16_t to float [m]
-//    tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-//    // compute point cloud (on CPU)
-//    tdp::Depth2PC(d,cam,pc);
-//    // compute normals
-//    tdp::Depth2Normals(cuD, cam, cuN);
-
     d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
     pc.CopyFrom(pcs_c.GetImage(0), cudaMemcpyDeviceToHost);
     cuN.CopyFrom(ns_c.GetImage(0), cudaMemcpyDeviceToDevice);
@@ -436,21 +433,6 @@ int main( int argc, char* argv[] )
       descsA[i].p_c_ = pyrPc(descsA[i].lvl_, descsA[i].pt_(0), descsA[i].pt_(1));
     }
     TOCK("Extraction");
-
-
-//    tdp::Gradient3D(cuGrey, cuD, cuN, cam, 0.001f, cuGreydu,
-//        cuGreydv, cuGrad3D);
-//    grad3D.CopyFrom(cuGrad3D, cudaMemcpyDeviceToHost);
-//    n.CopyFrom(cuN, cudaMemcpyDeviceToHost);
-//
-//    cosys.Reinitialise(ptsA.w_,1);
-//    for (size_t i=0; i<ptsA.Area(); ++i) {
-//      const tdp::Vector3fda& pci = pc(ptsA[i](0),ptsA[i](1));
-//      const tdp::Vector3fda& ni = n(ptsA[i](0),ptsA[i](1));
-//      tdp::Vector3fda gradi = grad3D(ptsA[i](0),ptsA[i](1)).normalized();
-//      tdp::SO3f R = tdp::SO3f::FromOrthogonalVectors(ni, gradi);
-//      cosys[i] = tdp::SE3f(R, pci);
-//    }
 
     if (gui.verbose) std::cout << "matching" << std::endl;
     TICK("Matching");

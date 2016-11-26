@@ -21,9 +21,19 @@ class LSH {
     std::random_shuffle(ids.begin(), ids.end());
     hashIds_.assign(ids.begin(), ids.begin()+H);
     std::sort(hashIds_.begin(), hashIds_.end());
-    // make double sure that these are all null
+    std::cout << "constructor of LSH " << H << std::endl;
+//    for (size_t i=0; i<(1<<H); ++i) 
+//      store_[i] = nullptr;
+//    for (size_t i=0; i<(1<<H); i+=10) 
+//      std::cout << store_[i];
+//    std::cout << std::endl;
+  }
+  LSH(const LSH& other) : hashIds_(other.hashIds_), store_(1<<H, nullptr) {
+    std::cout << "copy constructor of LSH" << std::endl;
     for (size_t i=0; i<(1<<H); ++i) 
-      store_[i] = nullptr;
+      if (other.store_[i]) {
+        store_[i] = new std::vector<Brief*>(*other.store_[i]);
+      }
   }
 
   ~LSH() {
@@ -36,13 +46,13 @@ class LSH {
     if (feat->IsValid()) {
       const uint32_t hash = Hash(feat->desc_);
       if (!store_[hash]) {
-        std::cout << hash << " does not exist: " << store_[hash];
+//        std::cout << hash << " does not exist: " << store_[hash];
         store_[hash] = new std::vector<Brief*>();
-        std::cout << " added " << store_[hash] << std::endl;
+//        std::cout << " added " << store_[hash] << std::endl;
       }
-      if (hash >= 1<<H) 
-        std::cout << "hash to big: " << hash << " " << (1<<H) << std::endl;
-      std::cout << hash << " " << store_[hash] << std::endl;
+//      if (hash >= 1<<H) 
+//        std::cout << "hash to big: " << hash << " " << (1<<H) << std::endl;
+//      std::cout << hash << " " << store_[hash] << std::endl;
       store_[hash]->push_back(feat);
     }
   }
@@ -105,14 +115,19 @@ class LSH {
     size_t nBuckets = 0;
     for (size_t i=0; i<store_.size(); ++i) {
       if (store_[i]) {
-        avg += store_[i]->size();
-        min = std::min(min, store_[i]->size());
-        max = std::max(max, store_[i]->size());
         nBuckets ++;
       }
     }
     std::cout << "# occupied buckets " << nBuckets << " of " << store_.size()
-      << "\tper bucket avg " << (double)avg/(double)store_.size() 
+      << std::endl;
+    for (size_t i=0; i<store_.size(); ++i) {
+      if (store_[i]) {
+        avg += store_[i]->size();
+        min = std::min(min, store_[i]->size());
+        max = std::max(max, store_[i]->size());
+      }
+    }
+    std::cout << "  per bucket avg " << (double)avg/(double)store_.size() 
       << "\tmin " << min 
       << "\tmax " << max << std::endl;
   }
@@ -129,6 +144,10 @@ class LshForest {
   LshForest(uint32_t N) : lshs_(N) { 
     for (size_t i=0; i<N; ++i)
       lshs_[i] = new LSH<H>();
+  }
+  LshForest(const LshForest& other) : lshs_(other.lshs_.size()) {
+    for (size_t i=0; i<other.lshs_.size(); ++i)
+      lshs_[i] = new LSH<H>(*other.lshs_[i]);
   }
 
   ~LshForest() {
