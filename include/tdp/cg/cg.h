@@ -21,8 +21,28 @@ class CG {
       x += alpha*p;
       r -= alpha*ATAp;
       float rsNew = r.dot(r);
-      std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
       if (sqrt(rsNew) < 1e-10) {
+        std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
+        break;
+      }
+      p = r + (rsNew/rsOld)*p;
+      rsOld = rsNew;
+    }
+  };
+
+  static void ComputeGpu(const Eigen::SparseMatrix<float>& A, 
+     const Eigen::VectorXf& b, size_t maxIt, Eigen::VectorXf& x) {
+    Eigen::VectorXf r = A.transpose()*(b - A*x);
+    Eigen::VectorXf p = r;
+    float rsOld = r.dot(r);
+    for(size_t it=0; it<maxIt; ++it) {
+      Eigen::VectorXf ATAp = A.transpose()*(A*p);
+      float alpha = rsOld/(p.dot(ATAp));
+      x += alpha*p;
+      r -= alpha*ATAp;
+      float rsNew = r.dot(r);
+      if (sqrt(rsNew) < 1e-10) {
+        std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
         break;
       }
       p = r + (rsNew/rsOld)*p;
@@ -50,8 +70,8 @@ class PCG {
 //      float rsNew = r.dot(r);
       z = r.array() / Mdiag.array();
       float rsNew = r.dot(z);
-      std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
       if (sqrt(rsNew) < 1e-10) {
+        std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
         break;
       }
       p = z + (rsNew/rsOld)*p;
