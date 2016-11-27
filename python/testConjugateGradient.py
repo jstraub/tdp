@@ -41,7 +41,7 @@ def solvePCG_direct(A,b,x0,M):
   x = np.copy(x0)
   r = A.T.dot(b-A.dot(x))
   z = solve(M,r)
-  p = np.copy(r)
+  p = np.copy(z)
   rsold = r.T.dot(z)
   for i in range(1000):
     Ap = A.T.dot(A.dot(p))
@@ -72,9 +72,16 @@ print x.T
 x = solveCG_direct(A,b,np.zeros((12,1)))
 print x.T
 
+print "PCG diag(I)"
 x = solvePCG_direct(A,b,np.zeros((12,1)),np.eye(12))
 print x.T
 
-M = np.diag(np.diag(A))
+print "PCG diag(ATA)"
+M = np.diag(np.diag(ATA))
+x = solvePCG_direct(A,b,np.zeros((12,1)),M)
+print x.T
+
+print "PCG ATA"
+M = ATA
 x = solvePCG_direct(A,b,np.zeros((12,1)),M)
 print x.T
