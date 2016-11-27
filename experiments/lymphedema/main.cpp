@@ -166,7 +166,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEz("ui.gridE z",0.461,0.9,0.);
 
   pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);
-  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<bool>  runICP("ui.run ICP", false, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
@@ -179,6 +179,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::Var<bool>  showPc("ui.showPc", true, true);
+  pangolin::Var<bool> dispEst("ui.disp Est", true,true);
 
   tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
   tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -209,6 +210,7 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
 
+  gui.verbose = true;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -305,21 +307,29 @@ int main( int argc, char* argv[] )
     }
 
     if (!gui.paused() && fuseTSDF ) {
+      if (runICP) {
+        std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+        std::vector<float> errPerLvl;
+        std::vector<float> countPerLvl;
+        Eigen::Matrix<float,6,6> Sigma_mr = 1e-4*Eigen::Matrix<float,6,6>::Identity();
 
-      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-      std::vector<float> errPerLvl;
-      std::vector<float> countPerLvl;
-      Eigen::Matrix<float,6,6> Sigma_mr = 1e-4*Eigen::Matrix<float,6,6>::Identity();
-      if (useRgbCamParasForDepth) {
-        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-            rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-            gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
-      } else {
-        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-            rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-            gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+        std::cout 
+          << pc.Description() << std::endl 
+          << pcs_m.Description() << std::endl 
+          << ns_m.Description() << std::endl
+          << pcs_o.Description() << std::endl
+          << ns_o.Description() << std::endl;
+
+        if (useRgbCamParasForDepth) {
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+              rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+        } else {
+          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+              rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+        }
       }
-
     	std::cout << "fusing a frame" << std::endl;
       TICK("Add To TSDF");
       rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
@@ -337,10 +347,6 @@ int main( int argc, char* argv[] )
           T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
     }
 
-    pc.CopyFrom(cuPc);
-    vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
-    cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
-
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     if (d_cam.IsShown()) {
@@ -357,11 +363,16 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAlignedBox(box);
 
       if (showPc) {
+        pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
+        vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+        cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
         // render point cloud
         pangolin::RenderVboCbo(vbo,cbo,true);
+        pc.CopyFrom(pcs_m.GetImage(0), cudaMemcpyDeviceToHost);
+        vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
+        glColor3f(0,1,0);
+        pangolin::RenderVbo(vbo);
       }
-
-
       if (meshVbo.num_elements > 0
           && meshCbo.num_elements > 0
           && meshIbo.num_elements > 0) {
@@ -405,8 +416,12 @@ int main( int argc, char* argv[] )
     }
     if (viewN2D.IsShown()) {
       // convert normals to RGB image
-      tdp::Normals2Image(cuN, cuN2D);
-      n2D.CopyFrom(cuN2D);
+      if (dispEst) {
+        tdp::Normals2Image(ns_m.GetImage(0), cuN2D);
+      } else {
+        tdp::Normals2Image(cuN, cuN2D);
+      }
+      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
       viewN2D.SetImage(n2D);
     }
 
