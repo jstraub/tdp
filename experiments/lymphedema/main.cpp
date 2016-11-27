@@ -33,6 +33,7 @@
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/camera_poly.h>
 #include <tdp/utils/Stopwatch.h>
+#include <tdp/icp/icp.h>
 
 #include <tdp/utils/threadedValue.hpp>
 #include <tdp/gl/shaders.h>
@@ -164,7 +165,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEy("ui.gridE y",0.074,0.5,0.);
   pangolin::Var<float> gridEz("ui.gridE z",0.461,0.9,0.);
 
-  pangolin::Var<bool> useRgbCamParasForDepth("ui.use rgb cams", true, true);
+  pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);
+  pangolin::Var<bool>  runICP("ui.run ICP", true, true);
+  pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",14,0,20);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",10,0,20);
 
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
@@ -298,11 +305,30 @@ int main( int argc, char* argv[] )
     }
 
     if (!gui.paused() && fuseTSDF ) {
+
+      std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+      std::vector<float> errPerLvl;
+      std::vector<float> countPerLvl;
+      Eigen::Matrix<float,6,6> Sigma_mr = 1e-4*Eigen::Matrix<float,6,6>::Identity();
+      if (useRgbCamParasForDepth) {
+        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+            rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+            gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+      } else {
+        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+            rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+            gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+      }
+
     	std::cout << "fusing a frame" << std::endl;
       TICK("Add To TSDF");
       rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
           grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
       TOCK("Add To TSDF");
+      TICK("Ray Trace TSDF");
+      rig.RayTraceTSDF(cuTSDF, T_mr, useRgbCamParasForDepth, grid0,
+          dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
+      TOCK("Ray Trace TSDF");
     }
 
     if (pangolin::Pushed(runMarchingCubes)) {
