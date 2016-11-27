@@ -11,7 +11,7 @@ namespace tdp {
 class CG {
  public:
   static void ComputeCpu(const Eigen::SparseMatrix<float>& A, 
-     const Eigen::VectorXf& b, size_t maxIt, Eigen::VectorXf& x) {
+     const Eigen::VectorXf& b, size_t maxIt, float eps, Eigen::VectorXf& x) {
     Eigen::VectorXf r = A.transpose()*(b - A*x);
     Eigen::VectorXf p = r;
     float rsOld = r.dot(r);
@@ -21,7 +21,7 @@ class CG {
       x += alpha*p;
       r -= alpha*ATAp;
       float rsNew = r.dot(r);
-      if (sqrt(rsNew) < 1e-10) {
+      if (sqrt(rsNew) < eps) {
         std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
         break;
       }
@@ -31,7 +31,7 @@ class CG {
   };
 
   static void ComputeGpu(const Eigen::SparseMatrix<float>& A, 
-     const Eigen::VectorXf& b, size_t maxIt, Eigen::VectorXf& x) {
+     const Eigen::VectorXf& b, size_t maxIt, float eps, Eigen::VectorXf& x) {
     Eigen::VectorXf r = A.transpose()*(b - A*x);
     Eigen::VectorXf p = r;
     float rsOld = r.dot(r);
@@ -41,7 +41,7 @@ class CG {
       x += alpha*p;
       r -= alpha*ATAp;
       float rsNew = r.dot(r);
-      if (sqrt(rsNew) < 1e-10) {
+      if (sqrt(rsNew) < eps) {
         std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
         break;
       }
@@ -57,7 +57,7 @@ class PCG {
  public:
   static void ComputeCpu(const Eigen::SparseMatrix<float>& A, 
      const Eigen::VectorXf& b, const Eigen::VectorXf& Mdiag,
-     size_t maxIt, Eigen::VectorXf& x) {
+     size_t maxIt, float eps, Eigen::VectorXf& x) {
     Eigen::VectorXf r = A.transpose()*(b - A*x);
     Eigen::VectorXf z = r.array() / Mdiag.array();
     Eigen::VectorXf p = z;
@@ -70,7 +70,7 @@ class PCG {
 //      float rsNew = r.dot(r);
       z = r.array() / Mdiag.array();
       float rsNew = r.dot(z);
-      if (sqrt(rsNew) < 1e-10) {
+      if (sqrt(rsNew) < eps) {
         std::cout << "  @" << it << ":\t" << sqrt(rsNew) << std::endl;
         break;
       }
@@ -120,7 +120,7 @@ class PCG {
  //     cublasSaxpy(CuBlas::Instance()->handle_, 
  //         cuAlpha.ptr_, Ap.ptr_, 1, r.ptr_, 1);
  //     
- //     if (CuBlas::dot(r, r) < 1e-10) {
+ //     if (CuBlas::dot(r, r) < eps) {
  //       break;
  //     }
 

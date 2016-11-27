@@ -18,22 +18,21 @@ TEST(CG, small) {
 
   Eigen::SparseMatrix<float> Asp = A.sparseView();
   Eigen::VectorXf xCg = Eigen::VectorXf::Zero(Nvar);
-  tdp::CG::ComputeCpu(Asp, b, 100, xCg);
+  tdp::CG::ComputeCpu(Asp, b, 100, 1e-6, xCg);
   std::cout << xCg.transpose() << std::endl;
 
   Eigen::VectorXf xPcg = Eigen::VectorXf::Zero(Nvar);
   Eigen::VectorXf Mdiag = ATA.diagonal();
-  tdp::PCG::ComputeCpu(Asp, b, Mdiag, 100, xPcg);
+  tdp::PCG::ComputeCpu(Asp, b, Mdiag, 100, 1e-6, xPcg);
   std::cout << xPcg.transpose() << std::endl;
 
 }
 
 TEST(CG, large) {
-  size_t Nvar = 6*1000;
-  size_t Nobs = 100000;
+  size_t Nvar = 6*100;
+  size_t Nobs = 1000000;
   Eigen::MatrixXf A = Eigen::MatrixXf::Random(Nobs,Nvar); 
   Eigen::VectorXf b = Eigen::VectorXf::Random(Nobs); 
-
 
   tdp::Timer t0;
   Eigen::MatrixXf ATA = A.transpose()*A;
@@ -45,14 +44,14 @@ TEST(CG, large) {
   Eigen::VectorXf xCg = Eigen::VectorXf::Zero(Nvar);
 
   t0.tic();
-  tdp::CG::ComputeCpu(Asp, b, 100, xCg);
+  tdp::CG::ComputeCpu(Asp, b, 100, 1e-6, xCg);
   t0.toctic("cg");
   std::cout << "CG err:\t" << (x-xCg).norm() << std::endl;
 
   Eigen::VectorXf xPcg = Eigen::VectorXf::Zero(Nvar);
   Eigen::VectorXf Mdiag = ATA.diagonal();
   t0.tic();
-  tdp::PCG::ComputeCpu(Asp, b, Mdiag, 100, xPcg);
+  tdp::PCG::ComputeCpu(Asp, b, Mdiag, 100, 1e-6, xPcg);
   t0.toctic("pcg");
   std::cout << "PCG err:\t" << (x-xPcg).norm() << std::endl;
 }
