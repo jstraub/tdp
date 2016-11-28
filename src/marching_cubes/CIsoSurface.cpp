@@ -821,18 +821,79 @@ void CIsoSurface::getColors(uint8_t* colorStore) const {
 	}
 }
 
+static bool sameDir(float *p1, float* p2, float* p3) {
+    float vx = p2[0] - p1[0];
+    float vy = p2[1] - p1[1];
+    float vz = p2[2] - p1[2];
+
+    float wx = p3[0] - p1[0];
+    float wy = p3[1] - p1[1];
+    float wz = p3[2] - p1[2];
+
+    float nx = vy * wz - vz * wy;
+    float ny = vz * wx - vx * wz;
+    float nz = vx * wy - vy * wx;
+
+    float px = (p1[0] + p2[0] + p3[0])/3 - 1;
+    float py = (p1[1] + p2[1] + p3[1])/3 - 1;
+    float pz = (p1[2] + p2[2] + p3[2])/3 - 1;
+
+    return nx * px + ny * py + nz * pz >= 0;
+}
+
 float CIsoSurface::getVolume() const {
+    bool debug = false;
+    float volume = 0.0f;
+
+    float minX = 100.0f, minY = 100.0f, minZ = 100.0f;
+    float maxX = -100.0f, maxY = -100.0f, maxZ = -100.0f;
+    int pos = 0, neg = 0;
+    float minV = 100.0f, maxV = -100.0f;
+    int bad = 0;
 	for (size_t i = 0; i < m_nTriangles; i++) {
         float * p1 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 0]];
         float * p2 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 1]];
         float * p3 = m_ppt3dVertices[m_piTriangleIndices[3 * i + 2]];
 
-        float v321 = p3[0]*p2[1]*p1[2];
-        float v231 = p2[0]*p3[1]*p1[2];
-        float v312 = p3[0]*p1[1]*p2[2];
-        float v132 = p1[0]*p3[1]*p2[2];
-        float v213 = p2[0]*p1[1]*p3[2];
-        float v123 = p1[0]*p2[1]*p3[2];
-        return (1.0f / 6.0f) *(-v321 + v231 + v312 - v132 - v213 + v123);
+        float v321 = (p3[0]-1)*(p2[1]-1)*(p1[2]-1);
+        float v231 = (p2[0]-1)*(p3[1]-1)*(p1[2]-1);
+        float v312 = (p3[0]-1)*(p1[1]-1)*(p2[2]-1);
+        float v132 = (p1[0]-1)*(p3[1]-1)*(p2[2]-1);
+        float v213 = (p2[0]-1)*(p1[1]-1)*(p3[2]-1);
+        float v123 = (p1[0]-1)*(p2[1]-1)*(p3[2]-1);
+
+        float calc = (-v321 + v231 + v312 - v132 - v213 + v123);
+        volume += (-v321 + v231 + v312 - v132 - v213 + v123);
+
+        if (debug) {
+            minX = fmin(minX, fmin(p1[0], fmin(p2[0], p3[0])));
+            maxX = fmax(maxX, fmin(p1[0], fmin(p2[0], p3[0])));
+            minY = fmin(minY, fmin(p1[1], fmin(p2[1], p3[1])));
+            maxY = fmax(maxY, fmin(p1[1], fmin(p2[1], p3[1])));
+            minZ = fmin(minZ, fmin(p1[2], fmin(p2[2], p3[2])));
+            maxZ = fmax(maxZ, fmin(p1[2], fmin(p2[2], p3[2])));
+            minV = fmin(minV, calc);
+            maxV = fmax(maxV, calc);
+
+            if (calc > 0) {
+                pos++;
+            } else {
+                neg++;
+            }
+
+            if (!sameDir(p1,p2,p3)) {
+                bad++;
+            }
+        }
 	}
+
+    if (debug) {
+        std::cout << "X: " << minX << " " << maxX << std::endl;
+        std::cout << "Y: " << minY << " " << maxY << std::endl;
+        std::cout << "Z: " << minZ << " " << maxZ << std::endl;
+        std::cout << "pos: " << pos << " neg: " << neg << std::endl;
+        std::cout << "V: " << minV << " " << maxV << std::endl;
+        std::cout << "bad: " << bad << std::endl;
+    }
+    return volume / 6.0f;
 }
