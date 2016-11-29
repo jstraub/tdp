@@ -380,8 +380,8 @@ int main( int argc, char* argv[] )
     tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
-    if (icpImu && imu) 
-      T_mo = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mo;
+//    if (icpImu && imu) 
+//      T_mo = (T_wr_imu * T_wr_imu_prev.Inverse()) * T_mo;
     if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -438,7 +438,8 @@ int main( int argc, char* argv[] )
       if (gui.verbose) std::cout << "add to tsdf" << std::endl;
       TICK("Add To TSDF");
       if (fuseRgb) {
-        tdp::TSDF::AddToTSDF(cuTSDF, cuD, cuRGBraw, T_mo, camD, grid0, dGrid, tsdfMu); 
+        tdp::TSDF::AddToTSDF(cuTSDF, cuD, cuRGBraw, T_mo, camD, grid0,
+            dGrid, tsdfMu); 
       } else {
         tdp::TSDF::AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid,
           tsdfMu, tsdfWMax); 
