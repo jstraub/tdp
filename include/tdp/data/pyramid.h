@@ -131,7 +131,14 @@ class Pyramid {
   /// Perform copy from the given src pyramid to this pyramid.
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Pyramid<T,LEVELS>& src, cudaMemcpyKind type) {
+    if (src.SizeBytes() == SizeBytes()) {
     checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+    } else {
+      std::cerr << "ERROR: not copying pyramid since sizes dont match" 
+        << std::endl << Description() 
+        << std::endl << src.Description() 
+        << std::endl;
+    }
   }
 #endif
 

@@ -45,12 +45,17 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 struct BinaryKF {
-  BinaryKF(size_t w, size_t h)
-    : pyrGrey(w,h), pyrPc(w,h), lsh(11)
-  {}
+  BinaryKF(const Pyramid<uint8_t,3>& pyrGrey,
+    const Pyramid<Vector3fda,3>& pyrPc)
+    : pyrGrey_(pyrGrey.w_,pyrGrey.h_), 
+      pyrPc_(pyrPc.w_,pyrPc.h_), lsh(11)
+  {
+      pyrPc_.CopyFrom(pyrPc, cudaMemcpyDeviceToHost);
+      pyrGrey_.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
+  }
 
-  ManagedHostPyramid<uint8_t,3> pyrGrey;
-  ManagedHostPyramid<Vector3fda,3> pyrPc;
+  ManagedHostPyramid<uint8_t,3> pyrGrey_;
+  ManagedHostPyramid<Vector3fda,3> pyrPc_;
   ManagedLshForest<14> lsh;
   ManagedHostImage<Brief> feats;
 
@@ -358,9 +363,9 @@ int main( int argc, char* argv[] )
 
       std::cout << "adding KF " << kfs.size() << std::endl;
 //      kfs.emplace_back(wOrig,hOrig);
-      kfs.emplace_back(wc,hc);
-      kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-      kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
+      kfs.emplace_back(pyrGrey, pcs_c);
+//      kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+//      kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
 
@@ -602,40 +607,40 @@ int main( int argc, char* argv[] )
     }
     if(viewClosures.IsShown() && kfs.size() > 0) {
       std::cout << "setting loop closure images" << std::endl;
-      viewClosuresImg0.SetImage(kfs[showKf].pyrGrey.GetImage(2));
+      viewClosuresImg0.SetImage(kfs[showKf].pyrGrey_.GetImage(2));
       size_t i=0;
       for (auto& loop : loopClosures) {
         if (loop.first == showKf) {
           switch(i) {
             case 0:
-              viewClosuresImg1.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg1.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 1:
-              viewClosuresImg2.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg2.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 2:
-              viewClosuresImg3.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg3.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 3:
-              viewClosuresImg4.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg4.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 4:
-              viewClosuresImg5.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg5.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 5:
-              viewClosuresImg6.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg6.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 6:
-              viewClosuresImg7.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg7.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 7:
-              viewClosuresImg8.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg8.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 8:
-              viewClosuresImg9.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg9.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             case 9:
-              viewClosuresImg10.SetImage(kfs[loop.second].pyrGrey.GetImage(2));
+              viewClosuresImg10.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             default:
               std::cout << "not enough displays" << std::endl;
