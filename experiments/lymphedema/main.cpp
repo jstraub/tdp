@@ -164,6 +164,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEx("ui.gridE x",0.18,0.5,0.);
   pangolin::Var<float> gridEy("ui.gridE y",0.074,0.5,0.);
   pangolin::Var<float> gridEz("ui.gridE z",0.461,0.9,0.);
+  pangolin::Var<int>   pyrLvl("ui.pyr lvl disp",1,0,2);
 
   pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);
   pangolin::Var<bool>  runICP("ui.run ICP", false, true);
@@ -172,7 +173,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",14,0,20);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",10,0,20);
-
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
   pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
@@ -330,7 +330,7 @@ int main( int argc, char* argv[] )
               gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
         }
       }
-    	std::cout << "fusing a frame" << std::endl;
+//    	std::cout << "fusing a frame" << std::endl;
       TICK("Add To TSDF");
       rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
           grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
@@ -368,7 +368,7 @@ int main( int argc, char* argv[] )
         cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
         // render point cloud
         pangolin::RenderVboCbo(vbo,cbo,true);
-        pc.CopyFrom(pcs_m.GetImage(0), cudaMemcpyDeviceToHost);
+        pc.CopyFrom(pcs_m.GetImage(pyrLvl), cudaMemcpyDeviceToHost);
         vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
         glColor3f(0,1,0);
         pangolin::RenderVbo(vbo);
