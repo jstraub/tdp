@@ -26,6 +26,8 @@
 #include <tdp/gui/quickView.h>
 #include <tdp/icp/icp.h>
 #include <tdp/icp/icpRot.h>
+#include <tdp/icp/icpGrad3d.h>
+#include <tdp/icp/icpTexture.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/preproc/depth.h>
@@ -264,7 +266,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool>  icpFrame2Frame("ui.run frame2frame ICP", true, true);
   pangolin::Var<bool>  icpRgb("ui.run ICP RGB", false, true);
-  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
+//  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
@@ -366,15 +368,16 @@ int main( int argc, char* argv[] )
           rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
     } else if (icpRgb) {
-      tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
+      tdp::IcpTexture::ComputeProjective<CameraT>(pcs_m, ns_m,
           cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
           cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
           icpDistThr, icpRgbLambda, gui.verbose, T_mc, Sigma_mc,
           errPerLvl, countPerLvl);
-    } else if (icpGrad3D) {
-      tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
-          rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-          gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
+//    } else if (icpGrad3D) {
+//      tdp::IcpGrad3d::ComputeProjective<CameraT::NumParams,CameraT>(
+//          pcs_m, ns_m, pcs_c, ns_c,
+//          rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+//          gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
     } else if (icpRot) {
       tdp::ComputeProjectiveRotation<CameraT::NumParams,CameraT>(
           ns_m,  ns_c, pcs_c, 

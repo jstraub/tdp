@@ -26,6 +26,7 @@
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
 #include <tdp/icp/icp.h>
+#include <tdp/icp/icpTexture.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/preproc/convolutionSeparable.h>
@@ -482,7 +483,7 @@ int main( int argc, char* argv[] )
               cuPyrGrey_c.CopyFrom(kfB.pyrGrey_, cudaMemcpyHostToDevice);
               cuPyrGradGrey_m.CopyFrom(kfA.pyrGradGrey_, cudaMemcpyHostToDevice);
               cuPyrGradGrey_c.CopyFrom(kfB.pyrGradGrey_, cudaMemcpyHostToDevice);
-              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
+              tdp::IcpTexture::ComputeProjective<CameraT>(pcs_m, ns_m,
                   cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
                   cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
                   icpDistThr, icpRgbLambda, gui.verbose, T_ab, Sigma_ab,
@@ -825,10 +826,11 @@ int main( int argc, char* argv[] )
       if (icpRgb) {
         cuPyrGrey_m.CopyFrom(kf.pyrGrey_,cudaMemcpyHostToDevice);
         cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_,cudaMemcpyHostToDevice);
-        tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m,
+        tdp::IcpTexture::ComputeProjective<CameraT>(pcs_m, ns_m,
             cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
             cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
-            icpDistThr, icpRgbLambda, gui.verbose, T_ac, dSigma_ac, errPerLvl, countPerLvl);
+            icpDistThr, icpRgbLambda, gui.verbose, T_ac, dSigma_ac,
+            errPerLvl, countPerLvl);
       } else {
 //        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_ac, tdp::SE3f(),
 //            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
