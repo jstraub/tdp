@@ -57,6 +57,18 @@ int AssociateANN(
 #endif
 
 #ifdef CUDA_FOUND
+
+template<int D, class Derived>
+__device__ 
+inline int AssociateModelIntoCurrent(
+    int x, int y, 
+    const Image<Vector3fda>& pc_m,
+    const SE3f& T_mo,
+    const SE3f& T_co,
+    const CameraBase<float,D,Derived>& cam,
+    int& u, int& v
+    );
+
 template<int D, typename Derived>
 void ICPStep (
     Image<Vector3fda> pc_m,
