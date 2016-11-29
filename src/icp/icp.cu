@@ -177,11 +177,12 @@ __global__ void KernelICPStep(
     const int x = id%pc_o.w_;
     const int y = id/pc_o.w_;
     int u, v;
-    printf("%d %d\n",x,y);
+    //printf("%d %d\n",x,y);
     int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
         T_co, cam, u, v);
+    //printf("%d %d %d\n",x,y,res);
     if (res == 0) {
-      printf("%d %d %d %d\n",x,y,u,v);
+      //printf("%d %d %d %d\n",x,y,u,v);
       // found association -> check thresholds;
       Vector3fda n_o_in_m = T_mo.rotation()*n_o(u,v);
       Vector3fda n_mi = n_m(x,y);
