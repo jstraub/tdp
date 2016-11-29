@@ -248,15 +248,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,10);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,10);
 
-  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
-  pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
-
-  pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
   pangolin::Var<bool>  icpImu("ui.use IMU to warm start ICP", false, true);
-  pangolin::Var<bool>  icpRotOverwrites("ui.ICP Rot Overwrites", false, true);
-  pangolin::Var<int>   icpRotIter0("ui.ICP rot iter lvl 0",10,0,10);
-  pangolin::Var<int>   icpRotIter1("ui.ICP rot iter lvl 1",7,0,10);
-  pangolin::Var<int>   icpRotIter2("ui.ICP rot iter lvl 2",5,0,10);
 
   pangolin::Var<bool> showIcpError("ui.show ICP",true,true);
   pangolin::Var<int>   icpErrorLvl("ui.ICP error vis lvl",0,0,2);
@@ -327,10 +319,6 @@ int main( int argc, char* argv[] )
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
-
-    if (icpGrad3D) {
-      runFusion = false; 
-    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
