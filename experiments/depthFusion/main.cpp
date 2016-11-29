@@ -356,7 +356,6 @@ int main( int argc, char* argv[] )
     TICK("Setup Pyramids");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
-
     cuRGBraw.CopyFrom(rgbRaw, cudaMemcpyHostToDevice);
 
     // construct pyramid  
@@ -373,11 +372,6 @@ int main( int argc, char* argv[] )
     if (!gui.ImageRGB(rgb,0)) continue;
     cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
     tdp::Rgb2Grey(cuRgb,cuGrey);
-    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
-    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
-    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
-        cuGreydv, cuGs);
-    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
     TOCK("Setup Pyramids");
 
 //    if (icpImu && imu) 
@@ -385,20 +379,10 @@ int main( int argc, char* argv[] )
     if (runICP && (!runFusion || numFused > 30)) {
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
-      //T_mo.matrix() = Eigen::Matrix4f::Identity();
-//      tdp::SE3f dTRot;
-//      if (icpRot) {
-//        std::vector<size_t> maxItRot{icpRotIter0,icpRotIter1,icpRotIter2};
-//        tdp::ICP::ComputeProjectiveRotation(ns_m, ns_c, pcs_c, dTRot,
-//            camD, maxItRot, icpAngleThr_deg); 
-//        std::cout << dTRot.matrix3x4() << std::endl;
-//      }
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
           tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose); 
-//      if (icpRot && icpRotOverwrites) 
-//        dT.matrix().topLeftCorner(3,3) = dTRot.matrix().topLeftCorner(3,3);
       TOCK("ICP");
 
       std::cout << "T_mo update: " << std::endl 
@@ -445,21 +429,11 @@ int main( int argc, char* argv[] )
     if (runFusion) {
       if (gui.verbose) std::cout << "ray trace" << std::endl;
       TICK("Ray Trace TSDF");
-      //tdp::Image<tdp::Vector3fda> nEst = ns_m.GetImage(0);
       // first one not needed anymore
-//      if (pcFromTSDF && !dispDepthPyrEst) {
       tdp::TSDF::RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
             ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
       // get pc in model coordinate system
       tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
-//      } else {
-//        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
-//            dGrid, tsdfMu); 
-//        tdp::ConstructPyramidFromImage<float,3>(cuDEst, cuDPyrEst,
-//            cudaMemcpyDeviceToDevice, 0.03);
-//        // compute point cloud from depth images in camera cosy
-//        tdp::Depth2PCsGpu(cuDPyrEst,camD,pcs_m);
-//      }
       TOCK("Ray Trace TSDF");
       if (normalsFromTSDF) {
         tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
@@ -507,9 +481,7 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAlignedBox(box);
 
       // imu
-      pangolin::glSetFrameOfReference(T_wr_imu.matrix());
-      pangolin::glDrawAxis(0.2f);
-      pangolin::glUnsetFrameOfReference();
+      pangolin::glDrawAxis(T_wr_imu.matrix(),0.2f);
 
       for (auto& T_moi : T_mos) 
         pangolin::glDrawAxis(T_moi.matrix(),0.1f);
