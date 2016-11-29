@@ -317,7 +317,7 @@ int main( int argc, char* argv[] )
       cuPyrGrey_m.CopyFrom(cuPyrGrey_c, cudaMemcpyDeviceToDevice);
       cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
       rgb_m.CopyFrom(rgb, cudaMemcpyHostToHost);
-      T_wc = T_wc_0;
+//      T_wc = T_wc_0;
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -384,7 +384,7 @@ int main( int argc, char* argv[] )
     }
     TOCK("ICP");
     if (!gui.paused()) {
-      T_wc = T_wc * T_mc;
+      T_wc = T_wc*T_mc;
       T_wcs.push_back(T_wc);
     }
 

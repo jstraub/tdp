@@ -395,8 +395,9 @@ int main( int argc, char* argv[] )
 //      }
       std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
       if (!icpGrad3D) {
-        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo, tdp::SE3f(),
-            camD, maxIt, icpAngleThr_deg, icpDistThr, gui.verbose); 
+        tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, ns_c, T_mo,
+            tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr,
+            gui.verbose); 
       } else {
         tdp::ICP::ComputeProjective(pcs_m, ns_m, gs_m, pcs_c, ns_c,
             gs_c, T_mo, tdp::SE3f(), camD, maxIt, icpAngleThr_deg,
@@ -454,8 +455,8 @@ int main( int argc, char* argv[] )
 //      if (pcFromTSDF && !dispDepthPyrEst) {
       tdp::TSDF::RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
             ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
-        // get pc in model coordinate system
-        tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+      // get pc in model coordinate system
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
 //      } else {
 //        RayTraceTSDF(cuTSDF, cuDEst, ns_m.GetImage(0), T_mo, camD, grid0,
 //            dGrid, tsdfMu); 
