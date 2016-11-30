@@ -328,6 +328,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
   pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",40,0,30);
 
+  pangolin::Var<int> fastLvl("ui.FAST lvl",0,0,2);
+  pangolin::Var<int> fastB("ui.FAST b",30,0,100);
+  pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
+  pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
+
   pangolin::Var<bool>  useANN("ui.use ANN", false,true);
   pangolin::Var<bool>  showAfterOpt("ui.show after opt", false,true);
   pangolin::Var<float> keyFrameDistThresh("ui.KF dist thr", 0.75, 0.35, 0.5);
@@ -637,6 +642,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuNMmf(Nmmf,1);
   pangolin::GlBuffer vboNMmf(pangolin::GlArrayBuffer,Nmmf,GL_FLOAT,3);
 
+  kfs.reserve(1000);
+  binaryKfs.reserve(1000);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -899,6 +907,8 @@ int main( int argc, char* argv[] )
         
         tdp::Convert(cuPyrGrey_c, cuPyrGreyB_c, 255., 0.);
         binaryKfs.emplace_back(cuPyrGreyB_c,pcs_c);
+        binaryKfs.back().Extract(kfs.size()-1, fastLvl, fastB,
+            kappaHarris, harrisThr);
 
         for (int i=kfs.size()-3; 
             i > std::max(-1,(int)kfs.size()-maxLoopClosures-1); --i) {

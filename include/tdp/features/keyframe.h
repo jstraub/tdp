@@ -8,6 +8,7 @@
 #include <tdp/data/managed_image.h>
 #include <tdp/data/managed_pyramid.h>
 #include <tdp/features/lsh.h>
+#include <tdp/features/fast.h>
 #include <tdp/features/brief.h>
 #include <tdp/ransac/ransac.h>
 #include <tdp/utils/Stopwatch.h>
@@ -24,10 +25,28 @@ struct BinaryKF {
       pyrGrey_.CopyFrom(pyrGrey);
   }
 
+  void Extract(size_t frameId, size_t fastLvl, int fastB, float
+      kappaHarris, float harrisThr) {
+    Image<uint8_t> grey = pyrGrey_.GetImage(fastLvl);
+    TICK("Detection");
+    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, pts, orientations);
+    TOCK("Detection");
+    TICK("Extraction");
+    tdp::ExtractBrief(pyrGrey_, pts, orientations, frameId, fastLvl, feats);
+    for (size_t i=0; i<feats.Area(); ++i) {
+      feats[i].p_c_ = pyrPc_(feats[i].lvl_, feats[i].pt_(0), feats[i].pt_(1));
+    }
+    TOCK("Extraction");
+    lsh.Insert(feats);
+  }
+
   ManagedHostPyramid<uint8_t,3> pyrGrey_;
   ManagedHostPyramid<Vector3fda,3> pyrPc_;
   ManagedLshForest<14> lsh;
   ManagedHostImage<Brief> feats;
+
+  tdp::ManagedHostImage<tdp::Vector2ida> pts;
+  tdp::ManagedHostImage<float> orientations;
 
 };
 

@@ -230,8 +230,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
   pangolin::Var<float> ransacInlierPercThr("ui.inlier thr",6,1,20);
 
-  pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<int> showKf("ui.showKf",0,0,1);
+  pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
