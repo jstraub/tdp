@@ -203,9 +203,8 @@ __global__ void KernelICPStep(
         top = (pc_oi).cross(n_m_in_oi);
         bottom = n_m_in_oi;
         float nTt = n_mi.dot(T_mo.translation());
-        top.array() += nTt;
-        bottom.array() += nTt;
-
+//        top.array() += nTt;
+//        bottom.array() += nTt;
         ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
         Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
         int k=0;
