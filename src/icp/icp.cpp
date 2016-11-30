@@ -161,12 +161,6 @@ void ICP::ComputeProjective(
       Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
         (ATA.cast<double>().ldlt().solve(ATb.cast<double>())).cast<float>(); 
 
-//      Eigen::JacobiSVD<Eigen::Matrix<float,6,6>> svd(ATA);
-//      int rank = svd.rank();
-//      Eigen::Matrix<float,6,1> e = svd.singularValues();
-//      // condition number
-//      float kappa = e.maxCoeff() / e.minCoeff();
-
       Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(ATA);
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().array().square();
       // condition number
@@ -181,11 +175,11 @@ void ICP::ComputeProjective(
       if (verbose) {
         std::cout << "lvl " << lvl << " it " << it 
           << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
-          << " # inliers: " << count 
-          << " kappa(ATA): " << kappa
-          << " ev(ATA): " << ev.transpose()
-          << " det(R): " << T_mo.rotation().matrix().determinant()
-          << " |x|: " << x.topRows(3).norm()*180./M_PI 
+          << "\t# inliers: " << count 
+          << "\tkappa(ATA): " << kappa
+//        << "\tev(ATA): " << ev.transpose()
+//          << "\tdet(R): " << T_mo.rotation().matrix().determinant()
+          << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
           << " " <<  x.bottomRows(3).norm()
           << std::endl;
       }

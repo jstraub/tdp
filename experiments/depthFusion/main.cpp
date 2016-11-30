@@ -207,8 +207,8 @@ int main( int argc, char* argv[] )
 
   viewICPassocC.Show(true);
   viewICPassocM.Show(true);
-  viewAngErr.Show(false);
-  viewPcErr.Show(false);
+  viewAngErr.Show(true);
+  viewPcErr.Show( true);
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
@@ -262,7 +262,7 @@ int main( int argc, char* argv[] )
 //  T_mo.rotation() = tdp::SO3f::Rz(M_PI/2.f);
   tdp::SE3f T_mo_0 = T_mo;
   tdp::SE3f T_mo_prev = T_mo_0;
-  tdp::SE3f T_wr_imu_prev;
+//  tdp::SE3f T_wr_imu_prev;
   size_t numFused = 0;
 
   tdp::SE3f T_wG;
@@ -286,7 +286,6 @@ int main( int argc, char* argv[] )
         }
       });
 
-
   gui.verbose = true;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -307,21 +306,18 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    // ERIC
     gui.NextFrames();
 
     tdp::Image<uint16_t> dRaw;
     tdp::Image<tdp::Vector3bda> rgbRaw;
-
     int64_t t_host_us_d = 0;
     int64_t t_host_us_rgb = 0;
-
     if (!gui.ImageD(dRaw, 0, &t_host_us_d) ||
         !gui.ImageRGB(rgbRaw, 0, &t_host_us_rgb)) {
       continue;
     }
 
-    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d * 1000] * T_ir;
+//    tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d * 1000] * T_ir;
 //    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
@@ -451,7 +447,7 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAlignedBox(box);
 
       // imu
-      pangolin::glDrawAxis(T_wr_imu.matrix(),0.2f);
+//      pangolin::glDrawAxis(T_wr_imu.matrix(),0.2f);
 
       for (auto& T_moi : T_mos) 
         pangolin::glDrawAxis(T_moi.matrix(),0.1f);
@@ -627,7 +623,7 @@ int main( int argc, char* argv[] )
       gs_m.CopyFrom(gs_c);
     }
     if (!gui.paused()) {
-      T_wr_imu_prev = T_wr_imu;
+//      T_wr_imu_prev = T_wr_imu;
       T_mo_prev = T_mo;
     }
 
