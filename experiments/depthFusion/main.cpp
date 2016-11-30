@@ -322,7 +322,7 @@ int main( int argc, char* argv[] )
     }
 
     tdp::SE3f T_wr_imu = T_ir.Inverse() * imuInterp.Ts_wi_[t_host_us_d * 1000] * T_ir;
-    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
+//    std::cout << " depth frame at " << t_host_us_d << " us" << std::endl;
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
@@ -356,14 +356,13 @@ int main( int argc, char* argv[] )
           tdp::SE3f(), camD, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose); 
       TOCK("ICP");
-
-      std::cout << "T_mo update: " << std::endl 
-        << T_mo * T_mo_prev.Inverse() << std::endl;
-      std::cout << "IMU : " << std::endl 
-        << T_wr_imu * T_wr_imu_prev.Inverse() << std::endl;
+//      std::cout << "T_mo update: " << std::endl 
+//        << T_mo * T_mo_prev.Inverse() << std::endl;
+//      std::cout << "IMU : " << std::endl 
+//        << T_wr_imu * T_wr_imu_prev.Inverse() << std::endl;
     }
-    std::cout << "T_mo after ICP: " << std::endl 
-      << T_mo  << std::endl;
+//    std::cout << "T_mo after ICP: " << std::endl 
+//      << T_mo  << std::endl;
     T_mos.push_back(T_mo);
 
     if (showIcpError) {

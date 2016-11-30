@@ -59,7 +59,8 @@ class GuiBase {
     if (camId >= iD.size()) return false;
     d = tdp::Image<uint16_t>(images[iD[camId]].w, images[iD[camId]].h,
         images[iD[camId]].pitch, 
-        reinterpret_cast<uint16_t*>(images[iD[camId]].ptr));
+        reinterpret_cast<uint16_t*>(images[iD[camId]].ptr),
+        Storage::Cpu);
     if (t_host_us) *t_host_us = t_host_us_[iD[camId]];
     return true; 
   } 
@@ -69,7 +70,8 @@ class GuiBase {
     rgb = tdp::Image<tdp::Vector3bda>(images[iRGB[camId]].w, 
         images[iRGB[camId]].h,
         images[iRGB[camId]].pitch, 
-        reinterpret_cast<tdp::Vector3bda*>(images[iRGB[camId]].ptr));
+        reinterpret_cast<tdp::Vector3bda*>(images[iRGB[camId]].ptr),
+        Storage::Cpu);
     if (t_host_us) *t_host_us = t_host_us_[iRGB[camId]];
     return true; 
   } 
