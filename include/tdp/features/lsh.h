@@ -21,7 +21,7 @@ class LSH {
     std::random_shuffle(ids.begin(), ids.end());
     hashIds_.assign(ids.begin(), ids.begin()+H);
     std::sort(hashIds_.begin(), hashIds_.end());
-    std::cout << "constructor of LSH " << H << std::endl;
+//    std::cout << "constructor of LSH " << H << std::endl;
 //    for (size_t i=0; i<(1<<H); ++i) 
 //      store_[i] = nullptr;
 //    for (size_t i=0; i<(1<<H); i+=10) 
@@ -29,7 +29,7 @@ class LSH {
 //    std::cout << std::endl;
   }
   LSH(const LSH& other) : hashIds_(other.hashIds_), store_(1<<H, nullptr) {
-    std::cout << "copy constructor of LSH" << std::endl;
+//    std::cout << "copy constructor of LSH" << std::endl;
     for (size_t i=0; i<(1<<H); ++i) 
       if (other.store_[i]) {
         store_[i] = new std::vector<Brief*>(*other.store_[i]);

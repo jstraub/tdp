@@ -1,3 +1,6 @@
+/* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ * under the MIT license. See the license file LICENSE.
+ */
 #pragma once
 
 #include <tdp/data/image.h>
@@ -20,17 +23,8 @@ struct BinaryKF {
       pyrPc_.CopyFrom(pyrPc);
       pyrGrey_.CopyFrom(pyrGrey);
   }
-  BinaryKF(const Pyramid<float,3>& pyrGrey,
-    const Pyramid<Vector3fda,3>& pyrPc)
-    : pyrGreyF_(pyrGrey.w_,pyrGrey.h_), 
-      pyrPc_(pyrPc.w_,pyrPc.h_), lsh(11)
-  {
-      pyrPc_.CopyFrom(pyrPc);
-      pyrGreyF_.CopyFrom(pyrGrey);
-  }
 
   ManagedHostPyramid<uint8_t,3> pyrGrey_;
-  ManagedHostPyramid<float,3> pyrGreyF_;
   ManagedHostPyramid<Vector3fda,3> pyrPc_;
   ManagedLshForest<14> lsh;
   ManagedHostImage<Brief> feats;

@@ -46,6 +46,7 @@
 #include <tdp/rtmf/vMFMMF.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/io/tinyply.h>
+#include <tdp/preproc/convert.h>
 #include <tdp/features/keyframe.h>
 #include <tdp/marching_cubes/marching_cubes.h>
 
@@ -266,6 +267,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDevicePyramid<float,3> cuPyrGrey_c(wc,hc);
   tdp::ManagedDevicePyramid<float,3> cuPyrGrey_m(wc,hc);
+  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrGreyB_c(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_c(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_m(wc,hc);
 
@@ -894,7 +896,9 @@ int main( int argc, char* argv[] )
         numKfsPrev = kfs.size();
         kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
             rgb, cuD, T_mo);
-        binaryKfs.emplace_back(cuPyrGrey_c,pcs_c);
+        
+        tdp::Convert(cuPyrGrey_c, cuPyrGreyB_c, 255., 0.);
+        binaryKfs.emplace_back(cuPyrGreyB_c,pcs_c);
 
         for (int i=kfs.size()-3; 
             i > std::max(-1,(int)kfs.size()-maxLoopClosures-1); --i) {
