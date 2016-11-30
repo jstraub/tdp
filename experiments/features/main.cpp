@@ -40,84 +40,9 @@
 #include <tdp/icp/icp.h>
 #include <tdp/features/lsh.h>
 
+#include <tdp/features/keyframe.h>
+
 typedef tdp::CameraPoly3f CameraT;
-
-
-namespace tdp {
-struct BinaryKF {
-  BinaryKF(const Pyramid<uint8_t,3>& pyrGrey,
-    const Pyramid<Vector3fda,3>& pyrPc)
-    : pyrGrey_(pyrGrey.w_,pyrGrey.h_), 
-      pyrPc_(pyrPc.w_,pyrPc.h_), lsh(11)
-  {
-      pyrPc_.CopyFrom(pyrPc, cudaMemcpyDeviceToHost);
-      pyrGrey_.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
-  }
-
-  ManagedHostPyramid<uint8_t,3> pyrGrey_;
-  ManagedHostPyramid<Vector3fda,3> pyrPc_;
-  ManagedLshForest<14> lsh;
-  ManagedHostImage<Brief> feats;
-
-};
-
-void MatchKFs(const std::vector<BinaryKF>& kfs, int briefMatchThr,
-    int ransacMaxIt, float ransacThr, float ransacInlierPercThr,
-    std::vector<std::pair<int,int>>& loopClosures) {
-
-  auto& kfA = kfs[kfs.size()-1];
-  for (size_t i=0; i<kfs.size()-1; ++i) {
-    auto& kfB = kfs[i];
-    kfB.lsh.PrintFillStatus();
-
-    TICK("MatchKFs");
-    std::vector<int32_t> assoc;
-    std::vector<Brief> featB;
-    std::vector<Brief> featA;
-    assoc.reserve(kfA.feats.w_);
-    featB.reserve(kfA.feats.w_);
-    featA.reserve(kfA.feats.w_);
-    for (size_t j=0; j<kfA.feats.w_; ++j) {
-      Brief* feat;
-      int dist;
-      if (kfB.lsh.SearchBest(kfA.feats(j,1),dist,feat)
-          && dist < briefMatchThr) {
-        std::cout << dist << " ";
-        assoc.push_back(j);
-        featB.push_back(*feat);
-        featA.push_back(kfA.feats(j,1));
-      }
-    }
-    TOCK("MatchKFs");
-    std::cout << std::endl;
-    std::cout << kfs.size()-1 <<  " -> " << i << ": " 
-      << assoc.size()/(float)kfA.feats.Area()
-      << std::endl;
-
-    TICK("RANSAC");
-//    Image<Brief> fA(featA.size(), 1, &featA[0]);
-//    Image<Brief> fB(featB.size(), 1, &featB[0]);
-    P3PBrief p3p;
-    Ransac<Brief> ransac(&p3p);
-    size_t numInliers = 0;
-//    tdp::Image<int32_t> assocBA(assoc.size(), 1, &assoc[0]);
-    SE3f T_ab = ransac.Compute(featA, featB, assoc, ransacMaxIt,
-        ransacThr, numInliers);
-    TOCK("RANSAC");
-    
-    std::cout << kfs.size()-1 <<  " -> " << i << ": " 
-      << assoc.size() << " " << assoc.size()/(float)kfA.feats.Area() 
-      << " after RANSAC "
-      << numInliers << " " << numInliers/(float)assoc.size()
-      << std::endl;
-//    if (numInliers/(float)assoc.size() > ransacInlierPercThr) {
-    if (numInliers > ransacInlierPercThr) {
-      loopClosures.emplace_back(kfs.size()-1, i);
-    }
-  }
-}
-
-}
 
 int main( int argc, char* argv[] )
 {
@@ -311,7 +236,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
-  pangolin::Var<float> dEntropyThr("ui.dH Thr",0.9,0.8,1.0);
+  pangolin::Var<float> dEntropyThr("ui.dH Thr",0.93,0.8,1.0);
 
   pangolin::Var<float> icpLoopCloseAngleThr_deg("ui.icpLoop angle thr",20,0.,90.);
   pangolin::Var<float> icpLoopCloseDistThr("ui.icpLoop dist thr",0.30,0.,1.);
@@ -349,16 +274,16 @@ int main( int argc, char* argv[] )
         || dH/dHkf < dEntropyThr) {
       if (gui.verbose) std::cout << "kf" << std::endl;
       descsB.Reinitialise(descsA.w_, descsA.h_);
-      descsB.CopyFrom(descsA, cudaMemcpyHostToHost);
+      descsB.CopyFrom(descsA);
       ptsB.Reinitialise(ptsA.w_, 1);
-      ptsB.CopyFrom(ptsA, cudaMemcpyHostToHost);
-      greyB.CopyFrom(grey, cudaMemcpyHostToHost);
+      ptsB.CopyFrom(ptsA);
+      greyB.CopyFrom(grey);
       pcB.CopyFrom(pc, cudaMemcpyHostToHost);
       orientationsB.Reinitialise(ptsA.w_,1);
-      orientationsB.CopyFrom(orientations, cudaMemcpyHostToHost);
+      orientationsB.CopyFrom(orientations);
 
-      pcs_m.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-      ns_m.CopyFrom(ns_c, cudaMemcpyDeviceToDevice);
+      pcs_m.CopyFrom(pcs_c);
+      ns_m.CopyFrom(ns_c);
       updatedEntropy = true;
 
       std::cout << "adding KF " << kfs.size() << std::endl;
@@ -367,7 +292,7 @@ int main( int argc, char* argv[] )
 //      kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
 //      kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
-      kfs.back().feats.CopyFrom(descsA, cudaMemcpyHostToHost);
+      kfs.back().feats.CopyFrom(descsA);
 
       kfs.back().lsh.PrintHashs();
       kfs.back().lsh.PrintFillStatus();
@@ -402,7 +327,7 @@ int main( int argc, char* argv[] )
 //    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
-    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGreyOrig,1.);
     tdp::Image<uint8_t> cuGrey0 = cuPyrGrey.GetImage(0);
     tdp::Blur5(cuGreyOrig,cuGrey0, 10.);
@@ -416,15 +341,15 @@ int main( int argc, char* argv[] )
     rig.ComputePc(cuD, true, pcs_c);
     rig.ComputeNormals(cuD, true, ns_c);
 
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
-    pc.CopyFrom(pcs_c.GetImage(0), cudaMemcpyDeviceToHost);
-    cuN.CopyFrom(ns_c.GetImage(0), cudaMemcpyDeviceToDevice);
-    pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
+    d.CopyFrom(cuD);
+    pc.CopyFrom(pcs_c.GetImage(0));
+    cuN.CopyFrom(ns_c.GetImage(0));
+    pyrPc.CopyFrom(pcs_c);
 
     int fastLvl = 0;
 //    tdp::Blur9(cuGrey,cuGreyChar, 10.);
-    grey.CopyFrom(cuPyrGrey.GetImage(fastLvl), cudaMemcpyDeviceToHost);
-    pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
+    grey.CopyFrom(cuPyrGrey.GetImage(fastLvl));
+    pyrGrey.CopyFrom(cuPyrGrey);
     if (gui.verbose) std::cout << "detect" << std::endl;
     TICK("Detection");
     tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, ptsA, orientations);
@@ -459,13 +384,6 @@ int main( int argc, char* argv[] )
     TOCK("Matching");
 
     tdp::SE3f T_ab;
-//    if (useHuber && numMatches > 5) {
-//      if (gui.verbose) std::cout << "huber" << std::endl;
-//      tdp::Huber3D3D<float> huber(pc, pcB, assoc, huberDelta);
-//      huber.Compute(tdp::SE3f(), 1e-5, 100);
-//      T_ab =  huber.GetMinimum().Inverse();
-//      std::cout << T_ab << std::endl;
-//    }
     if (useRansac && numMatches > 5) {
       if (gui.verbose) std::cout << "ransac" << std::endl;
       tdp::P3PBrief p3p;
@@ -541,7 +459,7 @@ int main( int argc, char* argv[] )
       // convert normals to RGB image
       tdp::Normals2Image(cuN, cuN2D);
       // copy normals image to CPU memory
-      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+      n2D.CopyFrom(cuN2D);
       viewN2D.SetImage(n2D);
     }
     if (viewGrey.IsShown()) {
@@ -563,8 +481,8 @@ int main( int argc, char* argv[] )
     if (viewAssoc.IsShown()) {
       tdp::Image<uint8_t> greyAssocA = greyAssoc.GetRoi(0,0,wOrig, hOrig);
       tdp::Image<uint8_t> greyAssocB = greyAssoc.GetRoi(wOrig,0,wOrig, hOrig);
-      greyAssocA.CopyFrom(grey, cudaMemcpyHostToHost);
-      greyAssocB.CopyFrom(greyB, cudaMemcpyHostToHost);
+      greyAssocA.CopyFrom(grey);
+      greyAssocB.CopyFrom(greyB);
       viewAssoc.SetImage(greyAssoc);
       viewAssoc.Activate();
       glColor3f(1,0,0);
@@ -606,7 +524,7 @@ int main( int argc, char* argv[] )
       }
     }
     if(viewClosures.IsShown() && kfs.size() > 0) {
-      std::cout << "setting loop closure images" << std::endl;
+//      std::cout << "setting loop closure images" << std::endl;
       viewClosuresImg0.SetImage(kfs[showKf].pyrGrey_.GetImage(2));
       size_t i=0;
       for (auto& loop : loopClosures) {
@@ -643,9 +561,9 @@ int main( int argc, char* argv[] )
               viewClosuresImg10.SetImage(kfs[loop.second].pyrGrey_.GetImage(2));
               break;
             default:
-              std::cout << "not enough displays" << std::endl;
+              std::cout << "not enough loop closure displays" << std::endl;
           }
-          std::cout << "   setting " << i << std::endl;
+//          std::cout << "   setting " << i << std::endl;
           ++i;
         }
       }

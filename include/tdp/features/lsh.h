@@ -118,8 +118,7 @@ class LSH {
         nBuckets ++;
       }
     }
-    std::cout << "# occupied buckets " << nBuckets << " of " << store_.size()
-      << std::endl;
+    std::cout << "# occupied buckets " << nBuckets << " of " << store_.size();
     for (size_t i=0; i<store_.size(); ++i) {
       if (store_[i]) {
         avg += store_[i]->size();
@@ -127,7 +126,7 @@ class LSH {
         max = std::max(max, store_[i]->size());
       }
     }
-    std::cout << "  per bucket avg " << (double)avg/(double)store_.size() 
+    std::cout << " per bucket avg " << (double)avg/(double)store_.size() 
       << "\tmin " << min 
       << "\tmax " << max << std::endl;
   }
