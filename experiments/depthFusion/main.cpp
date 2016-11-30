@@ -327,8 +327,7 @@ int main( int argc, char* argv[] )
     cuRGBraw.CopyFrom(rgbRaw);
 
     // construct pyramid  
-    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-        cudaMemcpyDeviceToDevice, 0.03);
+    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr, 0.03);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     // compute normals
     if (normalsFromDepthPyr) {
@@ -399,10 +398,10 @@ int main( int argc, char* argv[] )
       tdp::TSDF::RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
             ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
       // get pc in model coordinate system
-      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m);
       TOCK("Ray Trace TSDF");
       if (normalsFromTSDF) {
-        tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
+        tdp::CompleteNormalPyramid<3>(ns_m);
       } else {
         if (normalsFromDepthPyr) {
           tdp::Depth2NormalsViaDerivativePyr(cuDPyrEst,camD,ns_m);
@@ -565,19 +564,16 @@ int main( int argc, char* argv[] )
 //        tdp::PyramidToImage<float,3>(cuDPyrEst,dispDepthPyr,
 //            cudaMemcpyDeviceToHost);
 //      } else {
-        tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
-            cudaMemcpyDeviceToHost);
+        tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr);
 //      }
       viewDepthPyr.SetImage(dispDepthPyr);
     }
 
     if (viewNormalsPyr.IsShown()) {
       if (dispNormalsPyrEst) {
-        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,
-            cudaMemcpyDeviceToDevice);
+        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr);
       } else {
-        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,
-            cudaMemcpyDeviceToDevice);
+        tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr);
       }
       tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
       dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr);

@@ -278,7 +278,7 @@ int main( int argc, char* argv[] )
         while(runWorker.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
             tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
-            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            tmpTSDF.CopyFrom(cuTSDF);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
             tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
@@ -336,7 +336,7 @@ int main( int argc, char* argv[] )
     gui.NextFrames();
 
     TICK("rgb collection");
-    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
+    rig.CollectRGB(gui, rgb);
     TOCK("rgb collection");
     TICK("depth collection");
     int64_t t_host_us_d = 0;
@@ -429,9 +429,9 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     if (viewMain3D.IsShown()) {
       if (dispEst) {
-        pc.CopyFrom(pcs_m.GetImage(0),cudaMemcpyDeviceToHost);
+        pc.CopyFrom(pcs_m.GetImage(0));
       } else {
-        pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
+        pc.CopyFrom(pcs_o.GetImage(0));
       }
       viewMain3D.Activate(s_cam);
       // draw the axis
@@ -459,7 +459,7 @@ int main( int argc, char* argv[] )
       }
       pangolin::glUnsetFrameOfReference();
 
-      pc.CopyFrom(cuPcView,cudaMemcpyDeviceToHost);
+      pc.CopyFrom(cuPcView);
       vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
       pangolin::glDrawAxis(0.1f);
       glColor4f(1.f,0.f,0.f,0.5f);
@@ -476,9 +476,9 @@ int main( int argc, char* argv[] )
     }
     if (viewD.IsShown()) {
       if (dispEst) {
-        d.CopyFrom(cuDPyrEst.GetImage(0), cudaMemcpyDeviceToHost);
+        d.CopyFrom(cuDPyrEst.GetImage(0));
       }else {
-        d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+        d.CopyFrom(cuD);
       }
       viewD.SetImage(d);
     }
@@ -489,12 +489,12 @@ int main( int argc, char* argv[] )
       } else {
         tdp::Normals2Image(cuN, cuN2D);
       }
-      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+      n2D.CopyFrom(cuN2D);
       viewN2D.SetImage(n2D);
     }
     if (viewDebug.IsShown()) {
       tdp::ManagedHostImage<float> debug(640,480);
-      debug.CopyFrom(rig.cuDepthScales_[0], cudaMemcpyDeviceToHost);
+      debug.CopyFrom(rig.cuDepthScales_[0]);
       viewDebug.SetImage(debug);
     }
 
@@ -503,8 +503,8 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(savePC)) {
 
-      pc.CopyFrom(pcs_o.GetImage(0),cudaMemcpyDeviceToHost);
-      n.CopyFrom(ns_o.GetImage(0),cudaMemcpyDeviceToHost);
+      pc.CopyFrom(pcs_o.GetImage(0));
+      n.CopyFrom(ns_o.GetImage(0));
 
       std::vector<std::string> comments;
       std::stringstream ss;
@@ -526,8 +526,8 @@ int main( int argc, char* argv[] )
         tdp::TransformPc(T_mr, pc);
         tdp::TransformPc(T_mr.rotation(), n);
       }
-      pcs_m.CopyFrom(pcs_o, cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_o, cudaMemcpyDeviceToDevice);
+      pcs_m.CopyFrom(pcs_o);
+      ns_m.CopyFrom(ns_o);
     }
     if (!gui.paused()) {
       T_wr_imu_prev = T_wr_imu;

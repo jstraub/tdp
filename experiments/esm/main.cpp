@@ -154,7 +154,7 @@ int main( int argc, char* argv[] )
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cudaMemset(cuRgb.ptr_, 0, cuRgb.SizeBytes());
-    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGrey);
     tdp::Gradient(cuGrey, cuGreydu, cuGreydv);
 
@@ -165,13 +165,13 @@ int main( int argc, char* argv[] )
     tdp::ConstructPyramidFromImage(cuGreydv, cuPyrGreydv,
         cudaMemcpyDeviceToDevice);
 
-    tdp::PyramidToImage(cuPyrGrey, greyVis, cudaMemcpyDeviceToHost);
-    tdp::PyramidToImage(cuPyrGreydu, greydu, cudaMemcpyDeviceToHost);
-    tdp::PyramidToImage(cuPyrGreydv, greydv, cudaMemcpyDeviceToHost);
+    tdp::PyramidToImage(cuPyrGrey, greyVis);
+    tdp::PyramidToImage(cuPyrGreydu, greydu);
+    tdp::PyramidToImage(cuPyrGreydv, greydv);
 
-    pyrGrey.CopyFrom(cuPyrGrey, cudaMemcpyDeviceToHost);
-    pyrGreydu.CopyFrom(cuPyrGreydu, cudaMemcpyDeviceToHost);
-    pyrGreydv.CopyFrom(cuPyrGreydv, cudaMemcpyDeviceToHost);
+    pyrGrey.CopyFrom(cuPyrGrey);
+    pyrGreydu.CopyFrom(cuPyrGreydu);
+    pyrGreydv.CopyFrom(cuPyrGreydv);
     
     if (randomH && !gui.paused()) {
       H_rand = tdp::Homography<float>::Random();
@@ -180,19 +180,19 @@ int main( int argc, char* argv[] )
       std::cout << "true random homography" << std::endl 
         << H_rand.matrix() << std::endl;
 
-      grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
+      grey.CopyFrom(cuGrey);
       tdp::Transform(grey, H_rand, grey_m);
       tdp::ConstructPyramidFromImage(grey_m, cuPyrGrey_m,
           cudaMemcpyHostToDevice);
       tdp::Image<float> greydv_m0 = cuPyrGreydv_m.GetImage(0);
       tdp::Image<float> greydu_m0 = cuPyrGreydu_m.GetImage(0);
       tdp::Gradient(cuPyrGrey_m.GetImage(0), greydu_m0, greydv_m0);
-      tdp::CompletePyramid(cuPyrGreydu_m, cudaMemcpyDeviceToDevice);
-      tdp::CompletePyramid(cuPyrGreydv_m, cudaMemcpyDeviceToDevice);
+      tdp::CompletePyramid(cuPyrGreydu_m);
+      tdp::CompletePyramid(cuPyrGreydv_m);
 
       pyrGrey_m.CopyFrom(  cuPyrGrey_m,   cudaMemcpyDeviceToHost);
-      pyrGreydu_m.CopyFrom(cuPyrGreydv_m, cudaMemcpyDeviceToHost);
-      pyrGreydv_m.CopyFrom(cuPyrGreydu_m, cudaMemcpyDeviceToHost);
+      pyrGreydu_m.CopyFrom(cuPyrGreydv_m);
+      pyrGreydv_m.CopyFrom(cuPyrGreydu_m);
     }
 
     if (gui.frame > 1 && pangolin::Pushed(estimateH)) {
@@ -232,10 +232,10 @@ int main( int argc, char* argv[] )
     }
 
     if (!gui.paused()) {
-      tdp::PyramidToImage(pyrGrey_m, greyVis_m, cudaMemcpyHostToHost);
-      pyrGrey_m.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
-      pyrGreydu_m.CopyFrom(pyrGreydv, cudaMemcpyHostToHost);
-      pyrGreydv_m.CopyFrom(pyrGreydu, cudaMemcpyHostToHost);
+      tdp::PyramidToImage(pyrGrey_m, greyVis_m);
+      pyrGrey_m.CopyFrom(pyrGrey);
+      pyrGreydu_m.CopyFrom(pyrGreydv);
+      pyrGreydv_m.CopyFrom(pyrGreydu);
     }
 
     // get depth image
@@ -243,10 +243,10 @@ int main( int argc, char* argv[] )
     if (!gui.ImageD(dRaw)) continue;
     cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
     // copy raw image to gpu
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    cuDraw.CopyFrom(dRaw);
     // convet depth image from uint16_t to float [m]
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+    d.CopyFrom(cuD);
     // compute point cloud (on CPU)
     tdp::Depth2PC(d,cam,pc);
     // compute normals
@@ -254,7 +254,7 @@ int main( int argc, char* argv[] )
     // convert normals to RGB image
     tdp::Normals2Image(cuN, cuN2D);
     // copy normals image to CPU memory
-    n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+    n2D.CopyFrom(cuN2D);
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);

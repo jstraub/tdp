@@ -155,16 +155,15 @@ class Pyramid {
 
 #ifdef CUDA_FOUND
 template<typename T, int LEVELS>
-void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
-  P.GetImage(0).CopyFrom(I, type);
-  CompletePyramid(P, type);
+void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P) {
+  P.GetImage(0).CopyFrom(I);
+  CompletePyramid(P);
 }
 
 /// Complete pyramid from first level using pyrdown without blurr.
 template<typename T, int LEVELS>
-void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
-  if (type == cudaMemcpyDeviceToDevice 
-      || type == cudaMemcpyHostToDevice) {
+void CompletePyramid(Pyramid<T,LEVELS>& P) {
+  if (P.storage_ == Storage::Gpu) {
     // P is on GPU so perform downsampling on GPU
     for (int lvl=1; lvl<LEVELS; ++lvl) {
       Image<T> Isrc = P.GetImage(lvl-1);
@@ -189,18 +188,17 @@ void CompletePyramid(Pyramid<T,LEVELS>& P, cudaMemcpyKind type) {
 }
 
 template<typename T, int LEVELS>
-void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, cudaMemcpyKind type, float sigma) {
-  P.GetImage(0).CopyFrom(I, type);
-  CompletePyramidBlur(P, type, sigma);
+void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, float sigma) {
+  P.GetImage(0).CopyFrom(I);
+  CompletePyramidBlur(P, sigma);
 }
 
 /// Use PyrDown with small Gaussian Blur.
 /// @param sigma whats the expected std on the first level - to only
 /// smooth over pixels that are within 3 sigma of the center pixel
 template<typename T, int LEVELS>
-void CompletePyramidBlur(Pyramid<T,LEVELS>& P, cudaMemcpyKind type, float sigma) {
-  if (type == cudaMemcpyDeviceToDevice 
-      || type == cudaMemcpyHostToDevice) {
+void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma) {
+  if (P.storage_ == Storage::Gpu) {
     // P is on GPU so perform downsampling on GPU
     for (int lvl=1; lvl<LEVELS; ++lvl) {
       Image<T> Isrc = P.GetImage(lvl-1);
@@ -215,16 +213,16 @@ void CompletePyramidBlur(Pyramid<T,LEVELS>& P, cudaMemcpyKind type, float sigma)
 /// Construct a image from a pyramid by pasting levels into a single
 /// image.
 template<typename T, int LEVELS>
-void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I, cudaMemcpyKind type) {
+void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I) {
   Image<T> IlvlSrc = P.GetImage(0);
   Image<T> Ilvl(P.Width(0), P.Height(0), I.pitch_, I.ptr_);
-  Ilvl.CopyFrom(IlvlSrc, type);
+  Ilvl.CopyFrom(IlvlSrc);
   int v0 = 0;
   for (int lvl=1; lvl<LEVELS; ++lvl) {
     IlvlSrc = P.GetImage(lvl);
     Image<T> IlvlDst(P.Width(lvl), P.Height(lvl), I.pitch_, 
         &I(P.Width(0),v0));
-    IlvlDst.CopyFrom(IlvlSrc, type);
+    IlvlDst.CopyFrom(IlvlSrc);
     v0 += P.Height(lvl);
   }
 }

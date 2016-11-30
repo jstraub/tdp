@@ -37,8 +37,8 @@ void DetectFast(const Image<uint8_t>& grey, int b,
 
   int numPtsInside = 0;
   for (int i=0; i<numPts; ++i) {
-    if (borderS <= pts_[i].x && pts_[i].x < grey.w_-borderS
-        && borderS <= pts_[i].y && pts_[i].y < grey.h_-borderS) {
+    if (borderS <= pts_[i].x && pts_[i].x < (int)grey.w_-borderS
+        && borderS <= pts_[i].y && pts_[i].y < (int)grey.h_-borderS) {
       Image<uint8_t> patch = grey.GetRoi(pts_[i].x-5, pts_[i].y-5, 10,10);
       if (HarrisScore(patch, kappaHarris) > harrisThr) {
         numPtsInside ++;
@@ -53,8 +53,8 @@ void DetectFast(const Image<uint8_t>& grey, int b,
   pts.Reinitialise(numPtsInside, 1);
   int j = 0;
   for (int i=0; i<numPts; ++i) {
-    if (borderS <= pts_[i].x && pts_[i].x < grey.w_-borderS
-        && borderS <= pts_[i].y && pts_[i].y < grey.h_-borderS) {
+    if (borderS <= pts_[i].x && pts_[i].x < (int)grey.w_-borderS
+        && borderS <= pts_[i].y && pts_[i].y < (int)grey.h_-borderS) {
       pts[j](0) = pts_[i].x;
       pts[j++](1) = pts_[i].y;
     }

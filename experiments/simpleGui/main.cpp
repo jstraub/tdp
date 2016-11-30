@@ -32,11 +32,6 @@ int main( int argc, char* argv[] )
   const std::string input_uri = std::string(argv[1]);
   const std::string option = (argc > 2) ? std::string(argv[2]) : "";
 
-  bool runOnce = false;
-  if (!option.compare("-1")) {
-    runOnce = true; 
-  }
-
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, "./video.pango");
   const size_t num_streams = video.Streams().size();
@@ -110,10 +105,10 @@ int main( int argc, char* argv[] )
     if (!gui.ImageD(dRaw)) continue;
     cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
     // copy raw image to gpu
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    cuDraw.CopyFrom(dRaw);
     // convet depth image from uint16_t to float [m]
     tdp::ConvertDepthGpu(cuDraw, cuD, depthSensorScale, dMin, dMax);
-    d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+    d.CopyFrom(cuD);
     // compute point cloud (on CPU)
     tdp::Depth2PC(d,cam,pc);
     // compute normals
@@ -121,7 +116,7 @@ int main( int argc, char* argv[] )
     // convert normals to RGB image
     tdp::Normals2Image(cuN, cuN2D);
     // copy normals image to CPU memory
-    n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+    n2D.CopyFrom(cuN2D);
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -142,7 +137,7 @@ int main( int argc, char* argv[] )
 
     // if pressed savePC button save the point cloud to a file.
     if (pangolin::Pushed(savePC)) {
-      n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+      n.CopyFrom(cuN);
       std::vector<std::string> comments;
       comments.push_back("generated from simpleGui");
       tdp::SavePointCloud(pangolin::MakeUniqueFilename("mesh.ply"),

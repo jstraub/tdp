@@ -79,9 +79,8 @@ void Depth2Normals(
 }
 
 template<int LEVELS>
-void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr,
-    cudaMemcpyKind type) {
-  CompletePyramid<Vector3fda,3>(cuNPyr, type);
+void CompleteNormalPyramid(Pyramid<Vector3fda,LEVELS>& cuNPyr) {
+  CompletePyramid<Vector3fda,3>(cuNPyr);
   // make sure all normals are propperly normalized in lower levels of
   // pyramid
   for (int lvl=1; lvl<LEVELS; ++lvl) {
@@ -112,7 +111,7 @@ void Depth2Normals(
   float vc = cam.params_(3);
   Image<Vector3fda> cuN = cuNPyr.GetImage(0);
   ComputeNormals(cuD, cuDu, cuDv, cuN, f, uc, vc);
-  CompleteNormalPyramid<3>(cuNPyr, cudaMemcpyDeviceToDevice);
+  CompleteNormalPyramid<3>(cuNPyr);
 }
 
 template<int LEVELS, int D, typename Derived>
@@ -134,8 +133,8 @@ void Depth2NormalsViaDerivativePyr(
 
   Gradient(cuD, cuDu, cuDv);
 
-  tdp::CompletePyramid<float,3>(cuDuPyr, cudaMemcpyDeviceToDevice);
-  tdp::CompletePyramid<float,3>(cuDvPyr, cudaMemcpyDeviceToDevice);
+  tdp::CompletePyramid<float,3>(cuDuPyr);
+  tdp::CompletePyramid<float,3>(cuDvPyr);
 
   // Compute the pyramid by downsamplying the gradients and computing
   // the normals based on the downsampled normals

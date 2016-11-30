@@ -24,9 +24,9 @@ struct KeyFrame {
     pc_(pc.w_, pc.h_), n_(n.w_, n.h_), rgb_(rgb.w_, rgb.h_), 
     T_wk_(T_wk)
   {
-    pc_.CopyFrom(pc, cudaMemcpyHostToHost);
-    n_.CopyFrom(n, cudaMemcpyHostToHost);
-    rgb_.CopyFrom(rgb, cudaMemcpyHostToHost);
+    pc_.CopyFrom(pc);
+    n_.CopyFrom(n);
+    rgb_.CopyFrom(rgb);
   }
 
   KeyFrame(
@@ -42,15 +42,15 @@ struct KeyFrame {
     pyrGrey_(grey.w_, grey.h_), pyrGradGrey_(gradGrey.w_, gradGrey.h_),
     T_wk_(T_wk)
   {
-    pc_.CopyFrom(pc.GetConstImage(0),  cudaMemcpyDeviceToHost);
-    n_.CopyFrom(n.GetConstImage(0),    cudaMemcpyDeviceToHost);
-    d_.CopyFrom(d,                cudaMemcpyDeviceToHost);
-    rgb_.CopyFrom(rgb,            cudaMemcpyHostToHost);
+    pc_.CopyFrom(pc.GetConstImage(0));
+    n_.CopyFrom(n.GetConstImage(0));
+    d_.CopyFrom(d);
+    rgb_.CopyFrom(rgb);
 
-    pyrPc_.CopyFrom(pc,     cudaMemcpyDeviceToHost);
-    pyrN_.CopyFrom(n,       cudaMemcpyDeviceToHost);
-    pyrGrey_.CopyFrom(grey, cudaMemcpyHostToHost);
-    pyrGradGrey_.CopyFrom(gradGrey, cudaMemcpyDeviceToHost);
+    pyrPc_.CopyFrom(pc);
+    pyrN_.CopyFrom(n);
+    pyrGrey_.CopyFrom(grey);
+    pyrGradGrey_.CopyFrom(gradGrey);
   }
 
   ManagedHostImage<Vector3fda> pc_;
@@ -102,13 +102,13 @@ void Overlap(const KeyFrame& kfA, const KeyFrame& kfB,
   size_t w = kfA.pyrGrey_.w_;
   size_t h = kfA.pyrGrey_.h_;
   ManagedDeviceImage<float> greyA(w,h);
-  greyA.CopyFrom(kfA.pyrGrey_.GetConstImage(0), cudaMemcpyHostToDevice);
+  greyA.CopyFrom(kfA.pyrGrey_.GetConstImage(0));
   ManagedDeviceImage<float> greyB(w,h);
-  greyB.CopyFrom(kfB.pyrGrey_.GetConstImage(0), cudaMemcpyHostToDevice);
+  greyB.CopyFrom(kfB.pyrGrey_.GetConstImage(0));
   ManagedDeviceImage<Vector3fda> pcA(w,h);
-  pcA.CopyFrom(kfA.pyrPc_.GetConstImage(0), cudaMemcpyHostToDevice);
+  pcA.CopyFrom(kfA.pyrPc_.GetConstImage(0));
   ManagedDeviceImage<Vector3fda> pcB(w,h);
-  pcB.CopyFrom(kfB.pyrPc_.GetConstImage(0), cudaMemcpyHostToDevice);
+  pcB.CopyFrom(kfB.pyrPc_.GetConstImage(0));
 
   OverlapGpu(greyA, greyB, pcA, pcB, T_ab_, rig, overlap, rmse, errB); 
 }

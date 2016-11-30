@@ -147,7 +147,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> dEst(wc, hc);
   tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
   dEst.Fill(0.);
-  tdp::CopyImage(dEst, cuDEst, cudaMemcpyHostToDevice);
+  cuDEst.CopyFrom(dEst);
   tdp::ManagedDeviceImage<float> cuDView(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPcView(wc, hc);
 
@@ -241,7 +241,7 @@ int main( int argc, char* argv[] )
         while(runWorker.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
             tdp::ManagedHostVolume<tdp::TSDFval> tmpTSDF(wTSDF, hTSDF, dTSDF);
-            tmpTSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            tmpTSDF.CopyFrom(cuTSDF);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
             tdp::SaveVolume(tmpTSDF, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
@@ -384,11 +384,10 @@ int main( int argc, char* argv[] )
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    cuDraw.CopyFrom(dRaw);
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
     // construct pyramid  
-    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
-        cudaMemcpyDeviceToDevice, 0.03);
+    tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr, 0.03);
     tdp::Depth2PCsGpu(cuDPyr,camD,pcs_c);
     // compute normals
     tdp::Depth2Normals(cuDPyr,camD,ns_c);
@@ -514,15 +513,15 @@ int main( int argc, char* argv[] )
       tdp::TSDF::RayTraceTSDF(cuTSDF, pcs_m.GetImage(0), 
           ns_m.GetImage(0), T_mo, camD, grid0, dGrid, tsdfMu, tsdfWThr); 
       // get pc in model coordinate system
-      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m, cudaMemcpyDeviceToDevice);
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_m);
       TOCK("Ray Trace TSDF");
-      tdp::CompleteNormalPyramid<3>(ns_m, cudaMemcpyDeviceToDevice);
+      tdp::CompleteNormalPyramid<3>(ns_m);
     }
 
     if (pangolin::Pushed(resetTSDF)) {
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       dEst.Fill(0.);
-      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
+      cuTSDF.CopyFrom(TSDF);
       numFused = 0;
       T_mo = T_mo_0;
       T_mo_prev = T_mo;
@@ -650,31 +649,28 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
     gui.ShowFrames();
 
-    tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
+    tsdfDEst.CopyFrom(cuDEst);
     viewTsdfDEst.SetImage(tsdfDEst);
 
     tdp::Image<tdp::TSDFval> cuTsdfSlice =
       cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
     tdp::ManagedHostImage<tdp::TSDFval> tsdfSliceRaw(cuTsdfSlice.w_, 
         cuTsdfSlice.h_);
-    tsdfSliceRaw.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+    tsdfSliceRaw.CopyFrom(cuTsdfSlice);
     for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
       tsdfSlice[i] = tsdfSliceRaw[i].f;
     viewTsdfSliveView.SetImage(tsdfSlice);
 
-    tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr,
-        cudaMemcpyDeviceToHost);
+    tdp::PyramidToImage<float,3>(cuDPyr,dispDepthPyr);
     viewDepthPyr.SetImage(dispDepthPyr);
 
     if (dispNormalsPyrEst) {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
+      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_m,cuDispNormalsPyr);
     } else {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
+      tdp::PyramidToImage<tdp::Vector3fda,3>(ns_c,cuDispNormalsPyr);
     }
     tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-    dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+    dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr);
     viewNormalsPyr.SetImage(dispNormals2dPyr);
 
     TOCK("Draw 2D");
@@ -687,8 +683,8 @@ int main( int argc, char* argv[] )
         tdp::TransformPc(T_mo, pc);
         tdp::TransformPc(R_mo, n);
       }
-      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
+      pcs_m.CopyFrom(pcs_c);
+      ns_m.CopyFrom(ns_c);
     }
     if (!gui.paused()) {
 //      T_wr_imu_prev = T_wr_imu;

@@ -184,7 +184,7 @@ int main( int argc, char* argv[] )
   std::thread workThread([&]() {
         while(runSave.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
-            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            TSDF.CopyFrom(cuTSDF);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
             tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, T_wG, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
@@ -248,8 +248,8 @@ int main( int argc, char* argv[] )
             tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
             tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
                 wSingle, hSingle);
-            rgb_i.CopyFrom(_rgb,cudaMemcpyHostToHost);
-            cuDraw_i.CopyFrom(_d,cudaMemcpyHostToDevice);
+            rgb_i.CopyFrom(_rgb);
+            cuDraw_i.CopyFrom(_d);
             // convert depth image from uint16_t to float [m]
             tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
             if (rig.cuDepthScales_.size() > cId) {
@@ -270,7 +270,7 @@ int main( int argc, char* argv[] )
       // get next frames from the video source
       gui.NextFrames();
       TICK("rgb collection");
-      rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost);
+      rig.CollectRGB(gui, rgb);
       TOCK("rgb collection");
       TICK("depth collection");
       int64_t t_host_us_d = 0;
@@ -285,10 +285,10 @@ int main( int argc, char* argv[] )
 
     TICK("Setup Pyramids");
     // TODO might want to use the pyramid construction with smoothing
-    pcs_o.GetImage(0).CopyFrom(cuPc, cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o,cudaMemcpyDeviceToDevice);
-    ns_o.GetImage(0).CopyFrom(cuN, cudaMemcpyDeviceToDevice);
-    tdp::CompleteNormalPyramid<3>(ns_o,cudaMemcpyDeviceToDevice);
+    pcs_o.GetImage(0).CopyFrom(cuPc);
+    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o);
+    ns_o.GetImage(0).CopyFrom(cuN);
+    tdp::CompleteNormalPyramid<3>(ns_o);
     TOCK("Setup Pyramids");
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -306,12 +306,12 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(runMarchingCubes)) {
-      TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+      TSDF.CopyFrom(cuTSDF);
       tdp::ComputeMesh(TSDF, grid0, dGrid,
           T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
     }
 
-    pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
+    pc.CopyFrom(cuPc);
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
 
@@ -374,13 +374,13 @@ int main( int argc, char* argv[] )
       viewRgb.SetImage(rgb);
     }
     if (viewD.IsShown()) {
-      d.CopyFrom(cuD, cudaMemcpyDeviceToHost);
+      d.CopyFrom(cuD);
       viewD.SetImage(d);
     }
     if (viewN2D.IsShown()) {
       // convert normals to RGB image
       tdp::Normals2Image(cuN, cuN2D);
-      n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+      n2D.CopyFrom(cuN2D);
       viewN2D.SetImage(n2D);
     }
 

@@ -278,7 +278,7 @@ int main( int argc, char* argv[] )
       ptsB.Reinitialise(ptsA.w_, 1);
       ptsB.CopyFrom(ptsA);
       greyB.CopyFrom(grey);
-      pcB.CopyFrom(pc, cudaMemcpyHostToHost);
+      pcB.CopyFrom(pc);
       orientationsB.Reinitialise(ptsA.w_,1);
       orientationsB.CopyFrom(orientations);
 
@@ -289,8 +289,8 @@ int main( int argc, char* argv[] )
       std::cout << "adding KF " << kfs.size() << std::endl;
 //      kfs.emplace_back(wOrig,hOrig);
       kfs.emplace_back(pyrGrey, pcs_c);
-//      kfs.back().pyrPc.CopyFrom(pcs_c, cudaMemcpyDeviceToHost);
-//      kfs.back().pyrGrey.CopyFrom(pyrGrey, cudaMemcpyHostToHost);
+//      kfs.back().pyrPc.CopyFrom(pcs_c);
+//      kfs.back().pyrGrey.CopyFrom(pyrGrey);
       kfs.back().feats.Reinitialise(descsA.w_, descsA.h_);
       kfs.back().feats.CopyFrom(descsA);
 
@@ -317,21 +317,21 @@ int main( int argc, char* argv[] )
 
     if (gui.verbose) std::cout << "rgb" << std::endl;
     // get rgb image
-//    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
+//    rig.CollectRGB(gui, rgb) ;
 //    tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
 //    tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
-//    greyDu.CopyFrom(cuGreyDu, cudaMemcpyDeviceToHost);
-//    greyDv.CopyFrom(cuGreyDv, cudaMemcpyDeviceToHost);
+//    greyDu.CopyFrom(cuGreyDu);
+//    greyDv.CopyFrom(cuGreyDv);
 //    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
 //        cudaMemcpyDeviceToDevice);
-//    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
+//    tdp::CompletePyramid(cuPyrGradGrey_c);
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGreyOrig,1.);
     tdp::Image<uint8_t> cuGrey0 = cuPyrGrey.GetImage(0);
     tdp::Blur5(cuGreyOrig,cuGrey0, 10.);
-    tdp::CompletePyramid(cuPyrGrey, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid(cuPyrGrey);
 
     // get depth image
 //    cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
@@ -475,7 +475,7 @@ int main( int argc, char* argv[] )
       } 
     }
     if (viewPyrGrey.IsShown()) {
-      tdp::PyramidToImage(pyrGrey, pyrGreyImg, cudaMemcpyHostToHost);
+      tdp::PyramidToImage(pyrGrey, pyrGreyImg);
       viewPyrGrey.SetImage(pyrGreyImg);
     }
     if (viewAssoc.IsShown()) {

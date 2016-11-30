@@ -313,12 +313,12 @@ int main( int argc, char* argv[] )
 //        tdp::TransformPc(T_wc.rotation(), n);
 //        tdp::TransformPc(T_wc.rotation(), g);
 //      }
-      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
-      gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
-      cuPyrGrey_m.CopyFrom(cuPyrGrey_c, cudaMemcpyDeviceToDevice);
-      cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
-      rgb_m.CopyFrom(rgb, cudaMemcpyHostToHost);
+      pcs_m.CopyFrom(pcs_c);
+      ns_m.CopyFrom(ns_c);
+      gs_m.CopyFrom(gs_c);
+      cuPyrGrey_m.CopyFrom(cuPyrGrey_c);
+      cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c);
+      rgb_m.CopyFrom(rgb);
 //      T_wc = T_wc_0;
     }
 
@@ -337,23 +337,23 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute n" << std::endl;
     rig.ComputeNormals(cuD, true, ns_c);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
-    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
-    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    rig.CollectRGB(gui, rgb) ;
+    cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);
     
     tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
     tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
-    greyDu.CopyFrom(cuGreyDu, cudaMemcpyDeviceToHost);
-    greyDv.CopyFrom(cuGreyDv, cudaMemcpyDeviceToHost);
+    greyDu.CopyFrom(cuGreyDu);
+    greyDv.CopyFrom(cuGreyDv);
     tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
         cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid(cuPyrGradGrey_c);
 
 //    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
 //    tdp::Image<tdp::Vector3fda> cuGs = gs_c.GetImage(0);
 //    tdp::Gradient3D(cuGrey, cuD, cuNs, camD, gradNormThr, cuGreydu,
 //        cuGreydv, cuGs);
-//    tdp::CompletePyramid(gs_c, cudaMemcpyDeviceToDevice);
+//    tdp::CompletePyramid(gs_c);
     TOCK("Setup Pyramids");
 
     std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
@@ -404,7 +404,7 @@ int main( int argc, char* argv[] )
 //        rig.T_rcs_[rig.rgbStream2cam_[0]].Inverse()* T_mc, 
 //        rig.cams_[rig.rgbStream2cam_[0]],
 //        overlap, rmse, &cuIrmse); 
-    Irmse.CopyFrom(cuIrmse, cudaMemcpyDeviceToHost);
+    Irmse.CopyFrom(cuIrmse);
     rmseView = rmse;
     logRmse.Log(rmse);
     logOverlap.Log(overlap);
@@ -459,7 +459,7 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewModel.IsShown()) {
-      grey_m.CopyFrom(cuPyrGrey_m.GetImage(0), cudaMemcpyDeviceToHost);
+      grey_m.CopyFrom(cuPyrGrey_m.GetImage(0));
       viewModel.SetImage(grey_m);
     }
     if (viewCurrent.IsShown()) {
@@ -475,13 +475,13 @@ int main( int argc, char* argv[] )
       viewDebugC.SetImage(Irmse);
     }
     if (viewDebugD.IsShown()) {
-      tdp::PyramidToImage(cuPyrGradGrey_c, cuGrad2D, cudaMemcpyDeviceToDevice);
+      tdp::PyramidToImage(cuPyrGradGrey_c, cuGrad2D);
       tdp::Grad2Image(cuGrad2D, cuGrad2DImg);
-      grad2DImg.CopyFrom(cuGrad2DImg, cudaMemcpyDeviceToHost);
+      grad2DImg.CopyFrom(cuGrad2DImg);
       viewDebugD.SetImage(grad2DImg);
     }
     if (viewDebugE.IsShown()) {
-      tdp::PyramidToImage(cuPyrGrey_c, greyPyrImg, cudaMemcpyDeviceToHost);
+      tdp::PyramidToImage(cuPyrGrey_c, greyPyrImg);
       viewDebugE.SetImage(greyPyrImg);
     }
     if (viewDebugF.IsShown()) {
@@ -489,11 +489,10 @@ int main( int argc, char* argv[] )
     }
 
     if (viewGrad3DPyr.IsShown()) {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
+      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr);
       tdp::RenormalizeSurfaceNormals(cuDispNormalsPyr, 1e-3);
       tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr);
       viewGrad3DPyr.SetImage(dispNormals2dPyr);
     }
 

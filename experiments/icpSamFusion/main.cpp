@@ -46,6 +46,7 @@
 #include <tdp/rtmf/vMFMMF.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/io/tinyply.h>
+#include <tdp/features/keyframe.h>
 #include <tdp/marching_cubes/marching_cubes.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -390,6 +391,7 @@ int main( int argc, char* argv[] )
 
   tdp::KeyframeSLAM kfSLAM;
   std::vector<tdp::KeyFrame> kfs;
+  std::vector<tdp::BinaryKF> binaryKfs;
   std::vector<float> logHs;
   std::vector<tdp::SE3f> T_mos;
 
@@ -436,7 +438,7 @@ int main( int argc, char* argv[] )
         cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
         Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl, overlapBefore, 
             rmseBefore, nullptr, &cuPhotoErrAfter);
-        photoErrBefore.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
+        photoErrBefore.CopyFrom(cuPhotoErrAfter);
         TOCK("Overlap");
 
         if (overlapBefore > icpLoopCloseOverlapThr) {
@@ -446,10 +448,10 @@ int main( int argc, char* argv[] )
           float count=10000;
           Eigen::Matrix<float,6,6> Sigma_ab = 1e-6*Eigen::Matrix<float,6,6>::Identity();
           if (useANN) {
-            cuPcA.CopyFrom(kfA.pc_, cudaMemcpyHostToDevice);
-            cuNA.CopyFrom(kfA.n_, cudaMemcpyHostToDevice);
-            cuPcB.CopyFrom(kfB.pc_, cudaMemcpyHostToDevice);
-            cuNB.CopyFrom(kfB.n_, cudaMemcpyHostToDevice);
+            cuPcA.CopyFrom(kfA.pc_);
+            cuNA.CopyFrom(kfA.n_);
+            cuPcB.CopyFrom(kfB.pc_);
+            cuNB.CopyFrom(kfB.n_);
             tdp::ICP::ComputeANN(kfA.pc_, cuPcA, cuNA, kfB.pc_, cuPcB, cuNB, 
               assoc_ba, cuAssoc_ba, T_ab, icpLoopCloseIter0, 
               icpLoopCloseAngleThr_deg, icpLoopCloseDistThr, 
@@ -462,10 +464,10 @@ int main( int argc, char* argv[] )
             tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
             tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
 
-            pcs_m.CopyFrom(kfA.pyrPc_, cudaMemcpyHostToDevice);
-            ns_m.CopyFrom(kfA.pyrN_, cudaMemcpyHostToDevice);
-            pcs_c.CopyFrom(kfB.pyrPc_, cudaMemcpyHostToDevice);
-            ns_c.CopyFrom(kfB.pyrN_, cudaMemcpyHostToDevice);
+            pcs_m.CopyFrom(kfA.pyrPc_);
+            ns_m.CopyFrom(kfA.pyrN_);
+            pcs_c.CopyFrom(kfB.pyrPc_);
+            ns_c.CopyFrom(kfB.pyrN_);
 
             std::vector<size_t> maxIt = {icpIter0, icpIter1, icpIter2};
 //            tdp::ICP::ComputeProjective(pcs_m, ns_m, pcs_c, 
@@ -479,10 +481,10 @@ int main( int argc, char* argv[] )
               tdp::ManagedDevicePyramid<float,3> cuPyrGrey_m(wc,hc);
               tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_c(wc,hc);
               tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_m(wc,hc);
-              cuPyrGrey_m.CopyFrom(kfA.pyrGrey_, cudaMemcpyHostToDevice);
-              cuPyrGrey_c.CopyFrom(kfB.pyrGrey_, cudaMemcpyHostToDevice);
-              cuPyrGradGrey_m.CopyFrom(kfA.pyrGradGrey_, cudaMemcpyHostToDevice);
-              cuPyrGradGrey_c.CopyFrom(kfB.pyrGradGrey_, cudaMemcpyHostToDevice);
+              cuPyrGrey_m.CopyFrom(kfA.pyrGrey_);
+              cuPyrGrey_c.CopyFrom(kfB.pyrGrey_);
+              cuPyrGradGrey_m.CopyFrom(kfA.pyrGradGrey_);
+              cuPyrGradGrey_c.CopyFrom(kfB.pyrGradGrey_);
               tdp::IcpTexture::ComputeProjective<CameraT>(pcs_m, ns_m,
                   cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
                   cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
@@ -511,7 +513,7 @@ int main( int argc, char* argv[] )
           float overlapAfter, rmseAfter;
           Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl,
               overlapAfter, rmseAfter, &T_ab, &cuPhotoErrAfter);
-          photoErrAfter.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
+          photoErrAfter.CopyFrom(cuPhotoErrAfter);
 
           std::cout << "Overlap " << overlapBefore << " -> " << overlapAfter 
             << " RMSE " << rmseBefore << " -> " << rmseAfter 
@@ -561,7 +563,7 @@ int main( int argc, char* argv[] )
                 //        cudaMemset(cuPhotoErrAfter.ptr_, 0, cuPhotoErrAfter.SizeBytes());
                 Overlap(kfA, kfB, rig, icpLoopCloseOverlapLvl, overlap, 
                     rmse, nullptr, nullptr); //&cuPhotoErrAfter);
-                //        photoErrBefore.CopyFrom(cuPhotoErrAfter, cudaMemcpyDeviceToHost);
+                //        photoErrBefore.CopyFrom(cuPhotoErrAfter);
                 TOCK("Overlap");
                 std::cout << it.first << " to " << it.second << ":\tRMSE " << rmse
                   << "\toverlap " << overlap << std::endl;
@@ -675,7 +677,7 @@ int main( int argc, char* argv[] )
         } while (!tdp::IsValidData(ni));
         nMmf[i] = ni;
       }
-      cuNMmf.CopyFrom(nMmf, cudaMemcpyHostToDevice);
+      cuNMmf.CopyFrom(nMmf);
       mmf.Compute(cuNMmf, 100, true);
       size_t idMax = std::distance(mmf.Ns_.begin(),
           std::max_element(mmf.Ns_.begin(), mmf.Ns_.end()));
@@ -721,7 +723,7 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(resetTSDF)) {
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
-      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
+      cuTSDF.CopyFrom(TSDF);
       std::cout << "resetting TSDF" << std::endl;
     }
 
@@ -742,7 +744,7 @@ int main( int argc, char* argv[] )
           std::cout << "add KF " << i << " to tsdf" << std::endl;
         const auto& kfA = kfs[i];
         const tdp::SE3f& T_mk = kfA.T_wk_;
-        cuD.CopyFrom(kfA.d_, cudaMemcpyHostToDevice);
+        cuD.CopyFrom(kfA.d_);
         TICK("Add To TSDF");
 //        AddToTSDF(cuTSDF, cuD, T_mk, camD, grid0, dGrid, tsdfMu, tsdfWMax); 
         rig.AddToTSDF(cuD, T_wG.Inverse()*T_mk, useRgbCamParasForDepth, 
@@ -768,17 +770,17 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute n" << std::endl;
     rig.ComputeNormals(cuD, true, ns_c);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
-    rig.CollectRGB(gui, rgb, cudaMemcpyHostToHost) ;
-    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    rig.CollectRGB(gui, rgb) ;
+    cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);
 
     tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
     tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
-    greyDu.CopyFrom(cuGreyDu, cudaMemcpyDeviceToHost);
-    greyDv.CopyFrom(cuGreyDv, cudaMemcpyDeviceToHost);
+    greyDu.CopyFrom(cuGreyDu);
+    greyDv.CopyFrom(cuGreyDv);
     tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
         cudaMemcpyDeviceToDevice);
-    tdp::CompletePyramid(cuPyrGradGrey_c, cudaMemcpyDeviceToDevice);
+    tdp::CompletePyramid(cuPyrGradGrey_c);
 
     TOCK("Setup Pyramids");
 
@@ -811,10 +813,10 @@ int main( int argc, char* argv[] )
       }
 
       tdp::KeyFrame& kf = kfs[idActive];
-      pcs_m.CopyFrom(kf.pyrPc_,cudaMemcpyHostToDevice);
-      ns_m.CopyFrom(kf.pyrN_,cudaMemcpyHostToDevice);
+      pcs_m.CopyFrom(kf.pyrPc_);
+      ns_m.CopyFrom(kf.pyrN_);
       // TODO:
-      //      gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
+      //      gs_m.CopyFrom(gs_c);
 
       if (gui.verbose) std::cout << "icp" << std::endl;
       TICK("ICP");
@@ -824,8 +826,8 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,6> dSigma_ac = 1e-6*Eigen::Matrix<float,6,6>::Identity();
 //      T_ac = tdp::SE3f();
       if (icpRgb) {
-        cuPyrGrey_m.CopyFrom(kf.pyrGrey_,cudaMemcpyHostToDevice);
-        cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_,cudaMemcpyHostToDevice);
+        cuPyrGrey_m.CopyFrom(kf.pyrGrey_);
+        cuPyrGradGrey_m.CopyFrom(kf.pyrGradGrey_);
         tdp::IcpTexture::ComputeProjective<CameraT>(pcs_m, ns_m,
             cuPyrGradGrey_m, cuPyrGrey_m, pcs_c, ns_c, cuPyrGradGrey_c,
             cuPyrGrey_c, rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg,
@@ -888,10 +890,11 @@ int main( int argc, char* argv[] )
           << " T_mk: " << std::endl << T_mo
           << std::endl;
 
-//        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey, cudaMemcpyDeviceToHost);
+//        tdp::ConstructPyramidFromImage(cuGrey, pyrGrey);
         numKfsPrev = kfs.size();
         kfs.emplace_back(pcs_c, ns_c, cuPyrGrey_c, cuPyrGradGrey_c,
             rgb, cuD, T_mo);
+        binaryKfs.emplace_back(cuPyrGrey_c,pcs_c);
 
         for (int i=kfs.size()-3; 
             i > std::max(-1,(int)kfs.size()-maxLoopClosures-1); --i) {
@@ -942,9 +945,9 @@ int main( int argc, char* argv[] )
           }
 
           tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
-          pc.CopyFrom(pcs_c.GetImage(0),cudaMemcpyDeviceToHost);
+          pc.CopyFrom(pcs_c.GetImage(0));
           tdp::ManagedHostImage<tdp::Vector3fda> n(wc, hc);
-          n.CopyFrom(ns_c.GetImage(0),cudaMemcpyDeviceToHost);
+          n.CopyFrom(ns_c.GetImage(0));
           std::stringstream plyPath;
           plyPath << "./frame_" << std::setfill('0') << std::setw(10) 
             << idActive << ".ply";
@@ -981,7 +984,7 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(runMarchingCubes)
         || (runSlamFusion && gui.finished() && meshVbo.num_elements == 0)) {
-      TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+      TSDF.CopyFrom(cuTSDF);
       tdp::ComputeMesh(TSDF, grid0, dGrid,
           T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
       saveTSDF = true;
@@ -1058,8 +1061,8 @@ int main( int argc, char* argv[] )
       // render model and observed point cloud
       if (showPcModel && kfs.size() > 0) {
         tdp::KeyFrame& kf = kfs[idActive];
-        pcs_m.CopyFrom(kf.pyrPc_,cudaMemcpyHostToDevice);
-        ns_m.CopyFrom(kf.pyrN_,cudaMemcpyHostToDevice);
+        pcs_m.CopyFrom(kf.pyrPc_);
+        ns_m.CopyFrom(kf.pyrN_);
 
         pangolin::glSetFrameOfReference(kfs[idActive].T_wk_.matrix());
         {
@@ -1183,11 +1186,10 @@ int main( int argc, char* argv[] )
     }
 
     if (viewGrad3DPyr.IsShown()) {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
+      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr);
       tdp::RenormalizeSurfaceNormals(cuDispNormalsPyr, 1e-3);
       tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr);
       viewGrad3DPyr.SetImage(dispNormals2dPyr);
     }
 

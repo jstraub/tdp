@@ -103,11 +103,10 @@ struct Rig {
                   std::cout << "depth scale size w x h: " 
                     << w << "x" << h << " " <<  path << std::endl;
                   Image<float> scaleWrap(w,h,w*sizeof(float),
-                      (float*)scale8bit.ptr);
+                      (float*)scale8bit.ptr,Storage::Cpu);
                   cuDepthScales_.emplace_back(w,h);
                   std::cout << cuDepthScales_[cuDepthScales_.size()-1].Description() << std::endl;
-                  cuDepthScales_[cuDepthScales_.size()-1].CopyFrom(scaleWrap,
-                      cudaMemcpyHostToDevice);
+                  cuDepthScales_[cuDepthScales_.size()-1].CopyFrom(scaleWrap);
                   std::cout << "found and loaded depth scale file"
                     << " " 
                     <<  cuDepthScales_[cuDepthScales_.size()-1].ptr_ << std::endl;
@@ -166,7 +165,7 @@ struct Rig {
     const std::vector<pangolin::VideoInterface*>& streams);
 
   void CollectRGB(const GuiBase& gui,
-    Image<Vector3bda>& rgb, cudaMemcpyKind type) ;
+    Image<Vector3bda>& rgb);
 
   void CollectD(const GuiBase& gui,
     float dMin, float dMax, Image<uint16_t>& cuDraw,
@@ -316,7 +315,7 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
 
 template<class CamT>
 void Rig<CamT>::CollectRGB(const GuiBase& gui,
-    Image<Vector3bda>& rgb, cudaMemcpyKind type) {
+    Image<Vector3bda>& rgb) {
   for (size_t sId=0; sId < rgbdStream2cam_.size(); sId++) {
     Image<Vector3bda> rgbStream;
     if (!gui.ImageRGB(rgbStream, sId)) continue;
@@ -327,7 +326,7 @@ void Rig<CamT>::CollectRGB(const GuiBase& gui,
     wSingle = rgbStream.w_+rgbStream.w_%64;
     hSingle = rgbStream.h_+rgbStream.h_%64;
     Image<Vector3bda> rgb_i = GetStreamRoi(rgb, sId);
-    rgb_i.CopyFrom(rgbStream,type);
+    rgb_i.CopyFrom(rgbStream);
   }
 }
 
@@ -353,7 +352,7 @@ void Rig<CamT>::CollectD(const GuiBase& gui,
     hSingle = dStream.h_+dStream.h_%64;
     tdp::Image<uint16_t> cuDraw_i = GetStreamRoi(cuDraw, sId);
     cudaMemset(cuDraw_i.ptr_, 0, cuDraw_i.SizeBytes());
-    cuDraw_i.CopyFrom(dStream,cudaMemcpyHostToDevice);
+    cuDraw_i.CopyFrom(dStream);
     // convert depth image from uint16_t to float [m]
     tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     if (cuDepthScales_.size() > cId) {
@@ -400,8 +399,7 @@ void Rig<CamT>::ComputeNormals(Image<float>& cuD,
     Pyramid<Vector3fda,LEVELS>& cuPyrN) {
   Image<Vector3fda> cuN = cuPyrN.GetImage(0);
   ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
-  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN,
-      cudaMemcpyDeviceToDevice);
+  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN);
 }
 
 template<class CamT>
@@ -433,7 +431,7 @@ void Rig<CamT>::ComputePc(Image<float>& cuD,
     Pyramid<Vector3fda,LEVELS>& cuPyrPc) {
   Image<Vector3fda> cuPc = cuPyrPc.GetImage(0);
   ComputePc(cuD, useRgbCamParasForDepth, cuPc);
-  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc,cudaMemcpyDeviceToDevice);
+  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc);
 }
 
 
@@ -496,8 +494,8 @@ void Rig<CamT>::RayTraceTSDF(
         cuNEst_i, T_mo, cam, grid0, dGrid, tsdfMu, tsdfWThr); 
   }
   // just complete the surface normals obtained from the TSDF
-  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc,cudaMemcpyDeviceToDevice);
-  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN,cudaMemcpyDeviceToDevice);
+  tdp::CompletePyramid<tdp::Vector3fda,LEVELS>(cuPyrPc);
+  tdp::CompleteNormalPyramid<LEVELS>(cuPyrN);
 }
 
 #ifndef __CUDACC__
