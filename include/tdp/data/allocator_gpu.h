@@ -19,6 +19,8 @@ class GpuAllocator {
     cudaFree(ptr);
   }
 
+  static enum Storage StorageType() { return Storage::Gpu; }
+
  private:
   GpuAllocator() {}
 };

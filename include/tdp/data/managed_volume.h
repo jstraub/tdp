@@ -16,13 +16,12 @@ template <class T, class Alloc>
 class ManagedVolume : public Volume<T> {
   public:
    ManagedVolume(size_t w, size_t h, size_t d) 
-     : Volume<T>(w,h,d,Alloc::construct(w*h*d))
+     : Volume<T>(w,h,d,Alloc::construct(w*h*d),Alloc::StorageType())
    {}
 
   void Reinitialize(size_t w, size_t h, size_t d) {
     if (this->w_ == w && this->h_ == h && this->d_ == d)
       return;
-
     if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
     }
@@ -47,11 +46,6 @@ using ManagedHostVolume = ManagedVolume<T,CpuAllocator<T>>;
 template <class T>
 using ManagedDeviceVolume = ManagedVolume<T,GpuAllocator<T>>;
 
-template<class T>
-void CopyVolume(Volume<T>& From, Volume<T>& To, cudaMemcpyKind cpType) { 
-  assert(From.SizeBytes() == To.SizeBytes());
-  cudaMemcpy(To.ptr_, From.ptr_, From.SizeBytes(), cpType);
-}
 #endif
 
 template<typename T>

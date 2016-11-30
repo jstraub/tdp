@@ -142,7 +142,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
-  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  cuTSDF.CopyFrom(TSDF);
 
   tdp::ManagedHostImage<float> dEst(wc, hc);
   tdp::ManagedDeviceImage<float> cuDEst(wc, hc);

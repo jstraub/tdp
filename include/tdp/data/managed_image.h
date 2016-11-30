@@ -19,10 +19,10 @@ class ManagedImage : public Image<T> {
   ManagedImage() : Image<T>()
   {}
   ManagedImage(size_t w, size_t h=1) 
-    : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h))
+    : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h), Alloc::StorageType())
   {}
   ManagedImage(ManagedImage&& other)
-  : Image<T>(other.w_, other.h_, other.pitch_, other.ptr_) {
+  : Image<T>(other.w_, other.h_, other.pitch_, other.ptr_, other.storage_) {
     other.w_ = 0;
     other.h_ = 0;
     other.pitch_ = 0;

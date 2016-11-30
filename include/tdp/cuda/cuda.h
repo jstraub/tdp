@@ -8,7 +8,6 @@
 #include <tdp/data/image.h>
 #include <tdp/eigen/dense.h>
 #ifdef CUDA_FOUND
-#include <tdp/cuda/cuda.h>
 #include <tdp/nvidia/helper_cuda.h>
 #endif
 

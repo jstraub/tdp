@@ -10,14 +10,17 @@ template <class T>
 class Volume {
  public:
   Volume()
-    : w_(0), h_(0), d_(0), pitch_(0), pitchImg_(0), ptr_(nullptr)
+    : w_(0), h_(0), d_(0), pitch_(0), pitchImg_(0), ptr_(nullptr),
+    storage_(Storage::Unknown)
   {}
-  Volume(size_t w, size_t h, size_t d, T* ptr)
-    : w_(w), h_(h), d_(d), pitch_(w*sizeof(T)), pitchImg_(w*h*sizeof(T)), ptr_(ptr)
+  Volume(size_t w, size_t h, size_t d, T* ptr, 
+      enum Storage storage = Storage::Unknown)
+    : w_(w), h_(h), d_(d), pitch_(w*sizeof(T)), 
+    pitchImg_(w*h*sizeof(T)), ptr_(ptr), storage_(storage)
   {}
   Volume(const Volume& vol)
     : w_(vol.w_), h_(vol.h_), d_(vol.d_), pitch_(vol.pitch_),
-    pitchImg_(vol.pitchImg_), ptr_(vol.ptr_)
+    pitchImg_(vol.pitchImg_), ptr_(vol.ptr_), storage_(vol.storage_)
   {}
   ~Volume()
   {}
@@ -43,7 +46,7 @@ class Volume {
   }
 
   Image<T> GetImage(size_t d) const { 
-    return Image<T>(w_,h_,pitch_,ImagePtr(d));
+    return Image<T>(w_,h_,pitch_,ImagePtr(d),storage_);
   }
 
   TDP_HOST_DEVICE
@@ -54,11 +57,29 @@ class Volume {
 
   void Fill(T value) { for (size_t i=0; i<w_*d_*h_; ++i) ptr_[i] = value; }
 
+  std::string Description() const {
+    std::stringstream ss;
+    ss << w_ << "x" << h_ << "x" << d_
+      << " " << SizeBytes() << "bytes " 
+      << " ptr: " << ptr_ << " storage: " << storage_;
+    return ss.str();
+  }
+
 #ifdef CUDA_FOUND
   /// Perform pitched copy from the given src volume to this volume.
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Volume<T>& src, cudaMemcpyKind type) {
-    checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+    if (src.SizeBytes() == SizeBytes()) {
+      checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+    } else {
+      std::cerr << "ERROR: not copying volume since sizes dont match" 
+        << std::endl << Description() 
+        << std::endl << src.Description() 
+        << std::endl;
+    }
+  }
+  void CopyFrom(const Volume<T>& src) {
+    CopyFrom(src, CopyKindFromTo(src.storage_, storage_));
   }
 #endif
 
@@ -68,6 +89,7 @@ class Volume {
   size_t pitch_;    // the number of bytes per row
   size_t pitchImg_; // the number of bytes per u,v slice (an image)
   T* ptr_;
+  enum Storage storage_;
  private:
   
 };

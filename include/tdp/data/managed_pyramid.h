@@ -16,11 +16,12 @@ class ManagedPyramid : public Pyramid<T,LEVELS> {
   {}
   ManagedPyramid(size_t w, size_t h)
     : Pyramid<T,LEVELS>(w,h,Alloc::construct(
-          Pyramid<T,LEVELS>::NumElemsToLvl(w,h,LEVELS)))
+          Pyramid<T,LEVELS>::NumElemsToLvl(w,h,LEVELS)), 
+        Alloc::StorageType())
   {}
   /// important for propper emplace_back in factors
   ManagedPyramid(ManagedPyramid&& other)
-  : Pyramid<T,LEVELS>(other.w_, other.h_, other.ptr_) {
+  : Pyramid<T,LEVELS>(other.w_, other.h_, other.ptr_, other.storage_) {
     other.w_ = 0;
     other.h_ = 0;
     other.ptr_ = nullptr;
@@ -50,11 +51,6 @@ using ManagedHostPyramid = ManagedPyramid<T,LEVELS,CpuAllocator<T>>;
 template <class T, int LEVELS>
 using ManagedDevicePyramid = ManagedPyramid<T,LEVELS,GpuAllocator<T>>;
 
-template<class T, int LEVELS>
-void CopyPyramid(Pyramid<T,LEVELS>& From, Pyramid<T,LEVELS>& To, cudaMemcpyKind cpType) { 
-  assert(From.SizeBytes() == To.SizeBytes());
-  cudaMemcpy(To.ptr_, From.ptr_, From.SizeBytes(), cpType);
-}
 #endif
 
 }

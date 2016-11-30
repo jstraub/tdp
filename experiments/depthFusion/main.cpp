@@ -141,7 +141,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
-  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  cuTSDF.CopyFrom(TSDF);
 
   tdp::ManagedHostImage<float> dEst(wc, hc);
 //  tdp::ManagedDeviceImage<float> cuDEst(wc, hc);
@@ -342,9 +342,9 @@ int main( int argc, char* argv[] )
 
     if (gui.verbose) std::cout << "setup pyramids" << std::endl;
     TICK("Setup Pyramids");
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    cuDraw.CopyFrom(dRaw);
     ConvertDepthGpu(cuDraw, cuD, depthSensorScale, tsdfDmin, tsdfDmax);
-    cuRGBraw.CopyFrom(rgbRaw, cudaMemcpyHostToDevice);
+    cuRGBraw.CopyFrom(rgbRaw);
 
     // construct pyramid  
     tdp::ConstructPyramidFromImage<float,3>(cuD, cuDPyr,
@@ -358,7 +358,7 @@ int main( int argc, char* argv[] )
     }
 
     if (!gui.ImageRGB(rgb,0)) continue;
-    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    cuRgb.CopyFrom(rgb);
     tdp::Rgb2Grey(cuRgb,cuGrey);
     TOCK("Setup Pyramids");
 
@@ -390,8 +390,8 @@ int main( int argc, char* argv[] )
       cuICPassoc_m.Reinitialise(pc_m.w_, pc_m.h_);
       ICPassoc_c.Fill(-1.);
       ICPassoc_m.Fill(-1.);
-      cuICPassoc_c.CopyFrom(ICPassoc_c,cudaMemcpyHostToDevice);
-      cuICPassoc_m.CopyFrom(ICPassoc_m,cudaMemcpyHostToDevice);
+      cuICPassoc_c.CopyFrom(ICPassoc_c);
+      cuICPassoc_m.CopyFrom(ICPassoc_m);
       tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
         pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), T_mo,
 //        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), dT,

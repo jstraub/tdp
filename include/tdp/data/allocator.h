@@ -1,5 +1,7 @@
 #pragma once
 
+#include <tdp/data/storage.h>
+
 namespace tdp {
 
 template<typename T>
@@ -15,6 +17,8 @@ class CpuAllocator {
   static void destroy(T* ptr) {
     delete[] ptr;
   }
+
+  static enum Storage StorageType() { return Storage::Cpu; }
 
  private:
   CpuAllocator() {}

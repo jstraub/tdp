@@ -206,7 +206,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
-  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  cuTSDF.CopyFrom(TSDF);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,w*h,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
@@ -395,7 +395,7 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(resetTSDF)) {
       T_mr = tdp::SE3f(); 
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
-      tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+      cuTSDF.CopyFrom(TSDF);
       numFused = 0;
     }
     if (pangolin::Pushed(resetOdom)) {

@@ -16,6 +16,7 @@
 #endif
 
 #include <tdp/eigen/dense.h>
+#include <tdp/data/storage.h>
 
 namespace tdp {
 
@@ -23,16 +24,18 @@ template <class T>
 class Image {
  public:
   Image()
-    : w_(0), h_(0), pitch_(0), ptr_(nullptr)
+    : w_(0), h_(0), pitch_(0), ptr_(nullptr), storage_(Storage::Unknown)
   {}
-  Image(size_t w, size_t h, T* ptr)
-    : w_(w), h_(h), pitch_(w*sizeof(T)), ptr_(ptr)
+  Image(size_t w, size_t h, T* ptr, enum Storage storage = Storage::Unknown)
+    : w_(w), h_(h), pitch_(w*sizeof(T)), ptr_(ptr), storage_(storage)
   {}
-  Image(size_t w, size_t h, size_t pitch, T* ptr)
-    : w_(w), h_(h), pitch_(pitch), ptr_(ptr)
+  Image(size_t w, size_t h, size_t pitch, T* ptr, 
+      enum Storage storage = Storage::Unknown)
+    : w_(w), h_(h), pitch_(pitch), ptr_(ptr), storage_(storage)
   {}
   Image(const Image& img)
-    : w_(img.w_), h_(img.h_), pitch_(img.pitch_), ptr_(img.ptr_)
+    : w_(img.w_), h_(img.h_), pitch_(img.pitch_), ptr_(img.ptr_),
+      storage_(img.storage_)
   {}
   ~Image()
   {}
@@ -112,7 +115,7 @@ class Image {
     std::stringstream ss;
     ss << w_ << "x" << h_ << " pitch=" << pitch_ 
       << " " << SizeBytes() << "bytes " 
-      << " ptr: " << ptr_;
+      << " ptr: " << ptr_ << " storage " << storage_ ;
     return ss.str();
   }
 
@@ -130,16 +133,20 @@ class Image {
           std::min(w_,src.w_)*sizeof(T), 
           std::min(h_,src.h_), type));
   }
+  void CopyFrom(const Image<T>& src) {
+    CopyFrom(src, CopyKindFromTo(src.storage_, storage_));
+  }
 #endif
 
   Image<T> GetRoi(size_t u0, size_t v0, size_t w, size_t h) const {
-    return Image<T>(w,h,pitch_,&RowPtr(v0)[u0]);
+    return Image<T>(w,h,pitch_,&RowPtr(v0)[u0], storage_);
   }
 
   size_t w_;
   size_t h_;
   size_t pitch_; // the number of bytes per row
   T* ptr_;
+  enum Storage storage_;
  private:
   
 };

@@ -10,6 +10,7 @@
 #ifdef CUDA_FOUND
 #include <tdp/cuda/cuda.h>
 #endif
+#include <tdp/data/storage.h>
 
 namespace tdp {
 
@@ -60,10 +61,10 @@ template<typename T, int LEVELS>
 class Pyramid {
  public:
   Pyramid()
-    : w_(0), h_(0), ptr_(nullptr)
+    : w_(0), h_(0), ptr_(nullptr), storage_(Storage::Unknown)
   {}
-  Pyramid(size_t w, size_t h, T* ptr)
-    : w_(w), h_(h), ptr_(ptr)
+  Pyramid(size_t w, size_t h, T* ptr, enum Storage storage = Storage::Unknown)
+    : w_(w), h_(h), ptr_(ptr), storage_(storage)
   {}
 
   TDP_HOST_DEVICE
@@ -93,7 +94,7 @@ class Pyramid {
 
   const Image<T> GetConstImage(int lvl) const {
     if (lvl < LEVELS) {
-      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl));
+      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl),storage_);
     }
     assert(false);
     return Image<T>(0,0,nullptr);
@@ -101,7 +102,7 @@ class Pyramid {
 
   Image<T> GetImage(int lvl) {
     if (lvl < LEVELS) {
-      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl));
+      return Image<T>(Width(lvl),Height(lvl),ImgPtr(lvl),storage_);
     }
     assert(false);
     return Image<T>(0,0,nullptr);
@@ -123,7 +124,7 @@ class Pyramid {
     std::stringstream ss;
     ss << w_ << "x" << h_ << " lvls: " << LEVELS
       << " " << SizeBytes() << "bytes " 
-      << " ptr: " << ptr_;
+      << " ptr: " << ptr_ << " storage: " << storage_;
     return ss.str();
   }
 
@@ -132,7 +133,7 @@ class Pyramid {
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Pyramid<T,LEVELS>& src, cudaMemcpyKind type) {
     if (src.SizeBytes() == SizeBytes()) {
-    checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+      checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
     } else {
       std::cerr << "ERROR: not copying pyramid since sizes dont match" 
         << std::endl << Description() 
@@ -140,11 +141,15 @@ class Pyramid {
         << std::endl;
     }
   }
+  void CopyFrom(const Pyramid<T,LEVELS>& src) {
+    CopyFrom(src, CopyKindFromTo(src.storage_, storage_));
+  }
 #endif
 
   size_t w_;
   size_t h_;
   T* ptr_;
+  enum Storage storage_;
  private:
 };
 
