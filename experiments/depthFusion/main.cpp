@@ -191,8 +191,6 @@ int main( int argc, char* argv[] )
 
   tdp::QuickView viewNormalsPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
   gui.container().AddDisplay(viewNormalsPyr);
-  tdp::QuickView viewGrad3DPyr(dispNormals2dPyr.w_,dispNormals2dPyr.h_);
-  gui.container().AddDisplay(viewGrad3DPyr);
 
   tdp::QuickView viewICPassocM(wc,hc);
   gui.container().AddDisplay(viewICPassocM);
@@ -259,22 +257,6 @@ int main( int argc, char* argv[] )
 
   Stopwatch::getInstance().setCustomSignature(1243984912);
 
-  gui.verbose = true;
-
-  if (false) {
-    // for the SR300 or F200
-    //depthSensorScale = 1e-4;
-    //grid0x = -1.;
-    //grid0y = -1.;
-    //grid0z = 0.;
-    //gridEx = 1.;
-    //gridEy = 1.;
-    //gridEz = 2.;
-    //tsdfMu = 0.2;
-    grid0z = 1.;
-    gridEz = 6.;
-    icpDistThr = 1.;
-  }
 
   tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
 //  T_mo.rotation() = tdp::SO3f::Rz(M_PI/2.f);
@@ -284,6 +266,7 @@ int main( int argc, char* argv[] )
   size_t numFused = 0;
 
   tdp::SE3f T_wG;
+  std::vector<tdp::SE3f> T_mos;
 
   tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
   tdp::Vector3fda gridE(gridEx,gridEy,gridEz);
@@ -303,7 +286,8 @@ int main( int argc, char* argv[] )
         }
       });
 
-  std::vector<tdp::SE3f> T_mos;
+
+  gui.verbose = true;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -394,7 +378,6 @@ int main( int argc, char* argv[] )
       cuICPassoc_m.CopyFrom(ICPassoc_m);
       tdp::ICPVisualizeAssoc(pc_m, ns_m.GetImage(icpErrorLvl),
         pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), T_mo,
-//        pcs_c.GetImage(icpErrorLvl), ns_c.GetImage(icpErrorLvl), dT,
         tdp::ScaleCamera<float>(camD,pow(0.5,icpErrorLvl)), 
         icpAngleThr_deg, icpDistThr, cuICPassoc_m,
         cuICPassoc_c);
@@ -437,7 +420,7 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(resetTSDF)) {
       TSDF.Fill(tdp::TSDFval(-1.01,0.));
       dEst.Fill(0.);
-      cuTSDF.CopyFrom(TSDF, cudaMemcpyHostToDevice);
+      cuTSDF.CopyFrom(TSDF);
       numFused = 0;
       T_mo = T_mo_0;
       T_mo_prev = T_mo;
@@ -567,7 +550,7 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
 //    if (viewTsdfDEst.IsShown()) {
-//      tsdfDEst.CopyFrom(cuDEst,cudaMemcpyDeviceToHost);
+//      tsdfDEst.CopyFrom(cuDEst);
 //      viewTsdfDEst.SetImage(tsdfDEst);
 //    }
 
@@ -576,7 +559,7 @@ int main( int argc, char* argv[] )
         cuTSDF.GetImage(std::min((int)cuTSDF.d_-1,tsdfSliceD.Get()));
       tdp::ManagedHostImage<tdp::TSDFval> tsdfSliceRaw(cuTsdfSlice.w_, 
           cuTsdfSlice.h_);
-      tsdfSliceRaw.CopyFrom(cuTsdfSlice,cudaMemcpyDeviceToHost);
+      tsdfSliceRaw.CopyFrom(cuTsdfSlice);
       for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
         tsdfSlice[i] = tsdfSliceRaw[i].f;
       viewTsdfSliveView.SetImage(tsdfSlice);
@@ -602,38 +585,30 @@ int main( int argc, char* argv[] )
             cudaMemcpyDeviceToDevice);
       }
       tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
+      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr);
       viewNormalsPyr.SetImage(dispNormals2dPyr);
-    }
-    if (viewGrad3DPyr.IsShown()) {
-      tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr,
-          cudaMemcpyDeviceToDevice);
-      tdp::RenormalizeSurfaceNormals(cuDispNormalsPyr, 1e-3);
-      tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
-      dispNormals2dPyr.CopyFrom(cuDispNormals2dPyr,cudaMemcpyDeviceToHost);
-      viewGrad3DPyr.SetImage(dispNormals2dPyr);
     }
 
     if (showIcpError) {
       if (viewICPassocM.IsShown()) {
-        ICPassoc_m.CopyFrom(cuICPassoc_m,cudaMemcpyDeviceToHost);
+        ICPassoc_m.CopyFrom(cuICPassoc_m);
         viewICPassocM.SetImage(ICPassoc_m);
       }
       if (viewICPassocC.IsShown()) {
-        ICPassoc_c.CopyFrom(cuICPassoc_c,cudaMemcpyDeviceToHost);
+        ICPassoc_c.CopyFrom(cuICPassoc_c);
         viewICPassocC.SetImage(ICPassoc_c);
       }
     }
 
     if (viewPcErr.IsShown()) {
       tdp::L2Distance(pcs_m.GetImage(0), pcs_c.GetImage(0), T_mo, cuPcErr);
-      pcErr.CopyFrom(cuPcErr, cudaMemcpyDeviceToHost);
+      pcErr.CopyFrom(cuPcErr);
       viewPcErr.SetImage(pcErr);
     }
     if (viewAngErr.IsShown()) {
       tdp::AngularDeviation(ns_m.GetImage(0), ns_c.GetImage(0),
           T_mo.rotation(), cuAngErr);
-      angErr.CopyFrom(cuAngErr, cudaMemcpyDeviceToHost);
+      angErr.CopyFrom(cuAngErr);
       viewAngErr.SetImage(angErr);
     }
     TOCK("Draw 2D");
@@ -648,9 +623,9 @@ int main( int argc, char* argv[] )
         tdp::TransformPc(R_mo, n);
         tdp::TransformPc(R_mo, g);
       }
-      pcs_m.CopyFrom(pcs_c,cudaMemcpyDeviceToDevice);
-      ns_m.CopyFrom(ns_c,cudaMemcpyDeviceToDevice);
-      gs_m.CopyFrom(gs_c,cudaMemcpyDeviceToDevice);
+      pcs_m.CopyFrom(pcs_c);
+      ns_m.CopyFrom(ns_c);
+      gs_m.CopyFrom(gs_c);
     }
     if (!gui.paused()) {
       T_wr_imu_prev = T_wr_imu;
