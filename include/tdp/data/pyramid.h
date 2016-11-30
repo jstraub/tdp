@@ -115,6 +115,7 @@ class Pyramid {
   size_t SizeBytes() const { return NumElemsToLvl(w_,h_,LEVELS)*sizeof(T); }
 
   size_t NumElemsToLvl(int lvl) const { return NumElemsToLvl(w_,h_,lvl); }
+  size_t NumElems() const { return NumElemsToLvl(LEVELS); }
 
   static size_t NumElemsToLvl(size_t w, size_t h, int lvl) { 
     return w*h*((1<<lvl)-1)/(1<<(std::max(0,lvl-1))); 
