@@ -236,7 +236,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostVolume<tdp::TSDFval> TSDF(wTSDF, hTSDF, dTSDF);
   TSDF.Fill(tdp::TSDFval(-1.01,0.));
   tdp::ManagedDeviceVolume<tdp::TSDFval> cuTSDF(wTSDF, hTSDF, dTSDF);
-  tdp::CopyVolume(TSDF, cuTSDF, cudaMemcpyHostToDevice);
+  cuTSDF.CopyFrom(TSDF);
 
   // mesh buffers
   pangolin::GlBuffer meshVbo;
@@ -404,7 +404,7 @@ int main( int argc, char* argv[] )
   std::thread workThread([&]() {
         while(runSave.Get()) {
           if (pangolin::Pushed(saveTSDF)) {
-            TSDF.CopyFrom(cuTSDF, cudaMemcpyDeviceToHost);
+            TSDF.CopyFrom(cuTSDF);
             std::cout << "start writing TSDF to " << tsdfOutputPath << std::endl;
             tdp::TSDF::SaveTSDF(TSDF, grid0, dGrid, T_wG, tsdfOutputPath);
             std::cout << "done writing TSDF to " << tsdfOutputPath << std::endl;
