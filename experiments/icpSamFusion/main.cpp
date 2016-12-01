@@ -328,6 +328,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   numLoopClose("ui.Num loopClose",0,0,0);
   pangolin::Var<int>   maxLoopClosures("ui.maxLoopClosures",40,0,30);
 
+  pangolin::Var<bool> useRansac("ui.Ransac", true,true);
+  pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
+  pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
+  pangolin::Var<float> ransacInlierThr("ui.inlier thr",6,1,20);
+  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<int> fastLvl("ui.FAST lvl",0,0,2);
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
@@ -448,7 +453,18 @@ int main( int argc, char* argv[] )
         photoErrBefore.CopyFrom(cuPhotoErrAfter);
         TOCK("Overlap");
 
-        if (overlapBefore > icpLoopCloseOverlapThr) {
+        if (overlapBefore > icpLoopCloseOverlapThr || useRansac) {
+
+          size_t numInliers = 0;
+          if (useRansac && !MatchKFs(binaryKfs[idA], binaryKfs[idB],
+                briefMatchThr, ransacMaxIt, ransacThr,
+                ransacInlierThr, T_ab, numInliers)) {
+            std::cout << "RANSAC failed -- aborting loop closure " << std::endl;
+            return false;
+          } else {
+            std::cout << GREEN << "Ransac Succeded " 
+              << NORMAL << std::endl;
+          }
 
           TICK("LoopClosure");
           float err=0.;
@@ -531,13 +547,13 @@ int main( int argc, char* argv[] )
               (err == err 
               && err < icpLoopCloseErrThr
               && count > 3000 
-              && overlapAfter > icpLoopCloseOverlapThr
-              && (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr
+              && (overlapAfter > icpLoopCloseOverlapThr)
+              && (useRansac || (rmseBefore-rmseAfter)/rmseBefore > rmseChangeThr)
               && rmseAfter < rmseThr)) {
             std::cout << GREEN << "successfull loop closure " 
-              << NORMAL << std::endl
-              << T_ab.matrix3x4() 
-              << "Sigma_ab" << std::endl << Sigma_ab << std::endl;
+              << NORMAL << std::endl;
+//              << T_ab.matrix3x4() 
+//              << "Sigma_ab" << std::endl << Sigma_ab << std::endl;
             kfSLAM.AddLoopClosure(idA, idB, T_ab, Sigma_ab);
 //            kfSLAM.AddLoopClosure(ids.second, ids.first, T_ab.Inverse());
 //            loopClosures.emplace(std::make_pair(ids.first, ids.second), T_ab);

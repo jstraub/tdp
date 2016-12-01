@@ -16,7 +16,7 @@ namespace tdp {
 template <class T, class Alloc>
 class ManagedImage : public Image<T> {
  public:
-  ManagedImage() : Image<T>()
+  ManagedImage() : Image<T>(0,0,nullptr,Alloc::StorageType())
   {}
   ManagedImage(size_t w, size_t h=1) 
     : Image<T>(w,h,w*sizeof(T), Alloc::construct(w*h), Alloc::StorageType())

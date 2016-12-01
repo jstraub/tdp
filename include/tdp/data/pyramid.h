@@ -216,13 +216,13 @@ void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma) {
 template<typename T, int LEVELS>
 void PyramidToImage(Pyramid<T,LEVELS>& P, Image<T>& I) {
   Image<T> IlvlSrc = P.GetImage(0);
-  Image<T> Ilvl(P.Width(0), P.Height(0), I.pitch_, I.ptr_);
+  Image<T> Ilvl(P.Width(0), P.Height(0), I.pitch_, I.ptr_, P.storage_);
   Ilvl.CopyFrom(IlvlSrc);
   int v0 = 0;
   for (int lvl=1; lvl<LEVELS; ++lvl) {
     IlvlSrc = P.GetImage(lvl);
     Image<T> IlvlDst(P.Width(lvl), P.Height(lvl), I.pitch_, 
-        &I(P.Width(0),v0));
+        &I(P.Width(0),v0),P.storage_);
     IlvlDst.CopyFrom(IlvlSrc);
     v0 += P.Height(lvl);
   }

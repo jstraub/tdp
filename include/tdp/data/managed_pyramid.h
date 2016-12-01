@@ -12,7 +12,7 @@ template<typename T, int LEVELS, class Alloc>
 class ManagedPyramid : public Pyramid<T,LEVELS> {
  public:
   ManagedPyramid()
-    : Pyramid<T,LEVELS>()
+    : Pyramid<T,LEVELS>(0,0,nullptr, Alloc::StorageType())
   {}
   ManagedPyramid(size_t w, size_t h)
     : Pyramid<T,LEVELS>(w,h,Alloc::construct(

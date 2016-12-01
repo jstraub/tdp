@@ -228,13 +228,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runICP("ui.run ICP", true, true);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
-  pangolin::Var<float> ransacInlierPercThr("ui.inlier thr",6,1,20);
+  pangolin::Var<float> ransacInlierThr("ui.inlier thr",6,1,20);
+  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
 
   pangolin::Var<int> showKf("ui.showKf",0,0,1);
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
-  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<bool> newKf("ui.new KF", false, false);
   pangolin::Var<float> dEntropyThr("ui.dH Thr",0.93,0.8,1.0);
 
@@ -257,7 +257,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<int32_t> assoc;
 
 
-  gui.verbose = false;
+  gui.verbose = true;
 
   std::vector<std::pair<int,int>> loopClosures;
   bool updatedEntropy = false;
@@ -301,7 +301,7 @@ int main( int argc, char* argv[] )
 
       std::cout << "matching KFs " << std::endl;
       tdp::MatchKFs(kfs, briefMatchThr, ransacMaxIt, ransacThr,
-          ransacInlierPercThr, loopClosures);
+          ransacInlierThr, loopClosures);
 
       showKf = kfs.size()-1;
 
@@ -446,6 +446,7 @@ int main( int argc, char* argv[] )
     }
 
     glDisable(GL_DEPTH_TEST);
+    if (gui.verbose) std::cout << "draw 2D" << std::endl;
     // Draw 2D stuff
     // SHowFrames renders the raw input streams (in our case RGB and D)
     gui.ShowFrames();
@@ -456,6 +457,7 @@ int main( int argc, char* argv[] )
     plotInliers.ScrollView(1,0);
     // render normals image
     if (viewN2D.IsShown()) {
+      if (gui.verbose) std::cout << "normals vis" << std::endl;
       // convert normals to RGB image
       tdp::Normals2Image(cuN, cuN2D);
       // copy normals image to CPU memory
@@ -475,10 +477,12 @@ int main( int argc, char* argv[] )
       } 
     }
     if (viewPyrGrey.IsShown()) {
+      if (gui.verbose) std::cout << "grey pyr vis" << std::endl;
       tdp::PyramidToImage(pyrGrey, pyrGreyImg);
       viewPyrGrey.SetImage(pyrGreyImg);
     }
     if (viewAssoc.IsShown()) {
+      if (gui.verbose) std::cout << "assoc" << std::endl;
       tdp::Image<uint8_t> greyAssocA = greyAssoc.GetRoi(0,0,wOrig, hOrig);
       tdp::Image<uint8_t> greyAssocB = greyAssoc.GetRoi(wOrig,0,wOrig, hOrig);
       greyAssocA.CopyFrom(grey);
@@ -524,6 +528,7 @@ int main( int argc, char* argv[] )
       }
     }
     if(viewClosures.IsShown() && kfs.size() > 0) {
+      if (gui.verbose) std::cout << "loop closure vis" << std::endl;
 //      std::cout << "setting loop closure images" << std::endl;
       viewClosuresImg0.SetImage(kfs[showKf].pyrGrey_.GetImage(2));
       size_t i=0;
@@ -579,6 +584,7 @@ int main( int argc, char* argv[] )
     // finish this frame
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
+    if (gui.verbose) std::cout << "finished" << std::endl;
   }
 }
 
