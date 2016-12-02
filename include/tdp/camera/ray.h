@@ -26,7 +26,7 @@ struct Ray {
   Ray(const Ray<T,Option>& ray) : p(ray.p), dir(ray.dir) {}
 
   TDP_HOST_DEVICE
-  Ray<T,Option> Transform(const SE3<T>& T_wr) const {
+  Ray<T,Option> Transform(const SE3<T,Option>& T_wr) const {
     Ray<T,Option> ray;
     ray.p = T_wr*p;
     ray.dir = T_wr.rotation()*dir;
