@@ -6,6 +6,7 @@
 #include <complex>
 #include <vector>
 #include <cstdlib>
+#include <random>
 
 
 #include <pangolin/pangolin.h>
@@ -147,20 +148,43 @@ void Test_simplePc(){
 
 }
 
+tdp::ManagedHostImage<tdp::Vector3fda> getSamples(const tdp::Image<tdp::Vector3fda>& pc,
+                                                  int nSamples){
+    tdp::ManagedHostImage<tdp::Vector3fda> samples(nSamples,1);
+    //random number generator
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<int> uni(0, pc.Area()-1);
+    for(int i=0; i<samples.Area(); ++i){
+        int idx = uni(rng);
+        samples[i] = pc[idx];
+        //std::cout << "\nrandom idx: " << idx << ", val: \n" << samples[i] << std::endl;
+    }
+    return samples;
+}
+
 int main( int argc, char* argv[] ){
   //Test_simplePc();
   //return 1;
   tdp::ManagedHostImage<tdp::Vector3fda> pc_s(1000,1);
   tdp::ManagedHostImage<tdp::Vector3fda> ns_s(1000,1);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(1000,1);
-  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(1000,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_t(pc_s.Area(),1);
+  tdp::ManagedHostImage<tdp::Vector3fda> ns_t(ns_s.Area(),1);
 
-
-  if (argc > 1) {
+  if (argc > 1) {     
       const std::string input = std::string(argv[1]);
+
+      tdp::ManagedHostImage<tdp::Vector3fda> pc_all(1000,1);
+      tdp::ManagedHostImage<tdp::Vector3uda> trigs_all(1000,1);
+
       std::cout << "input pc: " << input << std::endl;
-      tdp::LoadPointCloud(input, pc_s, ns_s);
+      tdp::LoadMesh(input, pc_all, trigs_all);
+      std::cout << "triangle meshs loaded. Num points:  " << pc_s.Area() << std::endl;
+
+      pc_s = getSamples(pc_all, 1000);
+      pc_t = getSamples(pc_all, 1000);
+
   } else {
       std::srand(101);
       GetSphericalPc(pc_s);
