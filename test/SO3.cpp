@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include <tdp/manifold/SO3.h>
 #include <tdp/manifold/SO3mat.h>
+#include <tdp/eigen/dense.h>
 
 using namespace tdp;
 
@@ -27,7 +28,7 @@ TEST(SO3, log) {
 
     if (!IsAppox(x0,x1,eps)) {
       std::cout << R0.matrix() << std::endl;
-      Eigen::Vector3f axis;
+      tdp::Vector3fda axis;
       float angle;
       R0.ToAxisAngle(axis, angle);
       std::cout << axis.transpose() << " angle " << angle 

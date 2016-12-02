@@ -41,6 +41,7 @@ if (CUDA_FOUND)
 
   list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__;")
 
+  set (CUDA_DEBUG 1)
   if (CUDA_DEBUG)
     list(APPEND CUDA_NVCC_FLAGS " -g -G ")
   endif()

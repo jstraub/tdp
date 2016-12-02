@@ -605,14 +605,13 @@ int main( int argc, char* argv[] )
     TOCK("Draw 2D");
 
     if (!runFusion) {
-      tdp::SO3f R_mo = T_mo.rotation();
       for (size_t lvl=0; lvl<3; ++lvl) {
         tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
         tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);
         tdp::Image<tdp::Vector3fda> g = gs_c.GetImage(lvl);
         tdp::TransformPc(T_mo, pc);
-        tdp::TransformPc(R_mo, n);
-        tdp::TransformPc(R_mo, g);
+        tdp::TransformPc(T_mo.rotation(), n);
+        tdp::TransformPc(T_mo.rotation(), g);
       }
       pcs_m.CopyFrom(pcs_c);
       ns_m.CopyFrom(ns_c);

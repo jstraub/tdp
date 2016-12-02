@@ -8,7 +8,7 @@ namespace tdp {
 TDP_HOST_DEVICE
 inline 
 Eigen::Vector2f TransformHomography(const Eigen::Vector2f& u_d, 
-    const SE3<float>& T_rd, 
+    const SE3f& T_rd, 
     const Camera<float>& camR, 
     const Camera<float>& camD, 
     const Eigen::Vector3f& nd_r) {

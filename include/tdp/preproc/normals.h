@@ -10,7 +10,7 @@
 #include <tdp/data/managed_pyramid.h>
 #include <tdp/camera/camera.h>
 #include <tdp/camera/camera_base.h>
-#include <tdp/manifold/SO3.h>
+#include <tdp/manifold/SE3.h>
 #ifdef CUDA_FOUND
 #include <tdp/cuda/cuda.h>
 #include <tdp/preproc/grad.h>
@@ -24,7 +24,7 @@ void ComputeNormals(
     const Image<float>& ddu,
     const Image<float>& ddv,
     const Image<Vector3fda>& n,
-    const SO3f& R_rc,
+    const SE3f& T_rc,
     float f, float uc, float vc);
 
 void ComputeNormals(
@@ -60,7 +60,7 @@ template<int D, typename Derived>
 void Depth2Normals(
     const Image<float>& cuD,
     const CameraBase<float,D,Derived>& cam,
-    const SO3f& R_rc,
+    const SE3f& T_rc,
     Image<Vector3fda> cuN) {
   size_t wc = cuD.w_;
   size_t hc = cuD.h_;
@@ -75,7 +75,7 @@ void Depth2Normals(
   float f = K(0,0);
   int uc = K(0,2);
   int vc = K(1,2);
-  ComputeNormals(cuD, cuDu, cuDv, cuN, R_rc, f, uc, vc);
+  ComputeNormals(cuD, cuDu, cuDv, cuN, T_rc, f, uc, vc);
 }
 
 template<int LEVELS>

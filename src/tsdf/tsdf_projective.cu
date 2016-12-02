@@ -13,7 +13,7 @@ namespace tdp {
 
 __global__
 void KernelRayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d, 
-    SE3<float> T_rd, Camera<float> camR, Camera<float> camD,
+    SE3f T_rd, Camera<float> camR, Camera<float> camD,
     float rho0, float drho, float mu) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -48,7 +48,7 @@ void KernelRayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d,
 
 __global__ 
 void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W,
-    Image<float> d, SE3<float> T_rd, SE3<float> T_dr, Camera<float>
+    Image<float> d, SE3f T_rd, SE3f T_dr, Camera<float>
     camR, Camera<float>camD, float rho0, float drho, float mu) {
   // kernel over all pixel locations and depth locations in the TSDF
   // volume
@@ -83,7 +83,7 @@ void KernelAddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W,
 }
 
 void AddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d, 
-    SE3<float> T_rd, Camera<float> camR, Camera<float>camD,
+    SE3f T_rd, Camera<float> camR, Camera<float>camD,
     float rho0, float drho, float mu) {
   dim3 threads, blocks;
   ComputeKernelParamsForVolume(blocks,threads,tsdf,16,16,4);
@@ -92,7 +92,7 @@ void AddToProjectiveTSDF(Volume<float> tsdf, Volume<float> W, Image<float> d,
 }
 
 void RayTraceProjectiveTSDF(Volume<float> tsdf, Image<float> d, 
-    SE3<float> T_rd, Camera<float> camR, Camera<float>camD,
+    SE3f T_rd, Camera<float> camR, Camera<float>camD,
     float rho0, float drho, float mu) {
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);

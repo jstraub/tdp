@@ -47,7 +47,8 @@ void ComputeProjectiveRotation(
       std::cout << dR <<  std::endl;
       // apply x to the transformation
       //T_mo.rotation() = SO3f(dR); // this actually gives me an absloute rotation
-      T_mo.rotation() = SO3f(dR) * T_mo.rotation();
+      tdp::SE3f dT(dR,Vector3fda::Zero());
+      T_mo = dT * T_mo;
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 

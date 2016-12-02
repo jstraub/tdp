@@ -72,7 +72,7 @@ SO3<T,Options> SO3<T,Options>::Exp(const Eigen::Matrix<T,3,1,Options>& w) const 
 template<typename T, int Options>
 Eigen::Matrix<T,3,1,Options> SO3<T,Options>::Log(
     const SO3<T,Options>& other) const {
-  return Log_(q_.inverse()*other.q_);
+  return Log_(SO3<T,Options>(q_.inverse()*other.q_));
 }
 
 template<typename T, int Options>

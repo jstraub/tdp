@@ -32,12 +32,12 @@ TEST(SE3, setup) {
 
   std::cout << Tmu.Inverse()*Tmu << std::endl;
 
-  SE3f T1(SO3f::Rx(ToRad(10.)), Eigen::Vector3f(0,0,1));
-  std::cout << T1 << std::endl;
-  std::cout << T1*Eigen::Vector3f(1,0,0) << std::endl;
-  std::cout << T1*Eigen::Vector3f(0,1,0) << std::endl;
-
-  SE3f T2(SO3f::Rx(ToRad(10.)));
+//  SE3f T1(SO3f::Rx(ToRad(10.)), Eigen::Vector3f(0,0,1));
+//  std::cout << T1 << std::endl;
+//  std::cout << T1*Eigen::Vector3f(1,0,0) << std::endl;
+//  std::cout << T1*Eigen::Vector3f(0,1,0) << std::endl;
+//
+//  SE3f T2(SO3f::Rx(ToRad(10.)));
 
 //  std::cout << T-Tmu << std::endl;
 //  Eigen::Matrix<double,6,1> w = T-Tmu;
@@ -136,11 +136,11 @@ TEST(SE3, composition) {
   for (size_t i=0; i<1000; ++i) {
     Eigen::Matrix<float,6,1> x0 = 1e-3*Eigen::Matrix<float,6,1>::Random();
     Tw0 = Tw0 * SE3f::Exp_(x0);
-    Tw0mat = Tw0mat * SE3<float>::Exp_(x0).matrix();
+    Tw0mat = Tw0mat * SE3f::Exp_(x0).matrix();
     ASSERT_TRUE(Tw0mat.isApprox(Tw0.matrix(),eps));
 
     Tw1 = SE3f::Exp_(x0) * Tw1;
-    Tw1mat = SE3<float>::Exp_(x0).matrix() * Tw1mat;
+    Tw1mat = SE3f::Exp_(x0).matrix() * Tw1mat;
     ASSERT_TRUE(Tw1mat.isApprox(Tw1.matrix(),eps));
   }
 
@@ -200,7 +200,8 @@ TEST(SE3, gpu) {
 
   for (size_t it=0; it<100; ++it) {
     SE3f T = SE3f::Random();
-    SO3fda R (Eigen::Quaternion<float,Eigen::DontAlign>(T.rotation().vector()));
+//    SO3f R (Eigen::Quaternion<float,Eigen::DontAlign>(T.rotation().vector()));
+    SO3matf R (T.rotation());
 //    std::cout << T << std::endl;
 //    std::cout << T.rotation() << std::endl;
 //    std::cout << R << std::endl;

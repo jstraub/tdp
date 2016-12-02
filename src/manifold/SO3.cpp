@@ -2,7 +2,7 @@
 
 namespace tdp {
 
-template class SO3<float>;
-template class SO3<double>;
+template class SO3<float ,Eigen::DontAlign>;
+template class SO3<double,Eigen::DontAlign>;
 
 }

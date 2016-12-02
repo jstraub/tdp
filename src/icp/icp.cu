@@ -17,6 +17,12 @@
 
 namespace tdp {
 
+template <class T> 
+__device__ void swap ( T& a, T& b ) { 
+	T c(a); a=b; b=c; 
+}
+
+
 // T_mc: R_model_observation
 template<int BLK_SIZE>
 __global__ void KernelICPStep(
@@ -174,13 +180,18 @@ __global__ void KernelICPStep(
 
   sum[tid] = Vector29fda::Zero();
   for (int id=idS; id<idE; ++id) {
-    const int x = id%pc_o.w_;
-    const int y = id/pc_o.w_;
+    int x = id%pc_o.w_;
+    int y = id/pc_o.w_;
     int u, v;
-    //printf("%d %d\n",x,y);
-    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+    printf("%d %d\n",x,y);
+    int res = AssociateCurrentIntoModel<D,Derived>(x, y, pc_o, T_mo,
         T_co, cam, u, v);
-    //printf("%d %d %d\n",x,y,res);
+    printf("%d %d assoc result %d\n",x,y,res);
+    swap<int>(x,u);
+    swap<int>(y,v);
+//    res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+//        T_co, cam, u, v);
+//    printf("%d %d assoc result %d\n",x,y,res);
     if (res == 0) {
       //printf("%d %d %d %d\n",x,y,u,v);
       // found association -> check thresholds;
@@ -222,6 +233,7 @@ __global__ void KernelICPStep(
       }
     }
   }
+  printf("reduction\n");
   __syncthreads(); //sync the threads
 #pragma unroll
   for(int s=(BLK_SIZE)/2; s>1; s>>=1) {
@@ -258,14 +270,17 @@ void ICPStep (
   ComputeKernelParamsForArray(blocks,threads,N/10,BLK_SIZE);
   ManagedDeviceImage<float> out(29,1);
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
+  checkCudaErrors(cudaDeviceSynchronize());
 
+  printf("starting kernel KernelICPStep\n");
   KernelICPStep<BLK_SIZE,D,Derived><<<blocks,threads,
     BLK_SIZE*sizeof(Vector29fda)>>>(
         pc_m,n_m,pc_o,n_o,T_mo,T_cm,cam,
         dotThr,distThr,10,out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(29,1);
-  cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
+  sumAb.CopyFrom(out);
+//  cudaMemcpy(sumAb.ptr_,out.ptr_,29*sizeof(float), cudaMemcpyDeviceToHost);
 
   //for (int i=0; i<29; ++i) std::cout << sumAb[i] << "\t";
   //std::cout << std::endl;

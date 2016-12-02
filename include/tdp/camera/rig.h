@@ -388,7 +388,7 @@ void Rig<CamT>::ComputeNormals(Image<float>& cuD,
     tdp::Image<tdp::Vector3fda> cuN_i = GetStreamRoi(cuN, sId);
     tdp::Image<float> cuD_i = GetStreamRoi(cuD, sId);
     // compute normals from depth in rig coordinate system
-    tdp::Depth2Normals(cuD_i, cam, T_rc.rotation(), cuN_i);
+    tdp::Depth2Normals(cuD_i, cam, T_rc, cuN_i);
   }
 }
 

@@ -71,6 +71,9 @@ class SO3mat : Manifold<T,3> {
 
   static Eigen::Matrix<T,3,3> Exp_(const Eigen::Matrix<T,3,1>& w);
   static Eigen::Matrix<T,3,1> Log_(const Eigen::Matrix<T,3,3>& R);
+  static Eigen::Matrix<T,3,1> Log_(const SO3mat<T>& R) {
+    return Log_(R.matrix());
+  }
 
   static SO3mat<T> Random();
 

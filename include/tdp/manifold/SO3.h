@@ -122,8 +122,8 @@ std::ostream& operator<<(std::ostream& out, const SO3<T,Options>& s3) {
 
 namespace tdp {
 
-typedef SO3<double> SO3d;
-typedef SO3<float> SO3f;
+typedef SO3<double,Eigen::DontAlign> SO3d;
+typedef SO3<float,Eigen::DontAlign> SO3f;
 typedef SO3<double,Eigen::DontAlign> SO3dda;
 typedef SO3<float,Eigen::DontAlign> SO3fda;
 template <typename T> using SO3da = SO3<T,Eigen::DontAlign>;

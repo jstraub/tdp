@@ -4,7 +4,7 @@
 #include <tdp/camera/projective_math.h>
 
 TEST(projective_math, TransformHomography) {
-  tdp::SE3<float> T_rd(Eigen::Matrix4f::Identity());
+  tdp::SE3f T_rd(Eigen::Matrix4f::Identity());
   tdp::Camera<float> camR(Eigen::Vector4f(275,275,159.5,119.5)); 
   tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
   Eigen::Vector3f nd_r(0,0,-1);

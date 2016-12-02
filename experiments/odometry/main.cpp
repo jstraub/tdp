@@ -264,7 +264,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> newKf("ui.new KF", true, true);
 
-  pangolin::Var<bool>  icpFrame2Frame("ui.run frame2frame ICP", true, true);
+  pangolin::Var<bool>  icpFrame2Frame("ui.run frame2frame ICP", false, true);
   pangolin::Var<bool>  icpRgb("ui.run ICP RGB", false, true);
 //  pangolin::Var<bool>  icpGrad3D("ui.run ICP Grad3D", false, true);
   pangolin::Var<bool>  icpRot("ui.run ICP Rot", false, true);
@@ -280,8 +280,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
-  pangolin::Var<bool> showPcModel("ui.show model",true,true);
-  pangolin::Var<bool> showPcCurrent("ui.show current",true,true);
+  pangolin::Var<bool> showPcModel("ui.show model",false,true);
+  pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
 
   pangolin::Var<float> rmseView("ui.rmse",0.,0.,0.);
 
@@ -290,7 +290,7 @@ int main( int argc, char* argv[] )
   std::vector<tdp::SE3f> T_wcs;
   tdp::SE3f T_mc; // current to model
 
-  gui.verbose = false;
+  gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
   // Stream and display video
@@ -345,8 +345,7 @@ int main( int argc, char* argv[] )
     tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
     greyDu.CopyFrom(cuGreyDu);
     greyDv.CopyFrom(cuGreyDv);
-    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c,
-        cudaMemcpyDeviceToDevice);
+    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c);
     tdp::CompletePyramid(cuPyrGradGrey_c);
 
 //    tdp::Image<tdp::Vector3fda> cuNs = ns_c.GetImage(0);
@@ -360,10 +359,17 @@ int main( int argc, char* argv[] )
     std::vector<float> errPerLvl;
     std::vector<float> countPerLvl;
     T_mc = tdp::SE3f();
-    Eigen::Matrix<float,6,6> Sigma_mc = 1e-4*Eigen::Matrix<float,6,6>::Identity();
+    Eigen::Matrix<float,6,6> Sigma_mc;
     TICK("ICP");
     if(icpFrame2Frame) {
       if (gui.verbose) std::cout << "icp" << std::endl;
+
+      std::cout 
+        << pcs_m.Description() << std::endl
+        << pcs_c.Description() << std::endl
+        << ns_m.Description() << std::endl
+        << ns_c.Description() << std::endl;
+
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
@@ -451,14 +457,15 @@ int main( int argc, char* argv[] )
         pangolin::glUnsetFrameOfReference();
       }
     }
-
     TOCK("Draw 3D");
 
+    if (gui.verbose) std::cout << "draw 2D" << std::endl;
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
     if (viewModel.IsShown()) {
+      if (gui.verbose) std::cout << "model grey image" << std::endl;
       grey_m.CopyFrom(cuPyrGrey_m.GetImage(0));
       viewModel.SetImage(grey_m);
     }
@@ -475,12 +482,14 @@ int main( int argc, char* argv[] )
       viewDebugC.SetImage(Irmse);
     }
     if (viewDebugD.IsShown()) {
+      if (gui.verbose) std::cout << "gradient image" << std::endl;
       tdp::PyramidToImage(cuPyrGradGrey_c, cuGrad2D);
       tdp::Grad2Image(cuGrad2D, cuGrad2DImg);
       grad2DImg.CopyFrom(cuGrad2DImg);
       viewDebugD.SetImage(grad2DImg);
     }
     if (viewDebugE.IsShown()) {
+      if (gui.verbose) std::cout << "current grey image" << std::endl;
       tdp::PyramidToImage(cuPyrGrey_c, greyPyrImg);
       viewDebugE.SetImage(greyPyrImg);
     }
@@ -489,6 +498,7 @@ int main( int argc, char* argv[] )
     }
 
     if (viewGrad3DPyr.IsShown()) {
+      if (gui.verbose) std::cout << "3D gradient image" << std::endl;
       tdp::PyramidToImage<tdp::Vector3fda,3>(gs_c,cuDispNormalsPyr);
       tdp::RenormalizeSurfaceNormals(cuDispNormalsPyr, 1e-3);
       tdp::Normals2Image(cuDispNormalsPyr, cuDispNormals2dPyr);
@@ -500,9 +510,9 @@ int main( int argc, char* argv[] )
     plotCost.ScrollView(1,0);
     plotRmse.ScrollView(1,0);
     plotOverlap.ScrollView(1,0);
-
     TOCK("Draw 2D");
 
+    if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
     if(video.IsRecording()) {
