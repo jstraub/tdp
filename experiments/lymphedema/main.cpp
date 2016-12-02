@@ -168,6 +168,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);
   pangolin::Var<bool>  runICP("ui.run ICP", false, true);
+  pangolin::Var<bool>  alignIndividual("ui.individual ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
@@ -210,8 +211,10 @@ int main( int argc, char* argv[] )
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
 
-  gui.verbose = true;
+  std::vector<tdp::SE3f> T_rcs0 = rig.T_rcs_;
 
+  gui.verbose = true;
+  size_t numFrames = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -226,13 +229,27 @@ int main( int argc, char* argv[] )
       rs->SetPowers(ir);
     }
 
+    if (rotatingDepthScan.GuiChanged()) {
+      rs->SetPowers(ir);
+      numFrames = 0;
+    }
+
+    if (pangolin::Pushed(resetTSDF)) {
+      T_mr = tdp::SE3f(); 
+      TSDF.Fill(tdp::TSDFval(-1.01,0.));
+      cuTSDF.CopyFrom(TSDF);
+      numFrames = 0;
+    }
+
+    if (pangolin::Pushed(runMarchingCubes)) {
+      TSDF.CopyFrom(cuTSDF);
+      tdp::ComputeMesh(TSDF, grid0, dGrid,
+          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
+    }
+
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
-
-    if (rotatingDepthScan.GuiChanged()) {
-      rs->SetPowers(ir);
-    }
 
     if (rotatingDepthScan) {
       // start a collection thread to do the work so the rendering is
@@ -254,9 +271,9 @@ int main( int argc, char* argv[] )
             std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
             rs->GrabOne(sId, buffer, rotatingDepthScanIrPower);
             int32_t cId = rig.rgbdStream2cam_[sId]; 
+
             tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
-            tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle,
-                wSingle, hSingle);
+            tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle, wSingle, hSingle);
             rgb_i.CopyFrom(_rgb);
             cuDraw_i.CopyFrom(_d);
             // convert depth image from uint16_t to float [m]
@@ -274,6 +291,7 @@ int main( int argc, char* argv[] )
           received.Set(true);
         });
         std::cout << "received" << std::endl;
+        ++numFrames;
       }
     } else {
       // get next frames from the video source
@@ -286,65 +304,65 @@ int main( int argc, char* argv[] )
       cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
       rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
       TOCK("depth collection");
+      received.Set(true);
+      ++numFrames;
     }
-    TICK("pc and normals");
-    rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
-    rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
-    TOCK("pc and normals");
+    
+    if (received.Get()) {
+      TICK("pc and normals");
+      rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
+      rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
+      TOCK("pc and normals");
+      TICK("Setup Pyramids");
+      pcs_o.GetImage(0).CopyFrom(cuPc);
+      ns_o.GetImage(0).CopyFrom(cuN);
+      tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o);
+      tdp::CompleteNormalPyramid<3>(ns_o);
+      TOCK("Setup Pyramids");
 
-    TICK("Setup Pyramids");
-    // TODO might want to use the pyramid construction with smoothing
-    pcs_o.GetImage(0).CopyFrom(cuPc);
-    tdp::CompletePyramid<tdp::Vector3fda,3>(pcs_o);
-    ns_o.GetImage(0).CopyFrom(cuN);
-    tdp::CompleteNormalPyramid<3>(ns_o);
-    TOCK("Setup Pyramids");
+      if (!gui.paused() && fuseTSDF ) {
+        if (runICP && numFrames > 4) {
+          std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
+          std::vector<float> errPerLvl;
+          std::vector<float> countPerLvl;
+          Eigen::Matrix<float,6,6> Sigma_mr; 
 
-    if (pangolin::Pushed(resetTSDF)) {
-      T_mr = tdp::SE3f(); 
-      TSDF.Fill(tdp::TSDFval(-1.01,0.));
-      cuTSDF.CopyFrom(TSDF);
-    }
+          std::cout 
+            << pc.Description() << std::endl 
+            << pcs_m.Description() << std::endl 
+            << ns_m.Description() << std::endl
+            << pcs_o.Description() << std::endl
+            << ns_o.Description() << std::endl;
 
-    if (!gui.paused() && fuseTSDF ) {
-      if (runICP) {
-        std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
-        std::vector<float> errPerLvl;
-        std::vector<float> countPerLvl;
-        Eigen::Matrix<float,6,6> Sigma_mr = 1e-4*Eigen::Matrix<float,6,6>::Identity();
-
-        std::cout 
-          << pc.Description() << std::endl 
-          << pcs_m.Description() << std::endl 
-          << ns_m.Description() << std::endl
-          << pcs_o.Description() << std::endl
-          << ns_o.Description() << std::endl;
-
-        if (useRgbCamParasForDepth) {
-          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-              rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
-        } else {
-          tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-              rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-              gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+          if (alignIndividual) {
+            // reset to previous value - maybe not wanted/needed?
+            rig.T_rcs_ = T_rcs0; 
+            tdp::ICP::ComputeProjectiveUpdateIndividual<CameraT>(
+                pcs_m, ns_m, pcs_o, ns_o,
+                rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+                gui.verbose, T_mr, errPerLvl, countPerLvl);
+          } else {
+            if (useRgbCamParasForDepth) {
+              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+                  rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+                  gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+            } else {
+              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+                  rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+                  gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
+            }
+          }
         }
+        //    	std::cout << "fusing a frame" << std::endl;
+        TICK("Add To TSDF");
+        rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
+            grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
+        TOCK("Add To TSDF");
+        TICK("Ray Trace TSDF");
+        rig.RayTraceTSDF(cuTSDF, T_mr, useRgbCamParasForDepth, grid0,
+            dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
+        TOCK("Ray Trace TSDF");
       }
-//    	std::cout << "fusing a frame" << std::endl;
-      TICK("Add To TSDF");
-      rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
-          grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
-      TOCK("Add To TSDF");
-      TICK("Ray Trace TSDF");
-      rig.RayTraceTSDF(cuTSDF, T_mr, useRgbCamParasForDepth, grid0,
-          dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
-      TOCK("Ray Trace TSDF");
-    }
-
-    if (pangolin::Pushed(runMarchingCubes)) {
-      TSDF.CopyFrom(cuTSDF);
-      tdp::ComputeMesh(TSDF, grid0, dGrid,
-          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
     }
 
     // Draw 3D stuff

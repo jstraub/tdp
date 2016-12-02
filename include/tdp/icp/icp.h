@@ -156,6 +156,21 @@ class ICP {
     std::vector<float>& countPerLvl
     );
 
+  template<typename CameraT>
+  static void ComputeProjectiveUpdateIndividual(
+      Pyramid<Vector3fda,3>& pcs_m,
+      Pyramid<Vector3fda,3>& ns_m,
+      Pyramid<Vector3fda,3>& pcs_o,
+      Pyramid<Vector3fda,3>& ns_o,
+      Rig<CameraT>& rig,
+      const std::vector<int32_t>& stream2cam,
+      const std::vector<size_t>& maxIt, 
+      float angleThr_deg, float distThr,
+      bool verbose,
+      SE3f& T_mr,
+      std::vector<float>& errPerLvl,
+      std::vector<float>& countPerLvl
+      );
 
   static void ComputeGivenAssociation(
     Image<Vector3fda>& pc_m,
