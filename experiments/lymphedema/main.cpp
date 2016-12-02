@@ -205,8 +205,8 @@ int main( int argc, char* argv[] )
   pangolin::RealSenseVideo* rs = video.Cast<pangolin::RealSenseVideo>();
   uint8_t buffer[640*480*(2+rig.NumCams())];
 
-  tdp::Image<uint16_t> _d(640,480,(uint16_t*)buffer);
-  tdp::Image<tdp::Vector3bda> _rgb(640,480,(tdp::Vector3bda*)&buffer[640*480*2]);
+  tdp::Image<uint16_t> _d(640,480,(uint16_t*)buffer,tdp::Storage::Cpu);
+  tdp::Image<tdp::Vector3bda> _rgb(640,480,(tdp::Vector3bda*)&buffer[640*480*2],tdp::Storage::Cpu);
 
   tdp::ThreadedValue<bool> received(true);
   std::thread* threadCollect = nullptr;
@@ -232,6 +232,8 @@ int main( int argc, char* argv[] )
     if (rotatingDepthScan.GuiChanged()) {
       rs->SetPowers(ir);
       numFrames = 0;
+      received.Set(true);
+      resetTSDF = true;
     }
 
     if (pangolin::Pushed(resetTSDF)) {
@@ -260,7 +262,6 @@ int main( int argc, char* argv[] )
           delete threadCollect;
           threadCollect = nullptr;
         }
-        received.Set(false);
         threadCollect = new std::thread([&](){
 //          TICK("rgbd collection");
           cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
@@ -321,7 +322,7 @@ int main( int argc, char* argv[] )
       TOCK("Setup Pyramids");
 
       if (!gui.paused() && fuseTSDF ) {
-        if (runICP && numFrames > 4) {
+        if (runICP && numFrames > 1) {
           std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
           std::vector<float> errPerLvl;
           std::vector<float> countPerLvl;
@@ -352,6 +353,8 @@ int main( int argc, char* argv[] )
                   gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
             }
           }
+        } else {
+          std::cout << "@ frame " << numFrames << std::endl;
         }
         //    	std::cout << "fusing a frame" << std::endl;
         TICK("Add To TSDF");
@@ -363,6 +366,7 @@ int main( int argc, char* argv[] )
             dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
         TOCK("Ray Trace TSDF");
       }
+        received.Set(false);
     }
 
     // Draw 3D stuff
