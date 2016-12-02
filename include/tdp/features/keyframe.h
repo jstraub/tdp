@@ -77,7 +77,11 @@ bool MatchKFs(const BinaryKF& kfA, const BinaryKF& kfB, int briefMatchThr,
 //  std::cout << kfs.size()-1 <<  " -> " << i << ": " 
 //  std::cout << "matches: " << assoc.size()/(float)kfA.feats.Area() 
 //    << "%" << std::endl;
-
+  if (assoc.size() < 5) {
+    std::cout << "not enough matches: " << assoc.size()/(float)kfA.feats.Area() 
+      << "%" << std::endl;
+    return false;
+  }
   TICK("RANSAC");
   //    Image<Brief> fA(featA.size(), 1, &featA[0]);
   //    Image<Brief> fB(featB.size(), 1, &featB[0]);

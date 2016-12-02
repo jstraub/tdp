@@ -234,6 +234,11 @@ public:
   SE3f Compute(const Image<T>& dataA, const Image<T>& dataB,
       Image<int32_t>& assocBA, size_t maxIt, float thr, size_t& numInliers)
   {
+
+//    std::cout << dataA.Description() << std::endl
+//      << dataB.Description() << std::endl
+//      << assocBA.Description() << std::endl;
+
     SE3f T_ab;
     SE3f maxT_ab;
     size_t maxInlier = 0;

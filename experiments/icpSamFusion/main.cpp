@@ -330,7 +330,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> useRansac("ui.Ransac", true,true);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
-  pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
+  pangolin::Var<float> ransacThr("ui.thr",0.20,0.01,1.0);
   pangolin::Var<float> ransacInlierThr("ui.inlier thr",6,1,20);
   pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<int> fastLvl("ui.FAST lvl",0,0,2);
@@ -464,6 +464,7 @@ int main( int argc, char* argv[] )
           } else {
             std::cout << GREEN << "Ransac Succeded " 
               << NORMAL << std::endl;
+
           }
 
           TICK("LoopClosure");
