@@ -24,14 +24,14 @@ void TransformPc(
     const SO3f& R_rc,
     Image<Vector3fda>& pc_c
     );
-//void TransformPc(
-//    const SO3fda& R_rc,
-//    Image<Vector3fda>& pc_c
-//    );
-//void InverseTransformPc(
-//    const SO3fda& R_rc,
-//    Image<Vector3fda>& pc_c
-//    );
+void TransformPc(
+    const SO3f& R_rc,
+    Image<Vector3fda>& pc_c
+    );
+void InverseTransformPc(
+    const SO3f& R_rc,
+    Image<Vector3fda>& pc_c
+    );
 
 void BoundingBox(
     const Image<Vector3fda>& pc,

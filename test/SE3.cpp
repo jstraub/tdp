@@ -201,7 +201,7 @@ TEST(SE3, gpu) {
   for (size_t it=0; it<100; ++it) {
     SE3f T = SE3f::Random();
 //    SO3f R (Eigen::Quaternion<float,Eigen::DontAlign>(T.rotation().vector()));
-    SO3matf R (T.rotation());
+    SO3f R (T.rotation());
 //    std::cout << T << std::endl;
 //    std::cout << T.rotation() << std::endl;
 //    std::cout << R << std::endl;

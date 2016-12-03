@@ -183,20 +183,20 @@ __global__ void KernelICPStep(
     int y = id/pc_o.w_;
     int u, v;
 //    printf("%d %d\n",x,y);
-    int res = AssociateCurrentIntoModel<D,Derived>(x, y, pc_o, T_mo,
-        T_co, cam, u, v);
-//    printf("%d %d assoc result %d\n",x,y,res);
-    swap<int>(x,u);
-    swap<int>(y,v);
-//    res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+//    int res = AssociateCurrentIntoModel<D,Derived>(x, y, pc_o, T_mo,
 //        T_co, cam, u, v);
+//    printf("%d %d assoc result %d\n",x,y,res);
+//    swap<int>(x,u);
+//    swap<int>(y,v);
+    int res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
+        T_co, cam, u, v);
 //    printf("%d %d assoc result %d\n",x,y,res);
     if (res == 0) {
       //printf("%d %d %d %d\n",x,y,u,v);
       // found association -> check thresholds;
       Vector3fda n_o_in_m = T_mo.rotation()*n_o(u,v);
       Vector3fda n_mi = n_m(x,y);
-      Vector3fda n_m_in_oi = T_mo.rotation().Inverse()*n_mi;
+      Vector3fda n_m_in_oi = T_mo.rotation().InverseTransform(n_mi);
       Vector3fda pc_mi = pc_m(x,y);
       Vector3fda pc_oi = pc_o(u,v);
       Vector3fda pc_o_in_m = T_mo * pc_oi;

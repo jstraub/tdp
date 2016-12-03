@@ -335,9 +335,9 @@ int main( int argc, char* argv[] )
             << pcs_o.Description() << std::endl
             << ns_o.Description() << std::endl;
 
+          rig.T_rcs_ = T_rcs0; 
           if (alignIndividual) {
             // reset to previous value - maybe not wanted/needed?
-            rig.T_rcs_ = T_rcs0; 
             tdp::ICP::ComputeProjectiveUpdateIndividual<CameraT>(
                 pcs_m, ns_m, pcs_o, ns_o,
                 rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,

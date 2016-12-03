@@ -91,11 +91,11 @@ class Image {
 
   TDP_HOST_DEVICE
   bool Inside(int u, int v) const { 
-    return 0 <= u && u < w_-1 && 0 <= v && v < h_-1; 
+    return 0 <= u && u < (int)w_-1 && 0 <= v && v < (int)h_-1; 
   }
   TDP_HOST_DEVICE
   bool Inside(float u, float v) const { 
-    return 0 <= u && u < w_-1 && 0 <= v && v < h_-1; 
+    return 0 <= u && u < (float)w_-1 && 0 <= v && v < (float)h_-1; 
   }
   TDP_HOST_DEVICE
   bool Inside(const Eigen::Vector2f& x) const { 

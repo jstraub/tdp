@@ -4,23 +4,24 @@ namespace tdp {
 
 template<typename T, int Options>
 SO3<T,Options>::SO3() 
-  : q_(Eigen::Quaternion<T,Options>::Identity()), updateR_(true)
+  : q_(Eigen::Quaternion<T,Options>::Identity()), 
+    R_(Eigen::Matrix<T,3,3,Options>::Identity())
 {}
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Matrix<T,3,3>& R) 
-  : q_(R), R_(R), updateR_(false)
+  : q_(R), R_(R)
 {}
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const SO3<T,Options>& other)
-  : q_(other.q_), updateR_(true)
+  : q_(other.q_), R_(other.R_)
 {}
 
 template<typename T, int Options>
 SO3<T,Options>::SO3(const Eigen::Quaternion<T,Options>& q)
-  : q_(q), updateR_(true)
-{}
+  : q_(q), R_(q_.matrix())
+{ }
 
 //template<typename T, int Options>
 //SO3<T,Options>::SO3(const Eigen::Matrix<T,3,1>& axis, T angle) 
@@ -119,7 +120,7 @@ SO3<T,Options>& SO3<T,Options>::operator*=(const SO3<T,Options>& other) {
   if (norm != 1.) {
     q_.normalize();
   }
-  updateR_ = true;
+  R_ = q_.matrix();
   return *this;
 }
 
@@ -131,8 +132,12 @@ const SO3<T,Options> SO3<T,Options>::operator*(const SO3<T,Options>& other) cons
 template<typename T, int Options>
 Eigen::Matrix<T,3,1> SO3<T,Options>::operator*(const Eigen::Matrix<T,3,1>& x) const {
 //  return this->q_._transformVector(x);
-  UpdateR();
   return R_*x;
+}
+
+template<typename T, int Options>
+Eigen::Matrix<T,3,1> SO3<T,Options>::InverseTransform(const Eigen::Matrix<T,3,1>& x) const {
+  return R_.transpose()*x;
 }
 
 template<typename T, int Options>

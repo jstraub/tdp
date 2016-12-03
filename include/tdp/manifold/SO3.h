@@ -30,7 +30,6 @@ class SO3 : Manifold<T,3> {
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3,Options> matrix() const { 
-    UpdateR();
     return R_;
   }
   /// (x,y,z,w)
@@ -49,25 +48,18 @@ class SO3 : Manifold<T,3> {
 
   TDP_HOST_DEVICE
   void ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) const;
-  TDP_HOST_DEVICE
   static SO3<T,Options> FromAxisAngle(const Eigen::Matrix<T,3,1,Options>& axis,
       T angle);
-  TDP_HOST_DEVICE
   static SO3<T,Options> FromAxisAngle(const Eigen::Matrix<T,3,1,Options>& axisAngle);
 
-  TDP_HOST_DEVICE
   static SO3<T,Options> FromOrthogonalVectors(const Eigen::Matrix<T,3,1,Options>& a, const Eigen::Matrix<T,3,1,Options>& b);
 
-  TDP_HOST_DEVICE
   SO3<T,Options> Inverse() const ;
 
-  TDP_HOST_DEVICE
   SO3<T,Options> Exp(const Eigen::Matrix<T,3,1,Options>& w) const ;
 
-  TDP_HOST_DEVICE
   Eigen::Matrix<T,3,1,Options> Log(const SO3<T,Options>& other) const;
 
-  TDP_HOST_DEVICE
   SO3<T,Options>& operator*=(const SO3<T,Options>& other);
 
   TDP_HOST_DEVICE
@@ -75,8 +67,9 @@ class SO3 : Manifold<T,3> {
 
   /// transform 3D data point
   TDP_HOST_DEVICE
-  Eigen::Matrix<T,3,1> operator*(
-      const Eigen::Matrix<T,3,1>& x) const;
+  Eigen::Matrix<T,3,1> operator*(const Eigen::Matrix<T,3,1>& x) const;
+  TDP_HOST_DEVICE
+  Eigen::Matrix<T,3,1> InverseTransform(const Eigen::Matrix<T,3,1>& x) const;
 
   static SO3<T,Options> Exp_(const Eigen::Matrix<T,3,1,Options>& w);
   static Eigen::Matrix<T,3,1,Options> Log_(const SO3<T,Options>& R);
@@ -108,14 +101,7 @@ class SO3 : Manifold<T,3> {
  private:
   Eigen::Quaternion<T,Options> q_; // for composition of rotations
   Eigen::Matrix<T,3,3,Options> R_; // for fast transformation of points
-  bool updateR_;
 
-  void UpdateR() {
-    if (updateR_) {
-      R_ = q_.matrix();
-      updateR_ = false;
-    }
-  }
 };
 
 

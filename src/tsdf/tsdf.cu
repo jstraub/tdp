@@ -180,7 +180,7 @@ void KernelRayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d,
       Vector3fda ni = NormalFromTSDF(idTSDF(0),idTSDF(1),idTSDF(2),
           tsdf(idTSDF(0),idTSDF(1),idTSDF(2)).f, tsdf, dGrid);
       // and compute the normal in the depth frame of reference
-      n(idx,idy) = T_rd.rotation().Inverse() * ni;
+      n(idx,idy) = T_rd.rotation().InverseTransform(ni);
     }
   }
 }
