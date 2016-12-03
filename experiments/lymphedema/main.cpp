@@ -86,9 +86,9 @@ int main( int argc, char* argv[] )
   size_t w = wSingle;
   size_t h = rig.NumCams()*hSingle;
 
-  size_t dTSDF = 512;
-  size_t wTSDF = 512;
-  size_t hTSDF = 512;
+  size_t dTSDF = 256;
+  size_t wTSDF = 256;
+  size_t hTSDF = 256;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -143,20 +143,20 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer meshIbo;
 
   // Add some variables to GUI
-  pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+  pangolin::Var<float> dMin("ui.d min",0.01,0.0,0.1);
+  pangolin::Var<float> dMax("ui.d max",0.5,0.1,4.);
 
   pangolin::Var<int> ir("ui.IR", 16,0,16);
 //  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
   pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
   pangolin::Var<int> rotatingDepthScanIrPower("ui.IR power", 16,0,16);
-  pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 1000, 1, 2000);
+  pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 100, 1, 1000);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<float> tsdfMu("ui.mu",0.01,0.,0.1);
-  pangolin::Var<float> tsdfWThr("ui.w thr",25.,1.,20.);
+  pangolin::Var<float> tsdfWThr("ui.w thr",3,1.,20.);
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<float> grid0x("ui.grid0 x",-0.175,-.5,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-0.116,-.5,0);
@@ -170,7 +170,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  runICP("ui.run ICP", false, true);
   pangolin::Var<bool>  alignIndividual("ui.individual ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
-  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.20,0.,1.);
+  pangolin::Var<float> icpDistThr("ui.icp dist thr",0.03,0.,1.);
   pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
   pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",14,0,20);
   pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",10,0,20);
