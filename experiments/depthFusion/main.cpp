@@ -382,7 +382,7 @@ int main( int argc, char* argv[] )
       TICK("Add To TSDF");
       if (fuseRgb) {
         tdp::TSDF::AddToTSDF(cuTSDF, cuD, cuRGBraw, T_mo, camD, grid0,
-            dGrid, tsdfMu); 
+            dGrid, tsdfMu, tsdfWMax); 
       } else {
         tdp::TSDF::AddToTSDF(cuTSDF, cuD, T_mo, camD, grid0, dGrid,
           tsdfMu, tsdfWMax); 
