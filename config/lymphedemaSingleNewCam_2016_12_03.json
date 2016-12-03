@@ -1,0 +1,43 @@
+[
+{
+  "camera":{
+    "model" : {
+      "type" : "poly3",
+      "fu" : 604.6687, 
+      "fv" : 605.6548,
+      "uc" : 311.413,
+      "vc" : 244.8874,
+      "distortion" : [0.1222235,-0.1980609, -0.1737873]
+    },
+    "type" : "rgb",
+    "serialNumber" : "552206000285",
+    "description" : "calibration is wrong",
+    "T_rc" : {
+      "R_3x3" : [1, 0, 0, 0, 1, 0, 0, 0, 1], 
+      "t_xyz" : [0, 0, 0 ] 
+    }
+  }
+},
+{
+  "camera":{
+    "model" : {
+      "type" : "poly3",
+      "fu" : 604.6687, 
+      "fv" : 605.6548,
+      "uc" : 311.413,
+      "vc" : 244.8874,
+      "distortion" : [0.1222235,-0.1980609, -0.1737873]
+    },
+    "type" : "ir",
+    "depthSensorUniformScale" : 0.0001,
+    "depthScaleVsDepthModel" : [0.0, 1.0],
+    "serialNumber" : "612201003023",
+    "description" : "calibration is wrong",
+    "T_rc" : {
+      "R_3x3" : [1, 0, 0, 0, 1, 0, 0, 0, 1], 
+      "t_xyz" : [0, 0, 0 ] 
+    }
+  }
+},
+]
+
