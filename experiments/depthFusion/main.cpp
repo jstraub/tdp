@@ -598,7 +598,7 @@ int main( int argc, char* argv[] )
     }
     if (viewAngErr.IsShown()) {
       tdp::AngularDeviation(ns_m.GetImage(0), ns_c.GetImage(0),
-          T_mo.rotation(), cuAngErr);
+          T_mo, cuAngErr);
       angErr.CopyFrom(cuAngErr);
       viewAngErr.SetImage(angErr);
     }

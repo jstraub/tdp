@@ -189,7 +189,7 @@ int main( int argc, char* argv[] )
       cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
-      Depth2Normals(cuD, cam, tdp::SO3f(), cuN);
+      Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
       n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
       TOCK("Compute Normals");
       if (show2DNormals) {
@@ -252,7 +252,7 @@ int main( int argc, char* argv[] )
 
     tdp::SE3f T_wc;
     if (runRtmf) {
-      T_wc.rotation() = tdp::SO3f(rtmf.Rs_[0]);
+      T_wc.rotation() = rtmf.Rs_[0];
     }
 
     TICK("Render 3D");

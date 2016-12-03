@@ -22,7 +22,6 @@ __device__ void swap ( T& a, T& b ) {
 	T c(a); a=b; b=c; 
 }
 
-
 // T_mc: R_model_observation
 template<int BLK_SIZE>
 __global__ void KernelICPStep(
@@ -183,10 +182,10 @@ __global__ void KernelICPStep(
     int x = id%pc_o.w_;
     int y = id/pc_o.w_;
     int u, v;
-    printf("%d %d\n",x,y);
+//    printf("%d %d\n",x,y);
     int res = AssociateCurrentIntoModel<D,Derived>(x, y, pc_o, T_mo,
         T_co, cam, u, v);
-    printf("%d %d assoc result %d\n",x,y,res);
+//    printf("%d %d assoc result %d\n",x,y,res);
     swap<int>(x,u);
     swap<int>(y,v);
 //    res = AssociateModelIntoCurrent<D,Derived>(x, y, pc_m, T_mo,
@@ -233,7 +232,7 @@ __global__ void KernelICPStep(
       }
     }
   }
-  printf("reduction\n");
+//  printf("reduction\n");
   __syncthreads(); //sync the threads
 #pragma unroll
   for(int s=(BLK_SIZE)/2; s>1; s>>=1) {

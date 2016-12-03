@@ -67,7 +67,7 @@ void VideoViewer(const std::string& input_uri, const std::string& output_uri)
     tdp::ManagedDeviceImage<float> cuRho(wc, hc);
     tdp::ManagedDeviceImage<float> cuPlaneDeriv(wc, hc);
 
-    tdp::SE3<float> T_wd(Eigen::Matrix4f::Identity());
+    tdp::SE3f T_wd;
     tdp::Camera<float> camD(Eigen::Vector4f(550,550,319.5,239.5)); 
 
     pangolin::Var<float> huberAlpha("ui.alpha", 0.3, 0., 1.);

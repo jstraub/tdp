@@ -21,18 +21,18 @@ inline int AssociateModelIntoCurrent(
     ) {
   // project model point into camera frame to get association
   if (x < pc_m.w_ && y < pc_m.h_ ) {
-    printf("%d %d in pc_m\n",x,y);
+//    printf("%d %d in pc_m\n",x,y);
     Vector3fda pc_mi = pc_m(x,y);
     if (IsValidData(pc_mi)) {
-      printf("%d %d pc_m valid\n",x,y);
+//      printf("%d %d pc_m valid\n",x,y);
       Vector3fda pc_m_in_o = T_mo.Inverse() * pc_mi;
-      printf("%d %d pc_m_in_o\n",x,y);
+//      printf("%d %d pc_m_in_o\n",x,y);
       // project into current camera
       Vector2fda x_m_in_o = cam.Project(T_co*pc_m_in_o);
-      printf("%d %d x_m_in_o\n",x,y);
+//      printf("%d %d x_m_in_o\n",x,y);
       u = floor(x_m_in_o(0)+0.5f);
       v = floor(x_m_in_o(1)+0.5f);
-      printf("%d %d -> %d %d \n",x,y,u,v);
+//      printf("%d %d -> %d %d \n",x,y,u,v);
       if (0 <= u && u < pc_m.w_ && 0 <= v && v < pc_m.h_
           && pc_m_in_o(2) > 0.
           && IsValidData(pc_m_in_o)) {

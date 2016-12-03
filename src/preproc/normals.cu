@@ -157,21 +157,21 @@ void RenormalizeSurfaceNormals(
 
 __global__ 
 void KernelAngularDeviation(Image<Vector3fda> nA, Image<Vector3fda> nB,
-    SO3f T_ab,
+    SE3f T_ab,
     Image<float> ang) {
   //const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
 
   if (idx < nA.w_ && idy < nA.h_) {
-    ang(idx,idy) = acos(min(1.f,max(-1.f,nA(idx,idy).dot(T_ab*nB(idx,idy)))));
+    ang(idx,idy) = acos(min(1.f,max(-1.f,nA(idx,idy).dot(T_ab.rotation()*nB(idx,idy)))));
   }
 }
 
 void AngularDeviation(
     const Image<Vector3fda>& nA,
     const Image<Vector3fda>& nB,
-    const SO3f& T_ab,
+    const SE3f& T_ab,
     Image<float>& ang
     ) {
   dim3 threads, blocks;
