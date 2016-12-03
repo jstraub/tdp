@@ -374,6 +374,7 @@ void ICP::ComputeProjectiveUpdateIndividual(
     std::vector<float>& errPerLvl,
     std::vector<float>& countPerLvl
     ) {
+  std::vector<tdp::SE3f> dT_mr(stream2cam.size(), tdp::SE3f());
 
   size_t lvls = maxIt.size();
   errPerLvl   = std::vector<float>(lvls, 0);
@@ -385,10 +386,6 @@ void ICP::ComputeProjectiveUpdateIndividual(
     for (size_t it=0; it<maxIt[lvl]; ++it) {
       count = 0.f; 
       error = 0.f; 
-      Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA;
-      Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb;
-      ATA.fill(0.);
-      ATb.fill(0.);
       tdp::Image<tdp::Vector3fda> pc_ml = pcs_m.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> n_ml = ns_m.GetImage(lvl);
       tdp::Image<tdp::Vector3fda> pc_ol = pcs_o.GetImage(lvl);
@@ -398,7 +395,6 @@ void ICP::ComputeProjectiveUpdateIndividual(
         int32_t cId = stream2cam[sId]; 
         CameraT cam = rig.cams_[cId].Scale(scale);
         tdp::SE3f T_cr = rig.T_rcs_[cId].Inverse();
-        tdp::SE3f T_mc = T_mr * rig.T_rcs_[cId];
 
         // all PC and normals are in rig coordinates
         tdp::Image<tdp::Vector3fda> pc_mli = rig.GetStreamRoi(pc_ml, sId, scale);
@@ -410,10 +406,10 @@ void ICP::ComputeProjectiveUpdateIndividual(
         Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
         float error_i = 0;
         float count_i = 0;
+        tdp::SE3f T_mr_new = T_mr*dT_mr[sId];
         // Compute ATA and ATb from A x = b
         ICPStep(pc_mli, n_mli, pc_oli, n_oli,
-            T_mr, T_cr, cam,
-            cos(angleThr_deg*M_PI/180.),
+            T_mr_new, T_cr, cam, cos(angleThr_deg*M_PI/180.),
             distThr,ATA_i,ATb_i,error_i,count_i);
         error += error_i;
         count += count_i;
@@ -425,8 +421,7 @@ void ICP::ComputeProjectiveUpdateIndividual(
         // solve for x using ldlt
         Eigen::Matrix<float,6,1,Eigen::DontAlign> x =
           (ATA_i.cast<double>().ldlt().solve(ATb_i.cast<double>())).cast<float>(); 
-        rig.T_rcs_[cId] =  SE3f::Exp_(x) * rig.T_rcs_[cId];
-
+        dT_mr[sId] = dT_mr[sId] * SE3f::Exp_(x);
       }
       if (count < 1000) {
         std::cout << "# inliers " << count << " to small " << std::endl;
@@ -445,6 +440,11 @@ void ICP::ComputeProjectiveUpdateIndividual(
     }
     errPerLvl[lvl] = log(error);
     countPerLvl[lvl] = count;
+  }
+
+  for (size_t sId=0; sId < stream2cam.size(); sId++) {
+    int32_t cId = stream2cam[sId]; 
+    rig.T_rcs_[cId] = dT_mr[sId]*rig.T_rcs_[cId];
   }
 }
 

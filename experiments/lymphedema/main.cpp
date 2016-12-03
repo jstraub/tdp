@@ -160,10 +160,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
   pangolin::Var<float> grid0x("ui.grid0 x",-0.175,-.5,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-0.116,-.5,0);
-  pangolin::Var<float> grid0z("ui.grid0 z",0.327,0.,0.3);
+  pangolin::Var<float> grid0z("ui.grid0 z",0.320,0.,0.3);
   pangolin::Var<float> gridEx("ui.gridE x",0.18,0.5,0.);
   pangolin::Var<float> gridEy("ui.gridE y",0.074,0.5,0.);
-  pangolin::Var<float> gridEz("ui.gridE z",0.504,0.9,0.);
+  pangolin::Var<float> gridEz("ui.gridE z",0.500,0.9,0.);
   pangolin::Var<int>   pyrLvl("ui.pyr lvl disp",1,0,2);
 
   pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);

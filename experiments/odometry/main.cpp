@@ -290,7 +290,7 @@ int main( int argc, char* argv[] )
   std::vector<tdp::SE3f> T_wcs;
   tdp::SE3f T_mc; // current to model
 
-  gui.verbose = true;
+  gui.verbose = false;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
   // Stream and display video
@@ -363,13 +363,6 @@ int main( int argc, char* argv[] )
     TICK("ICP");
     if(icpFrame2Frame) {
       if (gui.verbose) std::cout << "icp" << std::endl;
-
-      std::cout 
-        << pcs_m.Description() << std::endl
-        << pcs_c.Description() << std::endl
-        << ns_m.Description() << std::endl
-        << ns_c.Description() << std::endl;
-
       tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_c, ns_c,
           rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
           gui.verbose, T_mc, Sigma_mc, errPerLvl, countPerLvl);
