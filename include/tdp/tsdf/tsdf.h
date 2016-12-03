@@ -40,7 +40,7 @@ struct TSDF {
   static void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
         SE3f T_rd, CameraBase<float,D,Derived>camD,
         Vector3fda grid0, Vector3fda dGrid,
-        float mu);
+        float mu, float wMax);
 
   // get depth image and surface normals from pose T_rd
   template<int D, typename Derived>

@@ -233,7 +233,7 @@ template<int D, typename Derived>
 __global__
 void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
     SE3f T_rd, SE3f T_dr, CameraBase<float,D,Derived>camD,
-    Vector3fda grid0, Vector3fda dGrid, float mu) {
+    Vector3fda grid0, Vector3fda dGrid, float mu, float wMax) {
   // kernel over all pixel locations and depth locations in the TSDF
   // volume
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -267,7 +267,7 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb
 
         tsdf(idx, idy, idz).f = (Wprev*tsdf(idx,idy,idz).f
             + Wnew*psi)/(Wprev+Wnew);
-        tsdf(idx, idy, idz).w = min(Wprev + Wnew, 100.f);
+        tsdf(idx, idy, idz).w = min(Wprev + Wnew, wMax);
 
         // tsdf(idx, idy, idz).rgb = rgb(x, y);
         tsdf(idx, idy, idz).r = rgb(x, y)(0);
@@ -305,12 +305,12 @@ template<int D, typename Derived>
 void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
     SE3f T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu) {
+    float mu, float wMax) {
   dim3 threads, blocks;
   ComputeKernelParamsForVolume(blocks, threads, tsdf, 8, 8, 8);
 
   KernelAddToTSDF<<<blocks,threads>>>(tsdf, d, rgb, T_rd, T_rd.Inverse(),
-      camD, grid0, dGrid, mu);
+      camD, grid0, dGrid, mu, wMax);
 
   checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -319,12 +319,12 @@ template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector
     SE3f T_rd,
     CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu);
+    float mu, float wMax);
 template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
     SE3f T_rd,
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
-    float mu);
+    float mu, float wMax);
 
 template<int D, typename Derived>
 void TSDF::RayTraceTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3fda> n,

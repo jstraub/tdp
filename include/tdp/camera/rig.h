@@ -191,6 +191,16 @@ struct Rig {
     float tsdfMu, float tsdfWMax,
     Volume<TSDFval>& cuTSDF);
 
+  void AddToTSDF(const Image<float>& cuD, 
+    const Image<Vector3bda>& cuRgb,
+    const SE3f& T_mr,
+    bool useRgbCamParasForDepth, 
+    const Vector3fda& grid0,
+    const Vector3fda& dGrid,
+    float tsdfMu,
+    float tsdfWMax,
+    Volume<TSDFval>& cuTSDF);
+
   template<int LEVELS>
   void RayTraceTSDF(
       const Volume<TSDFval>& cuTSDF, const SE3f& T_mr,
@@ -458,6 +468,34 @@ void Rig<CamT>::AddToTSDF(const Image<float>& cuD,
 //    (wSingle, hSingle, cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
     TSDF::AddToTSDF<CamT::NumParams,CamT>(cuTSDF, cuD_i, T_mo, cam, grid0,
         dGrid, tsdfMu, tsdfWMax); 
+  }
+}
+
+template<class CamT>
+void Rig<CamT>::AddToTSDF(const Image<float>& cuD, 
+    const Image<Vector3bda>& cuRgb,
+    const SE3f& T_mr,
+    bool useRgbCamParasForDepth, 
+    const Vector3fda& grid0,
+    const Vector3fda& dGrid,
+    float tsdfMu,
+    float tsdfWMax,
+    Volume<TSDFval>& cuTSDF) {
+  for (size_t sId=0; sId < dStream2cam_.size(); sId++) {
+    int32_t cId;
+    if (useRgbCamParasForDepth) {
+      cId = rgbStream2cam_[sId]; 
+    } else {
+      cId = dStream2cam_[sId]; 
+    }
+    CamT cam = cams_[cId];
+    tdp::SE3f T_rc = T_rcs_[cId];
+    tdp::SE3f T_mo = T_mr*T_rc;
+    tdp::Image<float> cuD_i = GetStreamRoi(cuD,sId);
+    tdp::Image<Vector3bda> cuRgb_i = GetStreamRoi(cuRgb,sId);
+//    (wSingle, hSingle, cuD.ptr_+rgbdStream2cam_[sId]*wSingle*hSingle);
+    TSDF::AddToTSDF<CamT::NumParams,CamT>(cuTSDF, cuD_i, cuRgb_i, T_mo,
+        cam, grid0, dGrid, tsdfMu, tsdfWMax); 
   }
 }
 
