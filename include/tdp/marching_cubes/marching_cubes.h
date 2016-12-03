@@ -36,7 +36,7 @@ bool ComputeMesh(
 
   surface.getVertices((float*)vertexStore.ptr_);
   surface.getIndices((uint32_t*)indexStore.ptr_);
-  colorStore.Fill(Vector3bda(128,128,128));
+  surface.getColors((uint8_t*)colorStore.ptr_);
 
   for (size_t i=0; i<vertexStore.Area(); ++i)
     vertexStore[i] = T_wg*(vertexStore[i] + grid0);
