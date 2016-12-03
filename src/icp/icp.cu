@@ -271,7 +271,6 @@ void ICPStep (
   cudaMemset(out.ptr_, 0, 29*sizeof(float));
   checkCudaErrors(cudaDeviceSynchronize());
 
-  printf("starting kernel KernelICPStep\n");
   KernelICPStep<BLK_SIZE,D,Derived><<<blocks,threads,
     BLK_SIZE*sizeof(Vector29fda)>>>(
         pc_m,n_m,pc_o,n_o,T_mo,T_cm,cam,

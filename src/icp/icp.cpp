@@ -263,13 +263,13 @@ void ICP::ComputeProjective(
         tdp::Image<tdp::Vector3fda> n_mli =  rig.GetStreamRoi(n_ml, sId, scale);
         tdp::Image<tdp::Vector3fda> n_oli =  rig.GetStreamRoi(n_ol, sId, scale);
 
-        std::cout 
-          << pc_mli.Description() << std::endl
-          << pc_oli.Description() << std::endl
-          << n_mli.Description() << std::endl
-          << n_oli.Description() << std::endl
-          << T_mr << std::endl
-          << T_cr << std::endl;
+//        std::cout 
+//          << pc_mli.Description() << std::endl
+//          << pc_oli.Description() << std::endl
+//          << n_mli.Description() << std::endl
+//          << n_oli.Description() << std::endl
+//          << T_mr << std::endl
+//          << T_cr << std::endl;
 
         Eigen::Matrix<float,6,6,Eigen::DontAlign> ATA_i;
         Eigen::Matrix<float,6,1,Eigen::DontAlign> ATb_i;
