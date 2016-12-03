@@ -30,8 +30,7 @@ class SO3 : Manifold<T,3> {
 
   TDP_HOST_DEVICE
   Eigen::Matrix<T,3,3,Options> matrix() const { 
-    UpdateR();
-    return R_;
+    return q_.matrix();
   }
   /// (x,y,z,w)
   TDP_HOST_DEVICE
@@ -106,16 +105,7 @@ class SO3 : Manifold<T,3> {
   }
 
  private:
-  Eigen::Quaternion<T,Options> q_; // for composition of rotations
-  Eigen::Matrix<T,3,3,Options> R_; // for fast transformation of points
-  bool updateR_;
-
-  void UpdateR() {
-    if (updateR_) {
-      R_ = q_.matrix();
-      updateR_ = false;
-    }
-  }
+  Eigen::Quaternion<T,Options> q_;
 };
 
 
