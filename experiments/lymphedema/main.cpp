@@ -34,6 +34,7 @@
 #include <tdp/camera/camera_poly.h>
 #include <tdp/utils/Stopwatch.h>
 #include <tdp/icp/icp.h>
+#include <tdp/gl/render.h>
 
 #include <tdp/utils/threadedValue.hpp>
 #include <tdp/gl/shaders.h>
@@ -86,6 +87,13 @@ int main( int argc, char* argv[] )
   size_t w = wSingle;
   size_t h = rig.NumCams()*hSingle;
 
+//  size_t dTSDF = 128;
+//  size_t wTSDF = 128;
+//  size_t hTSDF = 128;
+
+//  size_t dTSDF = 512;
+//  size_t wTSDF = 512;
+//  size_t hTSDF = 512;
   size_t dTSDF = 256;
   size_t wTSDF = 256;
   size_t hTSDF = 256;
@@ -96,9 +104,12 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& d_cam = pangolin::CreateDisplay()
+  pangolin::View& viewPc3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(d_cam);
+  gui.container().AddDisplay(viewPc3D);
+  pangolin::View& viewMeshOut = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewMeshOut);
   // add a simple image viewer
   tdp::QuickView viewRgb(w,h);
   gui.container().AddDisplay(viewRgb);
@@ -118,6 +129,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
+
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -155,9 +168,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<float> tsdfMu("ui.mu",0.01,0.,0.1);
+  pangolin::Var<float> tsdfMu("ui.mu",0.002,0.0001,0.01);
   pangolin::Var<float> tsdfWThr("ui.w thr",3,1.,20.);
-  pangolin::Var<float> tsdfWMax("ui.w max",200.,1.,300.);
+  pangolin::Var<float> tsdfWMax("ui.w max",100.,1.,300.);
   pangolin::Var<float> grid0x("ui.grid0 x",-0.175,-.5,0);
   pangolin::Var<float> grid0y("ui.grid0 y",-0.116,-.5,0);
   pangolin::Var<float> grid0z("ui.grid0 z",0.320,0.,0.3);
@@ -171,15 +184,18 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  alignIndividual("ui.individual ICP", true, true);
   pangolin::Var<float> icpAngleThr_deg("ui.icp angle thr",15,0.,90.);
   pangolin::Var<float> icpDistThr("ui.icp dist thr",0.03,0.,1.);
-  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",20,0,20);
-  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",14,0,20);
-  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",10,0,20);
+  pangolin::Var<int>   icpIter0("ui.ICP iter lvl 0",10,0,20);
+  pangolin::Var<int>   icpIter1("ui.ICP iter lvl 1",7,0,20);
+  pangolin::Var<int>   icpIter2("ui.ICP iter lvl 2",5,0,20);
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
   pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
   pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::Var<bool>  showPc("ui.showPc", true, true);
+  pangolin::Var<bool>  showBox("ui.showBox", true, true);
+  pangolin::Var<bool>  showAxes("ui.showAxes", true, true);
+  pangolin::Var<bool>  showMesh("ui.showMesh", true, true);
   pangolin::Var<bool> dispEst("ui.disp Est", true,true);
 
   tdp::Vector3fda grid0(grid0x,grid0y,grid0z);
@@ -310,6 +326,7 @@ int main( int argc, char* argv[] )
     }
     
     if (received.Get()) {
+      cuRgb.CopyFrom(rgb);
       TICK("pc and normals");
       rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
       rig.ComputeNormals(cuD, useRgbCamParasForDepth, cuN);
@@ -328,14 +345,14 @@ int main( int argc, char* argv[] )
           std::vector<float> countPerLvl;
           Eigen::Matrix<float,6,6> Sigma_mr; 
 
-          rig.T_rcs_ = T_rcs0; 
           if (alignIndividual) {
-            // reset to previous value - maybe not wanted/needed?
             tdp::ICP::ComputeProjectiveUpdateIndividual<CameraT>(
                 pcs_m, ns_m, pcs_o, ns_o,
                 rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
                 gui.verbose, T_mr, errPerLvl, countPerLvl);
           } else {
+            // reset to previous value - maybe not wanted/needed?
+            rig.T_rcs_ = T_rcs0; 
             if (useRgbCamParasForDepth) {
               tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
                   rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
@@ -351,7 +368,7 @@ int main( int argc, char* argv[] )
         }
         //    	std::cout << "fusing a frame" << std::endl;
         TICK("Add To TSDF");
-        rig.AddToTSDF(cuD, T_mr, useRgbCamParasForDepth, 
+        rig.AddToTSDF(cuD, cuRgb, T_mr, useRgbCamParasForDepth, 
             grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
         TOCK("Add To TSDF");
         TICK("Ray Trace TSDF");
@@ -359,24 +376,27 @@ int main( int argc, char* argv[] )
             dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
         TOCK("Ray Trace TSDF");
       }
-        received.Set(false);
+			received.Set(false);
     }
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
-    if (d_cam.IsShown()) {
-      d_cam.Activate(s_cam);
+    if (viewPc3D.IsShown()) {
+      viewPc3D.Activate(s_cam);
       // draw the axis
-      for (size_t i=0; i<rig.cams_.size(); ++i) {
-        auto& T = rig.T_rcs_[i];
-        auto& cam = rig.cams_[i];
-        pangolin::glDrawAxis(T.matrix(), 0.1f);
-        pangolin::glDrawFrustrum(cam.GetKinv(), wSingle, hSingle, T.matrix(), 0.1f);
+      if (showAxes) {
+        for (size_t i=0; i<rig.cams_.size(); ++i) {
+          auto& T = rig.T_rcs_[i];
+          auto& cam = rig.cams_[i];
+          pangolin::glDrawAxis(T.matrix(), 0.1f);
+          pangolin::glDrawFrustrum(cam.GetKinv(), wSingle, hSingle, T.matrix(), 0.1f);
+        }
       }
-      Eigen::AlignedBox3f box(grid0,gridE);
-      glColor4f(1,0,0,0.5f);
-      pangolin::glDrawAlignedBox(box);
-
+      if (showBox) {
+        Eigen::AlignedBox3f box(grid0,gridE);
+        glColor4f(1,0,0,0.5f);
+        pangolin::glDrawAlignedBox(box);
+      }
       if (showPc) {
         pc.CopyFrom(cuPc, cudaMemcpyDeviceToHost);
         vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
@@ -388,7 +408,7 @@ int main( int argc, char* argv[] )
         glColor3f(0,1,0);
         pangolin::RenderVbo(vbo);
       }
-      if (meshVbo.num_elements > 0
+      if (showMesh && meshVbo.num_elements > 0
           && meshCbo.num_elements > 0
           && meshIbo.num_elements > 0) {
         meshVbo.Bind();
@@ -417,6 +437,10 @@ int main( int argc, char* argv[] )
         meshVbo.Unbind();
       }
 
+    }
+    if (viewMeshOut.IsShown()) {
+      viewMeshOut.Activate(s_cam);
+      tdp::RenderVboIboCbo(meshVbo, meshIbo, meshCbo);
     }
     glDisable(GL_DEPTH_TEST);
 
