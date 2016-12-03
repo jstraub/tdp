@@ -64,16 +64,42 @@ void LoadPointCloud(
 
   verts.Reinitialise(vertices.size()/3,1);
   ns.Reinitialise(normals.size()/3,1);
-  for (size_t i=0; i<vertices.size(); ++i) {
-    verts[i/3](i%3) = vertices[i];
-    ns[i/3](i%3) = normals[i];
-//    if (i%3==2 &&  i < 10000) {
-//      std::cout << verts[i/3].transpose()
-//        << ", "<< ns[i/3].transpose() << std::endl;
-//    }
+  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
+  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
+}
+
+void LoadPointCloudFromMesh(
+    const std::string& path,
+    ManagedHostImage<Vector3fda>& verts) {
+
+  std::vector<float> vertices;
+  std::vector<uint32_t> triangles;
+  std::ifstream in(path);
+  tinyply::PlyFile ply(in);
+
+  for (auto e : ply.get_elements()) {
+    std::cout << "element - " << e.name << " (" << e.size << ")" 
+      << std::endl;
+    for (auto p : e.properties) {
+      std::cout << "\tproperty - " << p.name << " (" 
+        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+    }
   }
-//  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
-//  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
+  std::cout << std::endl;
+  ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
+  ply.request_properties_from_element("face", {"vertex_indices"}, triangles);
+  ply.read(in);
+  std::cout << "loaded mesh ply file: " << vertices.size() << " " << triangles.size() << std::endl;
+
+  std::unique(triangles.begin(), triangles.end());
+  std::cout << "only have " << triangles.size() << " used vertices" << std::endl;
+
+  verts.Reinitialise(triangles.size(),1);
+  for (size_t i=0; i<triangles.size(); ++i) {
+    verts[i](0) = vertices[triangles[i]*3+0];
+    verts[i](1) = vertices[triangles[i]*3+1];
+    verts[i](2) = vertices[triangles[i]*3+2];
+  }
 }
 
 void LoadMesh(

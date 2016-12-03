@@ -34,6 +34,11 @@ void LoadPointCloud(
     ManagedHostImage<Vector3fda>& verts,
     ManagedHostImage<Vector3fda>& ns, bool verbose=false);
 
+/// Filters unused mesh vertices
+void LoadPointCloudFromMesh(
+    const std::string& path,
+    ManagedHostImage<Vector3fda>& verts);
+
 void LoadMesh(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,
