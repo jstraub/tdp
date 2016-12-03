@@ -54,6 +54,13 @@ void SavePointCloud(
     bool binary=true,
     std::vector<std::string> comments = std::vector<std::string>());
 
+void SaveMesh(
+    const std::string& path,
+    const Image<Vector3fda>& pc,
+    const Image<Vector3uda>& tri,
+    bool binary=true,
+    std::vector<std::string> comments = std::vector<std::string>());
+
 }
 
 // original tinyply

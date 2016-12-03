@@ -179,6 +179,43 @@ void SavePointCloud(
   out.close();
 }
 
+void SaveMesh(
+    const std::string& path,
+    const Image<Vector3fda>& pc,
+    const Image<Vector3uda>& tri,
+    bool binary,
+    std::vector<std::string> comments) {
+  std::vector<float> verts;
+  std::vector<uint32_t> tris;
+  verts.reserve(pc.Area()*3);
+  tris.reserve(tri.Area()*3);
+  // filter out NAN points.
+  for (size_t i=0; i<pc.Area(); ++i)  {
+    if (IsValidData(pc[i])) {
+      verts.push_back(pc[i](0));
+      verts.push_back(pc[i](1));
+      verts.push_back(pc[i](2));
+    } else {
+      std::cerr << "warning invalid pc data" << std::endl;
+    }
+  }
+  for (size_t i=0; i<tri.Area(); ++i)  {
+    tris.push_back(tri[i](0));
+    tris.push_back(tri[i](1));
+    tris.push_back(tri[i](2));
+  }
+  tinyply::PlyFile plyFile;
+  plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
+  plyFile.add_properties_to_element("face", {"vertex_indices"}, tris);
+  for (auto& comment : comments) 
+    plyFile.comments.push_back(comment);
+  std::ostringstream outStream;
+  plyFile.write(outStream, binary);
+  std::ofstream out(path);
+  out << outStream.str();
+  out.close();
+}
+
 }
 
 using namespace tinyply;

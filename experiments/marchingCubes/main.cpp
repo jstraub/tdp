@@ -44,7 +44,7 @@ int main( int argc, char* argv[] )
   if (!option.compare("-1")) {
     runOnce = true; 
   }
-  std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("/mesh.ply");
+  std::string meshOutputPath = pangolin::PathParent(input_uri)+std::string("./mesh.ply");
   std::cout << meshOutputPath << std::endl;
 
   tdp::SE3f T_wG;
@@ -175,24 +175,14 @@ int main( int argc, char* argv[] )
       cbo.Upload(colorStore,  sizeof(unsigned char) * nVertices * 3, 0);
       ibo.Upload(indexStore,  sizeof(unsigned int) * nTriangles * 3, 0);
 
-      // TODO: dumm to do another copy
-      std::vector<float> verts(nVertices * 3);
-      verts.assign(vertexStore, vertexStore+nVertices*3);
-      std::vector<uint32_t> faces(nTriangles*3);
-      faces.assign(indexStore, indexStore+nTriangles*3);
+      tdp::Image<tdp::Vector3fda> verts(nVertices,1,
+        (tdp::Vector3fda*)vertexStore);
+      tdp::Image<tdp::Vector3uda> faces(nTriangles,1,
+        (tdp::Vector3uda*)indexStore);
 
-      tinyply::PlyFile plyFile;
-      plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
-      plyFile.add_properties_to_element("face", {"vertex_indices"},
-          faces, 3, tinyply::PlyProperty::Type::INT8);
-      plyFile.comments.push_back("generated from TSDF");
-
-      std::ostringstream outStream;
-      plyFile.write(outStream, true);
-
-      std::ofstream out(meshOutputPath);
-      out << outStream.str();
-      out.close();
+      std::vector<std::string> comments;
+      comments.push_back("generated from TSDF");
+      SaveMesh( meshOutputPath, verts, faces, false, comments);
 
       delete [] vertexStore;
       delete [] colorStore;
