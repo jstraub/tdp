@@ -182,7 +182,7 @@ int main( int argc, char* argv[] )
 
       std::vector<std::string> comments;
       comments.push_back("generated from TSDF");
-      SaveMesh( meshOutputPath, verts, faces, false, comments);
+      SaveMesh( meshOutputPath, verts, faces, true, comments);
 
       delete [] vertexStore;
       delete [] colorStore;

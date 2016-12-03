@@ -72,30 +72,11 @@ int main( int argc, char* argv[] )
   container.AddDisplay(d_cam);
   // use those OpenGL buffers
   
-  std::vector<float> verts;
-  std::vector<uint32_t> tris;
-  std::ifstream in(input_uri);
-  tinyply::PlyFile ply(in);
-
-  for (auto e : ply.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" 
-      << std::endl;
-    for (auto p : e.properties) {
-      std::cout << "\tproperty - " << p.name << " (" 
-        << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
-    }
-  }
-  std::cout << std::endl;
-  ply.request_properties_from_element("vertex", {"x", "y", "z"}, verts);
-  ply.request_properties_from_element("face", {"vertex_indices"}, tris);
-  ply.read(in);
-  std::cout << "loaded ply file: "
-    << verts.size() << " " << tris.size() << std::endl;
-
-  std::vector<uint8_t> cols(verts.size(), 128);
-  tdp::Image<tdp::Vector3fda> vertices(verts.size()/3,1,(tdp::Vector3fda*)&verts[0]);
-  tdp::Image<tdp::Vector3uda> tri(tris.size()/3,1,(tdp::Vector3uda*)&tris[0]);
-  tdp::Image<tdp::Vector3bda> color(cols.size()/3,1,(tdp::Vector3bda*)&cols[0]);
+  tdp::ManagedHostImage<tdp::Vector3fda> vertices;
+  tdp::ManagedHostImage<tdp::Vector3uda> tri;
+  tdp::LoadMesh(input_uri, vertices, tri);
+  tdp::ManagedHostImage<tdp::Vector3bda> color(vertices.Area(),1);
+  color.Fill(tdp::Vector3bda(128,128,128));
 
   tdp::ManagedHostImage<tdp::Vector3fda> n(vertices.w_,1);
   tdp::ManagedHostImage<tdp::Vector3fda> meanCurv(vertices.w_,1);
