@@ -21,6 +21,7 @@
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
+#include <tdp/preproc/lab.h>
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
@@ -78,6 +79,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(w, h);
+  tdp::ManagedHostImage<tdp::Vector3fda> lab(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -89,9 +91,10 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,w*h,GL_UNSIGNED_BYTE,3);
 
   // Add some variables to GUI
-  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
+  pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-4,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
+  pangolin::Var<float> colorDiff("ui.color diff",10.,1.0,40.);
   pangolin::Var<bool> binaryPly("ui.binary ply file",false,true);
   pangolin::Var<bool> savePC("ui.save current PC",false,false);
 
@@ -143,6 +146,23 @@ int main( int argc, char* argv[] )
 
       rgb.CopyFrom(_rgb);
       dRaw.CopyFrom(_d);
+    }
+
+    tdp::Rgb2LabCpu(rgb, lab);
+    for (size_t u=1; u<pc.w_-1; ++u) {
+      for (size_t v=1; v<pc.h_-1; ++v) {
+        if (dRaw(u,v) == 0) 
+          continue;
+        tdp::Vector3fda color = lab(u,v);
+        if (dRaw(u-1,v) == 0 || dRaw(u+1,v) == 0) {
+          size_t uN = u;
+          while(uN < pc.w_ 
+              && dRaw(uN,v) != 0 
+              && (color-lab(uN++,v)).norm() < colorDiff) {
+            rgb(uN-1,v) << 255, 0, 0;
+          }
+        }
+      }
     }
 
     cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
