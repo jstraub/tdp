@@ -9,7 +9,6 @@ template<typename Tin, typename Tout>
 __global__ void KernelConvert(
     Tin* in, Tout* out, float scale, float offset, size_t N, int N_PER_T
     ) {
-  const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   for(int id=idx*N_PER_T; id<min((int)N,(idx+1)*N_PER_T); ++id) {
     out[id] = static_cast<Tout>(scale*static_cast<float>(in[id])+offset);

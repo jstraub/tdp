@@ -15,7 +15,7 @@ void KernelRgb2Grey(
   if (idx < rgb.w_ && idy < rgb.h_) {
     grey(idx,idy) = static_cast<T>(Rgb2Grey(rgb(idx, idy))*scale);
   } else if (idx < grey.w_ && idy < grey.h_) {
-    grey(idx, idy) = NAN;
+    grey(idx, idy) = static_cast<T>(NAN);
   }
 }
 

@@ -100,10 +100,6 @@ int main( int argc, char* argv[] )
   tdp::GuiBase gui(1200,800,video);
   gui.container().SetLayout(pangolin::LayoutEqual);
 
-  size_t dTSDF = 512;
-  size_t wTSDF = 512;
-  size_t hTSDF = 512;
-
   tdp::Rig<CameraT> rig;
   if (calibPath.size() > 0) {
     rig.FromFile(calibPath,false);
