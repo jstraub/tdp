@@ -30,6 +30,10 @@ class GuiBase {
     if ( frame < end_frame ) {
       if (GrabFrames()) frame = frame +1;
     }
+    TicToc();
+  }
+
+  void TicToc() {
     t_prev_ = t_;
     t_ = pangolin::Time_us(pangolin::TimeNow());
     fps_ = 1./((t_-t_prev_)*1e-6);
