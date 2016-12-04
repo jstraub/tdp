@@ -265,14 +265,13 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb
         const float Wnew = 1.;
         const float Wprev = tsdf(idx,idy,idz).w;
 
-        tsdf(idx, idy, idz).f = (Wprev*tsdf(idx,idy,idz).f
-            + Wnew*psi)/(Wprev+Wnew);
-        tsdf(idx, idy, idz).w = min(Wprev + Wnew, wMax);
+        const float scale = 1.f/(Wprev+Wnew);
+        tsdf(idx, idy, idz).f = (Wprev*tsdf(idx,idy,idz).f + Wnew*psi)*scale;
+        tsdf(idx, idy, idz).r = (Wprev*tsdf(idx, idy, idz).r + Wnew*rgb(x, y)(0))*scale;
+        tsdf(idx, idy, idz).g = (Wprev*tsdf(idx, idy, idz).g + Wnew*rgb(x, y)(1))*scale;
+        tsdf(idx, idy, idz).b = (Wprev*tsdf(idx, idy, idz).b + Wnew*rgb(x, y)(2))*scale;
 
-        // tsdf(idx, idy, idz).rgb = rgb(x, y);
-        tsdf(idx, idy, idz).r = rgb(x, y)(0);
-        tsdf(idx, idy, idz).g = rgb(x, y)(1);
-        tsdf(idx, idy, idz).b = rgb(x, y)(2);
+        tsdf(idx, idy, idz).w = min(Wprev + Wnew, wMax);
       }
     }
   }

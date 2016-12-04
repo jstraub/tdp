@@ -37,6 +37,9 @@
 #include <tdp/manifold/SO3.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
+#include <tdp/marching_cubes/marching_cubes.h>
+
+#include <tdp/gl/render.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -205,6 +208,10 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewTsdfSliveView(wTSDF,hTSDF);
   gui.container().AddDisplay(viewTsdfSliveView);
 
+  pangolin::GlBuffer meshVbo;
+  pangolin::GlBuffer meshCbo;
+  pangolin::GlBuffer meshIbo;
+
   viewICPassocC.Show(true);
   viewICPassocM.Show(true);
   viewAngErr.Show(true);
@@ -222,7 +229,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
-  pangolin::Var<bool> fuseRgb("ui.fuse RGB",false,true);
+  pangolin::Var<bool> fuseRgb("ui.fuse RGB",true,true);
   pangolin::Var<bool> normalsFromTSDF("ui.normals from TSDF",true,true);
   pangolin::Var<bool> pcFromTSDF("ui.pc from TSDF", true, true);
   pangolin::Var<bool> normalsFromDepthPyr("ui.n from depth pyr",false,true);
@@ -237,6 +244,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gridEx("ui.gridE x", 3.0,2,3);
   pangolin::Var<float> gridEy("ui.gridE y", 3.0,2,3);
   pangolin::Var<float> gridEz("ui.gridE z", 3.0,2,3);
+
+  pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
+  pangolin::Var<float> marchCubesfThr("ui.f Thr", 1.0,0.,1.);
+  pangolin::Var<float> marchCubeswThr("ui.weight Thr", 0,0,10);
 
   pangolin::Var<bool> resetICP("ui.reset ICP",false,false);
   pangolin::Var<bool>  runICP("ui.run ICP", true, true);
@@ -302,6 +313,12 @@ int main( int argc, char* argv[] )
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
+
+    if (pangolin::Pushed(runMarchingCubes)) {
+      TSDF.CopyFrom(cuTSDF);
+      tdp::ComputeMesh(TSDF, grid0, dGrid,
+          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);      
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -450,6 +467,8 @@ int main( int argc, char* argv[] )
 
       for (auto& T_moi : T_mos) 
         pangolin::glDrawAxis(T_moi.matrix(),0.1f);
+
+      tdp::RenderVboIboCbo(meshVbo, meshIbo, meshCbo);
 
       // render global view of the model first
       pangolin::glDrawAxis(0.1f);
