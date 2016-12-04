@@ -230,7 +230,7 @@ int main( int argc, char* argv[] )
 
   gui.verbose = true;
 
-  tdp::SE3<float> T_mo(Eigen::Matrix4f::Identity());
+  tdp::SE3f T_mo;
   tdp::SE3f T_mo_0 = T_mo;
   tdp::SE3f T_mo_prev = T_mo_0;
   tdp::SE3f T_wr_imu_prev;
