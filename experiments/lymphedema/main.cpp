@@ -250,6 +250,7 @@ int main( int argc, char* argv[] )
       numFrames = 0;
       received.Set(true);
       resetTSDF = true;
+      runICP = true;
     }
     if (rotatingDepthScan.GuiChanged() && !rotatingDepthScan) {
       rs->SetPowers(ir);
@@ -275,7 +276,6 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-
     if (rotatingDepthScan) {
       // start a collection thread to do the work so the rendering is
       // smooth
@@ -289,7 +289,6 @@ int main( int argc, char* argv[] )
 //          TICK("rgbd collection");
           cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
           for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-            std::cout << "collecting " << sId << std::endl;
             // grab one frame 
             rs->SetPower(sId, rotatingDepthScanIrPower);
             std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
@@ -371,8 +370,6 @@ int main( int argc, char* argv[] )
                   gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
             }
           }
-        } else {
-          std::cout << "@ frame " << numFrames << std::endl;
         }
         //    	std::cout << "fusing a frame" << std::endl;
         TICK("Add To TSDF");
