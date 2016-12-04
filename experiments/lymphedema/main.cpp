@@ -247,13 +247,13 @@ int main( int argc, char* argv[] )
 
     if (rotatingDepthScan.GuiChanged()) {
     }
-    if (rotatingScan.GuiChanged() && rotatingScan) {
+    if (rotatingDepthScan.GuiChanged() && rotatingDepthScan) {
       rs->SetPowers(0);
     }
-    if (rotatingScan.GuiChanged() && !rotatingScan) {
+    if (rotatingDepthScan.GuiChanged() && !rotatingDepthScan) {
       rs->SetPowers(ir);
     }
-    if (rotatingScan.GuiChanged()) {
+    if (rotatingDepthScan.GuiChanged()) {
       numFrames = 0;
       received.Set(true);
       resetTSDF = true;
