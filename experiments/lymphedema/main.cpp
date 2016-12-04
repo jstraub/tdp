@@ -245,15 +245,14 @@ int main( int argc, char* argv[] )
       rs->SetPowers(ir);
     }
 
-    if (rotatingDepthScan.GuiChanged()) {
-    }
     if (rotatingDepthScan.GuiChanged() && rotatingDepthScan) {
       rs->SetPowers(0);
+      numFrames = 0;
+      received.Set(true);
+      resetTSDF = true;
     }
     if (rotatingDepthScan.GuiChanged() && !rotatingDepthScan) {
       rs->SetPowers(ir);
-    }
-    if (rotatingDepthScan.GuiChanged()) {
       numFrames = 0;
       received.Set(true);
       resetTSDF = true;
@@ -290,6 +289,7 @@ int main( int argc, char* argv[] )
 //          TICK("rgbd collection");
           cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
           for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+            std::cout << "collecting " << sId << std::endl;
             // grab one frame 
             rs->SetPower(sId, rotatingDepthScanIrPower);
             std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
