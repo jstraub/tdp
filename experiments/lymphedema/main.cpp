@@ -163,7 +163,7 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<bool> grabOneFrame("ui.grabOneFrame", true, false);
   pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
   pangolin::Var<int> rotatingDepthScanIrPower("ui.IR power", 16,0,16);
-  pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 100, 1, 1000);
+  pangolin::Var<int> stabilizationTime("ui.stabil. dt ms", 30, 1, 100);
 
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
@@ -246,7 +246,14 @@ int main( int argc, char* argv[] )
     }
 
     if (rotatingDepthScan.GuiChanged()) {
+    }
+    if (rotatingScan.GuiChanged() && rotatingScan) {
+      rs->SetPowers(0);
+    }
+    if (rotatingScan.GuiChanged() && !rotatingScan) {
       rs->SetPowers(ir);
+    }
+    if (rotatingScan.GuiChanged()) {
       numFrames = 0;
       received.Set(true);
       resetTSDF = true;
@@ -269,6 +276,7 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
+
     if (rotatingDepthScan) {
       // start a collection thread to do the work so the rendering is
       // smooth
@@ -282,11 +290,11 @@ int main( int argc, char* argv[] )
 //          TICK("rgbd collection");
           cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
           for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-            rs->SetPowers(0);
             // grab one frame 
             rs->SetPower(sId, rotatingDepthScanIrPower);
             std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
-            rs->GrabOne(sId, buffer, rotatingDepthScanIrPower);
+            rs->GrabOne(sId, buffer);
+            rs->SetPower(sId, 0);
             int32_t cId = rig.rgbdStream2cam_[sId]; 
 
             tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
