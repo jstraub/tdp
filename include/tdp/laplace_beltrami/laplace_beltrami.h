@@ -25,16 +25,22 @@ namespace tdp {
 Vector3fda getMean(const Image<Vector3fda> &pc, const Eigen::VectorXi& nnIds);
 
 Matrix3fda getCovariance(const Image<Vector3fda>& pc,
-                              const Eigen::VectorXi& nnIds);
+                         const Eigen::VectorXi& nnIds);
 
 ManagedHostImage<Vector3fda> GetSimplePc();
 
 
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc);
 
+void GetSphericalPc(ManagedHostImage<Vector3fda>& pc,
+                    int nSamples);
+
 void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc);
 
-void GetMtxPc(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h, float step=0.1);
+void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
+                      int nSamples);
+
+void GetMtxPc(ManagedHostImage<Vector3fda>& pc, int w, int h, float step=0.1);
 
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){
@@ -115,16 +121,16 @@ Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
 
 
 eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
-                                              const Eigen::VectorXf& evector,
-                                              int nBins);
+                                          const Eigen::VectorXf& evector,
+                                          int nBins);
 inline float rbf(const Vector3fda& p1,
                  const Vector3fda& p2,
                  const float alpha);
 
 
 void f_rbf(const Image<Vector3fda>& pc,
-                      const Vector3fda& p,
-                      const float alpha,
+           const Vector3fda& p,
+           const float alpha,
            Eigen::VectorXf& f );
 
 //std::vector<float> f_rbf(const Image<Vector3fda>& pc,

@@ -48,16 +48,36 @@ ManagedHostImage<Vector3fda> GetSimplePc(){
 
 
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc){
-    pc.Reinitialise(pc.w_, pc.h_);
+    //pc.Reinitialise(pc.w_, pc.h_);
     for (size_t i=0; i<pc.w_; ++i) {
+       pc[i] = S3f::Random().vector();
+    }
+}
+
+void GetSphericalPc(ManagedHostImage<Vector3fda>& pc,
+                    int nSamples){
+    pc.Reinitialise(nSamples,1);
+    for (size_t i=0; i<nSamples; ++i) {
        pc[i] = S3f::Random().vector();
     }
 }
 
 void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc){
     //todo: use [s1;R]
-    pc.Reinitialise(pc.w_, pc.h_);
-    for (size_t i=0; i<pc.Area(); ++i){
+    //pc.Reinitialise(nSamples,1);
+    for (size_t i=0; i<pc.w_; ++i){
+        S2f pt_2d = S2f::Random().vector();
+        float z  = static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX);
+        pc[i] = Vector3fda(pt_2d.vector()(0), pt_2d.vector()(1), z);
+    }
+}
+
+
+void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
+                      int nSamples){
+    //todo: use [s1;R]
+    pc.Reinitialise(nSamples,1);
+    for (size_t i=0; i<nSamples; ++i){
         S2f pt_2d = S2f::Random().vector();
         float z  = static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX);
         pc[i] = Vector3fda(pt_2d.vector()(0), pt_2d.vector()(1), z);
