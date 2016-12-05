@@ -148,9 +148,10 @@ void Test_simplePc(){
 
 }
 
-tdp::ManagedHostImage<tdp::Vector3fda> getSamples(const tdp::Image<tdp::Vector3fda>& pc,
-                                                  int nSamples){
-    tdp::ManagedHostImage<tdp::Vector3fda> samples(nSamples,1);
+void getSamples(const tdp::Image<tdp::Vector3fda>& pc,
+                tdp::ManagedHostImage<tdp::Vector3fda>& samples,
+                int nSamples){
+    samples.Reinitialise(nSamples,1);
     //random number generator
     std::random_device rd;
     std::mt19937 rng(rd());
@@ -160,7 +161,6 @@ tdp::ManagedHostImage<tdp::Vector3fda> getSamples(const tdp::Image<tdp::Vector3f
         samples[i] = pc[idx];
         //std::cout << "\nrandom idx: " << idx << ", val: \n" << samples[i] << std::endl;
     }
-    return samples;
 }
 
 int main( int argc, char* argv[] ){
@@ -179,11 +179,11 @@ int main( int argc, char* argv[] ){
       tdp::ManagedHostImage<tdp::Vector3uda> trigs_all(1000,1);
 
       std::cout << "input pc: " << input << std::endl;
-      tdp::LoadMesh(input, pc_all, trigs_all);
-      std::cout << "triangle meshs loaded. Num points:  " << pc_s.Area() << std::endl;
+      tdp::LoadPointCloudFromMesh(input, pc_all);
+      std::cout << "triangle meshs loaded. Num points:  " << pc_all.Area() << std::endl;
 
-      pc_s = getSamples(pc_all, 1000);
-      pc_t = getSamples(pc_all, 1000);
+      getSamples(pc_all, pc_s, 1000);
+      getSamples(pc_all, pc_t, 1000);
 
   } else {
       std::srand(101);
