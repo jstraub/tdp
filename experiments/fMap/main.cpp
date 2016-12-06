@@ -246,14 +246,11 @@ int main( int argc, char* argv[] ){
 
   if (argc > 1) {
       const std::string input = std::string(argv[1]);
-
       tdp::LoadPointCloudFromMesh(input, pc_all);
-
       //std::cout << "input pc: " << input << std::endl;
       //std::cout << "triangle meshs loaded. Num points:  " << pc_all.Area() << std::endl;
-
-      getSamples(pc_all, pc_s, nSamples);
-      getSamples(pc_all, pc_t, nSamples);
+//      getSamples(pc_all, pc_s, nSamples);
+//      getSamples(pc_all, pc_t, nSamples);
   } else {
       std::srand(101);
       GetSphericalPc(pc_s, nSamples);
@@ -263,9 +260,9 @@ int main( int argc, char* argv[] ){
   }
 
     // build kd tree
-  tdp::ANN ann_s, ann_t;
-  ann_s.ComputeKDtree(pc_s);
-  ann_t.ComputeKDtree(pc_t);
+//  tdp::ANN ann_s, ann_t;
+//  ann_s.ComputeKDtree(pc_s);
+//  ann_t.ComputeKDtree(pc_t);
 
 
   // get the matrix pc for visualizing C
@@ -302,6 +299,10 @@ int main( int argc, char* argv[] ){
   tdp::eigen_vector<tdp::Vector3fda> means_t((int)nBins, tdp::Vector3fda(0,0,0));
   Eigen::VectorXf evector_s;//(L_s.rows());
   Eigen::VectorXf evector_t;//(L_t.rows());
+  Eigen::MatrixXf F((int)numCst, (int)numEv),
+                  G((int)numCst, (int)numEv),
+                  C((int)numEv, (int)numEv);
+
   //---color scheme
   Eigen::VectorXf colors((int)numQ);
   for (int i=0; i<(int)numQ; ++i){
@@ -312,14 +313,24 @@ int main( int argc, char* argv[] ){
   Eigen::VectorXf qDists;
   tdp::ManagedHostImage<tdp::Vector3fda> queries;
   tdp::ManagedHostImage<tdp::Vector3fda> estimates;
+  tdp::ANN ann_s, ann_t;
+  bool annChanged = false;
+  bool laplacianChanged = false;
+  bool basisChanged = false;
 
   // Stream and display video
   while(!pangolin::ShouldQuit()){
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
+    if (pangolin::Pushed(showFMap)){//todo: remove
+        std::cout << "Running fMap..." << std::endl;
+
+    }
+
     // Get samples
-    if ( nSamples.GuiChanged() ){
+    if ( pangolin::Pushed(showFMap) || nSamples.GuiChanged() ){
+
         std::cout << "pushed fmap? " << showFMap << std::endl;
         std::cout << "viewPc? " << viewPc.IsShown() <<std::endl;
         if (argc>1){
@@ -333,27 +344,32 @@ int main( int argc, char* argv[] ){
         }
 
         // build kd tree
-        tdp::ANN ann_s, ann_t;
         ann_s.ComputeKDtree(pc_s);
         ann_t.ComputeKDtree(pc_t);
+
+        annChanged = true;
     }
 
-    if (pangolin::Pushed(showFMap) || knn.GuiChanged() || alpha.GuiChanged() ||alpha2.GuiChanged() ||
-            numEv.GuiChanged() || nBins.GuiChanged() || numQ.GuiChanged() || numCst.GuiChanged()){
-      std::cout << "Running fMap..." << std::endl;
+    if (pangolin::Pushed(showFMap) || annChanged || knn.GuiChanged() || alpha.GuiChanged()){
+        // get Laplacian operator and its eigenvectors
+        tdp::Timer t0;
+        L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
+        L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
+        std::cout << "L_s and L_t changed: " << alpha << std::endl;
+        t0.toctic("GetLaplacians");
+        laplacianChanged = true;
+    }
+
+
+    if (pangolin::Pushed(showFMap) || laplacianChanged ||
+                numEv.GuiChanged() || nBins.GuiChanged() ||
+                numCst.GuiChanged()){//|| numQ.GuiChanged()
       S_wl.resize(L_s.rows(),(int)numEv);
       T_wl.resize(L_t.rows(),(int)numEv);
       std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       std::cout << "t_wl resized: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
-
-      // get Laplacian operator and its eigenvectors
       tdp::Timer t0;
-      L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
-      L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
-      std::cout << "L_s and L_t changed: " << alpha << std::endl;
-      t0.toctic("GetLaplacians");
-
       tdp::getLaplacianBasis(L_s, numEv, S_wl);
       evector_s = S_wl.col(1); // first non-trivial evector
       means_s = tdp::getLevelSetMeans(pc_s, evector_s, (int)nBins); //means based on the evector_s's nBins level sets
@@ -379,18 +395,22 @@ int main( int argc, char* argv[] ){
       minVal_t = evector_t.minCoeff()-1e-3;
       maxVal_t = evector_t.maxCoeff();
 
-      //--playing around here
+      basisChanged = true;
+      }
+      if (Pangolin::Pushed(showFMap) || basisChanged || numCst.GuiChanged() || alpha2.GuiChanged()){
+
+      F.resize(((int)numCst, (int)numEv);
+      G.resize(((int)numCst, (int)numEv));
+      C.resize(((int)numEv, (int)numEv));
       Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
-      Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
-      Eigen::MatrixXf C((int)numEv, (int)numEv);
-
       // Automatic correspondence construction using one point
       // as the center and getting numCst (closest) points around it
       Eigen::VectorXi sIds((int)numCst), tIds((int)numCst);
       Eigen::VectorXf sDists((int)numCst), tDists((int)numCst);
       ann_s.Search(pc_s[0], (int)numCst, 1e-9, sIds, sDists);
       ann_t.Search(pc_t[0], (int)numCst, 1e-9, tIds, tDists);
+
 
       // --construct F(design matrix) using point correspondences
       Eigen::VectorXi nnIds(1);
@@ -432,11 +452,12 @@ int main( int argc, char* argv[] ){
       std::cout << cvec.minCoeff() << " " << cvec.maxCoeff() << std::endl;
       minVal_c = cvec.minCoeff()-1e-3;
       maxVal_c = cvec.maxCoeff();
+      }
 
       // Get the point-wise correspondence
       //--Query 100 closest points to pc_s[0]
       //--The result points should also be close to each other
-      if ( runQuery || numQ.GuiChanged()){
+      if ( Pangolin::Pushed(showFMap) || runQuery || numQ.GuiChanged()){
           std::cout << "current numQ: " << numQ<< std::endl;
 
           qIds.resize((int)numQ);
@@ -712,6 +733,8 @@ int main( int argc, char* argv[] ){
     pangolin::DisplayBase().ActivatePixelOrthographic();
     // finish this frame
     pangolin::FinishFrame();
+    // reset some switches
+    annChanged = false;
   }
 
   std::cout << "good morning!" << std::endl;
