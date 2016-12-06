@@ -84,7 +84,8 @@ void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
     }
 }
 
-void GetMtxPc(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
+void GetGrid(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
+    pc.Reinitialise(w,h);
     for(int r=0; r<h; ++r){
         for (int c=0; c<w; ++c){
             pc[r*w+c] = tdp::Vector3fda(c*step,r*step,0);

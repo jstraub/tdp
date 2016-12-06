@@ -163,7 +163,7 @@ void getSamples(const tdp::Image<tdp::Vector3fda>& pc,
     }
 }
 
-int main( int argc, char* argv[] ){
+int main(int argc, char* argv[]){
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -187,7 +187,7 @@ int main( int argc, char* argv[] ){
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
-  pangolin::OpenGlRenderState mtx_cam(
+  pangolin::OpenGlRenderState cmtx_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
@@ -198,9 +198,9 @@ int main( int argc, char* argv[] ){
   pangolin::View& viewPc_t = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(t_cam));
   container.AddDisplay(viewPc_t);
-  pangolin::View& viewMtx = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(mtx_cam));
-  container.AddDisplay(viewMtx);
+  pangolin::View& viewCMtx = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(cmtx_cam));
+  container.AddDisplay(viewCMtx);
   pangolin::View& viewF = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(viewF);
@@ -244,14 +244,17 @@ int main( int argc, char* argv[] ){
   tdp::ManagedHostImage<tdp::Vector3fda> pc_all;
   tdp::ManagedHostImage<tdp::Vector3uda> trigs_all;
 
-  if (argc > 1) {
+  // Visualization of C
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_grid((int)numEv*(int)numEv,1);
+
+  if(argc > 1){
       const std::string input = std::string(argv[1]);
       tdp::LoadPointCloudFromMesh(input, pc_all);
       //std::cout << "input pc: " << input << std::endl;
       //std::cout << "triangle meshs loaded. Num points:  " << pc_all.Area() << std::endl;
 //      getSamples(pc_all, pc_s, nSamples);
 //      getSamples(pc_all, pc_t, nSamples);
-  } else {
+  }else{
       std::srand(101);
       GetSphericalPc(pc_s, nSamples);
 //      std::srand(200);
@@ -264,75 +267,70 @@ int main( int argc, char* argv[] ){
 //  ann_s.ComputeKDtree(pc_s);
 //  ann_t.ComputeKDtree(pc_t);
 
+  // use those OpenGL buffers
+  pangolin::GlBuffer vbo, vbo_t, vbo_cmtx,
+                     vbo_f, vbo_g,  //point clouds
+                     valuebo_s, valuebo_t, valuebo_cmtx, //colorings: source manifold, target manifod, c_mtx
+                     valuebo_color, valuebo_g;
 
-  // get the matrix pc for visualizing C
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_mtx((int)numEv*(int)numEv,1);
-  GetMtxPc(pc_mtx, (int)numEv, (int)numEv);
+  //-- upload point cloud positions
+//  vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+//  vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
+//  vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+//  vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
+//  vbo_cmtx.Reinitialise(pangolin::GlArrayBuffer, pc_grid.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+//  vbo_cmtx.Upload(pc_grid.ptr_, pc_grid.SizeBytes(), 0);
+
+  // Declare variables
+  Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),
+                             L_t(pc_t.Area(), pc_t.Area());
+  Eigen::VectorXf evector_s,//(L_s.rows());
+                  evector_t;//(L_t.rows());
+  Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
+                  T_wl,//(L_t.rows(),(int)numEv),
+                  F,//((int)numCst, (int)numEv),
+                  G,//((int)numCst, (int)numEv),
+                  C;//((int)numEv, (int)numEv);
+  tdp::eigen_vector<tdp::Vector3fda> means_s((int)nBins, tdp::Vector3fda(0,0,0)),
+                                     means_t((int)nBins, tdp::Vector3fda(0,0,0));
+
+//  GetGrid(pc_grid, (int)numEv, (int)numEv);
 //  std::cout << "pc mtx: "<< std::endl;
 //  for (int r=0; r<(int)numEv; ++r){
 //      std::cout << "r: " << r << std::endl;
 //      for (int c=0; c<(int)numEv; ++c){
-//          std::cout << pc_mtx[r*(int)numEv + c] << std::endl;
+//          std::cout << pc_grid[r*(int)numEv + c] << std::endl;
 //      }
 //      std::cout << std::endl;
 //  }
-  // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vbo_t, vbo_mtx,
-                     vbo_f, vbo_g,  //point clouds
-                     valuebo_s, valuebo_t, valuebo_mtx, //colorings: source manifold, target manifod, c_mtx
-                     valuebo_color, valuebo_g;
 
-  //-- upload point cloud positions
-  vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
-  vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
-  vbo_mtx.Reinitialise(pangolin::GlArrayBuffer, pc_mtx.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo_mtx.Upload(pc_mtx.ptr_, pc_mtx.SizeBytes(), 0);
-
-  // Declare variables
-  Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
-  Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
-  Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);
-  Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
-  tdp::eigen_vector<tdp::Vector3fda> means_s((int)nBins, tdp::Vector3fda(0,0,0));
-  tdp::eigen_vector<tdp::Vector3fda> means_t((int)nBins, tdp::Vector3fda(0,0,0));
-  Eigen::VectorXf evector_s;//(L_s.rows());
-  Eigen::VectorXf evector_t;//(L_t.rows());
-  Eigen::MatrixXf F((int)numCst, (int)numEv),
-                  G((int)numCst, (int)numEv),
-                  C((int)numEv, (int)numEv);
-
-  //---color scheme
-  Eigen::VectorXf colors((int)numQ);
-  for (int i=0; i<(int)numQ; ++i){
-      colors(i) = (i*0.001);
-  }
   //---Queries
+  Eigen::VectorXi nnIds(1);
+  Eigen::VectorXf dists(1);
   Eigen::VectorXi qIds;
   Eigen::VectorXf qDists;
   tdp::ManagedHostImage<tdp::Vector3fda> queries;
   tdp::ManagedHostImage<tdp::Vector3fda> estimates;
   tdp::ANN ann_s, ann_t;
+  //----color scheme
+  Eigen::VectorXf colors;//((int)numQ);
+
+  // Control switches
   bool annChanged = false;
   bool laplacianChanged = false;
   bool basisChanged = false;
+  bool cChanged = false;
 
   // Stream and display video
   while(!pangolin::ShouldQuit()){
     // clear the OpenGL render buffers
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
-    if (pangolin::Pushed(showFMap)){//todo: remove
-        std::cout << "Running fMap..." << std::endl;
-
-    }
 
     // Get samples
     if ( pangolin::Pushed(showFMap) || nSamples.GuiChanged() ){
+        std::cout << "Running fMap from top..." << std::endl;
 
-        std::cout << "pushed fmap? " << showFMap << std::endl;
-        std::cout << "viewPc? " << viewPc.IsShown() <<std::endl;
         if (argc>1){
             getSamples(pc_all, pc_s, nSamples);
             getSamples(pc_all, pc_t, nSamples);
@@ -343,14 +341,21 @@ int main( int argc, char* argv[] ){
             GetSphericalPc(pc_t, nSamples);
         }
 
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
+        vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
+
         // build kd tree
         ann_s.ComputeKDtree(pc_s);
         ann_t.ComputeKDtree(pc_t);
 
         annChanged = true;
+        std::cout << "ANN changed" << std::endl;
     }
 
-    if (pangolin::Pushed(showFMap) || annChanged || knn.GuiChanged() || alpha.GuiChanged()){
+    if (pangolin::Pushed(showFMap) || annChanged ||
+                  knn.GuiChanged() || alpha.GuiChanged()){
         // get Laplacian operator and its eigenvectors
         tdp::Timer t0;
         L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
@@ -358,12 +363,12 @@ int main( int argc, char* argv[] ){
         std::cout << "L_s and L_t changed: " << alpha << std::endl;
         t0.toctic("GetLaplacians");
         laplacianChanged = true;
+        std::cout << "laplacian changed" << std::endl;
     }
 
 
     if (pangolin::Pushed(showFMap) || laplacianChanged ||
-                numEv.GuiChanged() || nBins.GuiChanged() ||
-                numCst.GuiChanged()){//|| numQ.GuiChanged()
+                numEv.GuiChanged() || nBins.GuiChanged()){
       S_wl.resize(L_s.rows(),(int)numEv);
       T_wl.resize(L_t.rows(),(int)numEv);
       std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
@@ -379,10 +384,6 @@ int main( int argc, char* argv[] ){
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
 
-      // color-coding on the surface
-//      for(int i=0; i< evector_s.rows(); ++i){
-//          std::cout << evector_s.transpose() << std::endl;
-//      }
       valuebo_s.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
       valuebo_s.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
       std::cout << evector_s.minCoeff() << " " << evector_s.maxCoeff() << std::endl;
@@ -396,26 +397,26 @@ int main( int argc, char* argv[] ){
       maxVal_t = evector_t.maxCoeff();
 
       basisChanged = true;
+      std::cout << "basisChanged" << std::endl;
       }
-      if (Pangolin::Pushed(showFMap) || basisChanged || numCst.GuiChanged() || alpha2.GuiChanged()){
 
-      F.resize(((int)numCst, (int)numEv);
-      G.resize(((int)numCst, (int)numEv));
-      C.resize(((int)numEv, (int)numEv));
+    if (pangolin::Pushed(showFMap) || basisChanged ||
+                numCst.GuiChanged()|| alpha2.GuiChanged()){
+
+      F.resize((int)numCst, (int)numEv);
+      G.resize((int)numCst, (int)numEv);
+      C.resize((int)numEv, (int)numEv);
       Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
       Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
+
       // Automatic correspondence construction using one point
       // as the center and getting numCst (closest) points around it
       Eigen::VectorXi sIds((int)numCst), tIds((int)numCst);
       Eigen::VectorXf sDists((int)numCst), tDists((int)numCst);
       ann_s.Search(pc_s[0], (int)numCst, 1e-9, sIds, sDists);
       ann_t.Search(pc_t[0], (int)numCst, 1e-9, tIds, tDists);
-
-
       // --construct F(design matrix) using point correspondences
-      Eigen::VectorXi nnIds(1);
-      Eigen::VectorXf dists(1);
-      for (int i=0; i< (int)numCst; ++i){
+      for (int i=0; i<(int)numCst; ++i){
           //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
           //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
           //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
@@ -439,78 +440,86 @@ int main( int argc, char* argv[] ){
       // solve least-square
       C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
 
+      //Visualization of C
+      GetGrid(pc_grid, (int)numEv, (int)numEv);
+      vbo_cmtx.Reinitialise(pangolin::GlArrayBuffer, pc_grid.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+      vbo_cmtx.Upload(pc_grid.ptr_, pc_grid.SizeBytes(), 0);
+
       //color coding of the C matrix
-      Eigen::VectorXf cvec(pc_mtx.Area());
+      Eigen::VectorXf cvec((int)numEv*(int)numEv);
       for (int r=0; r<C.rows(); ++r){
           for (int c=0; c<C.cols(); ++c){
               cvec(r*C.cols()+c) = C(r,c);
           }
       }
 
-      valuebo_mtx.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_mtx.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
+      valuebo_cmtx.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_cmtx.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
+
       std::cout << cvec.minCoeff() << " " << cvec.maxCoeff() << std::endl;
       minVal_c = cvec.minCoeff()-1e-3;
       maxVal_c = cvec.maxCoeff();
+
+      cChanged = true;
       }
 
       // Get the point-wise correspondence
       //--Query 100 closest points to pc_s[0]
       //--The result points should also be close to each other
-      if ( Pangolin::Pushed(showFMap) || runQuery || numQ.GuiChanged()){
-          std::cout << "current numQ: " << numQ<< std::endl;
+    if ( (viewF.IsShown() && viewG.IsShown()) &&
+         (pangolin::Pushed(showFMap) || cChanged || numQ.GuiChanged()) ){
 
-          qIds.resize((int)numQ);
-          qDists.resize((int)numQ);
-          ann_s.Search(pc_s[0], (int)numQ, 1e-9, qIds, qDists);
+        std::cout << "current numQ: " << numQ<< std::endl;
 
-          queries.Reinitialise((int)numQ,1);
-          estimates.Reinitialise((int)numQ,1);
-          for (int i=0; i<(int)numQ; ++i){
-              //todo: random i
-              int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
-              ann_t.Search(pc_s[qIds[i]], 1, 1e-9, nnIds, dists);
+        qIds.resize((int)numQ);
+        qDists.resize((int)numQ);
+        ann_s.Search(pc_s[0], (int)numQ, 1e-9, qIds, qDists);
 
-              queries[i] = pc_s[qIds[i]];
-              estimates[i] = pc_t[tId];
-    //          std::cout << "query: \n" << pc_s[qIds[i]]<<std::endl;
-    //          std::cout << "guess: \n" << pc_t[tId] << std::endl;
-    //          std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
-          }
+        queries.Reinitialise((int)numQ,1);
+        estimates.Reinitialise((int)numQ,1);
+        for (int i=0; i<(int)numQ; ++i){
+            //todo: random i
+            int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
+            ann_t.Search(pc_s[qIds[i]], 1, 1e-9, nnIds, dists);
 
-          //--visualization
-          std::cout << "before: " << colors.rows() << std::endl;
-          colors.resize((int)numQ);
-          for (int i=0; i<(int)numQ; ++i){
-              colors(i) = (i*0.001);
-          }
-          minCValue = colors.minCoeff()-1e-3;
-          maxCValue = colors.maxCoeff();
-          std::cout << "mincolor: " << minCValue << std::endl;
-          std::cout << "maxcolor: " << maxCValue << std::endl;
+            queries[i] = pc_s[qIds[i]];
+            estimates[i] = pc_t[tId];
+            //          std::cout << "query: \n" << pc_s[qIds[i]]<<std::endl;
+            //          std::cout << "guess: \n" << pc_t[tId] << std::endl;
+            //          std::cout << "true: \n" << pc_t[nnIds(0)] << std::endl;
+        }
 
-          vbo_f.Reinitialise(pangolin::GlArrayBuffer, queries.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-          vbo_f.Upload(queries.ptr_, queries.SizeBytes(), 0);
+        //--visualization
+        std::cout << "before: " << colors.rows() << std::endl;
+        colors.resize((int)numQ);
+        for (int i=0; i<(int)numQ; ++i){
+            colors(i) = (i*0.001);
+        }
+        minCValue = colors.minCoeff()-1e-3;
+        maxCValue = colors.maxCoeff();
+        std::cout << "mincolor: " << minCValue << std::endl;
+        std::cout << "maxcolor: " << maxCValue << std::endl;
 
-          vbo_g.Reinitialise(pangolin::GlArrayBuffer, estimates.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-          vbo_g.Upload(estimates.ptr_, estimates.SizeBytes(), 0);
+        vbo_f.Reinitialise(pangolin::GlArrayBuffer, queries.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo_f.Upload(queries.ptr_, queries.SizeBytes(), 0);
 
-          valuebo_color.Reinitialise(pangolin::GlArrayBuffer, colors.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-          valuebo_color.Upload(&colors(0), sizeof(float)*colors.rows(), 0);
+        vbo_g.Reinitialise(pangolin::GlArrayBuffer, estimates.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo_g.Upload(estimates.ptr_, estimates.SizeBytes(), 0);
 
-          //TODO: segment correspondence
-          //    : operator commutativity constraint?
-          //    : any other constraint to add to the least square?
-          //TODO: add a handler to choose correponding points from each point cloud by clicking on the gui
-          //    : use the points to construct least-square
-          //    : check how well that works
-          //START HERE!
-          //--end of playing
+        valuebo_color.Reinitialise(pangolin::GlArrayBuffer, colors.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+        valuebo_color.Upload(&colors(0), sizeof(float)*colors.rows(), 0);
 
-      }
-      std::cout << "<--DONE fMap-->" << std::endl;
+        //TODO: segment correspondence
+        //    : operator commutativity constraint?
+        //    : any other constraint to add to the least square?
+        //TODO: add a handler to choose correponding points from each point cloud by clicking on the gui
+        //    : use the points to construct least-square
+        //    : check how well that works
+        //START HERE!
+        //--end of playing
+        std::cout << "<--DONE fMap-->" << std::endl;
+
     }
-
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -598,8 +607,8 @@ int main( int argc, char* argv[] ){
         }
     }
 
-    if (viewMtx.IsShown()){
-        viewMtx.Activate(mtx_cam);
+    if (viewCMtx.IsShown()){
+        viewCMtx.Activate(cmtx_cam);
         pangolin::glDrawAxis(0.1);
 
         // plots dots with the same number of rows and cols of C
@@ -609,24 +618,24 @@ int main( int argc, char* argv[] ){
         // renders the vbo with colors from valuebo
         auto& shader = tdp::Shaders::Instance()->valueShader_;
         shader.Bind();
-        shader.SetUniform("P",  mtx_cam.GetProjectionMatrix());
-        shader.SetUniform("MV", mtx_cam.GetModelViewMatrix());
+        shader.SetUniform("P",  cmtx_cam.GetProjectionMatrix());
+        shader.SetUniform("MV", cmtx_cam.GetModelViewMatrix());
         shader.SetUniform("minValue", minVal_c);
         shader.SetUniform("maxValue", maxVal_c);
-        valuebo_mtx.Bind();
+        valuebo_cmtx.Bind();
         glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-        vbo_mtx.Bind();
+        vbo_cmtx.Bind();
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glPointSize(4.);
-        glDrawArrays(GL_POINTS, 0, vbo_mtx.num_elements);
+        glDrawArrays(GL_POINTS, 0, vbo_cmtx.num_elements);
         shader.Unbind();
         glDisableVertexAttribArray(1);
-        valuebo_mtx.Unbind();
+        valuebo_cmtx.Unbind();
         glDisableVertexAttribArray(0);
-        vbo_mtx.Unbind();
+        vbo_cmtx.Unbind();
 
     }
 
@@ -735,6 +744,9 @@ int main( int argc, char* argv[] ){
     pangolin::FinishFrame();
     // reset some switches
     annChanged = false;
+    laplacianChanged = false;
+    basisChanged = false;
+    cChanged = false;
   }
 
   std::cout << "good morning!" << std::endl;
