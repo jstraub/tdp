@@ -201,7 +201,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<bool> runQuery("ui.run queries", true, false);
   pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
 
-  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 1000, 1000, 10000);
+  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 3000, 1000, 10000);
 
   // pangolin::Var<int> pcOption("ui. pc option", 0, 0,1);
   //-- variables for KNN
@@ -212,7 +212,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<int> nBins("ui. nBins", 10, 10,100);
   //--Correspondence Matrix C estimation
   pangolin::Var<int> numEv("ui.numEv",50,10,300); //min=1, max=pc_s.Area()
-  pangolin::Var<int> numCst("ui.numCst",2*numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
+  pangolin::Var<int> numCst("ui.numCst",numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
