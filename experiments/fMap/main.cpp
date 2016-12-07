@@ -148,20 +148,7 @@ void Test_simplePc(){
 
 }
 
-void getSamples(const tdp::Image<tdp::Vector3fda>& pc,
-                tdp::ManagedHostImage<tdp::Vector3fda>& samples,
-                int nSamples){
-    samples.Reinitialise(nSamples,1);
-    //random number generator
-    std::random_device rd;
-    std::mt19937 rng(rd());
-    std::uniform_int_distribution<int> uni(0, pc.Area()-1);
-    for(int i=0; i<samples.Area(); ++i){
-        int idx = uni(rng);
-        samples[i] = pc[idx];
-        //std::cout << "\nrandom idx: " << idx << ", val: \n" << samples[i] << std::endl;
-    }
-}
+
 
 int main(int argc, char* argv[]){
   // Create OpenGL window - guess sensible dimensions
@@ -212,6 +199,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
   pangolin::Var<bool> showMeans("ui.show means", true, false);
   pangolin::Var<bool> runQuery("ui.run queries", true, false);
+  pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
 
   pangolin::Var<int> nSamples("ui. num samples from mesh pc", 1000, 1000, 10000);
 
@@ -220,16 +208,17 @@ int main(int argc, char* argv[]){
   pangolin::Var<int> knn("ui.knn",30,1,100);
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.001, 0.3); //variance of rbf kernel for laplacian
-  pangolin::Var<float> alpha2("ui. alpha2", 0.01, 0.01, 0.5); //variance of rbf kernel for defining function on manifold
+  pangolin::Var<float> alpha2("ui. alpha2", 0.001, 0.001, 0.5); //variance of rbf kernel for defining function on manifold
   pangolin::Var<int> nBins("ui. nBins", 10, 10,100);
   //--Correspondence Matrix C estimation
-  pangolin::Var<int> numEv("ui.numEv",30,10,300); //min=1, max=pc_s.Area()
-  pangolin::Var<int> numCst("ui.numCst",numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
+  pangolin::Var<int> numEv("ui.numEv",50,10,300); //min=1, max=pc_s.Area()
+  pangolin::Var<int> numCst("ui.numCst",2*numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
   pangolin::Var<int>numQ("ui. num Queries", 100, 100, nSamples);
-  float minVal_t, maxVal_t, minVal_c, maxVal_c, minCValue, maxCValue;
+  float minVal_t, maxVal_t, minVal_c, maxVal_c, minCValue, maxCValue,
+          minF0Value, maxF0Value, minG0Value, maxG0Value;
 
   //End of Pangoline GUI setup
 
@@ -270,8 +259,9 @@ int main(int argc, char* argv[]){
   // use those OpenGL buffers
   pangolin::GlBuffer vbo, vbo_t, vbo_cmtx,
                      vbo_f, vbo_g,  //point clouds
-                     valuebo_s, valuebo_t, valuebo_cmtx, //colorings: source manifold, target manifod, c_mtx
-                     valuebo_color, valuebo_g;
+                     vbo_f0, vbo_g0,
+                     valuebo_f, valuebo_g, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
+                     valuebo_f0, valuebo_g0;
 
   //-- upload point cloud positions
 //  vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
@@ -320,6 +310,7 @@ int main(int argc, char* argv[]){
   bool laplacianChanged = false;
   bool basisChanged = false;
   bool cChanged = false;
+  bool queryChanged = false;
 
   // Stream and display video
   while(!pangolin::ShouldQuit()){
@@ -332,8 +323,8 @@ int main(int argc, char* argv[]){
         std::cout << "Running fMap from top..." << std::endl;
 
         if (argc>1){
-            getSamples(pc_all, pc_s, nSamples);
-            getSamples(pc_all, pc_t, nSamples);
+            tdp::GetSamples(pc_all, pc_s, nSamples);
+            tdp::GetSamples(pc_all, pc_t, nSamples);
         } else{
             std::srand(101);
             GetSphericalPc(pc_s, nSamples);
@@ -384,14 +375,14 @@ int main(int argc, char* argv[]){
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
 
-      valuebo_s.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_s.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
+      valuebo_f.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_f.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
       std::cout << evector_s.minCoeff() << " " << evector_s.maxCoeff() << std::endl;
       minVal = evector_s.minCoeff()-1e-3;
       maxVal = evector_s.maxCoeff();
 
-      valuebo_t.Reinitialise(pangolin::GlArrayBuffer, evector_t.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_t.Upload(&evector_t(0), sizeof(float)*evector_t.rows(), 0);
+      valuebo_g.Reinitialise(pangolin::GlArrayBuffer, evector_t.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_g.Upload(&evector_t(0), sizeof(float)*evector_t.rows(), 0);
       std::cout << evector_t.minCoeff() << " " << evector_t.maxCoeff() << std::endl;
       minVal_t = evector_t.minCoeff()-1e-3;
       maxVal_t = evector_t.maxCoeff();
@@ -468,7 +459,6 @@ int main(int argc, char* argv[]){
       //--The result points should also be close to each other
     if ( (viewF.IsShown() && viewG.IsShown()) &&
          (pangolin::Pushed(showFMap) || cChanged || numQ.GuiChanged()) ){
-
         std::cout << "current numQ: " << numQ<< std::endl;
 
         qIds.resize((int)numQ);
@@ -517,6 +507,47 @@ int main(int argc, char* argv[]){
         //    : check how well that works
         //START HERE!
         //--end of playing
+        queryChanged = true;
+        std::cout << "<--DONE fMap-->" << std::endl;
+    }
+    if (queryChanged && showFTransfer){
+        std::cout << "showFTransfer: " << showFTransfer << std::endl;
+
+        //Show function transfer
+        //--pick a point 10
+        Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
+        Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
+
+        tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+        f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
+        g0_l = C*f0_l;
+        g0_w = T_wl*g0_l;
+
+        // Alternative
+        //int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
+        //tdp::f_rbf(pc_t, pc_t[tId], alpha2, g0_w);
+
+        vbo_f0.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
+        vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
+
+        valuebo_f0.Reinitialise(pangolin::GlArrayBuffer, f0_w.rows(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        valuebo_f0.Upload(&f0_w(0), sizeof(float)*f0_w.rows(), 0);
+
+        valuebo_g0.Reinitialise(pangolin::GlArrayBuffer, g0_w.rows(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        valuebo_g0.Upload(&g0_w(0), sizeof(float)*g0_w.rows(), 0);
+
+        // Coloring range
+        minF0Value = f0_w.minCoeff()-1e-3;
+        maxF0Value = f0_w.maxCoeff();
+        minG0Value = g0_w.minCoeff()-1e-3;
+        maxG0Value = g0_w.maxCoeff();
+        std::cout << "minF0: " << minF0Value << std::endl;
+        std::cout << "maxF0: " << maxF0Value << std::endl;
+        std::cout << "minG0: " << minG0Value << std::endl;
+        std::cout << "maxG0: " << maxG0Value << std::endl;
+        //std::cout << "f vals: " << f0_w.transpose() << std::endl;
         std::cout << "<--DONE fMap-->" << std::endl;
 
     }
@@ -524,6 +555,7 @@ int main(int argc, char* argv[]){
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 1.0f);
+
     if (viewPc.IsShown()) {
       viewPc.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
@@ -537,7 +569,7 @@ int main(int argc, char* argv[]){
       shader.SetUniform("MV", s_cam.GetModelViewMatrix());
       shader.SetUniform("minValue", minVal);
       shader.SetUniform("maxValue", maxVal);
-      valuebo_s.Bind();
+      valuebo_f.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
       vbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -548,7 +580,7 @@ int main(int argc, char* argv[]){
       glDrawArrays(GL_POINTS, 0, vbo.num_elements);
       shader.Unbind();
       glDisableVertexAttribArray(1);
-      valuebo_s.Unbind();
+      valuebo_f.Unbind();
       glDisableVertexAttribArray(0);
       vbo.Unbind();
 
@@ -579,7 +611,7 @@ int main(int argc, char* argv[]){
         shader_t.SetUniform("MV", t_cam.GetModelViewMatrix());
         shader_t.SetUniform("minValue", minVal_t);
         shader_t.SetUniform("maxValue", maxVal_t);
-        valuebo_t.Bind();
+        valuebo_g.Bind();
         glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
         vbo_t.Bind();
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -590,7 +622,7 @@ int main(int argc, char* argv[]){
         glDrawArrays(GL_POINTS, 0, vbo_t.num_elements);
         shader_t.Unbind();
         glDisableVertexAttribArray(1);
-        valuebo_t.Unbind();
+        valuebo_g.Unbind();
         glDisableVertexAttribArray(0);
         vbo_t.Unbind();
 
@@ -639,7 +671,7 @@ int main(int argc, char* argv[]){
 
     }
 
-    if (viewF.IsShown()){
+    if (viewF.IsShown() && (!showFTransfer) ){
 
 //        viewF.Activate(s_cam);
 //        pangolin::glDrawAxis(0.1);
@@ -707,7 +739,7 @@ int main(int argc, char* argv[]){
         vbo_f.Unbind();
     }
 
-    if (viewG.IsShown()){
+    if (viewG.IsShown() && (!showFTransfer) ){
 
         viewG.Activate(t_cam);
         pangolin::glDrawAxis(0.1);
@@ -737,6 +769,67 @@ int main(int argc, char* argv[]){
         vbo_g.Unbind();
     }
 
+    if (viewF.IsShown()&& showFTransfer) {
+      viewF.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
+
+      glPointSize(2.);
+      glColor3f(1.0f, 1.0f, 0.0f);
+      // renders the vbo with colors from valuebo
+      auto& shader = tdp::Shaders::Instance()->valueShader_;
+      shader.Bind();
+      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minF0Value);
+      shader.SetUniform("maxValue", maxF0Value);
+      //(showFTransfer)? valuebo_f0.Bind(): valuebo_f.Bind();
+      valuebo_f0.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+      vbo.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      //(showFTransfer)? valuebo_f0.Unbind(): valuebo_f.Unbind();
+      valuebo_f0.Unbind();
+      glDisableVertexAttribArray(0);
+      vbo.Unbind();
+
+    }
+
+    if (viewG.IsShown() && showFTransfer){
+        viewG.Activate(t_cam);
+        pangolin::glDrawAxis(0.1);
+
+        glPointSize(2.);
+        glColor3f(1.0f, 1.0f, 0.0f);
+        // renders the vbo with colors from valuebo
+        auto& shader_t = tdp::Shaders::Instance()->valueShader_;
+        shader_t.Bind();
+        shader_t.SetUniform("P",  t_cam.GetProjectionMatrix());
+        shader_t.SetUniform("MV", t_cam.GetModelViewMatrix());
+        shader_t.SetUniform("minValue", minG0Value);
+        shader_t.SetUniform("maxValue", maxG0Value);
+        valuebo_g0.Bind();
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+        vbo_t.Bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glPointSize(4.);
+        glDrawArrays(GL_POINTS, 0, vbo_t.num_elements);
+        shader_t.Unbind();
+        glDisableVertexAttribArray(1);
+        valuebo_g0.Unbind();
+        glDisableVertexAttribArray(0);
+        vbo_t.Unbind();
+    }
+
     glDisable(GL_DEPTH_TEST);
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -747,6 +840,7 @@ int main(int argc, char* argv[]){
     laplacianChanged = false;
     basisChanged = false;
     cChanged = false;
+    queryChanged = false;
   }
 
   std::cout << "good morning!" << std::endl;

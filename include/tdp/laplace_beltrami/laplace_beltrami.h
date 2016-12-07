@@ -42,6 +42,11 @@ void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
 
 void GetGrid(ManagedHostImage<Vector3fda>& pc, int w, int h, float step=0.1);
 
+
+void GetSamples(const Image<tdp::Vector3fda>& pc,
+                ManagedHostImage<Vector3fda>& samples,
+                int nSamples);
+
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){
 

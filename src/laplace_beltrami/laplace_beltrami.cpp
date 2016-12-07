@@ -84,12 +84,26 @@ void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
     }
 }
 
-void GetGrid(tdp::ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
+void GetGrid(ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
     pc.Reinitialise(w,h);
     for(int r=0; r<h; ++r){
         for (int c=0; c<w; ++c){
-            pc[r*w+c] = tdp::Vector3fda(c*step,r*step,0);
+            pc[r*w+c] = Vector3fda(c*step,r*step,0);
         }
+    }
+}
+
+void GetSamples(const Image<tdp::Vector3fda>& pc,
+                ManagedHostImage<Vector3fda>& samples,
+                int nSamples){
+    samples.Reinitialise(nSamples,1);
+    //random number generator
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<int> uni(0, pc.Area()-1);
+    for(int i=0; i<samples.Area(); ++i){
+        int idx = uni(rng);
+        samples[i] = pc[idx];
     }
 }
 
