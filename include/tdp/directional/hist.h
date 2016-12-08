@@ -60,7 +60,6 @@ GeodesicHist<D>::GeodesicHist() : cuTriCenters_(geoGrid_.NTri(),1),
 
 template<uint32_t D>
 void GeodesicHist<D>::ComputeGpu(Image<tdp::Vector3fda>& cuN) {
-  std::cout << "dirHist compute" << std::endl;
   ComputeCentroidBasedGeoidesicHist(cuN,cuTriCenters_,cuHist_);
   hist_.CopyFrom(cuHist_, cudaMemcpyDeviceToHost);
 //  for (size_t i=0; i<hist_.Area(); ++i) 
