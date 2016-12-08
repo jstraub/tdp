@@ -53,7 +53,7 @@ public:
   {return SigmaLDLT_;};
 
 private:
-  static constexpr T LOG_2PI = log(2.*M_PI);
+  static T LOG_2PI;
   Eigen::Matrix<T,D,1> mu_;
   Eigen::Matrix<T,D,D> Sigma_;
   T pi_;

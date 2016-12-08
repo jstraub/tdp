@@ -676,7 +676,7 @@ int main( int argc, char* argv[] )
     TOCK("Draw 2D");
 
     if (!runFusion) {
-      tdp::SO3f R_mo = T_mo.rotation();
+      tdp::SO3fda R_mo = T_mo.rotation();
       for (size_t lvl=0; lvl<3; ++lvl) {
         tdp::Image<tdp::Vector3fda> pc = pcs_c.GetImage(lvl);
         tdp::Image<tdp::Vector3fda> n = ns_c.GetImage(lvl);

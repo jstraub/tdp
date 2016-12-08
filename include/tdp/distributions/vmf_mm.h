@@ -9,6 +9,8 @@
 #include <tdp/eigen/std_vector.h>
 #include <tdp/distributions/vmf.h>
 #include <tdp/clustering/dpvmfmeans.hpp>
+#include <tdp/manifold/SO3.h>
+#include <tdp/data/managed_image.h>
 
 namespace tdp {
 
@@ -44,7 +46,7 @@ bool ComputevMFMM(
       W += w;
     }
   for(uint32_t k=0; k<K; ++k) {
-    std::cout << Ns[k] << " " << ws[k] << std::endl;
+//    std::cout << Ns[k] << " " << ws[k] << std::endl;
     if (Ns[k] > 5) {
       T pi = ws[k]/W;
       T tau = vMF<T,3>::MLEstimateTau(xSum[k],xSum[k]/xSum[k].norm(),ws[k]);
@@ -53,5 +55,18 @@ bool ComputevMFMM(
   }
   return true;
 }
+
+void MAPLabelAssignvMFMM( 
+    const Image<Vector3fda>& cuN,
+    const Image<Vector3fda>& cuTauMu,
+    const Image<float>& cuLogPi,
+    Image<uint16_t>& cuZ);
+
+
+void MAPLabelAssignvMFMM( 
+    std::vector<vMF<float,3>>& vmfs,
+    const SO3fda& R_nvmf,
+    const Image<Vector3fda>& cuN,
+    Image<uint16_t>& cuZ) ;
 
 }

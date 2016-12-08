@@ -32,6 +32,8 @@
 #include <tdp/camera/rig.h>
 #include <tdp/manifold/SO3.h>
 
+#include <tdp/distributions/vmf_mm.h>
+
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
@@ -108,6 +110,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> greydu(wc, hc);
   tdp::ManagedHostImage<float> greydv(wc, hc);
 
+  tdp::ManagedHostImage<uint16_t> z(wc,hc);
   tdp::ManagedDeviceImage<uint16_t> cuZ(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuN2D(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
@@ -157,12 +160,19 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
-  pangolin::Var<bool> runRtmf("ui.rtmf", true,true);
+  pangolin::Var<bool> runRtmf("ui.rtmf", false,true);
   pangolin::Var<float> tauR("ui.tau R", 10., 1., 100);
 
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
+  pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
+  pangolin::Var<bool> newKf("ui.new KF", true,false);
+
   tdp::vMFMMF<1> rtmf(tauR);
+  std::vector<tdp::vMF<float,3>> vmfs;
+  tdp::eigen_vector<Eigen::Matrix<float,3,1>> xSum;
+
+  tdp::SO3fda R_nvmf;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -211,6 +221,28 @@ int main( int argc, char* argv[] )
         tdp::SO3f R_wc(rtmf.Rs_[0]);
         tdp::TransformPc(R_wc.Inverse(),cuN);
         TOCK("Compute RTMF");
+      }
+
+      if (runNormals2vMF && pangolin::Pushed(newKf)) { 
+        tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
+        tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
+            z, cuZ, vmfs);
+        R_nvmf = tdp::SO3fda();
+      } else if (runNormals2vMF) {
+        tdp::MAPLabelAssignvMFMM(vmfs, R_nvmf, cuN,  cuZ);
+        Eigen::Matrix<float,4,Eigen::Dynamic> xSums =
+          tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
+        std::cout << xSums << std::endl;
+        Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+        for (size_t k=0; k<vmfs.size(); ++k) {
+          N += vmfs[k].GetTau()*vmfs[k].GetMu()*xSums.block<3,1>(0,k).transpose();
+        }
+        std::cout << N << std::endl;
+        Eigen::JacobiSVD<Eigen::Matrix3f> svd(N,Eigen::ComputeFullU|Eigen::ComputeFullV);
+        float sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
+        Eigen::Matrix3Xf dR = svd.matrixU()* Eigen::Vector3f(1,1,sign).asDiagonal()*svd.matrixV().transpose();
+        std::cout << dR << std::endl;
+        R_nvmf = tdp::SO3fda(dR) * R_nvmf;
       }
 
       if (computeHist) {
@@ -266,6 +298,15 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(cuNbuf);
 //      pangolin::glUnsetFrameOfReference();
     }
+    if (runNormals2vMF) {
+      tdp::SE3fda T_nvmf(R_nvmf);
+      pangolin::glSetFrameOfReference(T_nvmf.Inverse().matrix());
+      glColor4f(0,1,1,1);
+      for (const auto& vmf : vmfs) {
+        tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
+      }
+      pangolin::glUnsetFrameOfReference();
+    }
     if (computeHist) {
       if (dispGrid) {
         normalHist.geoGrid_.Render3D();
@@ -282,6 +323,7 @@ int main( int argc, char* argv[] )
       grad3dHist.geoGrid_.Render3D();
     }
     grad3dHist.Render3D(histScale, histLogScale);
+
     TOCK("Render 3D");
 
     TICK("Render 2D");

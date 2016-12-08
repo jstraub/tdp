@@ -1,6 +1,9 @@
 namespace tdp {
 
 template<typename T, uint32_t D>
+T Normal<T,D>::LOG_2PI = log(2.*M_PI);
+
+template<typename T, uint32_t D>
 Normal<T,D>::Normal(const Eigen::Matrix<T,D,1>& mu, const
     Eigen::Matrix<T,D,D>& Sigma, T pi)
   : mu_(mu), Sigma_(Sigma), pi_(pi), 
