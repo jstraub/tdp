@@ -199,8 +199,8 @@ TEST(SO3, opt) {
 //    std::cout << Jw << std::endl;
     f_prev = f;
     f = (Rmu.Inverse() * R).matrix().trace();
-//    std::cout << "f=" << f << " df/f=" << (f_prev - f)/f 
-//      << std::endl;
+    std::cout << "f=" << f << " df/f=" << (f_prev - f)/f 
+      << std::endl;
   }
   std::cout << Rmu << std::endl;
   std::cout << R << std::endl;

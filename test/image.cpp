@@ -19,7 +19,7 @@ TEST(image, bilinear) {
   for (size_t i=0; i<100000; ++i) {
     Eigen::Vector2f uv = 100*(Eigen::Vector2f::Random() + 0.5*Eigen::Vector2f::Ones());
     if (I.Inside(uv)) {
-      float val = I.GetBilinear(uv);
+      I.GetBilinear(uv);
       count++;
     }
   }
