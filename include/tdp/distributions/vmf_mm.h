@@ -21,36 +21,26 @@ bool ComputevMFMM(
     DPvMFmeans& dpvmfmeans,
     size_t maxIt, 
     float minNchangePerc,
-    Image<uint16_t>& z,
     Image<uint16_t>& cuZ,
     std::vector<vMF<T,3>>& vmfs) {
   vmfs.clear();
   // Run the clustering algorithm.
   dpvmfmeans.Compute(n, cuN, cuZ, maxIt, minNchangePerc);
-  z.CopyFrom(cuZ, cudaMemcpyDeviceToHost);
 //  eigen_vector<Vector3fda>& centers = dpvmfmeans.centers_;
   std::vector<size_t> Ns = dpvmfmeans.Ns_;
   uint32_t K = dpvmfmeans.K_;
 
-  eigen_vector<Eigen::Matrix<T,3,1>> xSum(K,Eigen::Matrix<T,3,1>::Zero());
-  std::vector<T> ws(K,0.f);
-  T W = 0.f;
-  for (uint32_t i=0; i<n.Area(); ++i) 
-    if(z[i] < K) {
-      // TODO: have no weighting right now
-      // Compute vMF statistics: area-weighted sum over surface normals
-      // associated with respective cluster. 
-      T w = 1.f;
-      xSum[z[i]] += n[i].cast<T>() * w;
-      ws[z[i]] += w;
-      W += w;
-    }
+  Eigen::Matrix<float,4,Eigen::Dynamic> xSums =
+    tdp::SufficientStats1stOrder(cuN, cuZ, K);
+
+  float W = xSums.bottomRows<1>().sum();
   for(uint32_t k=0; k<K; ++k) {
-//    std::cout << Ns[k] << " " << ws[k] << std::endl;
-    if (Ns[k] > 5) {
-      T pi = ws[k]/W;
-      T tau = vMF<T,3>::MLEstimateTau(xSum[k],xSum[k]/xSum[k].norm(),ws[k]);
-      vmfs.push_back(vMF<T,3>(xSum[k]/xSum[k].norm(),tau,pi));
+    Eigen::Vector3f xSum = xSums.block<3,1>(0,k);
+    float w = xSums(3,k);
+    if (w > 5) {
+      T pi = w/W;
+      T tau = vMF<T,3>::MLEstimateTau(xSum,xSum.normalized(),w);
+      vmfs.push_back(vMF<T,3>(xSum.normalized(),tau,pi));
     }
   }
   return true;

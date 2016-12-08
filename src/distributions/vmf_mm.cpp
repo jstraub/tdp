@@ -22,7 +22,7 @@ void MAPLabelAssignvMFMM(
 
   for (size_t i=0; i<vmfs.size(); ++i) {
     logPi[i] = log(vmfs[i].GetPi());
-    tauMu[i] = vmfs[i].GetTau()*(R_nvmf*vmfs[i].GetMu());
+    tauMu[i] = vmfs[i].GetTau()*(vmfs[i].GetMu());
   }
 
   cuLogPi.CopyFrom(logPi);

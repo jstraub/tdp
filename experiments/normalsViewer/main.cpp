@@ -57,7 +57,7 @@ int main( int argc, char* argv[] )
     return 1;
   }
 
-  tdp::GUI gui(1200,800,video);
+  tdp::GuiBase gui(1200,800,video);
 
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
@@ -79,19 +79,24 @@ int main( int argc, char* argv[] )
     cam = rig.cams_[rig.rgbStream2cam_[0]];
   }
 
-  tdp::QuickView viewN2D(wc,hc);
-  gui.container().AddDisplay(viewN2D);
-
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& d_cam = pangolin::CreateDisplay()
+  pangolin::View& viewNormals3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(d_cam);
+  gui.container().AddDisplay(viewNormals3D);
+  pangolin::View& viewPc3D = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewPc3D);
+  pangolin::View& viewGrad3D = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewGrad3D);
 
+  tdp::QuickView viewN2D(wc,hc);
+  gui.container().AddDisplay(viewN2D);
   tdp::QuickView viewGrey(wc,hc);
   gui.container().AddDisplay(viewGrey);
   tdp::QuickView viewGreyDu(wc,hc);
@@ -100,15 +105,22 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewGreyDv);
   tdp::QuickView viewGrad3Dimg(wc,hc);
   gui.container().AddDisplay(viewGrad3Dimg);
+  tdp::QuickView viewZ(wc,hc);
+  gui.container().AddDisplay(viewZ);
 
-  pangolin::View& viewGrad3D = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(viewGrad3D);
+  viewN2D.Show(true);
+  viewGrey.Show(false);
+  viewGreyDu.Show(false);
+  viewGreyDv.Show(false);
+  viewGrad3Dimg.Show(false);
+  viewGrad3D.Show(false);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<float> grey(wc, hc);
   tdp::ManagedHostImage<float> greydu(wc, hc);
   tdp::ManagedHostImage<float> greydv(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(wc, hc);
 
   tdp::ManagedHostImage<uint16_t> z(wc,hc);
   tdp::ManagedDeviceImage<uint16_t> cuZ(wc,hc);
@@ -134,6 +146,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBufferCudaPtr cuGrad3Dbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
+  pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
+  pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
+
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuDrawf(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -147,7 +162,6 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
-  pangolin::Var<bool>  show2DNormals("ui.show 2D Normals",true,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
   pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame", false, true);
   pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
@@ -170,7 +184,7 @@ int main( int argc, char* argv[] )
 
   tdp::vMFMMF<1> rtmf(tauR);
   std::vector<tdp::vMF<float,3>> vmfs;
-  tdp::eigen_vector<Eigen::Matrix<float,3,1>> xSum;
+  Eigen::Matrix<float,4,Eigen::Dynamic> xSums;
 
   tdp::SO3fda R_nvmf;
 
@@ -202,10 +216,11 @@ int main( int argc, char* argv[] )
       Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
       n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
       TOCK("Compute Normals");
-      if (show2DNormals) {
+
+      if (viewN2D.IsShown()) { 
         TICK("Compute 2D normals image");
         tdp::Normals2Image(cuN, cuN2D);
-        n2D.CopyFrom(cuN2D,cudaMemcpyDeviceToHost);
+        n2D.CopyFrom(cuN2D);
         TOCK("Compute 2D normals image");
       }
 
@@ -226,23 +241,27 @@ int main( int argc, char* argv[] )
       if (runNormals2vMF && pangolin::Pushed(newKf)) { 
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
         tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
-            z, cuZ, vmfs);
+            cuZ, vmfs);
         R_nvmf = tdp::SO3fda();
       } else if (runNormals2vMF) {
         tdp::MAPLabelAssignvMFMM(vmfs, R_nvmf, cuN,  cuZ);
-        Eigen::Matrix<float,4,Eigen::Dynamic> xSums =
-          tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
-        std::cout << xSums << std::endl;
-        Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+        xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
+        Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
-          N += vmfs[k].GetTau()*vmfs[k].GetMu()*xSums.block<3,1>(0,k).transpose();
+          N += vmfs[k].GetTau()
+            *vmfs[k].GetMu().cast<double>()
+            *xSums.block<3,1>(0,k).cast<double>().transpose();
         }
-        std::cout << N << std::endl;
-        Eigen::JacobiSVD<Eigen::Matrix3f> svd(N,Eigen::ComputeFullU|Eigen::ComputeFullV);
-        float sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-        Eigen::Matrix3Xf dR = svd.matrixU()* Eigen::Vector3f(1,1,sign).asDiagonal()*svd.matrixV().transpose();
-        std::cout << dR << std::endl;
-        R_nvmf = tdp::SO3fda(dR) * R_nvmf;
+        Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
+            Eigen::ComputeFullU|Eigen::ComputeFullV);
+        double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
+        Eigen::Matrix3Xd dR = svd.matrixU()*Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
+//        std::cout << dR << std::endl;
+        std::cout << " fit: " << (N*dR).trace() << std::endl;
+//        R_nvmf = tdp::SO3fda(dR.cast<float>()) * R_nvmf;
+        R_nvmf = tdp::SO3fda(dR.cast<float>()).Inverse();
+//        R_nvmf = R_nvmf * tdp::SO3fda(dR);
+
       }
 
       if (computeHist) {
@@ -289,40 +308,64 @@ int main( int argc, char* argv[] )
 
     TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
-    glLineWidth(1.5f);
-    pangolin::glDrawAxis(1);
-    glColor4f(0,1,0,0.5);
-    if (dispNormals) {
-//      pangolin::glSetFrameOfReference(T_wc.matrix());
-      pangolin::RenderVbo(cuNbuf);
-//      pangolin::glUnsetFrameOfReference();
-    }
-    if (runNormals2vMF) {
-      tdp::SE3fda T_nvmf(R_nvmf);
-      pangolin::glSetFrameOfReference(T_nvmf.Inverse().matrix());
-      glColor4f(0,1,1,1);
-      for (const auto& vmf : vmfs) {
-        tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
+    if (viewNormals3D.IsShown()) {
+      viewNormals3D.Activate(s_cam);
+      glLineWidth(1.5f);
+      pangolin::glDrawAxis(1);
+      glColor4f(0,1,0,0.5);
+      if (dispNormals) {
+        //      pangolin::glSetFrameOfReference(T_wc.matrix());
+        pangolin::RenderVbo(cuNbuf);
+        //      pangolin::glUnsetFrameOfReference();
       }
-      pangolin::glUnsetFrameOfReference();
-    }
-    if (computeHist) {
-      if (dispGrid) {
-        normalHist.geoGrid_.Render3D();
+      if (runNormals2vMF) {
+        tdp::SE3fda T_nvmf(R_nvmf);
+        pangolin::glSetFrameOfReference(T_nvmf.matrix());
+        glColor4f(0,1,1,1);
+        for (const auto& vmf : vmfs) {
+          tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
+        }
+        pangolin::glUnsetFrameOfReference();
+        glColor4f(1,1,0,1);
+        for (size_t k=0; k<xSums.cols(); ++k) {
+          Eigen::Vector3f dir = xSums.block<3,1>(0,k).normalized();
+          tdp::glDrawLine(Eigen::Vector3f::Zero(), dir);
+        }
       }
-      normalHist.Render3D(histScale, histLogScale);
+      if (computeHist) {
+        if (dispGrid) {
+          normalHist.geoGrid_.Render3D();
+        }
+        normalHist.Render3D(histScale, histLogScale);
+      }
+    }
+    if (viewPc3D.IsShown()) {
+      viewPc3D.Activate(s_cam);
+      if (runNormals2vMF) {
+        tdp::SE3fda T_nvmf(R_nvmf);
+        pangolin::glSetFrameOfReference(T_nvmf.Inverse().matrix());
+      }
+      tdp::Depth2PCGpu(cuD,cam,cuPc);
+      pc.CopyFrom(cuPc);
+      vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+      pangolin::RenderVboCbo(vbo, cbo);
+      if (runNormals2vMF) {
+        pangolin::glUnsetFrameOfReference();
+      }
     }
 
-    viewGrad3D.Activate(s_cam);
-    glLineWidth(1.5f);
-    pangolin::glDrawAxis(1);
-    glColor4f(0,1,0,0.5);
-    pangolin::RenderVbo(cuGrad3Dbuf);
-    if (dispGrid) {
-      grad3dHist.geoGrid_.Render3D();
+    if (viewGrad3D.IsShown()) {
+      viewGrad3D.Activate(s_cam);
+      glLineWidth(1.5f);
+      pangolin::glDrawAxis(1);
+      glColor4f(0,1,0,0.5);
+      pangolin::RenderVbo(cuGrad3Dbuf);
+      if (dispGrid) {
+        grad3dHist.geoGrid_.Render3D();
+      }
+      grad3dHist.Render3D(histScale, histLogScale);
     }
-    grad3dHist.Render3D(histScale, histLogScale);
 
     TOCK("Render 3D");
 
@@ -330,15 +373,17 @@ int main( int argc, char* argv[] )
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
-    gui.ShowFrames();
-
-    if (show2DNormals) {
-      viewN2D.SetImage(n2D);
+    if (viewZ.IsShown()) {
+      z.CopyFrom(cuZ);
+      for (size_t i=0; i<z.Area(); ++i)
+        z[i] = std::min(z[i],(uint16_t)vmfs.size());
+      viewZ.SetImage(z);
     }
-    viewGrad3Dimg.SetImage(grad3DdirImg);
-    viewGrey.SetImage(grey);
-    viewGreyDu.SetImage(greydu);
-    viewGreyDv.SetImage(greydv);
+    if (viewN2D.IsShown()) viewN2D.SetImage(n2D);
+    if (viewGrad3Dimg.IsShown()) viewGrad3Dimg.SetImage(grad3DdirImg);
+    if (viewGrey.IsShown()) viewGrey.SetImage(grey);
+    if (viewGreyDu.IsShown()) viewGreyDu.SetImage(greydu);
+    if (viewGreyDv.IsShown()) viewGreyDv.SetImage(greydv);
     TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.
