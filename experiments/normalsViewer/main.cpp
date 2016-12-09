@@ -37,6 +37,23 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+template <typename T>
+Eigen::Matrix<T,4,4> BuildM(const
+    Eigen::Matrix<T,3,1>& u, const Eigen::Matrix<T,3,1>& v) {
+  const T ui = u(0);
+  const T uj = u(1);
+  const T uk = u(2);
+  const T vi = v(0);
+  const T vj = v(1);
+  const T vk = v(2);
+  Eigen::Matrix<T,4,4> M;
+  M << u.transpose()*v, uk*vj-uj*vk,       ui*vk-uk*vi,       uj*vi-ui*vj, 
+       uk*vj-uj*vk,     ui*vi-uj*vj-uk*vk, uj*vi+ui*vj,       ui*vk+uk*vi,
+       ui*vk-uk*vi,     uj*vi+ui*vj,       uj*vj-ui*vi-uk*vk, uj*vk+uk*vj,
+       uj*vi-ui*vj,     ui*vk+uk*vi,       uj*vk+uk*vj,       uk*vk-ui*vi-uj*vj;
+  return M;
+}
+
 int main( int argc, char* argv[] )
 {
   std::string input_uri = "openni2://";
@@ -114,6 +131,16 @@ int main( int argc, char* argv[] )
   viewGreyDv.Show(false);
   viewGrad3Dimg.Show(false);
   viewGrad3D.Show(false);
+
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+  pangolin::DataLog logF;
+  pangolin::Plotter plotF(&logF, -100.f,1.f, 0.f,40.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotF);
+  pangolin::DataLog logEig;
+  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -2.f,2.f, 10.f, 0.1f);
+  plotters.AddDisplay(plotEig);
+  gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<float> grey(wc, hc);
@@ -257,11 +284,30 @@ int main( int argc, char* argv[] )
         double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
         Eigen::Matrix3Xd dR = svd.matrixU()*Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
 //        std::cout << dR << std::endl;
-        std::cout << " fit: " << (N*dR).trace() << std::endl;
+        std::cout << " fit: " << (N*dR).trace()  <<  " " 
+          << (N*dR).trace()/xSums.bottomRows<1>().sum()
+          << " singular values " << svd.singularValues().transpose()
+          << std::endl;
 //        R_nvmf = tdp::SO3fda(dR.cast<float>()) * R_nvmf;
         R_nvmf = tdp::SO3fda(dR.cast<float>()).Inverse();
 //        R_nvmf = R_nvmf * tdp::SO3fda(dR);
+        
+        Eigen::Matrix4f M = Eigen::Matrix4f::Zero();
+        for (size_t k=0; k<vmfs.size(); ++k) {
+          Eigen::Vector3f xSum = xSums.block<3,1>(0,k);
+          M += vmfs[k].GetTau()*BuildM(xSum,vmfs[k].GetMu());
+        }
+        std::cout << M << std::endl;
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix4f> eig(M);
+        Eigen::Vector4f e = eig.eigenvalues()/eig.eigenvalues()(0);
+        std::cout << e.transpose() << std::endl;
 
+        logF.Log((N*dR).trace()/xSums.bottomRows<1>().sum());
+//        logEig.Log(e(0), e(1), e(2), e(3));
+        logEig.Log(e.array().prod());
+
+        plotF.ScrollView(1,0);
+        plotEig.ScrollView(1,0);
       }
 
       if (computeHist) {
