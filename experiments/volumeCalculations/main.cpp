@@ -41,231 +41,9 @@
 #include <math.h>
 #include <cmath>
 #include <stdlib.h>
-
-// Returns true if a voxel is completely inside the surface
-bool inside_surface(tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t y, size_t z) {
-  bool inside = true;
-
-  inside &= tsdf(x    , y    , z    ).f <= 0;
-  inside &= tsdf(x + 1, y    , z    ).f <= 0;
-  inside &= tsdf(x    , y + 1, z    ).f <= 0;
-  inside &= tsdf(x    , y    , z + 1).f <= 0;
-  inside &= tsdf(x + 1, y + 1, z    ).f <= 0;
-  inside &= tsdf(x + 1, y    , z + 1).f <= 0;
-  inside &= tsdf(x    , y + 1, z + 1).f <= 0;
-  inside &= tsdf(x + 1, y + 1, z + 1).f <= 0;
-
-  return inside;
-}
-
-// Returns true if a voxel is completely outside of a plane of intersection
-bool outside_plane(Eigen::Vector3f normal, float d, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
-  bool less = false, greater = false;
-  for (int dx = 0; dx <= 1; dx++)
-    for (int dy = 0; dy <= 1; dy++)
-      for(int dz = 0; dz <= 1; dz++) {
-        Eigen::Vector3f x((i + dx) * scale(0), (j + dy) * scale(1), (k + dz) * scale(2));
-
-        // Calculate the distance to the plane from each corner
-        float out = normal.dot(x) - d;
-
-        // Ignore equality because the volume won't be affected
-        // if only one corner intersects the plane
-        less    |= out < 0;
-        greater |= out > 0;
-      }
-  return !greater;
-}
-
-// Returns true if the voxel intersections the plane
-bool intersects(Eigen::Vector3f normal, float d, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
-  bool less = false, greater = false;
-
-  for (int dx = 0; dx <= 1; dx++)
-    for (int dy = 0; dy <= 1; dy++)
-      for(int dz = 0; dz <= 1; dz++) {
-        Eigen::Vector3f x((i + dx) * scale(0), (j + dy) * scale(1), (k + dz) * scale(2));
-
-        // Calculate the distance to the plane from each corner
-        float out = normal.dot(x) - d;
-
-        // Ignore equality because the volume won't be affected
-        // if only one corner intersects the plane
-        less    |= out < 0;
-        greater |= out > 0;
-      }
-
-  return less && greater;
-}
-
-// first dimension specifies the index of the corner to be denoted v0
-// the second dimension lists the mapping from (v0 - v7) -> (0 - 7)
-// i.e. ordered_index_from_index[i][j] gives the index of vj given that v0 = i
-const int ordered_index_from_index[8][8] = {
-  {0,1,3,4,5,2,7,6},
-  {1,2,0,5,6,3,4,7},
-  {2,3,1,6,7,0,5,4},
-  {3,0,2,7,4,1,6,5},
-  {4,5,0,7,6,1,3,2},
-  {5,6,1,4,7,2,0,3},
-  {6,7,2,5,4,3,1,0},
-  {7,4,3,6,5,0,2,1}
-};
-
-int find_v0(Eigen::Vector3f normal, float d, Eigen::Vector3f* tmp) {
-
-  // Note that if d is negative, then we could flip the signs of the normal, and d to make it positive
-  // the maximization assumes postive d
-  int index = 0;
-  int sign = (0.0f < d) - (d < 0.0f);
-  float maxVal = sign * (normal.dot(tmp[0]) - d);
-
-  for (int i = 1; i < 8; i++) {
-    Eigen::Vector3f p = tmp[i];
-
-    float val = sign * (normal.dot(p) - d);
-
-    if (val > maxVal) {
-      maxVal = val;
-      index = i;
-    }
-  }
-
-  return index;
-}
-
-/*
- * Returns the volume >= to the plane
- */
-float percentVolumeRight(Eigen::Vector3f normal, float d, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
-  // If we let the plane with the given normal sweep from d = inifinity downwards, let v0 be defined as
-  // the first vertex it would intersect, v7 be the last vertex it would intersect, and let all other vertices
-  // be numbered according to the right hand rule
-
-  // further let us number the vertices of the cube from 0 - 7 as follows
-  // (i    , j    , k    ) -> 0
-  // (i + 1, j    , k    ) -> 1
-  // (i + 1, j + 1, k    ) -> 2
-  // (i    , j + 1, k    ) -> 3
-  // (i    ,      , k + 1) -> 4
-  // (i + 1, j    , k + 1) -> 5
-  // (i + 1, j + 1, k + 1) -> 6
-  // (i    , j + 1, k + 1) -> 7
-
-  // then we just need to figure out which vertex is "first" and then from that we have a deterministic
-  // mapping from numbers (0-7) -> (v0 - v7).
-
-
-  Eigen::Vector3f tmp[8] = {
-    Eigen::Vector3f((i    ) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2))
-  };
-
-  int index = find_v0(normal, d, tmp);
-  Eigen::Vector3f v[8];
-  for (int t = 0; t < 8; t++) {
-    v[t] = tmp[ordered_index_from_index[index][t]];
-  }
-
-  // Now given v0 - v7, we can calculate for the exact vertices of the intersections in an order that would
-  // define a polygon. There are at most 6 vertices that arise from the intersection of a plane and a
-  // rectangular prism. If there needs to be less vertices, then we will simply duplicate vertices to
-  // create a degenerate side of length 0.
-
-  // P0: Intersection on E0->1, E1->4, E4->7
-  // P1: Intersection on E1->5 or P0
-  // P2: Intersection on E0->2, E2->5, E5->7
-  // P3: Intersection on E2->6 or P2
-  // P4: Intersection on E0->3, E3->6, E6->7
-  // P5: Intersection on E3->4 or P4
-
-  Eigen::Vector3f p[6];
-  Eigen::Vector3f E01 = tmp[1] - tmp[0];
-  Eigen::Vector3f E14 = tmp[4] - tmp[1];
-  Eigen::Vector3f E47 = tmp[7] - tmp[4];
-  Eigen::Vector3f E15 = tmp[5] - tmp[1];
-  Eigen::Vector3f E02 = tmp[2] - tmp[0];
-  Eigen::Vector3f E25 = tmp[5] - tmp[2];
-  Eigen::Vector3f E57 = tmp[7] - tmp[5];
-  Eigen::Vector3f E26 = tmp[6] - tmp[2];
-  Eigen::Vector3f E03 = tmp[3] - tmp[0];
-  Eigen::Vector3f E36 = tmp[6] - tmp[3];
-  Eigen::Vector3f E67 = tmp[7] - tmp[6];
-  Eigen::Vector3f E34 = tmp[4] - tmp[3];
-
-  float lambda;
-
-
-  // Given the set of vertices, we can now compute the volume bounded by the polygon and rectangular prism.
-  // Note that the volume we are interested in is the volume that includes the point v0
-
-  return 0.0f;
-}
-
-/*
- * Returns the volume <= to the plane
- */
-float percentVolumeLeft(Eigen::Vector3f normal, float d, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
-  return 1 - percentVolumeRight(normal, d, i, j, k, scale);
-}
-
-/*
-  left and right should be the coefficients for the hessian normal form of the plane n dot x = d.
-  assume the indices are such that 0 -> x, 1 -> y, 2 -> z, 3 -> d
-  scale should be the x, y, z sidelength values
-  Assumes that the normal of the left and right planes point towards each other. e.g. n_l dot n_r < 0
- */
-float volume_exclude_non_surface_voxels(
-        tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
-        Eigen::Vector3f n_left,
-        float d_left,
-        Eigen::Vector3f n_right,
-        float d_right,
-        Eigen::Vector3f scale
-) {
-  // Cases:
-  //   Surface Voxel -> ignore
-  //   Interior voxel ->
-  //        Inside bounds?    -> add
-  //        Intersect bounds? -> calculate fraction and add
-  //   Exterior voxels -> ignore
-  // Sources of error
-  //    * lack of surface voxel volume (hollow cylinder of volume)
-  //    * if we add surface voxels that are not on the intersecting plane then we miss 2 rings of voxels
-
-  float volume = 0.0;
-
-  for (size_t k = 0; k < tsdf.d_ - 1; k++)
-    for (size_t j = 0; j < tsdf.h_ - 1; j++)
-      for (size_t i = 0; i < tsdf.w_ - 1; i++) {
-        if (!inside_surface(tsdf, i, j, k))
-          continue;
-
-        if (outside_plane(n_left, d_left, i, j, k, scale) ||
-            outside_plane(n_right, d_right, i, j, k, scale))
-          continue;
-
-        float percentVolume;
-
-        if (intersects(n_left, d_left, i, j, k, scale)) {
-          percentVolume = percentVolumeRight(n_left, d_left, i, j, k, scale);
-        } else if (intersects(n_right, d_right, i, j, k, scale)) {
-          percentVolume = percentVolumeLeft(n_right, d_right, i, j, k, scale);
-        } else {
-          percentVolume = 1.0f;
-        }
-        volume += scale[0] * scale[1] * scale[2] * percentVolume;
-    }
-
-
-    return volume;
-}
+#include <tdp/reconstruction/plane.h>
+#include <tdp/reconstruction/volumeReconstruction.h>
+#include "test.h"
 
 void calculate_volumes(Eigen::Matrix<float, 3, Eigen::Dynamic>& points,
                       float *boundingLength, float* center,
@@ -294,6 +72,7 @@ void calculate_volumes(Eigen::Matrix<float, 3, Eigen::Dynamic>& points,
 
 int main( int argc, char* argv[] )
 {
+  runtests();
   bool runOnce = false;
 
   // Generate the same point cloud each time
@@ -306,7 +85,7 @@ int main( int argc, char* argv[] )
   std::cout << "Built Point Cloud" << std::endl;
 
   //calculate_volumes(points, boundingLength, center, 128, 128, 4, volume);
-  
+
   int discretization = 128;
   float scale[3] = {
     boundingLength[0] / (discretization - 1),
@@ -323,6 +102,18 @@ int main( int argc, char* argv[] )
   tdp::TsdfShapeFields::build_tsdf(tsdf, points, scale, center);
   std::cout << "Finished building TSDF" << std::endl;
 
+  float d_left = 0.44f;
+  float d_right = -1.75f;
+
+  tdp::Reconstruction::Plane p_left(0, 0, 1, d_left);
+  tdp::Reconstruction::Plane p_right(0, 0, -1, d_right);
+
+  Eigen::Vector3f n_scale(scale[0], scale[1], scale[2]);
+
+  std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, p_left, p_right, n_scale) << std::endl;
+  std::cout << "True volume: " << 3.14159 * .15 * .15 * (-d_right - d_left) << std::endl;
+
+  /*
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -368,7 +159,7 @@ int main( int argc, char* argv[] )
   // load and compile shader
   //std::string shaderRoot = SHADER_DIR;
   //pangolin::GlSlProgram colorPc;
-  //colorPc.AddShaderFromFile(pangolin::GlSlVertexShader, 
+  //colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
   //    shaderRoot+std::string("normalShading.vert"));
   //colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
   //    shaderRoot+std::string("normalShading.geom"));
@@ -455,17 +246,17 @@ int main( int argc, char* argv[] )
     pangolin::glDrawAxis(0.1);
 
 //    pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
-    if (vbo.IsValid() && cbo.IsValid() && ibo.IsValid()) { 
+    if (vbo.IsValid() && cbo.IsValid() && ibo.IsValid()) {
       vbo.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
       cbo.Bind();
-      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
+      glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
       glEnableVertexAttribArray(0);
       glEnableVertexAttribArray(1);
 
       pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
       pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-      auto& shader = tdp::Shaders::Instance()->normalMeshShader_;   
+      auto& shader = tdp::Shaders::Instance()->normalMeshShader_;
       shader.Bind();
       shader.SetUniform("P",P);
       shader.SetUniform("MV",MV);
@@ -491,7 +282,7 @@ int main( int argc, char* argv[] )
     if (viewTsdfSliveView.IsShown()) {
       tdp::Image<tdp::TSDFval> tsdfSliceRaw =
         tsdf.GetImage(std::min((int)tsdf.d_-1,tsdfSliceD.Get()));
-      for (size_t i=0; i<tsdfSliceRaw.Area(); ++i) 
+      for (size_t i=0; i<tsdfSliceRaw.Area(); ++i)
         tsdfSlice[i] = tsdfSliceRaw[i].f;
       viewTsdfSliveView.SetImage(tsdfSlice);
     }
@@ -501,7 +292,7 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
+  */
   return 0;
-  
 }
 

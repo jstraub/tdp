@@ -18,6 +18,7 @@ file(GLOB SRCS
   "./inertial/*cpp"
   "./marching_cubes/*cpp"
   "./distributions/*cpp"
+  "./reconstruction/*cpp"
   "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
   "./gl/*cpp"
