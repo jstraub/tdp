@@ -81,11 +81,10 @@ int main( int argc, char* argv[] )
   size_t wc = w+w%64; // for convolution
   size_t hc = h+h%64;
 
-  float f = 550;
   float uc = (w-1.)/2.;
   float vc = (h-1.)/2.;
 
-  CameraT cam(Eigen::Vector4f(f,f,uc,vc)); 
+  CameraT cam(Eigen::Vector4f(550,550,uc,vc)); 
 
   if (calibPath.size() > 0) {
     tdp::Rig<CameraT> rig;
@@ -138,7 +137,7 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotF(&logF, -100.f,1.f, 0.f,40.f, 10.f, 0.1f);
   plotters.AddDisplay(plotF);
   pangolin::DataLog logEig;
-  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -2.f,2.f, 10.f, 0.1f);
+  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -0.f,1.3f, 10.f, 0.1f);
   plotters.AddDisplay(plotEig);
   gui.container().AddDisplay(plotters);
 
@@ -207,13 +206,19 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
   pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
+  pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
   pangolin::Var<bool> newKf("ui.new KF", true,false);
 
   tdp::vMFMMF<1> rtmf(tauR);
   std::vector<tdp::vMF<float,3>> vmfs;
   Eigen::Matrix<float,4,Eigen::Dynamic> xSums;
 
-  tdp::SO3fda R_nvmf;
+  tdp::SO3fda R_cvMF;
+  tdp::SO3fda R_wc;
+
+  size_t nFramesTracked = 0;
+  float f = 1.;
+  float fKF = 1.;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -265,13 +270,16 @@ int main( int argc, char* argv[] )
         TOCK("Compute RTMF");
       }
 
-      if (runNormals2vMF && pangolin::Pushed(newKf)) { 
+      if (runNormals2vMF && (pangolin::Pushed(newKf) || f/fKF < kfThr )) { 
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
         tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
             cuZ, vmfs);
-        R_nvmf = tdp::SO3fda();
-      } else if (runNormals2vMF) {
-        tdp::MAPLabelAssignvMFMM(vmfs, R_nvmf, cuN,  cuZ);
+        R_wc = R_wc * R_cvMF.Inverse();
+        R_cvMF = tdp::SO3fda();
+        nFramesTracked = 0;
+      }
+      if (runNormals2vMF) {
+        tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ);
         xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
         Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
@@ -288,9 +296,11 @@ int main( int argc, char* argv[] )
           << (N*dR).trace()/xSums.bottomRows<1>().sum()
           << " singular values " << svd.singularValues().transpose()
           << std::endl;
-//        R_nvmf = tdp::SO3fda(dR.cast<float>()) * R_nvmf;
-        R_nvmf = tdp::SO3fda(dR.cast<float>()).Inverse();
-//        R_nvmf = R_nvmf * tdp::SO3fda(dR);
+//        R_cvMF = tdp::SO3fda(dR.cast<float>()) * R_cvMF;
+        R_cvMF = tdp::SO3fda(dR.cast<float>()).Inverse();
+//        R_cvMF = R_cvMF * tdp::SO3fda(dR);
+//
+        f = (N*dR).trace()/xSums.bottomRows<1>().sum();
         
         Eigen::Matrix4f M = Eigen::Matrix4f::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
@@ -302,12 +312,13 @@ int main( int argc, char* argv[] )
         Eigen::Vector4f e = eig.eigenvalues()/eig.eigenvalues()(0);
         std::cout << e.transpose() << std::endl;
 
-        logF.Log((N*dR).trace()/xSums.bottomRows<1>().sum());
 //        logEig.Log(e(0), e(1), e(2), e(3));
-        logEig.Log(e.array().prod());
-
-        plotF.ScrollView(1,0);
-        plotEig.ScrollView(1,0);
+        if (nFramesTracked == 0) { 
+          fKF = f;
+        }
+        logF.Log(f);
+        logEig.Log(e.array().prod(), kfThr, f/fKF);
+        nFramesTracked ++;
       }
 
       if (computeHist) {
@@ -365,8 +376,8 @@ int main( int argc, char* argv[] )
         //      pangolin::glUnsetFrameOfReference();
       }
       if (runNormals2vMF) {
-        tdp::SE3fda T_nvmf(R_nvmf);
-        pangolin::glSetFrameOfReference(T_nvmf.matrix());
+        tdp::SE3fda T_wc(R_wc);
+        pangolin::glSetFrameOfReference(T_wc.matrix());
         glColor4f(0,1,1,1);
         for (const auto& vmf : vmfs) {
           tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
@@ -388,8 +399,8 @@ int main( int argc, char* argv[] )
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
       if (runNormals2vMF) {
-        tdp::SE3fda T_nvmf(R_nvmf);
-        pangolin::glSetFrameOfReference(T_nvmf.Inverse().matrix());
+        tdp::SE3fda T_wc(R_wc * R_cvMF.Inverse());
+        pangolin::glSetFrameOfReference(T_wc.matrix());
       }
       tdp::Depth2PCGpu(cuD,cam,cuPc);
       pc.CopyFrom(cuPc);
@@ -430,6 +441,8 @@ int main( int argc, char* argv[] )
     if (viewGrey.IsShown()) viewGrey.SetImage(grey);
     if (viewGreyDu.IsShown()) viewGreyDu.SetImage(greydu);
     if (viewGreyDv.IsShown()) viewGreyDv.SetImage(greydv);
+    plotF.ScrollView(1,0);
+    plotEig.ScrollView(1,0);
     TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.
