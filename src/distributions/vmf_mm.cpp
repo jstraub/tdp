@@ -13,7 +13,8 @@ void MAPLabelAssignvMFMM(
     std::vector<vMF<float,3>>& vmfs,
     const SO3fda& R_nvmf,
     const Image<Vector3fda>& cuN,
-    Image<uint16_t>& cuZ) {
+    Image<uint16_t>& cuZ,
+    bool filterHalfSphere = true) {
 
   ManagedHostImage<Vector3fda> tauMu(vmfs.size());
   ManagedHostImage<float> logPi(vmfs.size());
@@ -28,7 +29,7 @@ void MAPLabelAssignvMFMM(
   cuLogPi.CopyFrom(logPi);
   cuTauMu.CopyFrom(tauMu);
 
-  MAPLabelAssignvMFMM(cuN, cuTauMu, cuLogPi, cuZ);
+  MAPLabelAssignvMFMM(cuN, cuTauMu, R_nvmf, cuLogPi, cuZ, filterHalfSphere);
 }
 
 

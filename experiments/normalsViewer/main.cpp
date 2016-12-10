@@ -208,6 +208,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
   pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
   pangolin::Var<bool> newKf("ui.new KF", true,false);
+  pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", false,true);
 
   tdp::vMFMMF<1> rtmf(tauR);
   std::vector<tdp::vMF<float,3>> vmfs;
@@ -279,7 +280,7 @@ int main( int argc, char* argv[] )
         nFramesTracked = 0;
       }
       if (runNormals2vMF) {
-        tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ);
+        tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
         xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
         Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
@@ -290,7 +291,8 @@ int main( int argc, char* argv[] )
         Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
             Eigen::ComputeFullU|Eigen::ComputeFullV);
         double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-        Eigen::Matrix3Xd dR = svd.matrixU()*Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
+        Eigen::Matrix3Xd dR = svd.matrixU()
+          *Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
 //        std::cout << dR << std::endl;
         std::cout << " fit: " << (N*dR).trace()  <<  " " 
           << (N*dR).trace()/xSums.bottomRows<1>().sum()
