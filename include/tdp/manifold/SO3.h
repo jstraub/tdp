@@ -59,6 +59,7 @@ class SO3 : Manifold<T,3> {
   SO3<T,Options> Exp(const Eigen::Matrix<T,3,1,Options>& w) const ;
 
   Eigen::Matrix<T,3,1,Options> Log(const SO3<T,Options>& other) const;
+  Eigen::Matrix<T,3,1,Options> Log() const;
 
   SO3<T,Options>& operator*=(const SO3<T,Options>& other);
 

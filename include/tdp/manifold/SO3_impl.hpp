@@ -77,6 +77,11 @@ Eigen::Matrix<T,3,1,Options> SO3<T,Options>::Log(
 }
 
 template<typename T, int Options>
+Eigen::Matrix<T,3,1,Options> SO3<T,Options>::Log() const {
+  return Log_(SO3<T,Options>(q_));
+}
+
+template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::Exp_(const Eigen::Matrix<T,3,1,Options>& w) {
   return SO3<T,Options>::FromAxisAngle(w);
 //  return SO3<T,Options>(SO3mat<T>::Exp_(w));

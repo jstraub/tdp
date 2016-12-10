@@ -196,7 +196,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  dispNormals("ui.Show Normals",true,true);
 
   pangolin::Var<bool> dpvmfmeans("ui.DpvMFmeans", false,true);
-  pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 90., 1., 180.);
+  pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 65., 1., 180.);
   pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
   pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
 
@@ -208,7 +208,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
   pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
   pangolin::Var<bool> newKf("ui.new KF", true,false);
-  pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", false,true);
+  pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", true, true);
 
   tdp::vMFMMF<1> rtmf(tauR);
   std::vector<tdp::vMF<float,3>> vmfs;
@@ -216,6 +216,7 @@ int main( int argc, char* argv[] )
 
   tdp::SO3fda R_cvMF;
   tdp::SO3fda R_wc;
+  tdp::SO3fda R_cw;
 
   size_t nFramesTracked = 0;
   float f = 1.;
@@ -275,18 +276,21 @@ int main( int argc, char* argv[] )
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
         tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
             cuZ, vmfs);
-        R_wc = R_wc * R_cvMF.Inverse();
+//        R_cw = R_cw * R_cvMF;
+        R_cw = R_cvMF * R_cw;
         R_cvMF = tdp::SO3fda();
         nFramesTracked = 0;
       }
       if (runNormals2vMF) {
-        tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
+        if (nFramesTracked > 0)
+          tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
         xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
         Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
+          //TODO: push this into the writeup!
           N += vmfs[k].GetTau()
-            *vmfs[k].GetMu().cast<double>()
-            *xSums.block<3,1>(0,k).cast<double>().transpose();
+            *xSums.block<3,1>(0,k).cast<double>()
+            *vmfs[k].GetMu().cast<double>().transpose();
         }
         Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
             Eigen::ComputeFullU|Eigen::ComputeFullV);
@@ -299,7 +303,7 @@ int main( int argc, char* argv[] )
           << " singular values " << svd.singularValues().transpose()
           << std::endl;
 //        R_cvMF = tdp::SO3fda(dR.cast<float>()) * R_cvMF;
-        R_cvMF = tdp::SO3fda(dR.cast<float>()).Inverse();
+        R_cvMF = tdp::SO3fda(dR.cast<float>());
 //        R_cvMF = R_cvMF * tdp::SO3fda(dR);
 //
         f = (N*dR).trace()/xSums.bottomRows<1>().sum();
@@ -309,7 +313,7 @@ int main( int argc, char* argv[] )
           Eigen::Vector3f xSum = xSums.block<3,1>(0,k);
           M += vmfs[k].GetTau()*BuildM(xSum,vmfs[k].GetMu());
         }
-        std::cout << M << std::endl;
+//        std::cout << M << std::endl;
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix4f> eig(M);
         Eigen::Vector4f e = eig.eigenvalues()/eig.eigenvalues()(0);
         std::cout << e.transpose() << std::endl;
@@ -318,7 +322,7 @@ int main( int argc, char* argv[] )
         if (nFramesTracked == 0) { 
           fKF = f;
         }
-        logF.Log(f);
+        logF.Log(f, R_cvMF.Log().norm()*180./M_PI);
         logEig.Log(e.array().prod(), kfThr, f/fKF);
         nFramesTracked ++;
       }
@@ -374,22 +378,28 @@ int main( int argc, char* argv[] )
       glColor4f(0,1,0,0.5);
       if (dispNormals) {
         //      pangolin::glSetFrameOfReference(T_wc.matrix());
+        tdp::SE3fda T_wc((R_cw* R_cvMF).Inverse());
+        pangolin::glSetFrameOfReference(T_wc.matrix());
         pangolin::RenderVbo(cuNbuf);
+        pangolin::glUnsetFrameOfReference();
         //      pangolin::glUnsetFrameOfReference();
       }
       if (runNormals2vMF) {
-        tdp::SE3fda T_wc(R_wc);
-        pangolin::glSetFrameOfReference(T_wc.matrix());
         glColor4f(0,1,1,1);
+        tdp::SE3fda T_wcPrev(R_cw.Inverse());
+        pangolin::glSetFrameOfReference(T_wcPrev.matrix());
         for (const auto& vmf : vmfs) {
           tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
         }
         pangolin::glUnsetFrameOfReference();
         glColor4f(1,1,0,1);
+        tdp::SE3fda T_wc((R_cw* R_cvMF).Inverse());
+        pangolin::glSetFrameOfReference(T_wc.matrix());
         for (size_t k=0; k<xSums.cols(); ++k) {
           Eigen::Vector3f dir = xSums.block<3,1>(0,k).normalized();
           tdp::glDrawLine(Eigen::Vector3f::Zero(), dir);
         }
+        pangolin::glUnsetFrameOfReference();
       }
       if (computeHist) {
         if (dispGrid) {
@@ -401,7 +411,7 @@ int main( int argc, char* argv[] )
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
       if (runNormals2vMF) {
-        tdp::SE3fda T_wc(R_wc * R_cvMF.Inverse());
+        tdp::SE3fda T_wc((R_cw * R_cvMF).Inverse());
         pangolin::glSetFrameOfReference(T_wc.matrix());
       }
       tdp::Depth2PCGpu(cuD,cam,cuPc);

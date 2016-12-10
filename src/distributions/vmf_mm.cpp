@@ -14,7 +14,7 @@ void MAPLabelAssignvMFMM(
     const SO3fda& R_nvmf,
     const Image<Vector3fda>& cuN,
     Image<uint16_t>& cuZ,
-    bool filterHalfSphere = true) {
+    bool filterHalfSphere) {
 
   ManagedHostImage<Vector3fda> tauMu(vmfs.size());
   ManagedHostImage<float> logPi(vmfs.size());
@@ -23,7 +23,8 @@ void MAPLabelAssignvMFMM(
 
   for (size_t i=0; i<vmfs.size(); ++i) {
     logPi[i] = log(vmfs[i].GetPi());
-    tauMu[i] = vmfs[i].GetTau()*(vmfs[i].GetMu());
+    tauMu[i] = (vmfs[i].GetMu());
+//    tauMu[i] = vmfs[i].GetTau()*(vmfs[i].GetMu());
   }
 
   cuLogPi.CopyFrom(logPi);
