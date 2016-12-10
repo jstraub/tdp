@@ -26,18 +26,30 @@ struct TSDFval {
   }
 };
 
+/// The TSDF is constructed in a cube with voxel side-length dGrid and
+/// origin at grid0 in reference coordinates.
 struct TSDF {
 
-  // The TSDF is constructed in a cube with voxel side-length dGrid and
-  // origin at grid0 in reference coordinates.
+  /// Add observations from depth to TSDF volume (no rgb)
   template<int D, typename Derived>
   static void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
         SE3f T_rd, CameraBase<float,D,Derived>camD,
         Vector3fda grid0, Vector3fda dGrid,
         float mu, float wMax);
 
+  /// Add observations from depth and rgb to TSDF volume 
   template<int D, typename Derived>
   static void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+        SE3f T_rd, CameraBase<float,D,Derived>camD,
+        Vector3fda grid0, Vector3fda dGrid,
+        float mu, float wMax);
+
+  /// Add observations from depth and rgb to TSDF volume, weight
+  /// contribution by surface normal direction with respect to viewing
+  /// direction.
+  template<int D, typename Derived>
+  static void AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+        Image<Vector3fda> n,
         SE3f T_rd, CameraBase<float,D,Derived>camD,
         Vector3fda grid0, Vector3fda dGrid,
         float mu, float wMax);

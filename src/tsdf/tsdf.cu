@@ -278,6 +278,53 @@ void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb
 }
 
 template<int D, typename Derived>
+__global__
+void KernelAddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+    Image<Vector3bda> rgb, Image<Vector3fda> n,
+    SE3f T_rd, SE3f T_dr, CameraBase<float,D,Derived>camD,
+    Vector3fda grid0, Vector3fda dGrid, float mu, float wMax) {
+  // kernel over all pixel locations and depth locations in the TSDF
+  // volume
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  const int idz = threadIdx.z + blockDim.z * blockIdx.z;
+
+  if (idx < tsdf.w_ && idy < tsdf.h_ && idz < tsdf.d_) {
+    // unproject point in reference frame
+    Eigen::Vector4f p_r (grid0(0) + idx*dGrid(0),
+        grid0(1)+idy*dGrid(1),
+        grid0(2)+idz*dGrid(2),1);
+
+    // project the point into the depth frame
+    Eigen::Vector3f p_d = T_dr.matrix3x4()*p_r;
+    if (p_d(2) < 0.) return; // dont add to behind the camera.
+    Eigen::Vector2f u_d = camD.Project(p_d);
+    int x = floor(u_d(0)+0.5);
+    int y = floor(u_d(1)+0.5);
+
+    if (0 <= x && x < d.w_ && 0 <= y && y < d.h_) {
+      const float z_d = d(x, y);
+      const float lambda = camD.Unproject(u_d(0),u_d(1),1.).norm();
+      const float z_tsdf = (T_rd.translation()-p_r.topRows<3>()).norm()/lambda;
+      const float eta = z_d - z_tsdf;
+      if (eta >= -mu) {
+        const float etaOverMu = eta/mu;
+        const float psi = (etaOverMu>1.f?1.f:etaOverMu);
+        const float Wnew = -n(x,y)(2); // dot product between normal and viewing dir
+        const float Wprev = tsdf(idx,idy,idz).w;
+
+        const float scale = 1.f/(Wprev+Wnew);
+        tsdf(idx, idy, idz).f = (Wprev*tsdf(idx,idy,idz).f + Wnew*psi)*scale;
+        tsdf(idx, idy, idz).r = (Wprev*tsdf(idx, idy, idz).r + Wnew*rgb(x, y)(0))*scale;
+        tsdf(idx, idy, idz).g = (Wprev*tsdf(idx, idy, idz).g + Wnew*rgb(x, y)(1))*scale;
+        tsdf(idx, idy, idz).b = (Wprev*tsdf(idx, idy, idz).b + Wnew*rgb(x, y)(2))*scale;
+        tsdf(idx, idy, idz).w = min(Wprev + Wnew, wMax);
+      }
+    }
+  }
+}
+
+template<int D, typename Derived>
 void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d,
     SE3f T_rd, CameraBase<float,D,Derived>camD,
     Vector3fda grid0, Vector3fda dGrid,
@@ -321,6 +368,32 @@ template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector
     float mu, float wMax);
 template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
     SE3f T_rd,
+    CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu, float wMax);
+
+template<int D, typename Derived>
+void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, 
+    Image<Vector3bda> rgb, Image<Vector3fda> n,
+    SE3f T_rd, CameraBase<float,D,Derived>camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu, float wMax) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForVolume(blocks, threads, tsdf, 8, 8, 8);
+
+  KernelAddToTSDF<<<blocks,threads>>>(tsdf, d, rgb, n, T_rd, T_rd.Inverse(),
+      camD, grid0, dGrid, mu, wMax);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    Image<Vector3fda> n, SE3f T_rd,
+    CameraBase<float,Camera<float>::NumParams,Camera<float>> camD,
+    Vector3fda grid0, Vector3fda dGrid,
+    float mu, float wMax);
+template void TSDF::AddToTSDF(Volume<TSDFval> tsdf, Image<float> d, Image<Vector3bda> rgb,
+    Image<Vector3fda> n, SE3f T_rd,
     CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>> camD,
     Vector3fda grid0, Vector3fda dGrid,
     float mu, float wMax);
