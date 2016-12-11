@@ -369,6 +369,9 @@ int main( int argc, char* argv[] )
       T_wc.rotation() = rtmf.Rs_[0];
     }
 
+    tdp::SO3f R_wc = (R_cvMF*R_cw).Inverse();
+    tdp::SO3f R_wcPrev = (R_cw).Inverse();
+
     TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
     if (viewNormals3D.IsShown()) {
@@ -378,7 +381,7 @@ int main( int argc, char* argv[] )
       glColor4f(0,1,0,0.5);
       if (dispNormals) {
         //      pangolin::glSetFrameOfReference(T_wc.matrix());
-        tdp::SE3fda T_wc((R_cw* R_cvMF).Inverse());
+        tdp::SE3fda T_wc(R_wc);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         pangolin::RenderVbo(cuNbuf);
         pangolin::glUnsetFrameOfReference();
@@ -386,14 +389,14 @@ int main( int argc, char* argv[] )
       }
       if (runNormals2vMF) {
         glColor4f(0,1,1,1);
-        tdp::SE3fda T_wcPrev(R_cw.Inverse());
+        tdp::SE3fda T_wcPrev(R_wcPrev);
         pangolin::glSetFrameOfReference(T_wcPrev.matrix());
         for (const auto& vmf : vmfs) {
           tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
         }
         pangolin::glUnsetFrameOfReference();
         glColor4f(1,1,0,1);
-        tdp::SE3fda T_wc((R_cw* R_cvMF).Inverse());
+        tdp::SE3fda T_wc(R_wc);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         for (size_t k=0; k<xSums.cols(); ++k) {
           Eigen::Vector3f dir = xSums.block<3,1>(0,k).normalized();
@@ -411,7 +414,7 @@ int main( int argc, char* argv[] )
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
       if (runNormals2vMF) {
-        tdp::SE3fda T_wc((R_cw * R_cvMF).Inverse());
+        tdp::SE3fda T_wc(R_wc);
         pangolin::glSetFrameOfReference(T_wc.matrix());
       }
       tdp::Depth2PCGpu(cuD,cam,cuPc);
