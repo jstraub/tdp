@@ -27,6 +27,7 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
+#include <tdp/preproc/grey.h>
 
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/rig.h>
@@ -166,6 +167,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> grad3DdirImg(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> grad3Ddir(wc,hc);
 
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuDirs(wc, 2*hc);
+
   pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
       GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
@@ -205,6 +208,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
+  pangolin::Var<bool> addGrad3("ui.add Grad3d", true,true);
   pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
   pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
   pangolin::Var<bool> newKf("ui.new KF", true,false);
@@ -236,8 +240,15 @@ int main( int argc, char* argv[] )
     if (!gui.ImageRGB(rgb)) continue;
     TOCK("Read frame");
 
+    TICK("Compute grey");
+    cuRgb.CopyFrom(rgb);
+    tdp::Rgb2Grey(cuRgb,cuGrey);
+    grey.CopyFrom(cuGrey);
+    TOCK("Compute grey");
+
+
     TICK("Convert Depth");
-    cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
+    cuDraw.CopyFrom(dRaw);
     ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
     tdp::Blur5(cuDrawf, cuD, 0.03);
     TOCK("Convert Depth");
@@ -246,10 +257,30 @@ int main( int argc, char* argv[] )
       pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
       cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
-          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
+          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp,
+          tdp::Storage::Gpu);
       Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
-      n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+      n.CopyFrom(cuN);
       TOCK("Compute Normals");
+
+      TICK("Compute 3D grads");
+      grad3Ddir.Fill(tdp::Vector3fda(0,0,1));
+      pangolin::CudaScopedMappedPtr cuGrad3Dbufp(cuGrad3Dbuf);
+      tdp::Image<tdp::Vector3fda> cuGrad3Ddir(wc, hc,
+          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuGrad3Dbufp,
+          tdp::Storage::Gpu);
+      cuGrad3Ddir.CopyFrom(grad3Ddir);
+
+      tdp::Gradient3D(cuGrey, cuD, cuN, cam, gradNormThr, cuGreydu,
+          cuGreydv, cuGrad3D);
+      cuGrad3Ddir.CopyFrom(cuGrad3D);
+      tdp::RenormalizeSurfaceNormals(cuGrad3Ddir, gradNormThr);
+      tdp::Normals2Image(cuGrad3Ddir, cuGrad3DdirImg);
+
+      grad3DdirImg.CopyFrom(cuGrad3DdirImg);
+      greydu.CopyFrom(cuGreydu);
+      greydv.CopyFrom(cuGreydv);
+      TOCK("Compute 3D grads");
 
       if (viewN2D.IsShown()) { 
         TICK("Compute 2D normals image");
@@ -272,9 +303,18 @@ int main( int argc, char* argv[] )
         TOCK("Compute RTMF");
       }
 
+      if (addGrad3) {
+        cuDirs.Reinitialise(wc,hc*2);
+        cuDirs.GetRoi(0,0,wc,hc).CopyFrom(cuN);
+        cuDirs.GetRoi(0,hc,wc,hc).CopyFrom(cuGrad3Ddir);
+      } else {
+        cuDirs.Reinitialise(wc,hc);
+        cuDirs.CopyFrom(cuN);
+      }
+
       if (runNormals2vMF && (pangolin::Pushed(newKf) || f/fKF < kfThr )) { 
         tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
-        tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
+        tdp::ComputevMFMM(n, cuDirs, dpm, maxIt, minNchangePerc, 
             cuZ, vmfs);
 //        R_cw = R_cw * R_cvMF;
         R_cw = R_cvMF * R_cw;
@@ -283,8 +323,8 @@ int main( int argc, char* argv[] )
       }
       if (runNormals2vMF) {
         if (nFramesTracked > 0)
-          tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
-        xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
+          tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuDirs,  cuZ, filterHalfSphere);
+        xSums = tdp::SufficientStats1stOrder(cuDirs, cuZ, vmfs.size());
         Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
           //TODO: push this into the writeup!
@@ -335,24 +375,6 @@ int main( int argc, char* argv[] )
         TOCK("Compute Hist");
       }
 
-      grad3Ddir.Fill(tdp::Vector3fda(0,0,1));
-      pangolin::CudaScopedMappedPtr cuGrad3Dbufp(cuGrad3Dbuf);
-      tdp::Image<tdp::Vector3fda> cuGrad3Ddir(wc, hc,
-          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuGrad3Dbufp);
-      cuGrad3Ddir.CopyFrom(grad3Ddir,cudaMemcpyHostToDevice);
-
-      cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
-      tdp::Rgb2Grey(cuRgb,cuGrey);
-      tdp::Gradient3D(cuGrey, cuD, cuN, cam, gradNormThr, cuGreydu,
-          cuGreydv, cuGrad3D);
-      cuGrad3Ddir.CopyFrom(cuGrad3D, cudaMemcpyDeviceToDevice);
-      tdp::RenormalizeSurfaceNormals(cuGrad3Ddir, gradNormThr);
-      tdp::Normals2Image(cuGrad3Ddir, cuGrad3DdirImg);
-
-      grad3DdirImg.CopyFrom(cuGrad3DdirImg,cudaMemcpyDeviceToHost);
-      grey.CopyFrom(cuGrey,cudaMemcpyDeviceToHost);
-      greydu.CopyFrom(cuGreydu, cudaMemcpyDeviceToHost);
-      greydv.CopyFrom(cuGreydv, cudaMemcpyDeviceToHost);
 
       if (runRtmf) {
         tdp::SO3f R_wc(rtmf.Rs_[0]);
@@ -379,9 +401,9 @@ int main( int argc, char* argv[] )
       glLineWidth(1.5f);
       pangolin::glDrawAxis(1);
       glColor4f(0,1,0,0.5);
+      tdp::SE3fda T_wc(R_wc);
       if (dispNormals) {
         //      pangolin::glSetFrameOfReference(T_wc.matrix());
-        tdp::SE3fda T_wc(R_wc);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         pangolin::RenderVbo(cuNbuf);
         pangolin::glUnsetFrameOfReference();
@@ -396,7 +418,6 @@ int main( int argc, char* argv[] )
         }
         pangolin::glUnsetFrameOfReference();
         glColor4f(1,1,0,1);
-        tdp::SE3fda T_wc(R_wc);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         for (size_t k=0; k<xSums.cols(); ++k) {
           Eigen::Vector3f dir = xSums.block<3,1>(0,k).normalized();
@@ -405,10 +426,12 @@ int main( int argc, char* argv[] )
         pangolin::glUnsetFrameOfReference();
       }
       if (computeHist) {
+        pangolin::glSetFrameOfReference(T_wc.matrix());
         if (dispGrid) {
           normalHist.geoGrid_.Render3D();
         }
         normalHist.Render3D(histScale, histLogScale);
+        pangolin::glUnsetFrameOfReference();
       }
     }
     if (viewPc3D.IsShown()) {
