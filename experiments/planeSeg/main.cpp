@@ -116,6 +116,8 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(viewGrey);
   tdp::QuickView viewZ(wc,hc);
   gui.container().AddDisplay(viewZ);
+  tdp::QuickView viewProj(wc,hc);
+  gui.container().AddDisplay(viewProj);
 
   viewN2D.Show(true);
   viewGrey.Show(false);
@@ -139,6 +141,9 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<tdp::Vector3fda> projPc(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuProjPc(wc, hc);
+
+  tdp::ManagedHostImage<float> proj(wc, hc);
+  tdp::ManagedDeviceImage<float> cuProj(wc, hc);
 
   tdp::ManagedHostImage<uint16_t> z(wc,hc);
   tdp::ManagedDeviceImage<uint16_t> cuZ(wc,hc);
@@ -186,6 +191,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> newKf("ui.new KF", true,false);
   pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", true, true);
 
+  pangolin::Var<float> blurThr("ui.blur Thr", 0.03, 0.01, 0.2);
+
   std::vector<tdp::vMF<float,3>> vmfs;
   Eigen::Matrix<float,4,Eigen::Dynamic> xSums;
 
@@ -214,9 +221,9 @@ int main( int argc, char* argv[] )
     TICK("Convert Depth");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
     ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
-    tdp::Blur5(cuDrawf, cuD, 0.03);
-    tdp::Blur5(cuD, cuDrawf, 0.03);
-    tdp::Blur5(cuDrawf, cuD, 0.03);
+    tdp::Blur9(cuDrawf, cuD, 1.2*blurThr);
+    tdp::Blur9(cuD, cuDrawf, blurThr);
+    tdp::Blur9(cuDrawf, cuD, 0.8*blurThr);
     TOCK("Convert Depth");
     {
       TICK("Compute Normals");
@@ -281,7 +288,7 @@ int main( int argc, char* argv[] )
 //        std::cout << M << std::endl;
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix4f> eig(M);
         Eigen::Vector4f e = eig.eigenvalues()/eig.eigenvalues()(0);
-        std::cout << e.transpose() << std::endl;
+//        std::cout << e.transpose() << std::endl;
 
 //        logEig.Log(e(0), e(1), e(2), e(3));
         if (nFramesTracked == 0) { 
@@ -294,11 +301,15 @@ int main( int argc, char* argv[] )
         tdp::ManagedHostImage<tdp::Vector3fda> dirs(vmfs.size());
         tdp::ManagedDeviceImage<tdp::Vector3fda> cuDirs(vmfs.size());
         for (size_t k=0; k<vmfs.size(); ++k) {
-          dirs[k] = xSums.block<3,1>(0,k).normalized();
+//          dirs[k] = xSums.block<3,1>(0,k).normalized();
+          dirs[k] = R_cvMF*vmfs[k].GetMu().normalized();
         }
         cuDirs.CopyFrom(dirs);
         tdp::ProjectPc(cuPc, cuDirs, cuZ, vmfs.size(), cuProjPc);
         projPc.CopyFrom(cuProjPc);
+
+        tdp::ProjectPc(cuPc, cuDirs, cuZ, vmfs.size(), cuProj);
+        proj.CopyFrom(cuProj);
       }
 
       if (computeHist) {
@@ -406,6 +417,7 @@ int main( int argc, char* argv[] )
     }
     if (viewN2D.IsShown()) viewN2D.SetImage(n2D);
     if (viewGrey.IsShown()) viewGrey.SetImage(grey);
+    if (viewProj.IsShown()) viewProj.SetImage(proj);
     plotF.ScrollView(1,0);
     plotEig.ScrollView(1,0);
     TOCK("Render 2D");
