@@ -17,8 +17,16 @@ __global__ void KernelProjectPc(
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
   if (idx < pc.w_ && idy < pc.h_) {
     uint16_t zi = z(idx,idy);
-    if (zi < K) 
-      proj(idx,idy) = pc(idx,idy).dot(dirs[zi]);
+    if (zi < K) {
+      Vector3fda pc_i = pc(idx,idy);
+      if (IsValidData(pc_i)) {
+        proj(idx,idy) = pc_i.dot(dirs[zi]);
+      } else {
+        proj(idx,idy) = NAN;
+      }
+    } else {
+      proj(idx,idy) = NAN;
+    } 
   }
 }
 
