@@ -54,21 +54,24 @@ __global__ void KernelICPStepRotation(
         && pc_oi(2) > 0. && pc_o_in_m(2) > 0.
         && IsValidData(pc_o_in_m)) {
       // found association -> check thresholds;
-      Vector3fda n_o_in_m = T_mo.rotation() * n_o(idx,idy);
+      Vector3fda n_oi = n_o(idx,idy);
+      Vector3fda n_o_in_m = T_mo.rotation() * n_oi;
 //      Vector3fda n_o_in_m = n_o(idx,idy);
       Vector3fda n_mi = n_m(u,v);
       const float dot  = n_mi.dot(n_o_in_m);
       if (dot > dotThr && IsValidData(n_mi)) {
         // association is good -> accumulate
-        sum[tid](0) += n_mi(0)*n_o_in_m(0);
-        sum[tid](1) += n_mi(0)*n_o_in_m(1);
-        sum[tid](2) += n_mi(0)*n_o_in_m(2);
-        sum[tid](3) += n_mi(1)*n_o_in_m(0);
-        sum[tid](4) += n_mi(1)*n_o_in_m(1);
-        sum[tid](5) += n_mi(1)*n_o_in_m(2);
-        sum[tid](6) += n_mi(2)*n_o_in_m(0);
-        sum[tid](7) += n_mi(2)*n_o_in_m(1);
-        sum[tid](8) += n_mi(2)*n_o_in_m(2);
+        // TODO: test: association uses T_mo but computation of N does
+        // not  since we can get R in closed form from this.
+        sum[tid](0) += n_mi(0)*n_oi(0);
+        sum[tid](1) += n_mi(0)*n_oi(1);
+        sum[tid](2) += n_mi(0)*n_oi(2);
+        sum[tid](3) += n_mi(1)*n_oi(0);
+        sum[tid](4) += n_mi(1)*n_oi(1);
+        sum[tid](5) += n_mi(1)*n_oi(2);
+        sum[tid](6) += n_mi(2)*n_oi(0);
+        sum[tid](7) += n_mi(2)*n_oi(1);
+        sum[tid](8) += n_mi(2)*n_oi(2);
         sum[tid](9) += 1.; // to get number of data points
       }
     }
