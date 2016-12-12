@@ -151,7 +151,7 @@ void ICP::ComputeProjective(
           cos(angleThr_deg*M_PI/180.),
           distThr,ATA,ATb,error,count);
 #endif
-      if (count < 1000) {
+      if (count < 10) {
         std::cout << "# inliers " << count 
           << " in pyramid level " << lvl
           << " to small; skipping" << std::endl;
@@ -285,7 +285,7 @@ void ICP::ComputeProjective(
         error += error_i;
         count += count_i;
       }
-      if (count < 1000) {
+      if (count < 10) {
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
@@ -414,7 +414,7 @@ void ICP::ComputeProjectiveUpdateIndividual(
         error += error_i;
         count += count_i;
 
-        if (count_i < 1000) {
+        if (count_i < 10) {
           std::cout << "# inliers " << count_i << " to small " << std::endl;
           continue;
         }
@@ -423,7 +423,7 @@ void ICP::ComputeProjectiveUpdateIndividual(
           (ATA_i.cast<double>().ldlt().solve(ATb_i.cast<double>())).cast<float>(); 
         dT_mr[sId] = dT_mr[sId] * SE3f::Exp_(x);
       }
-      if (count < 1000) {
+      if (count < 10) {
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
