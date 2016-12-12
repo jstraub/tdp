@@ -41,6 +41,31 @@ TDP_HOST_DEVICE
 inline Eigen::Vector3f zero()
 {return Eigen::Vector3f::Zero();};
 
+template<typename T>
+TDP_HOST_DEVICE
+inline T nan()
+{return NAN;};
+
+template<>
+TDP_HOST_DEVICE
+inline Vector3fda nan()
+{return Vector3fda(NAN,NAN,NAN);};
+
+template<>
+TDP_HOST_DEVICE
+inline  Vector2fda nan()
+{return Vector2fda(NAN,NAN);};
+
+template<>
+TDP_HOST_DEVICE
+inline Eigen::Vector2f nan()
+{return Eigen::Vector2f(NAN,NAN);};
+
+template<>
+TDP_HOST_DEVICE
+inline Eigen::Vector3f nan()
+{return Eigen::Vector3f(NAN,NAN);};
+
 //template<>
 //__device__ inline Vector3fda zero()
 //{return Vector3fda::Zero();};

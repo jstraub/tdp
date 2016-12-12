@@ -44,7 +44,6 @@ void Depth2PCGpu(
     const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& pc_c
     ) {
-
   dim3 threads, blocks;
   ComputeKernelParamsForImage(blocks,threads,d,32,32);
   KernelDepth2PC<D,Derived><<<blocks,threads>>>(d,cam,pc_c);

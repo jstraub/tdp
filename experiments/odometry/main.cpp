@@ -203,7 +203,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc,hc);
 
   tdp::ManagedHostImage<float> grey_m(wc,hc);
-
   tdp::ManagedHostImage<float> greyDu(wc, hc);
   tdp::ManagedHostImage<float> greyDv(wc, hc);
 
@@ -212,6 +211,10 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<float> cuIrmse(wc, hc);
   tdp::ManagedHostImage<float> Irmse(wc, hc);
+
+  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrMask(wc, hc);
+  tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
+  tdp::ManagedHostImage<uint8_t> mask(wc, hc);
 
   // ICP stuff
   tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
@@ -254,6 +257,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
+
+  pangolin::Var<bool>  randomSubsample("ui.random subsample", false, true);
+  pangolin::Var<float> subsample("ui.subsample %",0.1,0.01,1.);
 
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -309,12 +315,26 @@ int main( int argc, char* argv[] )
 //        tdp::TransformPc(T_wc.rotation(), n);
 //        tdp::TransformPc(T_wc.rotation(), g);
 //      }
+
+
       pcs_m.CopyFrom(pcs_c);
       ns_m.CopyFrom(ns_c);
       gs_m.CopyFrom(gs_c);
       cuPyrGrey_m.CopyFrom(cuPyrGrey_c);
       cuPyrGradGrey_m.CopyFrom(cuPyrGradGrey_c);
       rgb_m.CopyFrom(rgb);
+
+      if (randomSubsample) {
+        tdp::RandomMaskCpu(mask, subsample);
+        cuMask.CopyFrom(mask);
+        tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
+        tdp::ApplyMask(cuPyrMask, pcs_m);
+        tdp::ApplyMask(cuPyrMask, ns_m);
+        tdp::ApplyMask(cuPyrMask, gs_m);
+//        tdp::ApplyMask(cuMask, rgb_m);
+        tdp::ApplyMask(cuPyrMask, cuPyrGrey_m);
+        tdp::ApplyMask(cuPyrMask, cuPyrGradGrey_m);
+      }
 //      T_wc = T_wc_0;
     }
 
