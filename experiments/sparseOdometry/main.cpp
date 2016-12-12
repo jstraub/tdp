@@ -39,6 +39,9 @@
 #include <tdp/manifold/SO3.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
+#include <tdp/preproc/mask.h>
+#include <tdp/preproc/curvature.h>
+#include <tdp/geometry/cosy.h>
 #include <tdp/gl/shaders.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>
@@ -53,12 +56,10 @@ int main( int argc, char* argv[] )
   std::string calibPath = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
-  bool runOnce = false;
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
-    if (argc > 3 && std::string(argv[3]).compare("-1") == 0 ) runOnce = true;
 //    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
 
@@ -135,23 +136,6 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(camNormals));
   gui.container().AddDisplay(viewNormals);
   viewNormals.Show(false);
-
-  pangolin::View& plotters = pangolin::Display("plotters");
-  plotters.SetLayout(pangolin::LayoutEqualVertical);
-  pangolin::DataLog logInliers;
-  pangolin::Plotter plotInliers(&logInliers, -100.f,1.f, 0, 130000.f, 
-      10.f, 0.1f);
-  plotters.AddDisplay(plotInliers);
-  pangolin::DataLog logCost;
-  pangolin::Plotter plotCost(&logCost, -100.f,1.f, -10.f,1.f, 10.f, 0.1f);
-  plotters.AddDisplay(plotCost);
-  pangolin::DataLog logRmse;
-  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,0.2f, 0.1f, 0.1f);
-  plotters.AddDisplay(plotRmse);
-  pangolin::DataLog logOverlap;
-  pangolin::Plotter plotOverlap(&logOverlap, -100.f,1.f, 0.f,1.f, .1f, 0.1f);
-  plotters.AddDisplay(plotOverlap);
-  gui.container().AddDisplay(plotters);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -254,11 +238,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.1,0.01,1.);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
 
-  pangolin::Var<int>   W("ui.W ",10,1,15);
+  pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
+
+  pangolin::Var<int>   W("ui.W ",4,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
+  pangolin::Var<bool> showPlanes("ui.show planes",false,true);
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
 
@@ -300,10 +287,11 @@ int main( int argc, char* argv[] )
     tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c);
     tdp::CompletePyramid(cuPyrGradGrey_c);
 
-    tdp::RandomMaskCpu(mask, subsample);
-    cuMask.CopyFrom(mask);
-    tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
-
+    if (!gui.paused()) {
+      tdp::RandomMaskCpu(mask, subsample);
+      cuMask.CopyFrom(mask);
+      tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
+    }
     TOCK("Setup Pyramids");
 
     pc.CopyFrom(pcs_c.GetImage(0));
@@ -311,16 +299,18 @@ int main( int argc, char* argv[] )
     for (size_t i=0; i<mask.Area(); ++i) {
       if (mask[i]) numObs++;
     }
-    tdp::ManagedHostImage<Vector3fda> pts(numObs);
-    tdp::ManagedHostImage<Vector3fda> cs(numObs);
+    std::cout << numObs << std::endl;
+    tdp::ManagedHostImage<tdp::Vector3fda> pts(numObs);
+    tdp::ManagedHostImage<tdp::Vector3fda> cs(numObs);
     size_t j=0;
     for (size_t i=0; i<mask.Area(); ++i) {
       if (mask[i]) {
         uint32_t u0 = i%wc;
-        uint32_t v0 = i%hc;
+        uint32_t v0 = i/wc;
         pts[j] = pc(u0,v0);
-        if (!tdp::MeanCurvature(pc, u0, v0, W, cs[j++]))
+        if (!tdp::MeanCurvature(pc, u0, v0, W, cs[j++])) {
           cs[j-1] << NAN,NAN,NAN;
+        }
       }
     }
 
@@ -349,17 +339,19 @@ int main( int argc, char* argv[] )
 
       glColor3f(1,1,0);
       for (size_t i=0; i<cs.Area(); ++i) {
-        tdp::glDrawLine(pts[i], pts[i] + cs[i]);
+        tdp::glDrawLine(pts[i], pts[i] + scale*cs[i]);
       }
       pangolin::glUnsetFrameOfReference();
-      for (size_t i=0; i<cs.Area(); ++i) {
-        Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
-            Eigen::Vector3f(0,1,0), cs[i].normalized());
-        tdp::SE3f T(R, pts[i]); 
-        pangolin::glSetFrameOfReference((T_wc*T).matrix());
-        pangolin::glDrawAxis(0.05f);
-        pangolin::glDraw_z0(0.1f,10);
-        pangolin::glUnsetFrameOfReference();
+      if (showPlanes) {
+        for (size_t i=0; i<cs.Area(); ++i) {
+          Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
+              Eigen::Vector3f(0,1,0), cs[i].normalized());
+          tdp::SE3f T(R, pts[i]); 
+          pangolin::glSetFrameOfReference((T_wc*T).matrix());
+          pangolin::glDrawAxis(0.05f);
+          pangolin::glDraw_z0(0.01,10);
+          pangolin::glUnsetFrameOfReference();
+        }
       }
 
       // render current camera second in the propper frame of
@@ -388,8 +380,8 @@ int main( int argc, char* argv[] )
 
     if (viewModel.IsShown()) {
       if (gui.verbose) std::cout << "model grey image" << std::endl;
-      grey_m.CopyFrom(cuPyrGrey_m.GetImage(0));
-      viewModel.SetImage(grey_m);
+//      grey_m.CopyFrom(cuPyrGrey_m.GetImage(0));
+      viewModel.SetImage(mask);
     }
     if (viewCurrent.IsShown()) {
       viewCurrent.SetImage(rgb);
@@ -419,10 +411,6 @@ int main( int argc, char* argv[] )
       viewDebugF.RenderImage();
     }
 
-    plotInliers.ScrollView(1,0);
-    plotCost.ScrollView(1,0);
-    plotRmse.ScrollView(1,0);
-    plotOverlap.ScrollView(1,0);
     TOCK("Draw 2D");
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
