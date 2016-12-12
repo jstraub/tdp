@@ -39,6 +39,7 @@
 #include <tdp/manifold/SO3.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
+#include <tdp/preproc/mask.h>
 #include <tdp/gl/shaders.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>

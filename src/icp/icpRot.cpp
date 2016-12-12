@@ -47,7 +47,7 @@ void ComputeProjectiveRotation(
       std::cout << dR <<  std::endl;
       // apply x to the transformation
       //T_mo.rotation() = SO3f(dR); // this actually gives me an absloute rotation
-      tdp::SE3f dT(dR);
+      tdp::SE3f dT(dR, Vector3fda(0,0,0));
 //      T_mo = dT * T_mo;
       // TODO: test this: we get absolute rotation
       T_mo.rotation() = dT.rotation();

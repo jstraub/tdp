@@ -64,7 +64,7 @@ inline Eigen::Vector2f nan()
 template<>
 TDP_HOST_DEVICE
 inline Eigen::Vector3f nan()
-{return Eigen::Vector3f(NAN,NAN);};
+{return Eigen::Vector3f(NAN,NAN,NAN);};
 
 //template<>
 //__device__ inline Vector3fda zero()
