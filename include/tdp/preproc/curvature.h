@@ -12,6 +12,36 @@
 
 namespace tdp {
 
+/// Compute Mean curvature via graph laplacian (implicitly)
+bool MeanCurvature(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& c
+    ) {
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W) {
+    Eigen::VectorXf norms(4*W*W);
+    c = pc(u0,v0);
+    size_t i=0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) norms(i++) =(c-pc(u,v)).squaredNorm();
+      }
+    }
+    float scale = norms.maxCoeff();
+    i=0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) c -= exp(-0.5*norms(i++)/scale) * pc(u,v);
+      }
+    }
+  }
+  return false;
+}
+
+
 void ComputeInvertedIndex(const Image<Vector3fda>& vert, 
     const Image<Vector3uda>& tri, 
     std::map<uint32_t,std::vector<uint32_t>>& invertedTri
