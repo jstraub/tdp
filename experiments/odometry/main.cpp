@@ -260,7 +260,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
 
   pangolin::Var<bool>  randomSubsample("ui.random subsample", false, true);
-  pangolin::Var<float> subsample("ui.subsample %",0.1,0.01,1.);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,0.1);
 
   pangolin::Var<bool> dispNormalsPyrEst("ui.disp normal est", false, true);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -283,7 +283,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> gradNormThr("ui.grad3d norm thr",6.,0.,10.);
 
-  pangolin::Var<bool> showPcModel("ui.show model",false,true);
+  pangolin::Var<bool> showPcModel("ui.show model",true,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
 
   pangolin::Var<float> rmseView("ui.rmse",0.,0.,0.);
@@ -327,8 +327,14 @@ int main( int argc, char* argv[] )
 
       if (randomSubsample) {
         tdp::RandomMaskCpu(mask, subsample);
+        size_t numObs = 0;
+        for (size_t i=0; i<mask.Area(); ++i) {
+          if (mask[i]) numObs++;
+        }
+        std::cout << "num obs in lvl 0 " << numObs 
+          << " " << subsample << std::endl;
         cuMask.CopyFrom(mask);
-        tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
+        tdp::ConstructPyramidFromMask(cuMask, cuPyrMask);
         tdp::ApplyMask(cuPyrMask, pcs_m);
         tdp::ApplyMask(cuPyrMask, ns_m);
         tdp::ApplyMask(cuPyrMask, gs_m);
@@ -444,10 +450,14 @@ int main( int argc, char* argv[] )
           cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
               cudaMemcpyDeviceToDevice);
         }
-        cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
         glColor3f(0,1,0);
         pangolin::glSetFrameOfReference((T_wc*T_mc.Inverse()).matrix());
-        pangolin::RenderVboCbo(cuPcbuf, cbo, true);
+        if (dispLvl == 0) {
+          cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
+          pangolin::RenderVboCbo(cuPcbuf, cbo, true);
+        } else {
+          pangolin::RenderVbo(cuPcbuf);
+        }
         pangolin::glUnsetFrameOfReference();
       }
       // render current camera second in the propper frame of
