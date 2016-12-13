@@ -143,32 +143,9 @@ int main( int argc, char* argv[] )
   containerTracking.AddDisplay(viewModel);
   tdp::QuickView viewCurrent(wc, hc);
   containerTracking.AddDisplay(viewCurrent);
+  tdp::QuickView viewMask(wc, hc);
+  containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
-
-  pangolin::View& containerLoopClosure = pangolin::Display("loopClosures");
-  containerLoopClosure.SetLayout(pangolin::LayoutEqual);
-  pangolin::OpenGlRenderState camLoopClose(
-      pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
-      );
-  pangolin::View& viewLoopClose = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(camLoopClose));
-  containerLoopClosure.AddDisplay(viewLoopClose);
-  tdp::QuickView viewDebugA(wc, hc);
-  containerLoopClosure.AddDisplay(viewDebugA);
-  tdp::QuickView viewDebugB(wc, hc);
-  containerLoopClosure.AddDisplay(viewDebugB);
-  tdp::QuickView viewDebugC(wc, hc);
-  containerLoopClosure.AddDisplay(viewDebugC);
-  tdp::QuickView viewDebugD(3*wc/2, hc);
-  containerLoopClosure.AddDisplay(viewDebugD);
-
-  tdp::QuickView viewDebugE(3*wc/2, hc);
-  containerLoopClosure.AddDisplay(viewDebugE);
-  tdp::QuickView viewDebugF(wc, hc);
-  containerLoopClosure.AddDisplay(viewDebugF);
-
-  gui.container().AddDisplay(containerLoopClosure);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
@@ -181,58 +158,28 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
   tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
-  tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
-  tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
-  tdp::ManagedDeviceImage<tdp::Vector2fda> cuGradGrey(wc,hc);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuGrad3D(wc,hc);
-
-  tdp::ManagedHostImage<float> grey_m(wc,hc);
-  tdp::ManagedHostImage<float> greyDu(wc, hc);
-  tdp::ManagedHostImage<float> greyDv(wc, hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
-
-  tdp::ManagedDeviceImage<float> cuIrmse(wc, hc);
-  tdp::ManagedHostImage<float> Irmse(wc, hc);
 
   tdp::ManagedDevicePyramid<uint8_t,3> cuPyrMask(wc, hc);
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
 
   // ICP stuff
-  tdp::ManagedHostPyramid<float,3> dPyr(wc,hc);
-  tdp::ManagedHostPyramid<float,3> dPyrEst(wc,hc);
-  tdp::ManagedDevicePyramid<float,3> cuDPyr(wc,hc);
-  tdp::ManagedDevicePyramid<float,3> cuDPyrEst(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_m(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> gs_c(wc,hc);
-
-  tdp::ManagedDevicePyramid<float,3> cuPyrGrey_c(wc,hc);
-  tdp::ManagedDevicePyramid<float,3> cuPyrGrey_m(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_c(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey_m(wc,hc);
-
-  tdp::ManagedDeviceImage<tdp::Vector2fda> cuGrad2D(3*wc/2, hc); 
-  tdp::ManagedDeviceImage<tdp::Vector3bda> cuGrad2DImg(3*wc/2, hc);
-  tdp::ManagedHostImage<tdp::Vector3bda> grad2DImg(3*wc/2, hc);
-  tdp::ManagedHostImage<float> greyPyrImg(3*wc/2, hc); 
-
-  pangolin::GlBufferCudaPtr cuPcbuf(pangolin::GlArrayBuffer, wc*hc,
-      GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
 
-  tdp::ManagedHostImage<float> dispDepthPyr(dPyr.Width(0)+dPyr.Width(1), hc);
-  
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuDispNormalsPyr(ns_m.Width(0)+ns_m.Width(1), hc);
-  tdp::ManagedDeviceImage<tdp::Vector3bda> cuDispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
-  tdp::ManagedHostImage<tdp::Vector3bda> dispNormals2dPyr(ns_m.Width(0)+ns_m.Width(1), hc);
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_c;
+  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
+
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_m;
+  tdp::ManagedHostImage<tdp::Vector3fda> n_m;
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
@@ -241,6 +188,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
+
+  pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.1,0,0.3);
+  pangolin::Var<int> maxIt("ui.max iter",10, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",4,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -257,9 +208,23 @@ int main( int argc, char* argv[] )
   gui.verbose = false;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
+  pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
+  pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+
+    if (!gui.paused()) {
+      pc_m.ResizeCopyFrom(pc_c); 
+      n_m.ResizeCopyFrom(n_c); 
+      rgb_m.CopyFrom(rgb);
+
+      tdp::TransformPc(T_wc, pc_c);
+      pc_w.Insert(pc_c);
+      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -277,15 +242,6 @@ int main( int argc, char* argv[] )
     rig.ComputeNormals(cuD, true, ns_c);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
-    cuRgb.CopyFrom(rgb);
-    tdp::Rgb2Grey(cuRgb,cuGrey, 1./255.);
-    
-    tdp::Image<tdp::Vector2fda> cuGradGrey_c = cuPyrGradGrey_c.GetImage(0);
-    tdp::Gradient(cuGrey, cuGreyDu, cuGreyDv, cuGradGrey_c);
-    greyDu.CopyFrom(cuGreyDu);
-    greyDv.CopyFrom(cuGreyDv);
-    tdp::ConstructPyramidFromImage(cuGrey, cuPyrGrey_c);
-    tdp::CompletePyramid(cuPyrGradGrey_c);
 
     if (!gui.paused()) {
       tdp::RandomMaskCpu(mask, subsample);
@@ -300,17 +256,62 @@ int main( int argc, char* argv[] )
       if (mask[i]) numObs++;
     }
     std::cout << numObs << std::endl;
-    tdp::ManagedHostImage<tdp::Vector3fda> pts(numObs);
-    tdp::ManagedHostImage<tdp::Vector3fda> cs(numObs);
+    pc_c.Reinitialise(numObs);
+    n_c.Reinitialise(numObs);
     size_t j=0;
     for (size_t i=0; i<mask.Area(); ++i) {
       if (mask[i]) {
         uint32_t u0 = i%wc;
         uint32_t v0 = i/wc;
-        pts[j] = pc(u0,v0);
-        if (!tdp::MeanCurvature(pc, u0, v0, W, cs[j++])) {
-          cs[j-1] << NAN,NAN,NAN;
+        pc_c[j] = pc(u0,v0);
+        if (!tdp::NormalViaScatter(pc, u0, v0, W, n_c[j++])) {
+          n_c[j-1] << NAN,NAN,NAN;
         }
+      }
+    }
+
+    T_mc = tdp::SE3f();
+    for (size_t it = 0; it < maxIt; ++i) {
+      Eigen::Matrix<float,6,6> A = Eigen::Matrix<float,6,6>::Zero();
+      Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
+      Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
+      float bi = 0.;
+      float err = 0.;
+      uint32_t numInl = 0;
+      float dotThr = cos(angleThr/M_PI*180.);
+      for (size_t i=0; i<pc_m.Area(); ++i) {
+        for (size_t j=0; j<pc_c.Area(); ++j) {
+          if (IsValidNormal(n_m[i]) && IsValidNormal(n_c[j]) 
+              && n_m[i].dot(n_c[j]) > dotThr) {
+            float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
+            if (IsValidData(pc_m[i]) && IsValidData(pc_c[j]) 
+                && fabs(p2pl) < p2plThr) {
+              // match
+              Eigen::Vector3fda n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
+              Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
+              Ai.bottomRows<3>() = n_m_in_c; 
+              bi = p2pl;
+              A += Ai * Ai.transpose();
+              b += Ai * bi;
+              numInl ++;
+              err += p2pl;
+            }
+          }
+        }
+      }
+      Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
+      if (numInl > 10) {
+        // solve for x using ldlt
+        x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+        T_mc = T_mc * SE3f::Exp_(x);
+      }
+      if (gui.verbose) {
+        std::cout << " it " << it 
+          << ": err=" << err
+          << "\t# inliers: " << numInl
+          << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+          << " " <<  x.bottomRows(3).norm()
+          << std::endl;
       }
     }
 
@@ -329,24 +330,26 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,30);
 
-      // draw sampled pc points and mean curvature
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pts.Area(), GL_FLOAT, 3,
-          GL_DYNAMIC_DRAW);
-      vbo.Upload(pts.ptr_, pts.SizeBytes(), 0);
-      glColor3f(1,0,0);
-      pangolin::glSetFrameOfReference(T_wc.matrix());
-      pangolin::RenderVboCbo(vbo, cbo, true);
+      glColor4f(0.,1.,1.,0.6);
+      pangolin::RenderVbo(vbo_w);
 
+      // draw sampled pc points and mean curvature
+//      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT, 3,
+//          GL_DYNAMIC_DRAW);
+//      vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
+//      glColor3f(1,0,0);
+      pangolin::glSetFrameOfReference(T_wc.matrix());
+//      pangolin::RenderVbo(vbo);
       glColor3f(1,1,0);
-      for (size_t i=0; i<cs.Area(); ++i) {
-        tdp::glDrawLine(pts[i], pts[i] + scale*cs[i]);
+      for (size_t i=0; i<n_c.Area(); ++i) {
+        tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
       }
       pangolin::glUnsetFrameOfReference();
       if (showPlanes) {
-        for (size_t i=0; i<cs.Area(); ++i) {
+        for (size_t i=0; i<n_c.Area(); ++i) {
           Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
-              Eigen::Vector3f(0,1,0), cs[i].normalized());
-          tdp::SE3f T(R, pts[i]); 
+              Eigen::Vector3f(0,1,0), n_c[i].normalized());
+          tdp::SE3f T(R, pc_c[i]); 
           pangolin::glSetFrameOfReference((T_wc*T).matrix());
           pangolin::glDrawAxis(0.05f);
           pangolin::glDraw_z0(0.01,10);
@@ -357,58 +360,35 @@ int main( int argc, char* argv[] )
       // render current camera second in the propper frame of
       // reference
       if (showPcCurrent) {
-        {
-          pangolin::CudaScopedMappedPtr cuPcbufp(cuPcbuf);
-          cudaMemset(*cuPcbufp,0,hc*wc*sizeof(tdp::Vector3fda));
-          tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(dispLvl);
-          cudaMemcpy(*cuPcbufp, pc0.ptr_, pc0.SizeBytes(),
-              cudaMemcpyDeviceToDevice);
-        }
-        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
-        glColor3f(1,0,0);
+        tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(dispLvl);
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc0.Area(), GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc0.ptr_, pc0.SizeBytes(), 0);
         pangolin::glSetFrameOfReference(T_wc.matrix());
-        pangolin::RenderVboCbo(cuPcbuf, cbo, true);
+        if(dispLvl == 0){
+          cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+          pangolin::RenderVboCbo(vbo, cbo, true);
+        } else {
+          glColor3f(1,0,0);
+          pangolin::RenderVbo(vbo);
+        }
         pangolin::glUnsetFrameOfReference();
       }
     }
-    TOCK("Draw 3D");
 
+    TOCK("Draw 3D");
     if (gui.verbose) std::cout << "draw 2D" << std::endl;
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
     if (viewModel.IsShown()) {
-      if (gui.verbose) std::cout << "model grey image" << std::endl;
-//      grey_m.CopyFrom(cuPyrGrey_m.GetImage(0));
-      viewModel.SetImage(mask);
+      viewModel.SetImage(rgb_m);
     }
     if (viewCurrent.IsShown()) {
       viewCurrent.SetImage(rgb);
     }
-    if (viewDebugA.IsShown()) {
-      viewDebugA.SetImage(greyDu);
-    }
-    if (viewDebugB.IsShown()) {
-      viewDebugB.SetImage(greyDv);
-    }
-    if (viewDebugC.IsShown()) {
-      viewDebugC.SetImage(Irmse);
-    }
-    if (viewDebugD.IsShown()) {
-      if (gui.verbose) std::cout << "gradient image" << std::endl;
-      tdp::PyramidToImage(cuPyrGradGrey_c, cuGrad2D);
-      tdp::Grad2Image(cuGrad2D, cuGrad2DImg);
-      grad2DImg.CopyFrom(cuGrad2DImg);
-      viewDebugD.SetImage(grad2DImg);
-    }
-    if (viewDebugE.IsShown()) {
-      if (gui.verbose) std::cout << "current grey image" << std::endl;
-      tdp::PyramidToImage(cuPyrGrey_c, greyPyrImg);
-      viewDebugE.SetImage(greyPyrImg);
-    }
-    if (viewDebugF.IsShown()) {
-      viewDebugF.RenderImage();
+    if (viewMask.IsShown()) {
+      viewMask.SetImage(mask);
     }
 
     TOCK("Draw 2D");
