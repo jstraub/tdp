@@ -41,6 +41,11 @@ class ManagedImage : public Image<T> {
     this->pitch_ = w*sizeof(T);
   }
 
+  void ResizeCopyFrom(const Image<T>& src) {
+    Reinitialise(src.w_, src.h_);
+    CopyFrom(src);
+  }
+
   ~ManagedImage() {
     Alloc::destroy(this->ptr_);
   }
