@@ -69,6 +69,7 @@ bool NormalViaScatter(
       int id = 0;
       float eval = eig.eigenvalues().minCoeff(&id);
       c = eig.eigenvectors().col(id);
+      c *= (c(2)<0.?1.:-1.);
     return true;
   }
   return false;
