@@ -21,6 +21,7 @@
 #include <tdp/data/managed_volume.h>
 #include <tdp/data/pyramid.h>
 #include <tdp/data/volume.h>
+#include <tdp/data/circular_buffer.h>
 #include <tdp/gl/gl_draw.h>
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
@@ -128,14 +129,9 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
 
-  pangolin::OpenGlRenderState camNormals(
-      pangolin::ProjectionMatrix(640,3*480,420,3*420,320,3*240,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
-      );
-  pangolin::View& viewNormals = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(camNormals));
-  gui.container().AddDisplay(viewNormals);
-  viewNormals.Show(false);
+  pangolin::View& viewAssoc = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewAssoc);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -155,6 +151,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb_m(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
+
+  tdp::ManagedHostImage<tdp::Vector3fda> pcFull_m(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
   tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
@@ -205,23 +203,26 @@ int main( int argc, char* argv[] )
   std::vector<tdp::SE3f> T_wcs;
   tdp::SE3f T_mc; // current to model
 
-  gui.verbose = false;
+  gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
 
+  size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
 
-    if (!gui.paused()) {
+    if (!gui.paused() && frame > 0) {
+      pcs_m.CopyFrom(pcs_c);
+      pcFull_m.CopyFrom(pcs_m.GetImage(0));
       pc_m.ResizeCopyFrom(pc_c); 
       n_m.ResizeCopyFrom(n_c); 
       rgb_m.CopyFrom(rgb);
 
-      tdp::TransformPc(T_wc, pc_c);
+      for (size_t i=0; i<pc_c.Area(); ++i) pc_c[i] = T_wc * pc_c[i];
       pc_w.Insert(pc_c);
       vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
     }
@@ -270,24 +271,28 @@ int main( int argc, char* argv[] )
       }
     }
 
+
+    std::vector<std::pair<size_t, size_t>> assoc;
     T_mc = tdp::SE3f();
-    for (size_t it = 0; it < maxIt; ++i) {
+    for (size_t it = 0; it < maxIt; ++it) {
       Eigen::Matrix<float,6,6> A = Eigen::Matrix<float,6,6>::Zero();
       Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
       Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
       float bi = 0.;
       float err = 0.;
       uint32_t numInl = 0;
-      float dotThr = cos(angleThr/M_PI*180.);
+      float dotThr = cos(angleThr*M_PI/180.);
       for (size_t i=0; i<pc_m.Area(); ++i) {
         for (size_t j=0; j<pc_c.Area(); ++j) {
-          if (IsValidNormal(n_m[i]) && IsValidNormal(n_c[j]) 
-              && n_m[i].dot(n_c[j]) > dotThr) {
+          if (tdp::IsValidNormal(n_m[i]) && tdp::IsValidNormal(n_c[j]) 
+              && fabs(n_m[i].dot(n_c[j])) > dotThr) {
             float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
-            if (IsValidData(pc_m[i]) && IsValidData(pc_c[j]) 
+            if (tdp::IsValidData(pc_m[i]) && tdp::IsValidData(pc_c[j]) 
                 && fabs(p2pl) < p2plThr) {
+//              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
+//                << " " << p2pl << std::endl;
               // match
-              Eigen::Vector3fda n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
+              Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
               Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
               Ai.bottomRows<3>() = n_m_in_c; 
               bi = p2pl;
@@ -295,6 +300,7 @@ int main( int argc, char* argv[] )
               b += Ai * bi;
               numInl ++;
               err += p2pl;
+              assoc.emplace_back(i,j);
             }
           }
         }
@@ -303,7 +309,7 @@ int main( int argc, char* argv[] )
       if (numInl > 10) {
         // solve for x using ldlt
         x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-        T_mc = T_mc * SE3f::Exp_(x);
+        T_mc = T_mc * tdp::SE3f::Exp_(x);
       }
       if (gui.verbose) {
         std::cout << " it " << it 
@@ -320,6 +326,8 @@ int main( int argc, char* argv[] )
       T_wcs.push_back(T_wc);
     }
 
+    frame ++;
+
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
     glEnable(GL_DEPTH_TEST);
@@ -328,7 +336,7 @@ int main( int argc, char* argv[] )
 
       pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
       glColor4f(1.,1.,0.,0.6);
-      glDrawPoses(T_wcs,30);
+      glDrawPoses(T_wcs,20);
 
       glColor4f(0.,1.,1.,0.6);
       pangolin::RenderVbo(vbo_w);
@@ -361,7 +369,8 @@ int main( int argc, char* argv[] )
       // reference
       if (showPcCurrent) {
         tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(dispLvl);
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc0.Area(), GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc0.Area(), GL_FLOAT,
+            3, GL_DYNAMIC_DRAW);
         vbo.Upload(pc0.ptr_, pc0.SizeBytes(), 0);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         if(dispLvl == 0){
@@ -373,6 +382,45 @@ int main( int argc, char* argv[] )
         }
         pangolin::glUnsetFrameOfReference();
       }
+    }
+
+    if (viewAssoc.IsShown()) {
+      viewAssoc.Activate(s_cam);
+
+      pangolin::glSetFrameOfReference((T_mc).matrix());
+      pangolin::glDrawAxis(0.1f);
+      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
+      glColor3f(0,1,0);
+      pangolin::RenderVbo(vbo);
+
+      vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+      pangolin::RenderVboCbo(vbo, cbo, true);
+
+      pangolin::glUnsetFrameOfReference();
+
+      pangolin::glDrawAxis(0.3f);
+      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
+      glColor3f(1,0,0);
+      pangolin::RenderVbo(vbo);
+
+      vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(pcFull_m.ptr_, pcFull_m.SizeBytes(), 0);
+      cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
+      pangolin::RenderVboCbo(vbo, cbo, true);
+
+      glColor4f(0,1,1,0.3);
+      for (const auto& ass : assoc) {
+        tdp::glDrawLine(pc_m[ass.first], pc_c[ass.second]);
+      }
+
     }
 
     TOCK("Draw 3D");
