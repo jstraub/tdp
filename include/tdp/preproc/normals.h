@@ -161,28 +161,6 @@ bool NormalViaScatter(
     uint32_t u0, 
     uint32_t v0,
     uint32_t W, 
-    Vector3fda& c
-    ) {
-  if ( W <= u0 && u0 < pc.w_-W 
-    && W <= v0 && v0 < pc.h_-W
-    && IsValidData(pc(u0,v0))) {
-      c = pc(u0,v0);
-      Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
-      for (size_t u=u0-W; u<u0+W; ++u) {
-        for (size_t v=v0-W; v<v0+W; ++v) {
-          if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-            S += (c-pc(u,v))*(c-pc(u,v)).transpose();
-          }
-        }
-      }
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
-
-      int id = 0;
-      float eval = eig.eigenvalues().minCoeff(&id);
-      c = eig.eigenvectors().col(id);
-    return true;
-  }
-  return false;
-}
+    Vector3fda& c);
 
 }
