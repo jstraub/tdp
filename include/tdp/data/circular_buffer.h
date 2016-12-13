@@ -16,8 +16,8 @@ class CircularBuffer : public Image<T> {
  public:
   CircularBuffer() : Image<T>(), iInsert_(0), iRead_(0)
   {}
-  CircularBuffer(size_t size, T* ptr) : Image<T>(size,1,ptr), 
-    iInsert_(0), iRead_(0)
+  CircularBuffer(size_t size, T* ptr, enum Storage storage) 
+    : Image<T>(size,1,ptr,storage), iInsert_(0), iRead_(0)
   {}
   ~CircularBuffer() 
   {}
@@ -41,6 +41,20 @@ class CircularBuffer : public Image<T> {
     iInsert_ = (iInsert_+1)%this->w_;
   }
 
+  void Insert(const Image<T>& data) {
+    assert(this->w_>0);
+    if ((iInsert_+data.Area()) >= this->w_ ) {
+      // split into two
+      Image<T> roiSrc = data.GetRoi(0, 0, this->w_-iInsert_, 1);
+      Image<T> roi = GetRoi(iInsert_, 0, this->w_-iInsert_, 1);
+      roi.CopyFrom(roiSrc);
+      iInsert_ = 0;
+    }
+    Image<T> roi = GetRoi(iInsert_, 0, data.Area(), 1);
+    roi.CopyFrom(data);
+    iInsert_ = iInsert_+data.Area();
+  }
+
   void MarkRead(int32_t num) {
     iRead_ = (iRead_+num)%this->w_;
   }
@@ -57,13 +71,15 @@ class CircularBuffer : public Image<T> {
 template <class T, class Alloc>
 class ManagedCircularBuffer : public CircularBuffer<T> {
  public:
-  ManagedCircularBuffer() : CircularBuffer<T>()
+  ManagedCircularBuffer() : CircularBuffer<T>(0,nullptr,Alloc::StorageType())
   {}
   ManagedCircularBuffer(size_t size) 
-    : CircularBuffer<T>(size,Alloc::construct(size))
+    : CircularBuffer<T>(size,Alloc::construct(size),Alloc::StorageType())
   {}
 
   void Reinitialise(size_t size) {
+    if (this->w_ == size)
+      return;
     if (this->ptr_)  {
       Alloc::destroy(this->ptr_);
     }
