@@ -5,7 +5,8 @@
 
 namespace tdp {
 
-void RandomMaskCpu(Image<uint8_t>& mask, float perc);
+void RandomMaskCpu(Image<uint8_t>& mask, float perc, 
+    uint32_t border = 0);
 
 template<typename T>
 void ApplyMask(const Image<uint8_t>& mask, Image<T>& I);
