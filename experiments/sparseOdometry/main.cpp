@@ -187,7 +187,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
-  pangolin::Var<bool> addKf("ui.add Kf",true,true);
+  pangolin::Var<bool> addKf("ui.add Kf",false,true);
 
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
@@ -204,6 +204,7 @@ int main( int argc, char* argv[] )
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
+  tdp::SE3f T_wKf = T_wc;
   std::vector<tdp::SE3f> T_wcs;
   tdp::SE3f T_mc; // current to model
 
@@ -219,13 +220,17 @@ int main( int argc, char* argv[] )
   while(!pangolin::ShouldQuit())
   {
 
-    if (!gui.paused() && frame > 0 && addKf) {
+    if (!gui.paused() && frame > 0 && (addKf || frame==1)) {
       pcs_m.CopyFrom(pcs_c);
       pcFull_m.CopyFrom(pcs_m.GetImage(0));
       pc_m.ResizeCopyFrom(pc_c); 
       n_m.ResizeCopyFrom(n_c); 
       rgb_m.CopyFrom(rgb);
+      T_wKf = T_wc;
+      T_mc = tdp::SE3f();
+    }
 
+    if (!gui.paused() && frame > 0) {
       for (size_t i=0; i<pc_c.Area(); ++i) pc_c[i] = T_wc * pc_c[i];
       pc_w.Insert(pc_c);
       vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -247,7 +252,7 @@ int main( int argc, char* argv[] )
     rig.CollectRGB(gui, rgb) ;
 
     if (!gui.paused() || subsample.GuiChanged()) {
-      tdp::RandomMaskCpu(mask, subsample);
+      tdp::RandomMaskCpu(mask, subsample, W*dMax);
       cuMask.CopyFrom(mask);
       tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
     }
@@ -257,7 +262,7 @@ int main( int argc, char* argv[] )
     pc.CopyFrom(pcs_c.GetImage(0));
     size_t numObs = 0;
     for (size_t i=0; i<mask.Area(); ++i) {
-      if (mask[i]) numObs++;
+      if (mask[i] && tdp::IsValidData(pc[i])) numObs++;
     }
     TOCK("mask");
     TICK("normals");
@@ -266,13 +271,16 @@ int main( int argc, char* argv[] )
     n_c.Reinitialise(numObs);
     size_t j=0;
     for (size_t i=0; i<mask.Area(); ++i) {
-      if (mask[i]) {
+      if (mask[i] && tdp::IsValidData(pc[i])) {
         uint32_t u0 = i%wc;
         uint32_t v0 = i/wc;
         pc_c[j] = pc(u0,v0);
         uint32_t Wscaled = floor(W*pc_c[j](2));
         if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
-          n_c[j-1] << NAN,NAN,NAN;
+          std::cout << "problem with normal computation" << std::endl;
+          std::cout << u0 << " " << v0 << std::endl;
+          std::cout << pc_c[j].transpose() << std::endl;
+          return 1;
         }
       }
     }
@@ -280,6 +288,7 @@ int main( int argc, char* argv[] )
 
     TICK("icp");
     std::vector<std::pair<size_t, size_t>> assoc;
+    assoc.reserve(10000);
     for (size_t it = 0; it < maxIt; ++it) {
       Eigen::Matrix<float,6,6> A = Eigen::Matrix<float,6,6>::Zero();
       Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
@@ -290,13 +299,12 @@ int main( int argc, char* argv[] )
       float dotThr = cos(angleThr*M_PI/180.);
       for (size_t i=0; i<pc_m.Area(); ++i) {
         for (size_t j=0; j<pc_c.Area(); ++j) {
-          float dist = (pc_m[i] - T_mc*pc_c[j]).norm();
-          if (tdp::IsValidData(pc_m[i]) && tdp::IsValidData(pc_c[j])
-              && dist < distThr*pc_m[i](2)) {
+          Eigen::Vector3f pc_c_in_m = T_mc*pc_c[j];
+          float dist = (pc_m[i] - pc_c_in_m).norm();
+          if (dist < distThr*pc_m[i](2)) {
             Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
-            if (tdp::IsValidNormal(n_m[i]) && tdp::IsValidNormal(n_c[j]) 
-                && fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
-              float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
+            if (fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
+              float p2pl = n_m[i].dot(pc_m[i] - pc_c_in_m);
               if ( fabs(p2pl) < p2plThr) {
                 //              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
                 //                << " " << p2pl << std::endl;
@@ -332,10 +340,9 @@ int main( int argc, char* argv[] )
     }
     TOCK("icp");
 
-    if (!gui.paused() && addKf) {
-      T_wc = T_wc*T_mc;
+    if (!gui.paused()) {
+      T_wc = T_wKf*T_mc;
       T_wcs.push_back(T_wc);
-      T_mc = tdp::SE3f();
     }
 
     frame ++;
@@ -355,7 +362,7 @@ int main( int argc, char* argv[] )
         pangolin::RenderVbo(vbo_w);
       }
 
-      pangolin::glSetFrameOfReference((T_wc*T_mc.Inverse()).matrix());
+      pangolin::glSetFrameOfReference((T_wKf.Inverse()).matrix());
       vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
           3, GL_DYNAMIC_DRAW);
       vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
