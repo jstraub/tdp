@@ -23,67 +23,48 @@ bool MeanCurvature(
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
-//    c = pc(u0,v0);
-//    Eigen::VectorXf norms = Eigen::VectorXf::Zero(4*W*W);
-//    size_t i=0;
-//    for (size_t u=u0-W; u<u0+W; ++u) {
-//      for (size_t v=v0-W; v<v0+W; ++v) {
-//        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-//          norms(i) = (c-pc(u,v)).squaredNorm();
-//        }
-//        i++;
-//      }
-//    }
-//    if (i<4) return false;
-//    float scale = norms.maxCoeff()/9.;
-//
-//    float sum = 0.;
-//    i = 0;
-//    for (size_t u=u0-W; u<u0+W; ++u) {
-//      for (size_t v=v0-W; v<v0+W; ++v) {
-//        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-//          sum += exp(-norms(i)/scale);
-//        }
-//        i++;
-//      }
-//    }
-////    float sum = (-norms.array()/scale).exp().sum();
-//    i=0;
-//    float sum2 = 0.;
-//    for (size_t u=u0-W; u<u0+W; ++u) {
-//      for (size_t v=v0-W; v<v0+W; ++v) {
-//        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-//          c -= exp(-norms(i)/scale)/sum * pc(u,v);
-//          sum2 += exp(-norms(i)/scale)/sum;
-////          std::cout << " " << exp(-norms(i)/scale)/sum;
-//        }
-//        i++;
-//      }
-//    }
-//    std::cout << W << " " << i << " " << scale 
-//      << " " << sum 
-//      << " " << sum2
-//      << " " << c.norm()
-//      << std::endl;
-//    if (c.norm() < 0.1) {
-      c = pc(u0,v0);
-      Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
-      for (size_t u=u0-W; u<u0+W; ++u) {
-        for (size_t v=v0-W; v<v0+W; ++v) {
-          if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-            S += (c-pc(u,v))*(c-pc(u,v)).transpose();
-          }
+    c = pc(u0,v0);
+    Eigen::VectorXf norms = Eigen::VectorXf::Zero(4*W*W);
+    size_t i=0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          norms(i) = (c-pc(u,v)).squaredNorm();
         }
+        i++;
       }
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
+    }
+    if (i<4) return false;
+    float scale = norms.maxCoeff()/9.;
 
-      int id = 0;
-      float eval = eig.eigenvalues().minCoeff(&id);
-      c = eig.eigenvectors().col(id);
-//      std::cout << eig.eigenvalues().transpose() << std::endl;
-//      std::cout << eval << std::endl;
-//    }
-//    std::cout << std::endl;
+    float sum = 0.;
+    i = 0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          sum += exp(-norms(i)/scale);
+        }
+        i++;
+      }
+    }
+//    float sum = (-norms.array()/scale).exp().sum();
+    i=0;
+    float sum2 = 0.;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          c -= exp(-norms(i)/scale)/sum * pc(u,v);
+          sum2 += exp(-norms(i)/scale)/sum;
+//          std::cout << " " << exp(-norms(i)/scale)/sum;
+        }
+        i++;
+      }
+    }
+    std::cout << W << " " << i << " " << scale 
+      << " " << sum 
+      << " " << sum2
+      << " " << c.norm()
+      << std::endl;
     return true;
   }
   return false;
