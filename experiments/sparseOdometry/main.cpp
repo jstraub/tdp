@@ -169,8 +169,6 @@ int main( int argc, char* argv[] )
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_m(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> ns_c(wc,hc);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
@@ -189,12 +187,14 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
+  pangolin::Var<bool> addKf("ui.add Kf",true,true);
+
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
-  pangolin::Var<int>   W("ui.W ",4,1,15);
+  pangolin::Var<int>   W("ui.W ",8,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
@@ -219,7 +219,7 @@ int main( int argc, char* argv[] )
   while(!pangolin::ShouldQuit())
   {
 
-    if (!gui.paused() && frame > 0) {
+    if (!gui.paused() && frame > 0 && addKf) {
       pcs_m.CopyFrom(pcs_c);
       pcFull_m.CopyFrom(pcs_m.GetImage(0));
       pc_m.ResizeCopyFrom(pc_c); 
@@ -243,8 +243,6 @@ int main( int argc, char* argv[] )
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
     rig.ComputePc(cuD, true, pcs_c);
-    if (gui.verbose) std::cout << "compute n" << std::endl;
-    rig.ComputeNormals(cuD, true, ns_c);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
 
@@ -255,11 +253,14 @@ int main( int argc, char* argv[] )
     }
     TOCK("Setup Pyramids");
 
+    TICK("mask");
     pc.CopyFrom(pcs_c.GetImage(0));
     size_t numObs = 0;
     for (size_t i=0; i<mask.Area(); ++i) {
       if (mask[i]) numObs++;
     }
+    TOCK("mask");
+    TICK("normals");
     std::cout << numObs << std::endl;
     pc_c.Reinitialise(numObs);
     n_c.Reinitialise(numObs);
@@ -269,14 +270,16 @@ int main( int argc, char* argv[] )
         uint32_t u0 = i%wc;
         uint32_t v0 = i/wc;
         pc_c[j] = pc(u0,v0);
-        if (!tdp::NormalViaScatter(pc, u0, v0, W, n_c[j++])) {
+        uint32_t Wscaled = floor(W*pc_c[j](2));
+        if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
           n_c[j-1] << NAN,NAN,NAN;
         }
       }
     }
+    TOCK("normals");
 
+    TICK("icp");
     std::vector<std::pair<size_t, size_t>> assoc;
-    T_mc = tdp::SE3f();
     for (size_t it = 0; it < maxIt; ++it) {
       Eigen::Matrix<float,6,6> A = Eigen::Matrix<float,6,6>::Zero();
       Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
@@ -287,25 +290,26 @@ int main( int argc, char* argv[] )
       float dotThr = cos(angleThr*M_PI/180.);
       for (size_t i=0; i<pc_m.Area(); ++i) {
         for (size_t j=0; j<pc_c.Area(); ++j) {
-          if (tdp::IsValidNormal(n_m[i]) && tdp::IsValidNormal(n_c[j]) 
-              && fabs(n_m[i].dot(n_c[j])) > dotThr) {
-            float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
-            float dist = (pc_m[i] - T_mc*pc_c[j]).norm();
-            if (tdp::IsValidData(pc_m[i]) && tdp::IsValidData(pc_c[j]) 
-                && fabs(p2pl) < p2plThr
-                && dist < distThr*pc_m[i](2)) {
-//              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
-//                << " " << p2pl << std::endl;
-              // match
-              Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
-              Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
-              Ai.bottomRows<3>() = n_m_in_c; 
-              bi = p2pl;
-              A += Ai * Ai.transpose();
-              b += Ai * bi;
-              numInl ++;
-              err += p2pl;
-              assoc.emplace_back(i,j);
+          float dist = (pc_m[i] - T_mc*pc_c[j]).norm();
+          if (tdp::IsValidData(pc_m[i]) && tdp::IsValidData(pc_c[j])
+              && dist < distThr*pc_m[i](2)) {
+            Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
+            if (tdp::IsValidNormal(n_m[i]) && tdp::IsValidNormal(n_c[j]) 
+                && fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
+              float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
+              if ( fabs(p2pl) < p2plThr) {
+                //              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
+                //                << " " << p2pl << std::endl;
+                // match
+                Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
+                Ai.bottomRows<3>() = n_m_in_c; 
+                bi = p2pl;
+                A += Ai * Ai.transpose();
+                b += Ai * bi;
+                numInl ++;
+                err += p2pl;
+                assoc.emplace_back(i,j);
+              }
             }
           }
         }
@@ -324,11 +328,14 @@ int main( int argc, char* argv[] )
           << " " <<  x.bottomRows(3).norm()
           << std::endl;
       }
+      if (x.norm() < 1e-4) break;
     }
+    TOCK("icp");
 
-    if (!gui.paused()) {
+    if (!gui.paused() && addKf) {
       T_wc = T_wc*T_mc;
       T_wcs.push_back(T_wc);
+      T_mc = tdp::SE3f();
     }
 
     frame ++;
@@ -436,7 +443,8 @@ int main( int argc, char* argv[] )
 
       glColor4f(0,1,1,0.3);
       for (const auto& ass : assoc) {
-        tdp::glDrawLine(pc_m[ass.first], pc_c[ass.second]);
+        tdp::Vector3fda pc_c_in_m = T_mc*pc_c[ass.second];
+        tdp::glDrawLine(pc_m[ass.first], pc_c_in_m);
       }
 
     }
