@@ -46,11 +46,11 @@ class CircularBuffer : public Image<T> {
     if ((iInsert_+data.Area()) >= this->w_ ) {
       // split into two
       Image<T> roiSrc = data.GetRoi(0, 0, this->w_-iInsert_, 1);
-      Image<T> roi = GetRoi(iInsert_, 0, this->w_-iInsert_, 1);
+      Image<T> roi = this->GetRoi(iInsert_, 0, this->w_-iInsert_, 1);
       roi.CopyFrom(roiSrc);
       iInsert_ = 0;
     }
-    Image<T> roi = GetRoi(iInsert_, 0, data.Area(), 1);
+    Image<T> roi = this->GetRoi(iInsert_, 0, data.Area(), 1);
     roi.CopyFrom(data);
     iInsert_ = iInsert_+data.Area();
   }

@@ -43,7 +43,7 @@ class ManagedImage : public Image<T> {
 
   void ResizeCopyFrom(const Image<T>& src) {
     Reinitialise(src.w_, src.h_);
-    CopyFrom(src);
+    this->CopyFrom(src);
   }
 
   ~ManagedImage() {
