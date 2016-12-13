@@ -143,6 +143,8 @@ int main( int argc, char* argv[] )
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
 
+  containerTracking.Show(false);
+
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
@@ -183,13 +185,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
+  pangolin::Var<float> subsample("ui.subsample %",0.002,0.0001,.01);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.1,0,0.3);
-  pangolin::Var<int> maxIt("ui.max iter",10, 1, 20);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
+  pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
+  pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",4,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -197,6 +200,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
+  pangolin::Var<bool> showFullPc("ui.show full",false,true);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -244,7 +248,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
 
-    if (!gui.paused()) {
+    if (!gui.paused() || subsample.GuiChanged()) {
       tdp::RandomMaskCpu(mask, subsample);
       cuMask.CopyFrom(mask);
       tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
@@ -271,7 +275,6 @@ int main( int argc, char* argv[] )
       }
     }
 
-
     std::vector<std::pair<size_t, size_t>> assoc;
     T_mc = tdp::SE3f();
     for (size_t it = 0; it < maxIt; ++it) {
@@ -287,8 +290,10 @@ int main( int argc, char* argv[] )
           if (tdp::IsValidNormal(n_m[i]) && tdp::IsValidNormal(n_c[j]) 
               && fabs(n_m[i].dot(n_c[j])) > dotThr) {
             float p2pl = n_m[i].dot(pc_m[i] - T_mc*pc_c[j]);
+            float dist = (pc_m[i] - T_mc*pc_c[j]).norm();
             if (tdp::IsValidData(pc_m[i]) && tdp::IsValidData(pc_c[j]) 
-                && fabs(p2pl) < p2plThr) {
+                && fabs(p2pl) < p2plThr
+                && dist < distThr*pc_m[i](2)) {
 //              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
 //                << " " << p2pl << std::endl;
               // match
@@ -338,8 +343,18 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20);
 
-      glColor4f(0.,1.,1.,0.6);
-      pangolin::RenderVbo(vbo_w);
+      if (showFullPc) {
+        glColor4f(0.,1.,1.,0.6);
+        pangolin::RenderVbo(vbo_w);
+      }
+
+      pangolin::glSetFrameOfReference((T_wc*T_mc.Inverse()).matrix());
+      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
+      glColor3f(1,0,0);
+      pangolin::RenderVbo(vbo);
+      pangolin::glUnsetFrameOfReference();
 
       // draw sampled pc points and mean curvature
 //      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT, 3,
@@ -368,10 +383,9 @@ int main( int argc, char* argv[] )
       // render current camera second in the propper frame of
       // reference
       if (showPcCurrent) {
-        tdp::Image<tdp::Vector3fda> pc0 = pcs_c.GetImage(dispLvl);
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc0.Area(), GL_FLOAT,
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
             3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc0.ptr_, pc0.SizeBytes(), 0);
+        vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         if(dispLvl == 0){
           cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
@@ -395,11 +409,13 @@ int main( int argc, char* argv[] )
       glColor3f(0,1,0);
       pangolin::RenderVbo(vbo);
 
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
-      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
-      pangolin::RenderVboCbo(vbo, cbo, true);
+      if (showPcCurrent) {
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
+            3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
+        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+        pangolin::RenderVboCbo(vbo, cbo, true);
+      }
 
       pangolin::glUnsetFrameOfReference();
 
@@ -410,11 +426,13 @@ int main( int argc, char* argv[] )
       glColor3f(1,0,0);
       pangolin::RenderVbo(vbo);
 
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(pcFull_m.ptr_, pcFull_m.SizeBytes(), 0);
-      cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
-      pangolin::RenderVboCbo(vbo, cbo, true);
+      if (showPcModel) {
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
+            3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pcFull_m.ptr_, pcFull_m.SizeBytes(), 0);
+        cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
+        pangolin::RenderVboCbo(vbo, cbo, true);
+      }
 
       glColor4f(0,1,1,0.3);
       for (const auto& ass : assoc) {
@@ -429,14 +447,16 @@ int main( int argc, char* argv[] )
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
-    if (viewModel.IsShown()) {
-      viewModel.SetImage(rgb_m);
-    }
-    if (viewCurrent.IsShown()) {
-      viewCurrent.SetImage(rgb);
-    }
-    if (viewMask.IsShown()) {
-      viewMask.SetImage(mask);
+    if (containerTracking.IsShown()) {
+      if (viewModel.IsShown()) {
+        viewModel.SetImage(rgb_m);
+      }
+      if (viewCurrent.IsShown()) {
+        viewCurrent.SetImage(rgb);
+      }
+      if (viewMask.IsShown()) {
+        viewMask.SetImage(mask);
+      }
     }
 
     TOCK("Draw 2D");
