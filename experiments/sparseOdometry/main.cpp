@@ -54,8 +54,8 @@ namespace tdp {
 
 void ExtractNormals(const Image<Vector3fda>& pc, 
     const Image<uint8_t>& mask, uint32_t W,
-    Image<Vector3fda>& pc_c,
-    Image<Vector3fda>& n_c) {
+    ManagedHostImage<Vector3fda>& pc_c,
+    ManagedHostImage<Vector3fda>& n_c) {
   size_t numObs = 0;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i] && tdp::IsValidData(pc[i])) numObs++;
@@ -65,8 +65,8 @@ void ExtractNormals(const Image<Vector3fda>& pc,
   size_t j=0;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i] && tdp::IsValidData(pc[i])) {
-      uint32_t u0 = i%wc;
-      uint32_t v0 = i/wc;
+      uint32_t u0 = i%mask.w_;
+      uint32_t v0 = i/mask.w_;
       pc_c[j] = pc(u0,v0);
       uint32_t Wscaled = floor(W*pc_c[j](2));
       if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
@@ -87,8 +87,9 @@ void IcpPlanes(
     float angleThr,
     float distThr,
     float p2plThr,
+    bool verbose,
     SE3f& T_mc,
-    Eigen::Matrix<float,6,6> Sigma_mc,
+    Eigen::Matrix<float,6,6>& Sigma_mc,
     std::vector<std::pair<size_t, size_t>>& assoc
     ) {
   assoc.clear();
@@ -132,7 +133,7 @@ void IcpPlanes(
       x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
       T_mc = T_mc * tdp::SE3f::Exp_(x);
     }
-    if (gui.verbose) {
+    if (verbose) {
       std::cout << " it " << it 
         << ": err=" << err
         << "\t# inliers: " << numInl
@@ -255,9 +256,17 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logdH;
   pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
   plotters.AddDisplay(plotdH);
+  pangolin::DataLog logObs;
+  pangolin::Plotter plotObs(&logObs, -100.f,1.f, 0.0f,1000.f, .1f, 0.1f);
+  plotters.AddDisplay(plotObs);
   pangolin::DataLog logEntropy;
   pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -80.f,-40.f, .1f, 0.1f);
   plotters.AddDisplay(plotH);
+
+
+  pangolin::DataLog logAdaptiveEntropy;
+  pangolin::Plotter plotAdaptiveH(&logAdaptiveEntropy, -100.f,1.f, -40.f,40.f, .1f, 0.1f);
+  plotters.AddDisplay(plotAdaptiveH);
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -305,11 +314,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> automaticKFs("ui.automatic Ks",true,true);
   pangolin::Var<bool> addKf("ui.add Kf",false,true);
 
+  pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<bool> icpFixed("ui.icp Fixed",true,true);
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
-  pangolin::Var<float> logdHThr("ui.log dH Thr",0.92,0.8,1.1);
+  pangolin::Var<float> logdHThr("ui.log dH Thr",0.90,0.8,1.1);
+  pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-2,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",8,1,15);
@@ -345,6 +356,14 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (pangolin::Pushed(icpReset)) {
+      pcs_m.CopyFrom(pcs_c);
+      pcFull_m.CopyFrom(pcs_m.GetImage(0));
+      pc_m.ResizeCopyFrom(pc_c); 
+      n_m.ResizeCopyFrom(n_c); 
+      rgb_m.CopyFrom(rgb);
+      T_mc = tdp::SE3f();
+    }
 
     if (!gui.paused() && frame > 0 && (addKf || frame==1)) {
       pcs_m.CopyFrom(pcs_c);
@@ -391,15 +410,16 @@ int main( int argc, char* argv[] )
 
     pc.CopyFrom(pcs_c.GetImage(0));
 
+    TICK("normals");
+    ExtractNormals(pc, mask, W, pc_c, n_c);
+    TOCK("normals");
     if (icpFixed) {
-      TICK("normals");
-      ExtractNormals(pc, mask, W, pc_c, n_c);
-      TOCK("normals");
       TICK("icp");
       IcpPlanes( pc_c, n_c, pc_m, n_m, 
-          maxIt, angleThr, distThr, p2plThr,
+          maxIt, angleThr, distThr, p2plThr, gui.verbose,
           T_mc, Sigma_mc, assoc);
       TOCK("icp");
+      logObs.Log(pc_c.Area(), assoc.size());
     } else {
 
       assoc.clear();
@@ -415,14 +435,17 @@ int main( int argc, char* argv[] )
       std::vector<size_t> id_m(pc_m.Area());
       std::iota(id_m.begin(), id_m.end(), 0);
       std::random_shuffle(id_m.begin(), id_m.end());
+      uint32_t numObs = 0;
+      uint32_t numInlPrev = 0;
       for (size_t it = 0; it < maxIt; ++it) {
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
         Ai = Eigen::Matrix<float,6,1>::Zero();
         float bi = 0.;
         float err = 0.;
+        float logHprev = 1e10;
         uint32_t numInl = 0;
-        float logHprev = -1e10;
+        numObs = 0;
 
         for (size_t j : id_c) {
           for (size_t i : id_m) {
@@ -440,17 +463,30 @@ int main( int argc, char* argv[] )
                   bi = p2pl;
                   A += Ai * Ai.transpose();
                   b += Ai * bi;
-                  numInl ++;
                   err += p2pl;
                   assoc.emplace_back(i,j);
                   // if this gets expenseive I could use 
                   // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-                  float logH = -((A.eigenvalues()).array().log().sum()).real();
-                  std::cout << logH << " " << (logH-logHprev)/logH << std::endl;
+                  numInl ++;
                 }
               }
             }
           }
+          if (numInl > numInlPrev) {
+            float logH = -((A.eigenvalues()).array().log().sum()).real();
+//            std::cout << numObs << " " << numInl 
+//              << " logH " << logH << " delta "
+//              << (logHprev-logH) << std::endl;
+            if ((logHprev - logH) < relLogHChange && numObs > 6) {
+              std::cout << numInl << " logH " << logH << " delta "
+                << (logHprev-logH) << std::endl;
+              break;
+            }
+            logAdaptiveEntropy.Log(logH);
+            logHprev = logH;
+            numObs ++;
+          }
+          numInlPrev = numInl;
         }
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -469,9 +505,12 @@ int main( int argc, char* argv[] )
         if (x.norm() < 1e-4) break;
       }
       Sigma_mc = A.inverse();
+      logObs.Log(numObs, numInlPrev);
+      plotAdaptiveH.ScrollView(numObs,0);
     }
 
     float logH = ((Sigma_mc.eigenvalues()).array().log().sum()).real();
+    std::cout << " H " << logH  << std::endl;
     if (numKfs > numKfsPrev) {
       logHs.push_back(logH);
     }
@@ -480,7 +519,7 @@ int main( int argc, char* argv[] )
       if (dH < logdHThr && automaticKFs) {
         addKf = true;
       }
-      std::cout << " dH " << dH << std::endl;
+      std::cout << " dH " << dH << " logHs[-1] " << logHs.back() << std::endl;
       logdH.Log(dH, logdHThr);
       logEntropy.Log(logH, logHs.back());
     }
@@ -621,6 +660,7 @@ int main( int argc, char* argv[] )
     }
     plotdH.ScrollView(1,0);
     plotH.ScrollView(1,0);
+    plotObs.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
