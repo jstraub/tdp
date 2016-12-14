@@ -50,6 +50,104 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+namespace tdp {
+
+void ExtractNormals(const Image<Vector3fda>& pc, 
+    const Image<uint8_t>& mask, uint32_t W,
+    Image<Vector3fda>& pc_c,
+    Image<Vector3fda>& n_c) {
+  size_t numObs = 0;
+  for (size_t i=0; i<mask.Area(); ++i) {
+    if (mask[i] && tdp::IsValidData(pc[i])) numObs++;
+  }
+  pc_c.Reinitialise(numObs);
+  n_c.Reinitialise(numObs);
+  size_t j=0;
+  for (size_t i=0; i<mask.Area(); ++i) {
+    if (mask[i] && tdp::IsValidData(pc[i])) {
+      uint32_t u0 = i%wc;
+      uint32_t v0 = i/wc;
+      pc_c[j] = pc(u0,v0);
+      uint32_t Wscaled = floor(W*pc_c[j](2));
+      if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
+        std::cout << "problem with normal computation" << std::endl;
+        std::cout << u0 << " " << v0 << std::endl;
+        std::cout << pc_c[j].transpose() << std::endl;
+      }
+    }
+  }
+}
+
+void IcpPlanes(
+    const Image<Vector3fda>& pc_c,
+    const Image<Vector3fda>& n_c,
+    const Image<Vector3fda>& pc_m,
+    const Image<Vector3fda>& n_m,
+    uint32_t maxIt,
+    float angleThr,
+    float distThr,
+    float p2plThr,
+    SE3f& T_mc,
+    Eigen::Matrix<float,6,6> Sigma_mc,
+    std::vector<std::pair<size_t, size_t>>& assoc
+    ) {
+  assoc.clear();
+  Eigen::Matrix<float,6,6> A;
+  Eigen::Matrix<float,6,1> b;
+  Eigen::Matrix<float,6,1> Ai;
+  float dotThr = cos(angleThr*M_PI/180.);
+  for (size_t it = 0; it < maxIt; ++it) {
+    A = Eigen::Matrix<float,6,6>::Zero();
+    b = Eigen::Matrix<float,6,1>::Zero();
+    Ai = Eigen::Matrix<float,6,1>::Zero();
+    float bi = 0.;
+    float err = 0.;
+    uint32_t numInl = 0;
+    for (size_t i=0; i<pc_m.Area(); ++i) {
+      for (size_t j=0; j<pc_c.Area(); ++j) {
+        Eigen::Vector3f pc_c_in_m = T_mc*pc_c[j];
+        float dist = (pc_m[i] - pc_c_in_m).norm();
+        if (dist < distThr*pc_m[i](2)) {
+          Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
+          if (fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
+            float p2pl = n_m[i].dot(pc_m[i] - pc_c_in_m);
+            if (fabs(p2pl) < p2plThr) {
+              // match
+              Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
+              Ai.bottomRows<3>() = n_m_in_c; 
+              bi = p2pl;
+              A += Ai * Ai.transpose();
+              b += Ai * bi;
+              numInl ++;
+              err += p2pl;
+              assoc.emplace_back(i,j);
+            }
+          }
+        }
+      }
+    }
+    Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
+    if (numInl > 10) {
+      // solve for x using ldlt
+      x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+      T_mc = T_mc * tdp::SE3f::Exp_(x);
+    }
+    if (gui.verbose) {
+      std::cout << " it " << it 
+        << ": err=" << err
+        << "\t# inliers: " << numInl
+        << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+        << " " <<  x.bottomRows(3).norm()
+        << std::endl;
+    }
+    if (x.norm() < 1e-4) break;
+  }
+  Sigma_mc = A.inverse();
+}
+
+
+}    
+
 int main( int argc, char* argv[] )
 {
   std::string input_uri = "openni2://";
@@ -207,6 +305,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> automaticKFs("ui.automatic Ks",true,true);
   pangolin::Var<bool> addKf("ui.add Kf",false,true);
 
+  pangolin::Var<bool> icpFixed("ui.icp Fixed",true,true);
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
@@ -235,6 +334,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+
+  std::vector<std::pair<size_t, size_t>> assoc;
+  assoc.reserve(10000);
 
   size_t numKfs = 0;
   size_t numKfsPrev = 0;
@@ -279,94 +381,95 @@ int main( int argc, char* argv[] )
     rig.CollectRGB(gui, rgb) ;
 
     if (!gui.paused() || subsample.GuiChanged()) {
+      TICK("mask");
       tdp::RandomMaskCpu(mask, subsample, W*dMax);
       cuMask.CopyFrom(mask);
       tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
+      TOCK("mask");
     }
     TOCK("Setup Pyramids");
 
-    TICK("mask");
     pc.CopyFrom(pcs_c.GetImage(0));
-    size_t numObs = 0;
-    for (size_t i=0; i<mask.Area(); ++i) {
-      if (mask[i] && tdp::IsValidData(pc[i])) numObs++;
-    }
-    TOCK("mask");
-    TICK("normals");
-    std::cout << numObs << std::endl;
-    pc_c.Reinitialise(numObs);
-    n_c.Reinitialise(numObs);
-    size_t j=0;
-    for (size_t i=0; i<mask.Area(); ++i) {
-      if (mask[i] && tdp::IsValidData(pc[i])) {
-        uint32_t u0 = i%wc;
-        uint32_t v0 = i/wc;
-        pc_c[j] = pc(u0,v0);
-        uint32_t Wscaled = floor(W*pc_c[j](2));
-        if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
-          std::cout << "problem with normal computation" << std::endl;
-          std::cout << u0 << " " << v0 << std::endl;
-          std::cout << pc_c[j].transpose() << std::endl;
-          return 1;
-        }
-      }
-    }
-    TOCK("normals");
 
-    TICK("icp");
-    std::vector<std::pair<size_t, size_t>> assoc;
-    assoc.reserve(10000);
-    for (size_t it = 0; it < maxIt; ++it) {
-      Eigen::Matrix<float,6,6> A = Eigen::Matrix<float,6,6>::Zero();
-      Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
-      Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
-      float bi = 0.;
-      float err = 0.;
-      uint32_t numInl = 0;
+    if (icpFixed) {
+      TICK("normals");
+      ExtractNormals(pc, mask, W, pc_c, n_c);
+      TOCK("normals");
+      TICK("icp");
+      IcpPlanes( pc_c, n_c, pc_m, n_m, 
+          maxIt, angleThr, distThr, p2plThr,
+          T_mc, Sigma_mc, assoc);
+      TOCK("icp");
+    } else {
+
+      assoc.clear();
+      Eigen::Matrix<float,6,6> A;
+      Eigen::Matrix<float,6,1> b;
+      Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-      for (size_t i=0; i<pc_m.Area(); ++i) {
-        for (size_t j=0; j<pc_c.Area(); ++j) {
-          Eigen::Vector3f pc_c_in_m = T_mc*pc_c[j];
-          float dist = (pc_m[i] - pc_c_in_m).norm();
-          if (dist < distThr*pc_m[i](2)) {
-            Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
-            if (fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
-              float p2pl = n_m[i].dot(pc_m[i] - pc_c_in_m);
-              if ( fabs(p2pl) < p2plThr) {
-                //              std::cout << acos(n_m[i].dot(n_c[j]))*180./M_PI 
-                //                << " " << p2pl << std::endl;
-                // match
-                Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
-                Ai.bottomRows<3>() = n_m_in_c; 
-                bi = p2pl;
-                A += Ai * Ai.transpose();
-                b += Ai * bi;
-                numInl ++;
-                err += p2pl;
-                assoc.emplace_back(i,j);
+
+      std::vector<size_t> id_c(pc_c.Area());
+      std::iota(id_c.begin(), id_c.end(), 0);
+      std::random_shuffle(id_c.begin(), id_c.end());
+
+      std::vector<size_t> id_m(pc_m.Area());
+      std::iota(id_m.begin(), id_m.end(), 0);
+      std::random_shuffle(id_m.begin(), id_m.end());
+      for (size_t it = 0; it < maxIt; ++it) {
+        A = Eigen::Matrix<float,6,6>::Zero();
+        b = Eigen::Matrix<float,6,1>::Zero();
+        Ai = Eigen::Matrix<float,6,1>::Zero();
+        float bi = 0.;
+        float err = 0.;
+        uint32_t numInl = 0;
+        float logHprev = -1e10;
+
+        for (size_t j : id_c) {
+          for (size_t i : id_m) {
+//        for (size_t i=0; i<pc_m.Area(); ++i) {
+//          for (size_t j=0; j<pc_c.Area(); ++j) {
+            Eigen::Vector3f pc_c_in_m = T_mc*pc_c[j];
+            float dist = (pc_m[i] - pc_c_in_m).norm();
+            if (dist < distThr*pc_m[i](2)) {
+              Eigen::Vector3f n_m_in_c = T_mc.rotation().Inverse()*n_m[i];
+              if (fabs(n_m_in_c.dot(n_c[j])) > dotThr) {
+                float p2pl = n_m[i].dot(pc_m[i] - pc_c_in_m);
+                if (fabs(p2pl) < p2plThr) {
+                  Ai.topRows<3>() = pc_c[j].cross(n_m_in_c); 
+                  Ai.bottomRows<3>() = n_m_in_c; 
+                  bi = p2pl;
+                  A += Ai * Ai.transpose();
+                  b += Ai * bi;
+                  numInl ++;
+                  err += p2pl;
+                  assoc.emplace_back(i,j);
+                  // if this gets expenseive I could use 
+                  // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+                  float logH = -((A.eigenvalues()).array().log().sum()).real();
+                  std::cout << logH << " " << (logH-logHprev)/logH << std::endl;
+                }
               }
             }
           }
         }
+        Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
+        if (numInl > 10) {
+          // solve for x using ldlt
+          x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+          T_mc = T_mc * tdp::SE3f::Exp_(x);
+        }
+        if (gui.verbose) {
+          std::cout << " it " << it 
+            << ": err=" << err
+            << "\t# inliers: " << numInl
+            << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+            << " " <<  x.bottomRows(3).norm()
+            << std::endl;
+        }
+        if (x.norm() < 1e-4) break;
       }
-      Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-      if (numInl > 10) {
-        // solve for x using ldlt
-        x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-        T_mc = T_mc * tdp::SE3f::Exp_(x);
-        Sigma_mc = A.inverse();
-      }
-      if (gui.verbose) {
-        std::cout << " it " << it 
-          << ": err=" << err
-          << "\t# inliers: " << numInl
-          << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
-          << " " <<  x.bottomRows(3).norm()
-          << std::endl;
-      }
-      if (x.norm() < 1e-4) break;
+      Sigma_mc = A.inverse();
     }
-    TOCK("icp");
 
     float logH = ((Sigma_mc.eigenvalues()).array().log().sum()).real();
     if (numKfs > numKfsPrev) {
