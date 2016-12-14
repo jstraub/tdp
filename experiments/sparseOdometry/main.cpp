@@ -145,6 +145,23 @@ int main( int argc, char* argv[] )
 
   containerTracking.Show(false);
 
+  pangolin::View& plotters = pangolin::Display("plotters");
+  plotters.SetLayout(pangolin::LayoutEqualVertical);
+//  pangolin::DataLog logInliers;
+//  pangolin::Plotter plotInliers(&logInliers, -100.f,1.f, 0, 130000.f, 
+//      10.f, 0.1f);
+//  plotters.AddDisplay(plotInliers);
+//  pangolin::DataLog logRmse;
+//  pangolin::Plotter plotRmse(&logRmse, -100.f,1.f, 0.f,0.2f, 0.1f, 0.1f);
+//  plotters.AddDisplay(plotRmse);
+  pangolin::DataLog logdH;
+  pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
+  plotters.AddDisplay(plotdH);
+  pangolin::DataLog logEntropy;
+  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -80.f,-40.f, .1f, 0.1f);
+  plotters.AddDisplay(plotH);
+  gui.container().AddDisplay(plotters);
+
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
@@ -183,15 +200,17 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.002,0.0001,.01);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
+  pangolin::Var<bool> automaticKFs("ui.automatic Ks",true,true);
   pangolin::Var<bool> addKf("ui.add Kf",false,true);
 
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
+  pangolin::Var<float> logdHThr("ui.log dH Thr",0.92,0.8,1.1);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",8,1,15);
@@ -207,6 +226,8 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wKf = T_wc;
   std::vector<tdp::SE3f> T_wcs;
   tdp::SE3f T_mc; // current to model
+  Eigen::Matrix<float,6,6> Sigma_mc;
+  std::vector<float> logHs;
 
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
@@ -214,6 +235,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+
+  size_t numKfs = 0;
+  size_t numKfsPrev = 0;
 
   size_t frame = 0;
   // Stream and display video
@@ -228,6 +252,9 @@ int main( int argc, char* argv[] )
       rgb_m.CopyFrom(rgb);
       T_wKf = T_wc;
       T_mc = tdp::SE3f();
+      numKfs ++;
+      if (automaticKFs) 
+        addKf = false;
     }
 
     if (!gui.paused() && frame > 0) {
@@ -327,6 +354,7 @@ int main( int argc, char* argv[] )
         // solve for x using ldlt
         x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
         T_mc = T_mc * tdp::SE3f::Exp_(x);
+        Sigma_mc = A.inverse();
       }
       if (gui.verbose) {
         std::cout << " it " << it 
@@ -340,12 +368,27 @@ int main( int argc, char* argv[] )
     }
     TOCK("icp");
 
+    float logH = ((Sigma_mc.eigenvalues()).array().log().sum()).real();
+    if (numKfs > numKfsPrev) {
+      logHs.push_back(logH);
+    }
+    if (numKfsPrev > 0) {
+      float dH = logH / logHs.back();
+      if (dH < logdHThr && automaticKFs) {
+        addKf = true;
+      }
+      std::cout << " dH " << dH << std::endl;
+      logdH.Log(dH, logdHThr);
+      logEntropy.Log(logH, logHs.back());
+    }
+
     if (!gui.paused()) {
       T_wc = T_wKf*T_mc;
       T_wcs.push_back(T_wc);
     }
 
     frame ++;
+    numKfsPrev = numKfs;
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
@@ -362,7 +405,7 @@ int main( int argc, char* argv[] )
         pangolin::RenderVbo(vbo_w);
       }
 
-      pangolin::glSetFrameOfReference((T_wKf.Inverse()).matrix());
+      pangolin::glSetFrameOfReference(T_wKf.matrix());
       vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
           3, GL_DYNAMIC_DRAW);
       vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
@@ -473,6 +516,8 @@ int main( int argc, char* argv[] )
         viewMask.SetImage(mask);
       }
     }
+    plotdH.ScrollView(1,0);
+    plotH.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
