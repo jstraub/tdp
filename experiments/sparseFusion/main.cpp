@@ -83,9 +83,27 @@ void ExtractNormals(const Image<Vector3fda>& pc,
 }
 
 struct Plane {
-  Vector3fda pt; 
-  Vector3fda n; 
-  Vector3bda rgb; 
+  Vector3fda p_; 
+  Vector3fda n_; 
+  Vector3bda rgb_; 
+
+  float w_; // weight
+
+  void AddObs(const Vector3fda& p, const Vector3fda& n) {
+    float wNew = w_+1; 
+    p_ = (p_*w_ + p)/wNew;
+    n_ = (n_*w_ + n).normalized();
+    w_ = std::min(100.f, wNew);
+  }
+
+  void AddObs(const Vector3fda& p, const Vector3fda& n, 
+      const Vector3bda& rgb) {
+    float wNew = w_+1; 
+    p_ = (p_*w_ + p)/wNew;
+    n_ = (n_*w_ + n).normalized();
+    rgb_ = ((rgb_.cast<float>()*w_ + rgb.cast<float>())/wNew).cast<uint8_t>();
+    w_ = std::min(100.f, wNew);
+  }
 };
 
 }    
@@ -259,7 +277,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
-  pangolin::Var<bool> runMapping("ui.run mapping",false,true);
+  pangolin::Var<bool> runMapping("ui.run mapping",true,true);
+  pangolin::Var<bool> updatePlanes("ui.update planes",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
@@ -276,10 +295,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",false,true);
+  pangolin::Var<bool> showNormals("ui.show ns",false,true);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
-  tdp::SE3f T_wKf = T_wc;
   std::vector<tdp::SE3f> T_wcs;
   Eigen::Matrix<float,6,6> Sigma_mc;
   std::vector<float> logHs;
@@ -328,7 +347,6 @@ int main( int argc, char* argv[] )
     rig.CollectRGB(gui, rgb) ;
     TOCK("Setup");
 
-
     uint32_t numObs = 0;
     uint32_t numInlPrev = 0;
     if (frame > 0 && runTracking) { // tracking
@@ -346,7 +364,6 @@ int main( int argc, char* argv[] )
       n_m.Reinitialise(pl_w.SizeToRead());
       pc_c.Reinitialise(pl_w.SizeToRead());
       n_c.Reinitialise(pl_w.SizeToRead());
-
 
       for (size_t it = 0; it < maxIt; ++it) {
 
@@ -367,31 +384,32 @@ int main( int argc, char* argv[] )
         tdp::SE3f T_cw = T_wc.Inverse();
         size_t j =0;
         for (size_t i : id_w) {
-          tdp::Vector3fda& n_w = pl_w.GetCircular(i).n;
-          tdp::Vector3fda& pc_w = pl_w.GetCircular(i).pt;
-
-          n_m[j] = n_w;
-          pc_m[j++] = pc_w;
+          tdp::Vector3fda& n_w = pl_w.GetCircular(i).n_;
+          tdp::Vector3fda& pc_w = pl_w.GetCircular(i).p_;
 
           tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
           Eigen::Vector2f x = cam.Project(pc_w_in_c);
           int32_t u = floor(x(0)+0.5f);
           int32_t v = floor(x(1)+0.5f);
           if (0 <= u && u < w && 0 <= v && v < h) {
+            n_m[j] = n_w;
+            pc_m[j++] = pc_w;
             if (tdp::IsValidData(pc(u,v))) {
               uint32_t Wscaled = floor(W*pc(u,v)(2));
               tdp::Vector3fda n;
               if (!tdp::NormalViaScatter(pc, u, v, Wscaled, n)) {
-                std::cout << "problem at " << u << ", " << v << std::endl;
+//                std::cout << "problem at " << u << ", " << v << std::endl;
                 continue;
               } else {
                 pc_c[j-1] = pc(u,v);
                 n_c[j-1] = n;
-                float dist = (pc_w - T_wc*pc(u,v)).norm();
+
+                tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+                float dist = (pc_w - pc_c_in_w).norm();
                 if (dist < distThr*pc(u,v)(2)) {
                   Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
                   if (fabs(n_w_in_c.dot(n)) > dotThr) {
-                    float p2pl = n_w.dot(pc_w - T_wc*pc(u,v));
+                    float p2pl = n_w.dot(pc_w - pc_c_in_w);
                     if (fabs(p2pl) < p2plThr) {
                       Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
                       Ai.bottomRows<3>() = n_w_in_c; 
@@ -399,10 +417,11 @@ int main( int argc, char* argv[] )
                       A += Ai * Ai.transpose();
                       b += Ai * bi;
                       err += p2pl;
-                      assoc.emplace_back(j-1,j-1);
+                      assoc.emplace_back(i,j-1);
                       // if this gets expenseive I could use 
                       // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
                       numInl ++;
+                      tdp::Vector3fda n_c_in_w = T_wc.rotation() * n;
                     }
                   }
                 }
@@ -438,7 +457,6 @@ int main( int argc, char* argv[] )
             << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
             << " " <<  x.bottomRows(3).norm()
             << std::endl;
-          std::cout << T_wc << std::endl;
         }
         if (x.norm() < 1e-4) break;
       }
@@ -449,15 +467,23 @@ int main( int argc, char* argv[] )
       std::cout << " H " << logH  << std::endl;
       T_wcs.push_back(T_wc);
       trackingGood = true;
+
+      if (updatePlanes) {
+        for (const auto& ass : assoc) {
+          tdp::Vector3fda pc_c_in_w = T_wc*pc_c[ass.second];
+          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c[ass.second];
+          pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
+        }
+      }
     }
 
     if (!gui.paused() 
         && (runMapping || frame == 0) 
         && (trackingGood || frame == 0)) { // add new observations
+      float perc = std::max(0.f, (float)subsample - (float)numObs/(float)mask.Area());
+      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
       TICK("mask");
-      tdp::RandomMaskCpu(mask, 
-          std::max(0.f, (float)subsample - (float)numObs/(float)mask.Area()), 
-          W*dMax);
+      tdp::RandomMaskCpu(mask, perc, W*dMax);
       cuMask.CopyFrom(mask);
       tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
       TOCK("mask");
@@ -468,14 +494,15 @@ int main( int argc, char* argv[] )
 
       tdp::Plane pl;
       for (size_t i=0; i<pc_i.Area(); ++i) {
-        pl.pt = T_wc*pc_i[i];
-        pl.n = T_wc.rotation()*n_i[i];
-        pl.rgb = rgb_i[i];
+        pl.p_ = T_wc*pc_i[i];
+        pl.n_ = T_wc.rotation()*n_i[i];
+        pl.rgb_ = rgb_i[i];
         pl_w.Insert(pl);
 
-        pc_w.Insert(pl.pt);
-        rgb_w.Insert(pl.rgb);
+        pc_w.Insert(pl.p_);
+        rgb_w.Insert(pl.rgb_);
       }
+      std::cout << " # map points: " << pl_w.SizeToRead() << std::endl;
 
       if (showFullPc) {
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -501,21 +528,32 @@ int main( int argc, char* argv[] )
         pangolin::RenderVboCbo(vbo_w, cbo_w, true);
       }
 
-      pangolin::glSetFrameOfReference(T_wKf.matrix());
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
       glColor3f(1,0,0);
-      pangolin::RenderVbo(vbo);
-      pangolin::glUnsetFrameOfReference();
+      if (showNormals) {
+        for (size_t i=0; i<n_m.Area(); ++i) {
+          tdp::glDrawLine(pc_m[i], pc_m[i] + scale*n_m[i]);
+        }
+      } else {
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
+            3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
+        pangolin::RenderVbo(vbo);
+      }
 
+      glColor3f(0,1,0);
       pangolin::glSetFrameOfReference(T_wc.matrix());
-//      pangolin::RenderVbo(vbo);
-      glColor3f(1,1,0);
-      for (size_t i=0; i<n_c.Area(); ++i) {
-        tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
+      if (showNormals) {
+        for (size_t i=0; i<n_c.Area(); ++i) {
+          tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
+        }
+      } else {
+        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
+            3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
+        pangolin::RenderVbo(vbo);
       }
       pangolin::glUnsetFrameOfReference();
+
       if (showPlanes) {
         for (size_t i=0; i<n_c.Area(); ++i) {
           Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
@@ -585,7 +623,7 @@ int main( int argc, char* argv[] )
       glColor4f(0,1,1,0.3);
       for (const auto& ass : assoc) {
         tdp::Vector3fda pc_c_in_m = T_wc*pc_c[ass.second];
-        tdp::glDrawLine(pc_m[ass.first], pc_c_in_m);
+        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
       }
 
     }
