@@ -82,13 +82,11 @@ void ExtractNormals(const Image<Vector3fda>& pc,
   }
 }
 
-
 struct Plane {
   Vector3fda pt; 
   Vector3fda n; 
   Vector3bda rgb; 
-}
-
+};
 
 }    
 
@@ -244,6 +242,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
   tdp::ManagedHostImage<tdp::Vector3fda> n_c;
 
+  tdp::ManagedHostImage<tdp::Vector3fda> pc_i;
+  tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
+  tdp::ManagedHostImage<tdp::Vector3fda> n_i;
+
   tdp::ManagedHostImage<tdp::Vector3fda> pc_m;
   tdp::ManagedHostImage<tdp::Vector3fda> n_m;
 
@@ -279,7 +281,6 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wc = T_wc_0;
   tdp::SE3f T_wKf = T_wc;
   std::vector<tdp::SE3f> T_wcs;
-  tdp::SE3f T_mc; // current to model
   Eigen::Matrix<float,6,6> Sigma_mc;
   std::vector<float> logHs;
 
@@ -307,6 +308,10 @@ int main( int argc, char* argv[] )
   {
     trackingGood = false;
 
+    if (pangolin::Pushed(icpReset)) {
+      T_wc = tdp::SE3f();
+    }
+
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -323,9 +328,10 @@ int main( int argc, char* argv[] )
     rig.CollectRGB(gui, rgb) ;
     TOCK("Setup");
 
+
     uint32_t numObs = 0;
     uint32_t numInlPrev = 0;
-    if (!gui.paused() && frame > 0 && runTracking) { // tracking
+    if (frame > 0 && runTracking) { // tracking
       assoc.clear();
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
@@ -335,7 +341,20 @@ int main( int argc, char* argv[] )
       std::vector<size_t> id_w(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
       std::random_shuffle(id_w.begin(), id_w.end());
+
+      pc_m.Reinitialise(pl_w.SizeToRead());
+      n_m.Reinitialise(pl_w.SizeToRead());
+      pc_c.Reinitialise(pl_w.SizeToRead());
+      n_c.Reinitialise(pl_w.SizeToRead());
+
+
       for (size_t it = 0; it < maxIt; ++it) {
+
+        pc_m.Fill(tdp::Vector3fda::Zero());
+        pc_c.Fill(tdp::Vector3fda::Zero());
+        n_m.Fill(tdp::Vector3fda::Zero());
+        n_c.Fill(tdp::Vector3fda::Zero());
+
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
         Ai = Eigen::Matrix<float,6,1>::Zero();
@@ -346,26 +365,33 @@ int main( int argc, char* argv[] )
         numObs = 0;
 
         tdp::SE3f T_cw = T_wc.Inverse();
+        size_t j =0;
         for (size_t i : id_w) {
-          Eigen::Vector3f& n_w = pl_w.GetCircular(i).n;
-          Eigen::Vector3f& pc_w = pl_w.GetCircular(i).pt;
-          Eigen::Vector3f& pc_w_in_c = T_cw*pc_w;
+          tdp::Vector3fda& n_w = pl_w.GetCircular(i).n;
+          tdp::Vector3fda& pc_w = pl_w.GetCircular(i).pt;
+
+          n_m[j] = n_w;
+          pc_m[j++] = pc_w;
+
+          tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
           Eigen::Vector2f x = cam.Project(pc_w_in_c);
           int32_t u = floor(x(0)+0.5f);
           int32_t v = floor(x(1)+0.5f);
           if (0 <= u && u < w && 0 <= v && v < h) {
-            if (IsValidData(pc(u,v))) {
+            if (tdp::IsValidData(pc(u,v))) {
               uint32_t Wscaled = floor(W*pc(u,v)(2));
               tdp::Vector3fda n;
               if (!tdp::NormalViaScatter(pc, u, v, Wscaled, n)) {
                 std::cout << "problem at " << u << ", " << v << std::endl;
                 continue;
               } else {
-                float dist = (pc(u,v) - pc_w_in_c).norm();
+                pc_c[j-1] = pc(u,v);
+                n_c[j-1] = n;
+                float dist = (pc_w - T_wc*pc(u,v)).norm();
                 if (dist < distThr*pc(u,v)(2)) {
                   Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
                   if (fabs(n_w_in_c.dot(n)) > dotThr) {
-                    _float p2pl = n_w.dot(pc_w - T_wc*pc(u,v));
+                    float p2pl = n_w.dot(pc_w - T_wc*pc(u,v));
                     if (fabs(p2pl) < p2plThr) {
                       Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
                       Ai.bottomRows<3>() = n_w_in_c; 
@@ -373,7 +399,7 @@ int main( int argc, char* argv[] )
                       A += Ai * Ai.transpose();
                       b += Ai * bi;
                       err += p2pl;
-                      assoc.emplace_back(i,j);
+                      assoc.emplace_back(j-1,j-1);
                       // if this gets expenseive I could use 
                       // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
                       numInl ++;
@@ -404,12 +430,15 @@ int main( int argc, char* argv[] )
         if (numInl > 10) {
           // solve for x using ldlt
           x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-          T_mc = T_mc * tdp::SE3f::Exp_(x);
+          T_wc = T_wc * tdp::SE3f::Exp_(x);
         }
         if (gui.verbose) {
-          std::cout << " it " << it << ": err=" << err << "\t# inliers: " << numInl
-            << "\t|x|: " << x.topRows(3).norm()*180./M_PI << " " <<  x.bottomRows(3).norm()
+          std::cout << " it " << it << ": err=" << err 
+            << "\t# inliers: " << numInl
+            << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+            << " " <<  x.bottomRows(3).norm()
             << std::endl;
+          std::cout << T_wc << std::endl;
         }
         if (x.norm() < 1e-4) break;
       }
@@ -418,12 +447,13 @@ int main( int argc, char* argv[] )
       plotAdaptiveH.ScrollView(numObs,0);
       float logH = ((Sigma_mc.eigenvalues()).array().log().sum()).real();
       std::cout << " H " << logH  << std::endl;
-      T_wc = T_mc;
       T_wcs.push_back(T_wc);
       trackingGood = true;
     }
 
-    if (!gui.paused() && runMapping && trackingGood) { // add new observations
+    if (!gui.paused() 
+        && (runMapping || frame == 0) 
+        && (trackingGood || frame == 0)) { // add new observations
       TICK("mask");
       tdp::RandomMaskCpu(mask, 
           std::max(0.f, (float)subsample - (float)numObs/(float)mask.Area()), 
@@ -432,15 +462,24 @@ int main( int argc, char* argv[] )
       tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
       TOCK("mask");
       TICK("normals");
-      ExtractNormals(pc, rgb, mask, W, pc_c, n_c, rgb_c);
+      
+      ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
       TOCK("normals");
 
       tdp::Plane pl;
-      for (size_t i=0; i<pc_c.Area(); ++i) {
-        pl.pt = pc_c[i];
-        pl.n = n_c[i];
-        pl.rgb = rgb_c[i];
+      for (size_t i=0; i<pc_i.Area(); ++i) {
+        pl.pt = T_wc*pc_i[i];
+        pl.n = T_wc.rotation()*n_i[i];
+        pl.rgb = rgb_i[i];
         pl_w.Insert(pl);
+
+        pc_w.Insert(pl.pt);
+        rgb_w.Insert(pl.rgb);
+      }
+
+      if (showFullPc) {
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
       }
     }
 
@@ -459,11 +498,6 @@ int main( int argc, char* argv[] )
       if (showFullPc) {
 //        glColor4f(0.,1.,1.,0.6);
 //        pangolin::RenderVbo(vbo_w);
-        for (size_t i=0; i<pc_c.Area(); ++i) pc_c[i] = T_wc * pc_c[i];
-        pc_w.Insert(pc_c);
-        rgb_w.Insert(rgb_c);
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
         pangolin::RenderVboCbo(vbo_w, cbo_w, true);
       }
 
@@ -515,7 +549,7 @@ int main( int argc, char* argv[] )
     if (viewAssoc.IsShown()) {
       viewAssoc.Activate(s_cam);
 
-      pangolin::glSetFrameOfReference((T_mc).matrix());
+      pangolin::glSetFrameOfReference((T_wc).matrix());
       pangolin::glDrawAxis(0.1f);
       vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
           3, GL_DYNAMIC_DRAW);
@@ -550,7 +584,7 @@ int main( int argc, char* argv[] )
 
       glColor4f(0,1,1,0.3);
       for (const auto& ass : assoc) {
-        tdp::Vector3fda pc_c_in_m = T_mc*pc_c[ass.second];
+        tdp::Vector3fda pc_c_in_m = T_wc*pc_c[ass.second];
         tdp::glDrawLine(pc_m[ass.first], pc_c_in_m);
       }
 
