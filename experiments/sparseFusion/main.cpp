@@ -255,8 +255,9 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
-  pangolin::Var<bool> runMapping("ui.icp Fixed",false,true);
-  pangolin::Var<bool> runTracking("ui.icp Fixed",true,true);
+  pangolin::Var<bool> runTracking("ui.run tracking",true,true);
+  pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
+  pangolin::Var<bool> runMapping("ui.run mapping",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
@@ -304,6 +305,8 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    trackingGood = false;
+
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -329,7 +332,7 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
 
-      std::vector<size_t> id_w(pl_w.Area());
+      std::vector<size_t> id_w(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
       std::random_shuffle(id_w.begin(), id_w.end());
       for (size_t it = 0; it < maxIt; ++it) {
@@ -344,7 +347,9 @@ int main( int argc, char* argv[] )
 
         tdp::SE3f T_cw = T_wc.Inverse();
         for (size_t i : id_w) {
-          Eigen::Vector3f pc_w_in_c = T_cw*pl_w[i].pt;
+          Eigen::Vector3f& n_w = pl_w.GetCircular(i).n;
+          Eigen::Vector3f& pc_w = pl_w.GetCircular(i).pt;
+          Eigen::Vector3f& pc_w_in_c = T_cw*pc_w;
           Eigen::Vector2f x = cam.Project(pc_w_in_c);
           int32_t u = floor(x(0)+0.5f);
           int32_t v = floor(x(1)+0.5f);
@@ -358,9 +363,9 @@ int main( int argc, char* argv[] )
               } else {
                 float dist = (pc(u,v) - pc_w_in_c).norm();
                 if (dist < distThr*pc(u,v)(2)) {
-                  Eigen::Vector3f n_w_in_c = T_cw.rotation()*pl_w[i].n;
+                  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
                   if (fabs(n_w_in_c.dot(n)) > dotThr) {
-                    float p2pl = pl_w[i].n.dot(pl_w[i].pt - T_wc*pc(u,v));
+                    _float p2pl = n_w.dot(pc_w - T_wc*pc(u,v));
                     if (fabs(p2pl) < p2plThr) {
                       Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
                       Ai.bottomRows<3>() = n_w_in_c; 
@@ -415,9 +420,10 @@ int main( int argc, char* argv[] )
       std::cout << " H " << logH  << std::endl;
       T_wc = T_mc;
       T_wcs.push_back(T_wc);
+      trackingGood = true;
     }
 
-    if (!gui.paused() && runMapping) { // add new observations
+    if (!gui.paused() && runMapping && trackingGood) { // add new observations
       TICK("mask");
       tdp::RandomMaskCpu(mask, 
           std::max(0.f, (float)subsample - (float)numObs/(float)mask.Area()), 
