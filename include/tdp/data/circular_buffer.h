@@ -55,8 +55,12 @@ class CircularBuffer : public Image<T> {
     iInsert_ = iInsert_+data.Area();
   }
 
-  void MarkRead(int32_t num) {
-    iRead_ = (iRead_+num)%this->w_;
+  void MarkRead(int32_t num = -1) {
+    if (num < 0) {
+      iRead_ = (iInsert_-1+this->w_)%this->w_;
+    } else {
+      iRead_ = (iRead_+num)%this->w_;
+    }
   }
 
   size_t SizeToRead() const {
