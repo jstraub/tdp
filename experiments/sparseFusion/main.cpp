@@ -245,7 +245,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
-  tdp::ManagedDevicePyramid<uint8_t,3> cuPyrMask(wc, hc);
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
 
@@ -318,18 +317,50 @@ int main( int argc, char* argv[] )
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
 
-  size_t numKfs = 0;
-  size_t numKfsPrev = 0;
+  uint32_t numObs = 0;
+  uint32_t numInlPrev = 0;
 
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
-    trackingGood = false;
-
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
+
+    if (!gui.paused() 
+        && frame > 0
+        && (runMapping || frame == 1) 
+        && (trackingGood || frame == 1)) { // add new observations
+      float perc = std::max(0.f, 
+          (float)subsample-(float)numObs/(float)mask.Area());
+      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
+      TICK("mask");
+      tdp::RandomMaskCpu(mask, perc, W*dMax);
+      TOCK("mask");
+      TICK("normals");
+      ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
+      TOCK("normals");
+
+      TICK("add to model");
+      tdp::Plane pl;
+      for (size_t i=0; i<pc_i.Area(); ++i) {
+        pl.p_ = T_wc*pc_i[i];
+        pl.n_ = T_wc.rotation()*n_i[i];
+        pl.rgb_ = rgb_i[i];
+        pl_w.Insert(pl);
+        pc_w.Insert(pl.p_);
+        rgb_w.Insert(pl.rgb_);
+      }
+      TOCK("add to model");
+      std::cout << " # map points: " << pl_w.SizeToRead() << std::endl;
+
+      if (showFullPc) {
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+      }
+    }
+
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -345,32 +376,34 @@ int main( int argc, char* argv[] )
     pc.CopyFrom(pcs_c.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
+    n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
-    uint32_t numObs = 0;
-    uint32_t numInlPrev = 0;
-    if (frame > 0 && runTracking) { // tracking
-      assoc.clear();
+    trackingGood = false;
+    if (frame > 1 && runTracking) { // tracking
+      TICK("icp");
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
 
+      TICK("icp prep");
       std::vector<size_t> id_w(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
       std::random_shuffle(id_w.begin(), id_w.end());
 
-      pc_m.Reinitialise(pl_w.SizeToRead());
-      n_m.Reinitialise(pl_w.SizeToRead());
+//      pc_m.Reinitialise(pl_w.SizeToRead());
+//      n_m.Reinitialise(pl_w.SizeToRead());
       pc_c.Reinitialise(pl_w.SizeToRead());
       n_c.Reinitialise(pl_w.SizeToRead());
+//      pc_m.Fill(tdp::Vector3fda::Zero());
+//      n_m.Fill(tdp::Vector3fda::Zero());
+      pc_c.Fill(tdp::Vector3fda::Zero());
+      n_c.Fill(tdp::Vector3fda::Zero());
+      TOCK("icp prep");
 
       for (size_t it = 0; it < maxIt; ++it) {
-
-        pc_m.Fill(tdp::Vector3fda::Zero());
-        pc_c.Fill(tdp::Vector3fda::Zero());
-        n_m.Fill(tdp::Vector3fda::Zero());
-        n_c.Fill(tdp::Vector3fda::Zero());
+        assoc.clear();
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -392,37 +425,42 @@ int main( int argc, char* argv[] )
           int32_t u = floor(x(0)+0.5f);
           int32_t v = floor(x(1)+0.5f);
           if (0 <= u && u < w && 0 <= v && v < h) {
-            n_m[j] = n_w;
-            pc_m[j++] = pc_w;
+//            n_m[j] = n_w;
+//            pc_m[j++] = pc_w;
             if (tdp::IsValidData(pc(u,v))) {
               uint32_t Wscaled = floor(W*pc(u,v)(2));
-              tdp::Vector3fda n;
-              if (!tdp::NormalViaScatter(pc, u, v, Wscaled, n)) {
-//                std::cout << "problem at " << u << ", " << v << std::endl;
-                continue;
-              } else {
-                pc_c[j-1] = pc(u,v);
-                n_c[j-1] = n;
+              tdp::Vector3fda ni = n(u,v);
+              if (!tdp::IsValidData(ni)) {
+                if(!tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
+                  //                std::cout << "problem at " << u << ", " << v << std::endl;
+                  continue;
+                } else {
+                  n(u,v) = ni;
+                }
+//              } else {
+//                std::cout << "saved a normal comp" << std::endl; 
+              }
+              pc_c[j] = pc(u,v);
+              n_c[j++] = ni;
 
-                tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
-                float dist = (pc_w - pc_c_in_w).norm();
-                if (dist < distThr*pc(u,v)(2)) {
-                  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-                  if (fabs(n_w_in_c.dot(n)) > dotThr) {
-                    float p2pl = n_w.dot(pc_w - pc_c_in_w);
-                    if (fabs(p2pl) < p2plThr) {
-                      Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
-                      Ai.bottomRows<3>() = n_w_in_c; 
-                      bi = p2pl;
-                      A += Ai * Ai.transpose();
-                      b += Ai * bi;
-                      err += p2pl;
-                      assoc.emplace_back(i,j-1);
-                      // if this gets expenseive I could use 
-                      // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-                      numInl ++;
-                      tdp::Vector3fda n_c_in_w = T_wc.rotation() * n;
-                    }
+              tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+              float dist = (pc_w - pc_c_in_w).norm();
+              if (dist < distThr*pc(u,v)(2)) {
+                Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+                if (fabs(n_w_in_c.dot(ni)) > dotThr) {
+                  float p2pl = n_w.dot(pc_w - pc_c_in_w);
+                  if (fabs(p2pl) < p2plThr) {
+                    Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
+                    Ai.bottomRows<3>() = n_w_in_c; 
+                    bi = p2pl;
+                    A += Ai * Ai.transpose();
+                    b += Ai * bi;
+                    err += p2pl;
+                    assoc.emplace_back(i,j-1);
+                    // if this gets expenseive I could use 
+                    // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+                    numInl ++;
+                    tdp::Vector3fda n_c_in_w = T_wc.rotation() * ni;
                   }
                 }
               }
@@ -467,46 +505,16 @@ int main( int argc, char* argv[] )
       std::cout << " H " << logH  << std::endl;
       T_wcs.push_back(T_wc);
       trackingGood = true;
+      TOCK("icp");
 
       if (updatePlanes) {
+        TICK("update planes");
         for (const auto& ass : assoc) {
           tdp::Vector3fda pc_c_in_w = T_wc*pc_c[ass.second];
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c[ass.second];
           pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
         }
-      }
-    }
-
-    if (!gui.paused() 
-        && (runMapping || frame == 0) 
-        && (trackingGood || frame == 0)) { // add new observations
-      float perc = std::max(0.f, (float)subsample - (float)numObs/(float)mask.Area());
-      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
-      TICK("mask");
-      tdp::RandomMaskCpu(mask, perc, W*dMax);
-      cuMask.CopyFrom(mask);
-      tdp::ConstructPyramidFromImage(cuMask, cuPyrMask);
-      TOCK("mask");
-      TICK("normals");
-      
-      ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
-      TOCK("normals");
-
-      tdp::Plane pl;
-      for (size_t i=0; i<pc_i.Area(); ++i) {
-        pl.p_ = T_wc*pc_i[i];
-        pl.n_ = T_wc.rotation()*n_i[i];
-        pl.rgb_ = rgb_i[i];
-        pl_w.Insert(pl);
-
-        pc_w.Insert(pl.p_);
-        rgb_w.Insert(pl.rgb_);
-      }
-      std::cout << " # map points: " << pl_w.SizeToRead() << std::endl;
-
-      if (showFullPc) {
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+        TOCK("update planes");
       }
     }
 
@@ -534,10 +542,10 @@ int main( int argc, char* argv[] )
           tdp::glDrawLine(pc_m[i], pc_m[i] + scale*n_m[i]);
         }
       } else {
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
-            3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
-        pangolin::RenderVbo(vbo);
+//        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
+//            3, GL_DYNAMIC_DRAW);
+//        vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
+//        pangolin::RenderVbo(vbo);
       }
 
       glColor3f(0,1,0);
@@ -606,11 +614,11 @@ int main( int argc, char* argv[] )
       pangolin::glUnsetFrameOfReference();
 
       pangolin::glDrawAxis(0.3f);
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
-      glColor3f(1,0,0);
-      pangolin::RenderVbo(vbo);
+//      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
+//          3, GL_DYNAMIC_DRAW);
+//      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
+//      glColor3f(1,0,0);
+//      pangolin::RenderVbo(vbo);
 
       if (showPcModel) {
         vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
@@ -620,10 +628,11 @@ int main( int argc, char* argv[] )
         pangolin::RenderVboCbo(vbo, cbo, true);
       }
 
-      glColor4f(0,1,1,0.3);
+      glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
         tdp::Vector3fda pc_c_in_m = T_wc*pc_c[ass.second];
-        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
+//        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
+        tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
 
     }
