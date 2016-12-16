@@ -63,7 +63,8 @@ protected:
   void removeEmptyClusters();
   /// Computes the index of the closest cluster (may be K_ in which
   /// case a new cluster has to be added).
-  uint32_t indOfClosestCluster(const Eigen::Matrix<T,D,1>& x, T& sim_closest);
+  uint32_t indOfClosestCluster(const Eigen::Matrix<T,D,1>& x, T& sim_closest,
+      uint32_t* zExclude=nullptr);
 };
 
 typedef DPvMFmeansSimple<float,3> DPvMFmeansSimple3f; 
@@ -91,11 +92,13 @@ void DPvMFmeansSimple<T,D>::addObservation(const Eigen::Matrix<T,D,1>& x) {
 
 template<class T, int D>
 uint32_t DPvMFmeansSimple<T,D>::indOfClosestCluster(const
-    Eigen::Matrix<T,D,1>& x, T& sim_closest)
+    Eigen::Matrix<T,D,1>& x, T& sim_closest, uint32_t* zExclude)
 {
   uint32_t z_i = K_;
   sim_closest = lambda_;
   for (uint32_t k=0; k<K_; ++k) {
+    if (zExclude && k == *zExclude)
+      continue;
     T sim_k = mus_[k].dot(x);
     if(sim_k > sim_closest) {
       sim_closest = sim_k;
@@ -111,7 +114,12 @@ void DPvMFmeansSimple<T,D>::updateLabels()
   if (xs_.size() == 0) return;
   for(uint32_t i=0; i<xs_.size(); ++i) {
     T sim_closest = 0;
+    uint32_t zPrev = zs_[i];
     uint32_t z = indOfClosestCluster(xs_[i], sim_closest);
+    if (z==zPrev && Ns_[z] == 1) {
+      z = indOfClosestCluster(xs_[i], sim_closest, &z);
+      std::cout << "single cluster " << z << " " << zPrev << std::endl;
+    }
     if (z == K_) {
       mus_.push_back(xs_[i]);
       ++K_;
@@ -181,8 +189,9 @@ T DPvMFmeansSimple<T,D>::cost() {
 //  std::cout << "f="<<f<< std::endl;
   for(uint32_t i=0; i<xs_.size(); ++i)  {
     f += mus_[zs_[i]].dot(xs_[i]);
-//    std::cout << zs_[i] << ", " << xs_[i].transpose() << ", " << mus_[zs_[i]].transpose() << std::endl;
-//  std::cout << "f="<<f<< std::endl;
+//    std::cout << zs_[i] << ", " << xs_[i].transpose() << ", " 
+//      << mus_[zs_[i]].transpose();
+//    std::cout << " f="<<f<< std::endl;
   }
   return f;
 }
@@ -190,7 +199,7 @@ T DPvMFmeansSimple<T,D>::cost() {
 template<class T, int D>
 bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
   uint32_t iter = 0;
-  T fPrev = 1e99;
+  T fPrev = 1e9;
   T f = cost();
 //  std::cout << "f=" << f << " fPrev=" << fPrev << std::endl;
   while (iter < maxIter && fabs(fPrev - f)/f > eps) {
@@ -199,9 +208,14 @@ bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
     fPrev = f;
     f = cost();
     ++iter;
-    std::cout << iter << ": f=" << f << " fPrev=" << fPrev << std::endl;
+//    std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
   }
-//  std::cout << "iter=" << iter<< std::endl;
+  if (f != f || fPrev != fPrev || f > 1e9 || iter == maxIter-1) {
+    std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
+    for (const auto& N : Ns_) {
+      std::cout << N << " ";
+    } std::cout << std::endl;
+  }
   return iter < maxIter;
 }
 
