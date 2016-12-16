@@ -88,6 +88,9 @@ struct Plane {
   Vector3fda n_; 
   Vector3bda rgb_; 
 
+  uint32_t lastFrame_;
+  uint32_t numObs_;
+
   float w_; // weight
 
   void AddObs(const Vector3fda& p, const Vector3fda& n) {
@@ -202,7 +205,7 @@ int main( int argc, char* argv[] )
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
 
-  containerTracking.Show(false);
+  containerTracking.Show(true);
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
@@ -274,7 +277,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
+  pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
   pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
 
@@ -335,6 +338,10 @@ int main( int argc, char* argv[] )
   std::vector<size_t> id_w;
   id_w.reserve(1000000);
 
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -347,11 +354,45 @@ int main( int argc, char* argv[] )
         && frame > 0
         && (runMapping || frame == 1) 
         && (trackingGood || frame == 1)) { // add new observations
-      float perc = std::max(0.f, 
-          (float)subsample-(float)numObs/(float)mask.Area());
-      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
+//      float perc = std::max(0.f, 
+//          (float)subsample-(float)numObs/(float)mask.Area());
+//      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
       TICK("mask");
-      tdp::RandomMaskCpu(mask, perc, W*dMax);
+//      tdp::RandomMaskCpu(mask, perc, W*dMax);
+      std::uniform_real_distribution<> coin(0, 1);
+      size_t I = 4;
+      size_t J = 4;
+      for (size_t i=0; i<I; ++i) {
+        for (size_t j=0; j<J; ++j) {
+          size_t count = 0;
+          for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+            for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+              if (mask(u,v)) count++;
+            }
+          }
+          float perc = (float)subsample-(float)count/(float)(mask.w_/I*mask.h_/J);
+//          std::cout << i << "," << j << ": " << 100*perc << std::endl;
+          if (perc > 0.) {
+            for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+              for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+                if (mask(u,v)) {
+                  mask(u,v) = 0;
+                } else if (coin(gen) < perc) {
+                  mask(u,v) = 1;
+                } else {
+                  mask(u,v) = 0;
+                }
+              }
+            }
+          } else {
+            for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+              for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+                if (mask(u,v)) mask(u,v) = 0;
+              }
+            }
+          }
+        }
+      }
       TOCK("mask");
       TICK("normals");
       ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
@@ -363,6 +404,8 @@ int main( int argc, char* argv[] )
         pl.p_ = T_wc*pc_i[i];
         pl.n_ = T_wc.rotation()*n_i[i];
         pl.rgb_ = rgb_i[i];
+        pl.lastFrame_ = frame;
+        pl.numObs_ = 1;
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         rgb_w.Insert(pl.rgb_);
@@ -399,11 +442,14 @@ int main( int argc, char* argv[] )
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
       }
-
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
+
+      if (viewMask.IsShown()) {
+        viewMask.SetImage(mask);
+      }
 
     gui.NextFrames();
 
@@ -433,10 +479,9 @@ int main( int argc, char* argv[] )
 //      TICK("icp prep");
 //      TOCK("icp prep");
 
-      std::random_device rd;
-      std::mt19937 gen(rd());
       std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
-
+      
+      mask.Fill(0);
       for (size_t it = 0; it < maxIt; ++it) {
         assoc.clear();
 
@@ -500,6 +545,10 @@ int main( int argc, char* argv[] )
                       // if this gets expenseive I could use 
                       // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
                       numInl ++;
+                      pl_w.GetCircular(i).lastFrame_ = frame;
+                      pl_w.GetCircular(i).numObs_ ++;
+                      mask(u,v) ++;
+
                       break;
                     }
                   }
@@ -705,9 +754,6 @@ int main( int argc, char* argv[] )
       }
       if (viewCurrent.IsShown()) {
         viewCurrent.SetImage(rgb);
-      }
-      if (viewMask.IsShown()) {
-        viewMask.SetImage(mask);
       }
     }
     plotdH.ScrollView(1,0);
