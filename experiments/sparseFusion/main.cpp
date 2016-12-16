@@ -296,12 +296,14 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
 
+  tdp::ManagedHostImage<float> age;
+
   // ICP stuff
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_m(wc,hc);
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
+  pangolin::GlBuffer valuebo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,1);
 
 //  tdp::ManagedHostImage<tdp::Vector3fda> pc_c;
 //  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
@@ -318,7 +320,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.01);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
@@ -344,6 +346,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
+  pangolin::Var<bool> showAge("ui.show age",true,true);
+  pangolin::Var<bool> showObs("ui.show # obs",true,true);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -677,9 +681,29 @@ int main( int argc, char* argv[] )
       glDrawPoses(T_wcs,20);
 
       if (showFullPc) {
-//        glColor4f(0.,1.,1.,0.6);
-//        pangolin::RenderVbo(vbo_w);
-        pangolin::RenderVboCbo(vbo_w, cbo_w, true);
+        if ((!showAge && !showObs) || pl_w.SizeToRead() == 0) {
+          pangolin::RenderVboCbo(vbo_w, cbo_w, true);
+        } else {
+          age.Reinitialise(pl_w.SizeToRead());
+          if (showAge) {
+            for (size_t i=0; i<age.Area(); ++i) 
+              age[i] = pl_w.GetCircular(i).lastFrame_;
+          } else {
+            for (size_t i=0; i<age.Area(); ++i) 
+              age[i] = pl_w.GetCircular(i).numObs_;
+          }
+          valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),  GL_FLOAT,
+              1, GL_DYNAMIC_DRAW);
+          valuebo.Upload(age.ptr_,  age.SizeBytes(), 0);
+
+          pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+          pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+          std::pair<float,float> minMaxAge = age.MinMax();
+//          std::cout << " age " << minMaxAge.first 
+//            << " < . < " << minMaxAge.second << std::endl;
+          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
+              P, MV);
+        }
       }
 
       glColor3f(1,0,0);
@@ -687,26 +711,7 @@ int main( int argc, char* argv[] )
         for (size_t i=0; i<n_m.Area(); ++i) {
           tdp::glDrawLine(pc_m[i], pc_m[i] + scale*n_m[i]);
         }
-      } else {
-//        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
-//            3, GL_DYNAMIC_DRAW);
-//        vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
-//        pangolin::RenderVbo(vbo);
       }
-
-      glColor3f(0,1,0);
-      pangolin::glSetFrameOfReference(T_wc.matrix());
-//      if (showNormals) {
-//        for (size_t i=0; i<n_c.Area(); ++i) {
-//          tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
-//        }
-//      } else {
-//        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
-//            3, GL_DYNAMIC_DRAW);
-//        vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
-//        pangolin::RenderVbo(vbo);
-//      }
-      pangolin::glUnsetFrameOfReference();
 
       if (showPlanes) {
         for (size_t i=0; i<n_c.Area(); ++i) {
@@ -743,12 +748,6 @@ int main( int argc, char* argv[] )
 
       pangolin::glSetFrameOfReference((T_wc).matrix());
       pangolin::glDrawAxis(0.1f);
-//      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
-//          3, GL_DYNAMIC_DRAW);
-//      vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
-//      glColor3f(0,1,0);
-//      pangolin::RenderVbo(vbo);
-
       if (showPcCurrent) {
         vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
             3, GL_DYNAMIC_DRAW);
@@ -756,16 +755,9 @@ int main( int argc, char* argv[] )
         cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
         pangolin::RenderVboCbo(vbo, cbo, true);
       }
-
       pangolin::glUnsetFrameOfReference();
 
       pangolin::glDrawAxis(0.3f);
-//      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_m.Area(), GL_FLOAT,
-//          3, GL_DYNAMIC_DRAW);
-//      vbo.Upload(pc_m.ptr_, pc_m.SizeBytes(), 0);
-//      glColor3f(1,0,0);
-//      pangolin::RenderVbo(vbo);
-
       if (showPcModel) {
         vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
             3, GL_DYNAMIC_DRAW);
@@ -777,9 +769,9 @@ int main( int argc, char* argv[] )
       glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
         tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
-//        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
         tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
+
     }
 
     TOCK("Draw 3D");
