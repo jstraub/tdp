@@ -46,6 +46,7 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>
+#include <tdp/clustering/dpmeans_simple.hpp>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -227,10 +228,9 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logEigt;
   pangolin::Plotter plotEigt(&logEigt, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
   plotters.AddDisplay(plotEigt);
-
-
   pangolin::DataLog logAdaptiveEntropy;
-  pangolin::Plotter plotAdaptiveH(&logAdaptiveEntropy, -100.f,1.f, -40.f,40.f, .1f, 0.1f);
+  pangolin::Plotter plotAdaptiveH(&logAdaptiveEntropy, -100.f,1.f,
+      -40.f,40.f, .1f, 0.1f);
   plotters.AddDisplay(plotAdaptiveH);
   gui.container().AddDisplay(plotters);
 
@@ -286,6 +286,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updatePlanes("ui.update planes",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
+  pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
@@ -328,6 +329,12 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
+  tdp::DPvMFmeansSimple3f dpvmf(cos(65.*M_PI/180.));
+
+  std::vector<std::vector<uint32_t>> invInd;
+  std::vector<size_t> id_w;
+  id_w.reserve(1000000);
+
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -359,16 +366,41 @@ int main( int argc, char* argv[] )
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         rgb_w.Insert(pl.rgb_);
+
+        dpvmf.addObservation(pl.n_);
       }
+      id_w.resize(pl_w.SizeToRead());
+      std::iota(id_w.begin(), id_w.end(), 0);
+      std::random_shuffle(id_w.begin(), id_w.end());
       TOCK("add to model");
-      std::cout << " # map points: " << pl_w.SizeToRead() << std::endl;
+      std::cout << " # map points: " << pl_w.SizeToRead() 
+        << " " << dpvmf.GetZs().size() << std::endl;
+      TICK("dpvmf");
+      dpvmf.iterateToConvergence(100, 1e-3);
+      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+        if (k >= invInd.size()) {
+          invInd.push_back(std::vector<uint32_t>());
+          invInd.back().reserve(1000000);
+        } else {
+          invInd[k].clear();
+        }
+        for (auto i : id_w) {
+          if (dpvmf.GetZs()[i] == k) 
+            invInd[k].push_back(i);
+          if (invInd[k].size() >= 100000)
+            break;
+        }
+        std::cout << "cluster " << k << ": # " << invInd[k].size() << std::endl;
+      }
+      TOCK("dpvmf");
+      std::cout << " # clusters " << dpvmf.GetK() << std::endl;
 
       if (showFullPc) {
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
       }
-    }
 
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -398,11 +430,12 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
 
-      TICK("icp prep");
-      std::vector<size_t> id_w(pl_w.SizeToRead());
-      std::iota(id_w.begin(), id_w.end(), 0);
-      std::random_shuffle(id_w.begin(), id_w.end());
-      TOCK("icp prep");
+//      TICK("icp prep");
+//      TOCK("icp prep");
+
+      std::random_device rd;
+      std::mt19937 gen(rd());
+      std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
 
       for (size_t it = 0; it < maxIt; ++it) {
         assoc.clear();
@@ -416,47 +449,59 @@ int main( int argc, char* argv[] )
         uint32_t numInl = 0;
         numObs = 0;
 
+        std::vector<size_t> indK(dpvmf.GetK(),0);
+//        tdp::eigen_vector<tdp::Vector3fda> ns;
+
         tdp::SE3f T_cw = T_wc.Inverse();
-        for (size_t i : id_w) {
-          tdp::Vector3fda& n_w = pl_w.GetCircular(i).n_;
-          tdp::Vector3fda& pc_w = pl_w.GetCircular(i).p_;
+        bool exploredAll = false;
+        uint32_t k = dis(gen);
+        while (numObs < 10000 && !exploredAll) {
+          k = (k+1) % dpvmf.GetK();
+          while (indK[k] < invInd[k].size()) {
+//            std::cout << k << " " << indK[k] << " " << invInd[k].size() << std::endl;
+            size_t i = invInd[k][indK[k]++];
 
-          tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
-          Eigen::Vector2f x = cam.Project(pc_w_in_c);
-          int32_t u = floor(x(0)+0.5f);
-          int32_t v = floor(x(1)+0.5f);
-          numProjected++;
-          if (0 <= u && u < w && 0 <= v && v < h) {
-            if (tdp::IsValidData(pc(u,v))) {
-              uint32_t Wscaled = floor(W*pc(u,v)(2));
-              tdp::Vector3fda ni = n(u,v);
-              if (!tdp::IsValidData(ni)) {
-                if(!tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-                  continue;
-                } else {
-                  n(u,v) = ni;
+            tdp::Vector3fda& n_w = pl_w.GetCircular(i).n_;
+            tdp::Vector3fda& pc_w = pl_w.GetCircular(i).p_;
+
+            tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
+            Eigen::Vector2f x = cam.Project(pc_w_in_c);
+            int32_t u = floor(x(0)+0.5f);
+            int32_t v = floor(x(1)+0.5f);
+            numProjected++;
+            if (0 <= u && u < w && 0 <= v && v < h) {
+              if (tdp::IsValidData(pc(u,v))) {
+                uint32_t Wscaled = floor(W*pc(u,v)(2));
+                tdp::Vector3fda ni = n(u,v);
+                if (!tdp::IsValidData(ni)) {
+                  if(!tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
+                    continue;
+                  } else {
+                    n(u,v) = ni;
+                  }
                 }
-              }
 
-              tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
-              float dist = (pc_w - pc_c_in_w).norm();
-              if (dist < distThr*pc(u,v)(2)) {
-                Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-                if (fabs(n_w_in_c.dot(ni)) > dotThr) {
-                  float p2pl = n_w.dot(pc_w - pc_c_in_w);
-                  if (fabs(p2pl) < p2plThr) {
-                    Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
-                    Ai.bottomRows<3>() = n_w_in_c; 
-                    bi = p2pl;
-                    A += Ai * Ai.transpose();
-                    b += Ai * bi;
-                    err += p2pl;
-                    assoc.emplace_back(i,pc_c.SizeToRead());
-                    pc_c.Insert(pc(u,v));
-                    n_c.Insert(ni);
-                    // if this gets expenseive I could use 
-                    // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-                    numInl ++;
+                tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+                float dist = (pc_w - pc_c_in_w).norm();
+                if (dist < distThr*pc(u,v)(2)) {
+                  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+                  if (fabs(n_w_in_c.dot(ni)) > dotThr) {
+                    float p2pl = n_w.dot(pc_w - pc_c_in_w);
+                    if (fabs(p2pl) < p2plThr) {
+                      Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
+                      Ai.bottomRows<3>() = n_w_in_c; 
+                      bi = p2pl;
+                      A += Ai * Ai.transpose();
+                      b += Ai * bi;
+                      err += p2pl;
+                      assoc.emplace_back(i,pc_c.SizeToRead());
+                      pc_c.Insert(pc(u,v));
+                      n_c.Insert(ni);
+                      // if this gets expenseive I could use 
+                      // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+                      numInl ++;
+                      break;
+                    }
                   }
                 }
               }
@@ -470,13 +515,14 @@ int main( int argc, char* argv[] )
 //              << (Hprev-H) << std::endl;
             if ((Hprev - H) < relLogHChange && numInl > 6) {
               std::cout << numInl 
-                << " " << numProjected 
+                << " " << numObs
                 << " " << numProjected 
                 << " H " << H 
                 << " delta " << (Hprev-H) 
                 << " " << -A.eigenvalues().array().log().matrix().transpose()
                 << std::endl;
-
+              for (auto k : indK) std::cout << k << " " ;
+              std::cout << std::endl;
               break;
             }
             logAdaptiveEntropy.Log(H);
@@ -484,6 +530,11 @@ int main( int argc, char* argv[] )
             numObs ++;
           }
           numInlPrev = numInl;
+
+          exploredAll = true;
+          for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
+//          for (auto k : indK) std::cout << k << " " ;
+//          std::cout << std::endl;
         }
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -640,7 +691,6 @@ int main( int argc, char* argv[] )
 //        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
         tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
-
     }
 
     TOCK("Draw 3D");
