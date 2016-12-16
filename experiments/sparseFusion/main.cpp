@@ -216,11 +216,17 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
   plotters.AddDisplay(plotdH);
   pangolin::DataLog logObs;
-  pangolin::Plotter plotObs(&logObs, -100.f,1.f, 0.0f,1000.f, .1f, 0.1f);
+  pangolin::Plotter plotObs(&logObs, -100.f,1.f, 0.0f,10000.f, .1f, 0.1f);
   plotters.AddDisplay(plotObs);
   pangolin::DataLog logEntropy;
-  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -80.f,-40.f, .1f, 0.1f);
+  pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -30.f,0.f, .1f, 0.1f);
   plotters.AddDisplay(plotH);
+  pangolin::DataLog logEigR;
+  pangolin::Plotter plotEigR(&logEigR, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
+  plotters.AddDisplay(plotEigR);
+  pangolin::DataLog logEigt;
+  pangolin::Plotter plotEigt(&logEigt, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
+  plotters.AddDisplay(plotEigt);
 
 
   pangolin::DataLog logAdaptiveEntropy;
@@ -255,9 +261,9 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_c;
-  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
-  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
+//  tdp::ManagedHostImage<tdp::Vector3fda> pc_c;
+//  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
+//  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
 
   tdp::ManagedHostImage<tdp::Vector3fda> pc_i;
   tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
@@ -293,7 +299,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
-  pangolin::Var<bool> showFullPc("ui.show full",false,true);
+  pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
 
   tdp::SE3f T_wc_0;
@@ -313,6 +319,8 @@ int main( int argc, char* argv[] )
   rgb_w.Fill(tdp::Vector3bda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
 
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
@@ -379,6 +387,9 @@ int main( int argc, char* argv[] )
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
+    pc_c.MarkRead();
+
+    size_t numProjected =0;
     trackingGood = false;
     if (frame > 1 && runTracking) { // tracking
       TICK("icp");
@@ -391,15 +402,6 @@ int main( int argc, char* argv[] )
       std::vector<size_t> id_w(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
       std::random_shuffle(id_w.begin(), id_w.end());
-
-//      pc_m.Reinitialise(pl_w.SizeToRead());
-//      n_m.Reinitialise(pl_w.SizeToRead());
-      pc_c.Reinitialise(pl_w.SizeToRead());
-      n_c.Reinitialise(pl_w.SizeToRead());
-//      pc_m.Fill(tdp::Vector3fda::Zero());
-//      n_m.Fill(tdp::Vector3fda::Zero());
-      pc_c.Fill(tdp::Vector3fda::Zero());
-      n_c.Fill(tdp::Vector3fda::Zero());
       TOCK("icp prep");
 
       for (size_t it = 0; it < maxIt; ++it) {
@@ -410,12 +412,11 @@ int main( int argc, char* argv[] )
         Ai = Eigen::Matrix<float,6,1>::Zero();
         float bi = 0.;
         float err = 0.;
-        float logHprev = 1e10;
+        float Hprev = 1e10;
         uint32_t numInl = 0;
         numObs = 0;
 
         tdp::SE3f T_cw = T_wc.Inverse();
-        size_t j =0;
         for (size_t i : id_w) {
           tdp::Vector3fda& n_w = pl_w.GetCircular(i).n_;
           tdp::Vector3fda& pc_w = pl_w.GetCircular(i).p_;
@@ -424,24 +425,18 @@ int main( int argc, char* argv[] )
           Eigen::Vector2f x = cam.Project(pc_w_in_c);
           int32_t u = floor(x(0)+0.5f);
           int32_t v = floor(x(1)+0.5f);
+          numProjected++;
           if (0 <= u && u < w && 0 <= v && v < h) {
-//            n_m[j] = n_w;
-//            pc_m[j++] = pc_w;
             if (tdp::IsValidData(pc(u,v))) {
               uint32_t Wscaled = floor(W*pc(u,v)(2));
               tdp::Vector3fda ni = n(u,v);
               if (!tdp::IsValidData(ni)) {
                 if(!tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-                  //                std::cout << "problem at " << u << ", " << v << std::endl;
                   continue;
                 } else {
                   n(u,v) = ni;
                 }
-//              } else {
-//                std::cout << "saved a normal comp" << std::endl; 
               }
-              pc_c[j] = pc(u,v);
-              n_c[j++] = ni;
 
               tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
               float dist = (pc_w - pc_c_in_w).norm();
@@ -456,11 +451,12 @@ int main( int argc, char* argv[] )
                     A += Ai * Ai.transpose();
                     b += Ai * bi;
                     err += p2pl;
-                    assoc.emplace_back(i,j-1);
+                    assoc.emplace_back(i,pc_c.SizeToRead());
+                    pc_c.Insert(pc(u,v));
+                    n_c.Insert(ni);
                     // if this gets expenseive I could use 
                     // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
                     numInl ++;
-                    tdp::Vector3fda n_c_in_w = T_wc.rotation() * ni;
                   }
                 }
               }
@@ -468,17 +464,23 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            float logH = -((A.eigenvalues()).array().log().sum()).real();
+            float H = -((A.eigenvalues()).array().log().sum()).real();
 //            std::cout << numObs << " " << numInl 
-//              << " logH " << logH << " delta "
-//              << (logHprev-logH) << std::endl;
-            if ((logHprev - logH) < relLogHChange && numObs > 6) {
-              std::cout << numInl << " logH " << logH << " delta "
-                << (logHprev-logH) << std::endl;
+//              << " H " << H << " delta "
+//              << (Hprev-H) << std::endl;
+            if ((Hprev - H) < relLogHChange && numInl > 6) {
+              std::cout << numInl 
+                << " " << numProjected 
+                << " " << numProjected 
+                << " H " << H 
+                << " delta " << (Hprev-H) 
+                << " " << -A.eigenvalues().array().log().matrix().transpose()
+                << std::endl;
+
               break;
             }
-            logAdaptiveEntropy.Log(logH);
-            logHprev = logH;
+            logAdaptiveEntropy.Log(H);
+            Hprev = H;
             numObs ++;
           }
           numInlPrev = numInl;
@@ -499,10 +501,14 @@ int main( int argc, char* argv[] )
         if (x.norm() < 1e-4) break;
       }
       Sigma_mc = A.inverse();
-      logObs.Log(numObs, numInlPrev);
+      logObs.Log(numObs, numInlPrev, numProjected);
       plotAdaptiveH.ScrollView(numObs,0);
-      float logH = ((Sigma_mc.eigenvalues()).array().log().sum()).real();
-      std::cout << " H " << logH  << std::endl;
+      Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
+      float H = ev.array().log().sum();
+      std::cout << " H " << H  << std::endl;
+      logEntropy.Log(H);
+      logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
+      logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
       T_wcs.push_back(T_wc);
       trackingGood = true;
       TOCK("icp");
@@ -510,7 +516,7 @@ int main( int argc, char* argv[] )
       if (updatePlanes) {
         TICK("update planes");
         for (const auto& ass : assoc) {
-          tdp::Vector3fda pc_c_in_w = T_wc*pc_c[ass.second];
+          tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c[ass.second];
           pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
         }
@@ -550,16 +556,16 @@ int main( int argc, char* argv[] )
 
       glColor3f(0,1,0);
       pangolin::glSetFrameOfReference(T_wc.matrix());
-      if (showNormals) {
-        for (size_t i=0; i<n_c.Area(); ++i) {
-          tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
-        }
-      } else {
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
-            3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
-        pangolin::RenderVbo(vbo);
-      }
+//      if (showNormals) {
+//        for (size_t i=0; i<n_c.Area(); ++i) {
+//          tdp::glDrawLine(pc_c[i], pc_c[i] + scale*n_c[i]);
+//        }
+//      } else {
+//        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
+//            3, GL_DYNAMIC_DRAW);
+//        vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
+//        pangolin::RenderVbo(vbo);
+//      }
       pangolin::glUnsetFrameOfReference();
 
       if (showPlanes) {
@@ -597,11 +603,11 @@ int main( int argc, char* argv[] )
 
       pangolin::glSetFrameOfReference((T_wc).matrix());
       pangolin::glDrawAxis(0.1f);
-      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
-      glColor3f(0,1,0);
-      pangolin::RenderVbo(vbo);
+//      vbo.Reinitialise(pangolin::GlArrayBuffer, pc_c.Area(), GL_FLOAT,
+//          3, GL_DYNAMIC_DRAW);
+//      vbo.Upload(pc_c.ptr_, pc_c.SizeBytes(), 0);
+//      glColor3f(0,1,0);
+//      pangolin::RenderVbo(vbo);
 
       if (showPcCurrent) {
         vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
@@ -630,7 +636,7 @@ int main( int argc, char* argv[] )
 
       glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
-        tdp::Vector3fda pc_c_in_m = T_wc*pc_c[ass.second];
+        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
 //        tdp::glDrawLine(pc_m[ass.second], pc_c_in_m);
         tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
@@ -657,6 +663,8 @@ int main( int argc, char* argv[] )
     plotdH.ScrollView(1,0);
     plotH.ScrollView(1,0);
     plotObs.ScrollView(1,0);
+    plotEigR.ScrollView(1,0);
+    plotEigt.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
