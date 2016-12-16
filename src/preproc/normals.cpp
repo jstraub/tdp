@@ -55,21 +55,24 @@ bool NormalViaScatter(
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
-      c = pc(u0,v0);
-      Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
-      for (size_t u=u0-W; u<u0+W; ++u) {
-        for (size_t v=v0-W; v<v0+W; ++v) {
-          if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-            S += (c-pc(u,v))*(c-pc(u,v)).transpose();
-          }
+    c = pc(u0,v0);
+    Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
+    size_t N = 0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          S += (c-pc(u,v))*(c-pc(u,v)).transpose();
+          N ++;
         }
       }
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
-
-      int id = 0;
-      float eval = eig.eigenvalues().minCoeff(&id);
-      c = eig.eigenvectors().col(id);
-      c *= (c(2)<0.?1.:-1.);
+    }
+    if (N<3) 
+      return false;
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
+    int id = 0;
+    float eval = eig.eigenvalues().minCoeff(&id);
+    c = eig.eigenvectors().col(id).normalized();
+    c *= (c(2)<0.?1.:-1.);
     return true;
   }
   return false;
