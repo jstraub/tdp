@@ -53,33 +53,72 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
+//void ExtractNormals(const Image<Vector3fda>& pc, 
+//    const Image<Vector3bda>& rgb,
+//    const Image<uint8_t>& mask, uint32_t W,
+//    ManagedHostImage<Vector3fda>& pc_c,
+//    ManagedHostImage<Vector3bda>& rgb_c,
+//    ManagedHostImage<Vector3fda>& n_c) {
+//  size_t numObs = 0;
+//  for (size_t i=0; i<mask.Area(); ++i) {
+//    if (mask[i] && tdp::IsValidData(pc[i])
+//        && pc[i].norm() < 5. 
+//        && 0.3 < pc[i].norm() ) 
+//      numObs++;
+//  }
+//  pc_c.Reinitialise(numObs);
+//  rgb_c.Reinitialise(numObs);
+//  n_c.Reinitialise(numObs);
+//  size_t j=0;
+//  for (size_t i=0; i<mask.Area(); ++i) {
+//    if (mask[i] && tdp::IsValidData(pc[i])
+//        && pc[i].norm() < 5. 
+//        && 0.3 < pc[i].norm() )  {
+//      uint32_t u0 = i%mask.w_;
+//      uint32_t v0 = i/mask.w_;
+//      pc_c[j] = pc(u0,v0);
+//      rgb_c[j] = rgb(u0,v0);
+//      uint32_t Wscaled = floor(W*pc_c[j](2));
+//      if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
+//        std::cout << "problem with normal computation" << std::endl;
+//        std::cout << u0 << " " << v0 << std::endl;
+//        std::cout << pc_c[j].transpose() << std::endl;
+//      }
+//    }
+//  }
+//}
+
 void ExtractNormals(const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
     const Image<uint8_t>& mask, uint32_t W,
     ManagedHostImage<Vector3fda>& pc_c,
     ManagedHostImage<Vector3bda>& rgb_c,
     ManagedHostImage<Vector3fda>& n_c) {
-  size_t numObs = 0;
+  std::vector<size_t> ids;
+  eigen_vector<Vector3fda> ns;
+  ids.reserve(1000);
+  ns.reserve(1000);
+  Vector3fda n;
   for (size_t i=0; i<mask.Area(); ++i) {
-    if (mask[i] && tdp::IsValidData(pc[i])) numObs++;
+    if (mask[i] && tdp::IsValidData(pc[i])
+        && pc[i].norm() < 5. 
+        && 0.3 < pc[i].norm() )  {
+      uint32_t Wscaled = floor(W*pc[i](2));
+      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
+        ids.push_back(i);
+        ns.emplace_back(n);
+      }
+    }
   }
+  size_t numObs = ids.size();
   pc_c.Reinitialise(numObs);
   rgb_c.Reinitialise(numObs);
   n_c.Reinitialise(numObs);
-  size_t j=0;
-  for (size_t i=0; i<mask.Area(); ++i) {
-    if (mask[i] && tdp::IsValidData(pc[i])) {
-      uint32_t u0 = i%mask.w_;
-      uint32_t v0 = i/mask.w_;
-      pc_c[j] = pc(u0,v0);
-      rgb_c[j] = rgb(u0,v0);
-      uint32_t Wscaled = floor(W*pc_c[j](2));
-      if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
-        std::cout << "problem with normal computation" << std::endl;
-        std::cout << u0 << " " << v0 << std::endl;
-        std::cout << pc_c[j].transpose() << std::endl;
-      }
-    }
+  for (size_t j=0; j<ids.size(); ++j) {
+    size_t i= ids[j];
+    pc_c[j] = pc[i];
+    rgb_c[j] = rgb[i];
+    n_c[j] = ns[j];
   }
 }
 
@@ -293,7 +332,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
-  pangolin::Var<float> logdHThr("ui.log dH Thr",0.90,0.8,1.1);
+  pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
   pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-2,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
@@ -341,6 +380,7 @@ int main( int argc, char* argv[] )
   std::random_device rd;
   std::mt19937 gen(rd());
 
+  mask.Fill(0);
 
   size_t frame = 0;
   // Stream and display video
@@ -354,9 +394,6 @@ int main( int argc, char* argv[] )
         && frame > 0
         && (runMapping || frame == 1) 
         && (trackingGood || frame == 1)) { // add new observations
-//      float perc = std::max(0.f, 
-//          (float)subsample-(float)numObs/(float)mask.Area());
-//      std::cout << "sampling " << 100*perc << "% more points" << std::endl;
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
       std::uniform_real_distribution<> coin(0, 1);
@@ -371,7 +408,7 @@ int main( int argc, char* argv[] )
             }
           }
           float perc = (float)subsample-(float)count/(float)(mask.w_/I*mask.h_/J);
-//          std::cout << i << "," << j << ": " << 100*perc << std::endl;
+          std::cout << i << "," << j << ": " << 100*perc << std::endl;
           if (perc > 0.) {
             for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
               for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
@@ -430,13 +467,14 @@ int main( int argc, char* argv[] )
         for (auto i : id_w) {
           if (dpvmf.GetZs()[i] == k) 
             invInd[k].push_back(i);
-          if (invInd[k].size() >= 100000)
+          if (invInd[k].size() >= 10000)
             break;
         }
         std::cout << "cluster " << k << ": # " << invInd[k].size() << std::endl;
       }
       TOCK("dpvmf");
-      std::cout << " # clusters " << dpvmf.GetK() << std::endl;
+      std::cout << " # clusters " << dpvmf.GetK() << " " 
+        << dpvmf.GetNs().size() << std::endl;
 
       if (showFullPc) {
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -562,7 +600,8 @@ int main( int argc, char* argv[] )
 //            std::cout << numObs << " " << numInl 
 //              << " H " << H << " delta "
 //              << (Hprev-H) << std::endl;
-            if ((Hprev - H) < relLogHChange && numInl > 6) {
+            if ( (H < HThr ||  (Hprev - H) < relLogHChange )
+                && numInl > 6) {
               std::cout << numInl 
                 << " " << numObs
                 << " " << numProjected 
@@ -581,7 +620,8 @@ int main( int argc, char* argv[] )
           numInlPrev = numInl;
 
           exploredAll = true;
-          for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
+          for (size_t k=0; k<indK.size(); ++k) 
+            exploredAll &= indK[k] >= invInd[k].size();
 //          for (auto k : indK) std::cout << k << " " ;
 //          std::cout << std::endl;
         }
