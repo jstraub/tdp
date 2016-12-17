@@ -127,9 +127,11 @@ void DPvMFmeansSimple<T,D>::updateLabels()
       std::cout << "single cluster " << z << " " << zPrev << std::endl;
     }
     if (z != zPrev && z < K_) {
-      Ns_[zPrev] --;
+      if (zPrev < K_) {
+        Ns_[zPrev] --;
+        xSums_[zPrev] -= xs_[i];
+      }
       Ns_[z] --;
-      xSums_[zPrev] -= xs_[i];
       xSums_[z] += xs_[i];
     }
     if (z == K_) {
