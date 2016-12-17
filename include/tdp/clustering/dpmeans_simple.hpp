@@ -45,6 +45,8 @@ public:
   const std::vector<uint32_t>& GetNs() const {return Ns_;};
   bool GetCenter(uint32_t k, Eigen::Matrix<T,D,1>& mu) const {
     if (k<K_) {mu = mus_[k]; return true; } else { return false; } };
+  const Eigen::Matrix<T,D,1>& GetCenter(uint32_t k) const {
+    if (k<K_) {return mus_[k]; } else { return Eigen::Matrix<T,D,1>::Zero(); } };
   const std::vector<uint32_t>& GetZs() const { return zs_;};
   bool GetX(uint32_t i, Eigen::Matrix<T,D,1>& x) const {
     if (i<xs_.size()) {x=xs_[i]; return true; } else { return false; } };
