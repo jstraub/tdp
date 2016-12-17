@@ -378,7 +378,7 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotdH(&logdH, -100.f,1.f, .5f,1.5f, .1f, 0.1f);
   plotters.AddDisplay(plotdH);
   pangolin::DataLog logObs;
-  pangolin::Plotter plotObs(&logObs, -100.f,1.f, 0.0f,10000.f, .1f, 0.1f);
+  pangolin::Plotter plotObs(&logObs, -100.f,1.f, 0.f,10.f, .1f, 0.1f);
   plotters.AddDisplay(plotObs);
   pangolin::DataLog logEntropy;
   pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -30.f,0.f, .1f, 0.1f);
@@ -429,7 +429,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
+  pangolin::Var<float> subsample("ui.subsample %",0.01,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
@@ -444,6 +444,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.5,-1.,1.);
   pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
@@ -605,12 +606,15 @@ int main( int argc, char* argv[] )
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
       
-      assoc.clear();
-      pc_c.MarkRead();
-      n_c.MarkRead();
       mask.Fill(0);
       std::vector<size_t> indK(dpvmf.GetK(),0);
       for (size_t it = 0; it < maxIt; ++it) {
+        if (it % 1 == 0) {
+          assoc.clear();
+          pc_c.MarkRead();
+          n_c.MarkRead();
+          indK = std::vector<size_t>(dpvmf.GetK(),0);
+        }
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -630,10 +634,10 @@ int main( int argc, char* argv[] )
                 n_c.GetCircular(ass.second),
                 distThr, p2plThr, dotThr, A, Ai, b, err)) {
             numInl ++;
-            Eigen::Matrix<float,6,1> logEv = A.eigenvalues().real().array().log();
-            float H = -logEv.sum();
+            Eigen::Matrix<float,6,1> negLogEv = A.eigenvalues().real().array().log();
+            float H = negLogEv.sum();
             if ((H < HThr || Hprev - H < relLogHChange) && numInl > 6
-                && (logEv.array() < -0.5).all()) {
+                && (negLogEv.array() < negLogEvThr).all()) {
               std::cout << numInl << " " << numObs << " " << numProjected 
                 << " H " << H << " delta " << (Hprev-H) << std::endl;
               break;
@@ -643,6 +647,7 @@ int main( int argc, char* argv[] )
           }
         }
         std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+        size_t numInl0 = numInl;
         numInlPrev = numInl;
         // associate new data until enough
         bool exploredAll = false;
@@ -673,10 +678,11 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            Eigen::Matrix<float,6,1> logEv = A.eigenvalues().real().array().log();
-            float H = -logEv.sum();
+            Eigen::Matrix<float,6,1> negLogEv = 
+              -A.eigenvalues().real().array().log();
+            float H = negLogEv.sum();
             if ((H < HThr || Hprev - H < relLogHChange ) && numInl > 6
-                && (logEv.array() < -0.5).all()) {
+                && (negLogEv.array() < negLogEvThr).all()) {
               std::cout << numInl << " " << numObs << " " << numProjected 
                 << " H " << H << " delta " << (Hprev-H) << std::endl;
               break;
@@ -690,6 +696,7 @@ int main( int argc, char* argv[] )
           for (size_t k=0; k<indK.size(); ++k) 
             exploredAll &= indK[k] >= invInd[k].size();
         }
+        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
           // solve for x using ldlt
@@ -704,12 +711,23 @@ int main( int argc, char* argv[] )
             << std::endl;
         }
         if (x.norm() < 1e-4) break;
+        Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
+        float H = -negLogEv.sum();
+        std::cout << " H " << H << " " << negLogEv.transpose() << std::endl;
+        if (H < HThr && numInl > 6
+            && (negLogEv.array() < negLogEvThr).all()) {
+          std::cout << numInl << " " << numObs << " " << numProjected 
+            << " H " << H << " delta " << (Hprev-H) << std::endl;
+          break;
+        }
       }
       Sigma_mc = A.inverse();
-      logObs.Log(numObs, numInlPrev, numProjected);
+      logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
+          log(numProjected)/log(10.));
       Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
       float H = ev.array().log().sum();
-      std::cout << " H " << H  << std::endl;
+      std::cout << " H " << H << " " << ev.array().log().matrix().transpose()
+        << std::endl;
       logEntropy.Log(H);
       logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
       logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
