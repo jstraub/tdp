@@ -233,10 +233,8 @@ bool AccumulateP2Pl(const Plane& pl,
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
-    const Image<Vector3fda>& pc,
-    const Image<Vector3fda>& n,
-    int32_t u,
-    int32_t v,
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
     float distThr, 
     float p2plThr, 
     float dotThr,
@@ -247,15 +245,14 @@ bool AccumulateP2Pl(const Plane& pl,
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
-  const tdp::Vector3fda& ni = n(u,v);
-  tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
   float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr*pc(u,v)(2)) {
+  if (dist < distThr*pc_ci(2)) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (fabs(n_w_in_c.dot(ni)) > dotThr) {
+    if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
-        Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
+        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
         Ai.bottomRows<3>() = n_w_in_c; 
         A += Ai * Ai.transpose();
         b += Ai * p2pl;
@@ -392,10 +389,6 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logEigt;
   pangolin::Plotter plotEigt(&logEigt, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
   plotters.AddDisplay(plotEigt);
-  pangolin::DataLog logAdaptiveEntropy;
-  pangolin::Plotter plotAdaptiveH(&logAdaptiveEntropy, -100.f,1.f,
-      -40.f,40.f, .1f, 0.1f);
-  plotters.AddDisplay(plotAdaptiveH);
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -451,7 +444,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
-  pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-2,1.e-3,1e-2);
+  pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",8,1,15);
@@ -612,11 +605,12 @@ int main( int argc, char* argv[] )
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
       
+      assoc.clear();
+      pc_c.MarkRead();
+      n_c.MarkRead();
       mask.Fill(0);
+      std::vector<size_t> indK(dpvmf.GetK(),0);
       for (size_t it = 0; it < maxIt; ++it) {
-        assoc.clear();
-        pc_c.MarkRead();
-        n_c.MarkRead();
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -626,9 +620,31 @@ int main( int argc, char* argv[] )
         uint32_t numInl = 0;
         numObs = 0;
 
-        std::vector<size_t> indK(dpvmf.GetK(),0);
-
         tdp::SE3f T_cw = T_wc.Inverse();
+
+        // first use already associated data
+        for (const auto& ass : assoc) {
+          tdp::Plane& pl = pl_w.GetCircular(ass.first);
+          if (AccumulateP2Pl(pl, T_wc, T_cw, cam, 
+                pc_c.GetCircular(ass.second), 
+                n_c.GetCircular(ass.second),
+                distThr, p2plThr, dotThr, A, Ai, b, err)) {
+            numInl ++;
+            Eigen::Matrix<float,6,1> logEv = A.eigenvalues().real().array().log();
+            float H = -logEv.sum();
+            if ((H < HThr || Hprev - H < relLogHChange) && numInl > 6
+                && (logEv.array() < -0.5).all()) {
+              std::cout << numInl << " " << numObs << " " << numProjected 
+                << " H " << H << " delta " << (Hprev-H) << std::endl;
+              break;
+            }
+            Hprev = H;
+            numObs ++;
+          }
+        }
+        std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+        numInlPrev = numInl;
+        // associate new data until enough
         bool exploredAll = false;
         uint32_t k = dis(gen);
         while (numObs < 10000 && !exploredAll) {
@@ -642,8 +658,8 @@ int main( int argc, char* argv[] )
                   W, n, u,v ))
               continue;
 //            std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
-            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc, n,
-                  u, v, distThr, p2plThr, dotThr, A, Ai, b, err)) {
+            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v),
+                  distThr, p2plThr, dotThr, A, Ai, b, err)) {
               pl.lastFrame_ = frame;
               pl.numObs_ ++;
               numInl ++;
@@ -657,18 +673,14 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            float H = -((A.eigenvalues()).array().log().sum()).real();
-            if ((H < HThr || Hprev - H < relLogHChange )
-                && numInl > 6) {
+            Eigen::Matrix<float,6,1> logEv = A.eigenvalues().real().array().log();
+            float H = -logEv.sum();
+            if ((H < HThr || Hprev - H < relLogHChange ) && numInl > 6
+                && (logEv.array() < -0.5).all()) {
               std::cout << numInl << " " << numObs << " " << numProjected 
-                << " H " << H << " delta " << (Hprev-H);
-//                << " " << -A.eigenvalues().array().log().matrix().transpose()
-//                << std::endl;
-//              for (auto k : indK) std::cout << k << " " ;
-//              std::cout << std::endl;
+                << " H " << H << " delta " << (Hprev-H) << std::endl;
               break;
             }
-            logAdaptiveEntropy.Log(H);
             Hprev = H;
             numObs ++;
           }
@@ -677,8 +689,6 @@ int main( int argc, char* argv[] )
           exploredAll = true;
           for (size_t k=0; k<indK.size(); ++k) 
             exploredAll &= indK[k] >= invInd[k].size();
-//          for (auto k : indK) std::cout << k << " " ;
-//          std::cout << std::endl;
         }
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -697,7 +707,6 @@ int main( int argc, char* argv[] )
       }
       Sigma_mc = A.inverse();
       logObs.Log(numObs, numInlPrev, numProjected);
-      plotAdaptiveH.ScrollView(numObs,0);
       Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
       float H = ev.array().log().sum();
       std::cout << " H " << H  << std::endl;
