@@ -445,7 +445,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-2,-3.,1.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1,-2.,1.);
   pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
@@ -595,7 +595,6 @@ int main( int argc, char* argv[] )
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
-
     size_t numProjected =0;
     trackingGood = false;
     if (frame > 1 && runTracking) { // tracking
@@ -615,6 +614,7 @@ int main( int argc, char* argv[] )
           pc_c.MarkRead();
           n_c.MarkRead();
           indK = std::vector<size_t>(dpvmf.GetK(),0);
+          numProjected = 0;
         }
 
         A = Eigen::Matrix<float,6,6>::Zero();
