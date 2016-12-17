@@ -487,6 +487,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
 
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
@@ -553,6 +554,7 @@ int main( int argc, char* argv[] )
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
+        n_w.Insert(pl.n_);
         rgb_w.Insert(pl.rgb_);
       }
       id_w.resize(pl_w.SizeToRead());
@@ -829,6 +831,9 @@ int main( int argc, char* argv[] )
 
     if (viewNormals.IsShown()) {
       viewNormals.Activate(s_cam);
+      glColor4f(0,0,1,0.5);
+      vbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+      pangolin::RenderVbo(vbo_w);
       glColor4f(1,0,0,1.);
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
@@ -841,10 +846,6 @@ int main( int argc, char* argv[] )
       vbo.Upload(n_i.ptr_, n_i.SizeBytes(), 0);
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
-
-      glColor4f(0,0,1,0.5);
-      vbo_w.Upload(n_c.ptr_, n_c.SizeBytes(), 0);
-      pangolin::RenderVbo(vbo_w);
     }
 
     TOCK("Draw 3D");
