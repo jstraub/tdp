@@ -87,6 +87,47 @@ namespace tdp {
 //    }
 //  }
 //}
+ 
+void UniformResampleMask(
+    Image<uint8_t>& mask, uint32_t W,
+    float subsample,
+  std::mt19937& gen,
+      size_t I, 
+      size_t J 
+    ) {
+  std::uniform_real_distribution<> coin(0, 1);
+  for (size_t i=0; i<I; ++i) {
+    for (size_t j=0; j<J; ++j) {
+      size_t count = 0;
+      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+          if (mask(u,v)) count++;
+        }
+      }
+      float perc = (float)subsample-(float)count/(float)(mask.w_/I*mask.h_/J);
+      std::cout << i << "," << j << ": " << 100*perc << std::endl;
+      if (perc > 0.) {
+        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+            if (mask(u,v)) {
+              mask(u,v) = 0;
+            } else if (coin(gen) < perc) {
+              mask(u,v) = 1;
+            } else {
+              mask(u,v) = 0;
+            }
+          }
+        }
+      } else {
+        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+            if (mask(u,v)) mask(u,v) = 0;
+          }
+        }
+      }
+    }
+  }
+}
 
 void ExtractNormals(const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
@@ -122,10 +163,41 @@ void ExtractNormals(const Image<Vector3fda>& pc,
   }
 }
 
+
+bool ProjectiveAssocNormalExtract(const Plane& pl, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Image<Vector3fda>& pc,
+    uint32_t W,
+    Image<Vector3fda>& n
+    ) {
+  tdp::Vector3fda& n_w =  pl.n_;
+  tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
+  Eigen::Vector2f x = cam.Project(pc_w_in_c);
+  int32_t u = floor(x(0)+0.5f);
+  int32_t v = floor(x(1)+0.5f);
+  if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
+    if (tdp::IsValidData(pc(u,v))) {
+      uint32_t Wscaled = floor(W*pc(u,v)(2));
+      tdp::Vector3fda ni = n(u,v);
+      if (!tdp::IsValidData(ni)) {
+        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
+          n(u,v) = ni;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+
 struct Plane {
   Vector3fda p_; 
   Vector3fda n_; 
   Vector3bda rgb_; 
+  Vector3fda dir_; 
 
   uint32_t lastFrame_;
   uint32_t numObs_;
@@ -146,6 +218,12 @@ struct Plane {
     n_ = (n_*w_ + n).normalized();
     rgb_ = ((rgb_.cast<float>()*w_ + rgb.cast<float>())/wNew).cast<uint8_t>();
     w_ = std::min(100.f, wNew);
+  }
+
+  tdp::SE3f LocalCosy() {
+    Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
+        dir_, n_);
+    return tdp::SE3f(R, p_); 
   }
 };
 
@@ -234,6 +312,10 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewAssoc);
 
+  pangolin::View& viewNormals = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  gui.container().AddDisplay(viewNormals);
+
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
   tdp::QuickView viewModel(wc, hc);
@@ -313,9 +395,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
   tdp::ManagedHostImage<tdp::Vector3fda> n_i;
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_m;
-  tdp::ManagedHostImage<tdp::Vector3fda> n_m;
-
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
@@ -386,6 +465,8 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
+  size_t iReadCurW = 0;
+  size_t sizeReadCurW = 0;
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -400,40 +481,7 @@ int main( int argc, char* argv[] )
         && (trackingGood || frame == 1)) { // add new observations
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
-      std::uniform_real_distribution<> coin(0, 1);
-      size_t I = 4;
-      size_t J = 4;
-      for (size_t i=0; i<I; ++i) {
-        for (size_t j=0; j<J; ++j) {
-          size_t count = 0;
-          for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-            for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-              if (mask(u,v)) count++;
-            }
-          }
-          float perc = (float)subsample-(float)count/(float)(mask.w_/I*mask.h_/J);
-          std::cout << i << "," << j << ": " << 100*perc << std::endl;
-          if (perc > 0.) {
-            for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-              for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-                if (mask(u,v)) {
-                  mask(u,v) = 0;
-                } else if (coin(gen) < perc) {
-                  mask(u,v) = 1;
-                } else {
-                  mask(u,v) = 0;
-                }
-              }
-            }
-          } else {
-            for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-              for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-                if (mask(u,v)) mask(u,v) = 0;
-              }
-            }
-          }
-        }
-      }
+      tdp::UniformResampleMask(mask,subsample, gen, 4, 4);
       TOCK("mask");
       TICK("normals");
       ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
@@ -441,17 +489,31 @@ int main( int argc, char* argv[] )
 
       TICK("add to model");
       tdp::Plane pl;
+      iReadCurW = pc_i.iRead_;
+      sizeReadCurW = pc_i.Area();
       for (size_t i=0; i<pc_i.Area(); ++i) {
         pl.p_ = T_wc*pc_i[i];
         pl.n_ = T_wc.rotation()*n_i[i];
         pl.rgb_ = rgb_i[i];
         pl.lastFrame_ = frame;
         pl.numObs_ = 1;
+
+        dpvmf.addObservation(pl.n_);
+        uint32_t zi = dpvmf.GetZs().back();
+        uint32_t kMax = 0;
+        uint32_t nMax = 0;
+        for (size_t k=0; k<dpvmf.GetK(); ++k) {
+          if (k==zi) continue;
+          if (nMax < dpvmf.GetNs()[k]) {
+            nMax = dpvmf.GetNs()[k];
+            kMax = k;
+          }
+        }
+        pl.dir_ = dpvmf.GetCenter(kMax);
+
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         rgb_w.Insert(pl.rgb_);
-
-        dpvmf.addObservation(pl.n_);
       }
       id_w.resize(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
@@ -489,10 +551,6 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-      if (viewMask.IsShown()) {
-        viewMask.SetImage(mask);
-      }
-
     gui.NextFrames();
 
     int64_t t_host_us_d = 0;
@@ -517,9 +575,6 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-
-//      TICK("icp prep");
-//      TOCK("icp prep");
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
       
@@ -606,11 +661,8 @@ int main( int argc, char* argv[] )
 //              << (Hprev-H) << std::endl;
             if ( (H < HThr ||  (Hprev - H) < relLogHChange )
                 && numInl > 6) {
-              std::cout << numInl 
-                << " " << numObs
-                << " " << numProjected 
-                << " H " << H 
-                << " delta " << (Hprev-H) 
+              std::cout << numInl << " " << numObs << " " << numProjected 
+                << " H " << H << " delta " << (Hprev-H) 
                 << " " << -A.eigenvalues().array().log().matrix().transpose()
                 << std::endl;
               for (auto k : indK) std::cout << k << " " ;
@@ -654,14 +706,14 @@ int main( int argc, char* argv[] )
       logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
       logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
       T_wcs.push_back(T_wc);
-      trackingGood = true;
+      trackingGood = H <= HThr;
       TOCK("icp");
 
-      if (updatePlanes) {
+      if (updatePlanes && trackingGood) {
         TICK("update planes");
         for (const auto& ass : assoc) {
           tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
-          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c[ass.second];
+          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c.GetCircular(ass.second);
           pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
         }
         TOCK("update planes");
@@ -708,20 +760,18 @@ int main( int argc, char* argv[] )
 
       glColor3f(1,0,0);
       if (showNormals) {
-        for (size_t i=0; i<n_m.Area(); ++i) {
-          tdp::glDrawLine(pc_m[i], pc_m[i] + scale*n_m[i]);
+        for (size_t i=0; i<n_i.Area(); ++i) {
+          tdp::glDrawLine(pc_i[i], pc_i[i] + scale*n_i[i]);
         }
       }
 
       if (showPlanes) {
-        for (size_t i=0; i<n_c.Area(); ++i) {
-          Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
-              Eigen::Vector3f(0,1,0), n_c[i].normalized());
-          tdp::SE3f T(R, pc_c[i]); 
-          pangolin::glSetFrameOfReference((T_wc*T).matrix());
-          pangolin::glDrawAxis(0.05f);
-          pangolin::glDraw_z0(0.01,10);
-          pangolin::glUnsetFrameOfReference();
+        for (size_t i=iReadCurW; i<iReadCurW+sizeReadCurW; ++i) {
+          tdp::SE3f T = pl_w.GetCircular(i).LocalCosy();
+//          pangolin::glSetFrameOfReference((T_wc*T).matrix());
+          pangolin::glDrawAxis((T_wc*T).matrix(),0.05f);
+//          pangolin::glDraw_z0(0.01,10);
+//          pangolin::glUnsetFrameOfReference();
         }
       }
 
@@ -746,7 +796,7 @@ int main( int argc, char* argv[] )
     if (viewAssoc.IsShown()) {
       viewAssoc.Activate(s_cam);
 
-      pangolin::glSetFrameOfReference((T_wc).matrix());
+      pangolin::glSetFrameOfReference(T_wc.matrix());
       pangolin::glDrawAxis(0.1f);
       if (showPcCurrent) {
         vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
@@ -771,7 +821,26 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
         tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
+    }
 
+    if (viewNormals.IsShown()) {
+      viewNormals.Activate(s_cam);
+      glColor4f(1,0,0,1.);
+      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+        tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
+      }
+      glColor4f(0,1,0,1.);
+      tdp::SE3f R_wc(T_wc.rotation());
+      pangolin::glSetFrameOfReference(R_wc.matrix());
+      vbo.Reinitialise(pangolin::GlArrayBuffer, nc_i.Area(), GL_FLOAT,
+          3, GL_DYNAMIC_DRAW);
+      vbo.Upload(nc_i.ptr_, nc_i.SizeBytes(), 0);
+      pangolin::RenderVbo(vbo);
+      pangolin::glUnsetFrameOfReference();
+
+      glColor4f(0,0,1,0.5);
+      vbo_w.Upload(n_c.ptr_, n_c.SizeBytes(), 0);
+      pangolin::RenderVbo(vbo_w);
     }
 
     TOCK("Draw 3D");
@@ -786,6 +855,9 @@ int main( int argc, char* argv[] )
       }
       if (viewCurrent.IsShown()) {
         viewCurrent.SetImage(rgb);
+      }
+      if (viewMask.IsShown()) {
+        viewMask.SetImage(mask);
       }
     }
     plotdH.ScrollView(1,0);
