@@ -56,6 +56,7 @@ protected:
   uint32_t K_;
   eigen_vector<Eigen::Matrix<T,D,1>> xs_;
   eigen_vector<Eigen::Matrix<T,D,1>> mus_;
+  eigen_vector<Eigen::Matrix<T,D,1>> xSums_;
   std::vector<uint32_t> zs_;
   std::vector<uint32_t> Ns_;
 
@@ -87,9 +88,12 @@ void DPvMFmeansSimple<T,D>::addObservation(const Eigen::Matrix<T,D,1>& x) {
   uint32_t z = indOfClosestCluster(x, sim_closest);
   if (z == K_) {
     mus_.push_back(x);
+    xSums_.push_back(x);
+    Ns_.push_back(0);
     ++K_;
   }
   zs_.push_back(z);
+  Ns_[z] ++;
 };
 
 template<class T, int D>
@@ -122,8 +126,19 @@ void DPvMFmeansSimple<T,D>::updateLabels()
       z = indOfClosestCluster(xs_[i], sim_closest, &z);
       std::cout << "single cluster " << z << " " << zPrev << std::endl;
     }
+    if (z != zPrev && z < K_) {
+      Ns_[zPrev] --;
+      Ns_[z] --;
+      xSums_[zPrev] -= xs_[i];
+      xSums_[z] += xs_[i];
+    }
     if (z == K_) {
-      mus_.push_back(xs_[i]);
+      std::cout << "adding cluster " << mus_.size() << " "
+        << xSums_.size() << " " << K_ << " "
+        << xs_[i].transpose() << std::endl;
+      mus_.push_back(  xs_[i]);
+      xSums_.push_back(xs_[i]);
+      Ns_.push_back(0);
       ++K_;
     }
     zs_[i] = z;
@@ -135,14 +150,15 @@ template<class T, int D>
 void DPvMFmeansSimple<T,D>::updateCenters()
 {
   if (xs_.size() == 0) return;
-  resetClusters();
-  for(uint32_t i=0; i<xs_.size(); ++i) {
-    ++Ns_[zs_[i]]; 
-    mus_[zs_[i]] += xs_[i];
-  }
+//  resetClusters();
+//  for(uint32_t i=0; i<xs_.size(); ++i) {
+//    ++Ns_[zs_[i]]; 
+//    mus_[zs_[i]] += xs_[i];
+//  }
   // Spherical mean computation
   for(uint32_t k=0; k<K_; ++k) {
-    mus_[k] /= mus_[k].norm();
+//    mus_[k] /= mus_[k].norm();
+    mus_[k] = xSums_[k].normalized();
   }
   removeEmptyClusters();
 };
@@ -174,6 +190,7 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
   for(uint32_t k=0; k<K_; ++k) 
     if(toDelete[k]) { 
       mus_[j] = mus_[k];
+      xSums_[j] = xSums_[k];
       Ns_[j] = Ns_[k];
       ++j;
     }
@@ -181,6 +198,7 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
   K_ = kNew;
   Ns_.resize(K_);
   mus_.resize(K_);
+  xSums_.resize(K_);
 //  for(uint32_t k=0; k<K_; ++k) 
 //    std::cout << mus_[k].transpose() << std::endl;
 };
