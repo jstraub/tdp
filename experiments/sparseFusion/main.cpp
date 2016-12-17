@@ -221,6 +221,8 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
           n(u,v) = ni;
           return true;
         }
+      } else {
+        return true;
       }
     }
   }
@@ -640,7 +642,6 @@ int main( int argc, char* argv[] )
                   W, n, u,v ))
               continue;
 //            std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
-
             if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc, n,
                   u, v, distThr, p2plThr, dotThr, A, Ai, b, err)) {
               pl.lastFrame_ = frame;
@@ -650,13 +651,14 @@ int main( int argc, char* argv[] )
               assoc.emplace_back(i,pc_c.SizeToRead());
               pc_c.Insert(pc(u,v));
               n_c.Insert(n(u,v));
+//              std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
               break;
             }
           }
 
           if (numInl > numInlPrev) {
             float H = -((A.eigenvalues()).array().log().sum()).real();
-            if ( (H < HThr ||  (Hprev - H) < relLogHChange )
+            if ((H < HThr || Hprev - H < relLogHChange )
                 && numInl > 6) {
               std::cout << numInl << " " << numObs << " " << numProjected 
                 << " H " << H << " delta " << (Hprev-H) 
@@ -703,7 +705,7 @@ int main( int argc, char* argv[] )
       logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
       logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
       T_wcs.push_back(T_wc);
-      trackingGood = true; //H <= HThr && numInlPrev > 10;
+      trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
       if (trackingGood) {
         std::cout << "tracking good" << std::endl;
