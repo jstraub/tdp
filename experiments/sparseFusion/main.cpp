@@ -198,8 +198,7 @@ bool AccumulateP2Pl(const Plane& pl,
     tdp::SE3f& T_cw, 
     CameraT& cam,
     const Image<Vector3fda>& pc,
-    uint32_t W,
-    const Image<Vector3fda>& n
+    const Image<Vector3fda>& n,
     int32_t u,
     int32_t v,
     float distThr, 
@@ -208,6 +207,7 @@ bool AccumulateP2Pl(const Plane& pl,
     Eigen::Matrix<float,6,6>& A,
     Eigen::Matrix<float,6,1>& Ai,
     Eigen::Matrix<float,6,1>& b,
+    float& err
     ) {
   tdp::Vector3fda& n_w =  pl.n_;
   tdp::Vector3fda& pc_w = pl.p_;
@@ -224,19 +224,11 @@ bool AccumulateP2Pl(const Plane& pl,
         A += Ai * Ai.transpose();
         b += Ai * p2pl;
         err += p2pl;
-        assoc.emplace_back(i,pc_c.SizeToRead());
-        pc_c.Insert(pc(u,v));
-        n_c.Insert(ni);
-        // if this gets expenseive I could use 
-        // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-        numInl ++;
-        pl_w.GetCircular(i).lastFrame_ = frame;
-        pl_w.GetCircular(i).numObs_ ++;
-        mask(u,v) ++;
-        break;
+        return true;
       }
     }
   }
+  return false;
 }
 
 
@@ -646,7 +638,6 @@ int main( int argc, char* argv[] )
         while (numObs < 10000 && !exploredAll) {
           k = (k+1) % dpvmf.GetK();
           while (indK[k] < invInd[k].size()) {
-//            std::cout << k << " " << indK[k] << " " << invInd[k].size() << std::endl;
             size_t i = invInd[k][indK[k]++];
             Plane& pl = pl_w.GetCircular(i);
             numProjected++;
@@ -654,33 +645,17 @@ int main( int argc, char* argv[] )
             if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                   W, n, u,v ))
               continue;
-            tdp::Vector3fda& n_w =  pl.n_;
-            tdp::Vector3fda& pc_w = pl.p_;
-            const tdp::Vector3fda& ni = n(u,v);
-            tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
-            float dist = (pc_w - pc_c_in_w).norm();
-            if (dist < distThr*pc(u,v)(2)) {
-              Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-              if (fabs(n_w_in_c.dot(ni)) > dotThr) {
-                float p2pl = n_w.dot(pc_w - pc_c_in_w);
-                if (fabs(p2pl) < p2plThr) {
-                  Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
-                  Ai.bottomRows<3>() = n_w_in_c; 
-                  A += Ai * Ai.transpose();
-                  b += Ai * p2pl;
-                  err += p2pl;
-                  assoc.emplace_back(i,pc_c.SizeToRead());
-                  pc_c.Insert(pc(u,v));
-                  n_c.Insert(ni);
-                  // if this gets expenseive I could use 
-                  // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-                  numInl ++;
-                  pl_w.GetCircular(i).lastFrame_ = frame;
-                  pl_w.GetCircular(i).numObs_ ++;
-                  mask(u,v) ++;
-                  break;
-                }
-              }
+
+            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc, n,
+                  u, v, distThr, p2plThr, dotThr, A, Ai, b, err)) {
+              assoc.emplace_back(i,pc_c.SizeToRead());
+              pc_c.Insert(pc(u,v));
+              n_c.Insert(n(u,v));
+              numInl ++;
+              pl_w.GetCircular(i).lastFrame_ = frame;
+              pl_w.GetCircular(i).numObs_ ++;
+              mask(u,v) ++;
+              break;
             }
           }
 
