@@ -170,13 +170,14 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     const Image<Vector3fda>& pc,
     uint32_t W,
     Image<Vector3fda>& n
+    int32_t u,
+    int32_t v
     ) {
   tdp::Vector3fda& n_w =  pl.n_;
   tdp::Vector3fda& pc_w = pl.p_;
-  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
-  Eigen::Vector2f x = cam.Project(pc_w_in_c);
-  int32_t u = floor(x(0)+0.5f);
-  int32_t v = floor(x(1)+0.5f);
+  Eigen::Vector2f x = cam.Project(T_cw*pc_w);
+  u = floor(x(0)+0.5f);
+  v = floor(x(1)+0.5f);
   if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
     if (tdp::IsValidData(pc(u,v))) {
       uint32_t Wscaled = floor(W*pc(u,v)(2));
@@ -190,6 +191,52 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     }
   }
   return false;
+}
+
+bool AccumulateP2Pl(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Image<Vector3fda>& pc,
+    uint32_t W,
+    const Image<Vector3fda>& n
+    int32_t u,
+    int32_t v,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    ) {
+  tdp::Vector3fda& n_w =  pl.n_;
+  tdp::Vector3fda& pc_w = pl.p_;
+  const tdp::Vector3fda& ni = n(u,v);
+  tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr*pc(u,v)(2)) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (fabs(n_w_in_c.dot(ni)) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
+        Ai.bottomRows<3>() = n_w_in_c; 
+        A += Ai * Ai.transpose();
+        b += Ai * p2pl;
+        err += p2pl;
+        assoc.emplace_back(i,pc_c.SizeToRead());
+        pc_c.Insert(pc(u,v));
+        n_c.Insert(ni);
+        // if this gets expenseive I could use 
+        // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+        numInl ++;
+        pl_w.GetCircular(i).lastFrame_ = frame;
+        pl_w.GetCircular(i).numObs_ ++;
+        mask(u,v) ++;
+        break;
+      }
+    }
+  }
 }
 
 
@@ -585,7 +632,6 @@ int main( int argc, char* argv[] )
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
         Ai = Eigen::Matrix<float,6,1>::Zero();
-        float bi = 0.;
         float err = 0.;
         float Hprev = 1e10;
         uint32_t numInl = 0;
@@ -602,53 +648,37 @@ int main( int argc, char* argv[] )
           while (indK[k] < invInd[k].size()) {
 //            std::cout << k << " " << indK[k] << " " << invInd[k].size() << std::endl;
             size_t i = invInd[k][indK[k]++];
-
-            tdp::Vector3fda& n_w = pl_w.GetCircular(i).n_;
-            tdp::Vector3fda& pc_w = pl_w.GetCircular(i).p_;
-
-            tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
-            Eigen::Vector2f x = cam.Project(pc_w_in_c);
-            int32_t u = floor(x(0)+0.5f);
-            int32_t v = floor(x(1)+0.5f);
+            Plane& pl = pl_w.GetCircular(i);
             numProjected++;
-            if (0 <= u && u < w && 0 <= v && v < h) {
-              if (tdp::IsValidData(pc(u,v))) {
-                uint32_t Wscaled = floor(W*pc(u,v)(2));
-                tdp::Vector3fda ni = n(u,v);
-                if (!tdp::IsValidData(ni)) {
-                  if(!tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-                    continue;
-                  } else {
-                    n(u,v) = ni;
-                  }
-                }
-
-                tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
-                float dist = (pc_w - pc_c_in_w).norm();
-                if (dist < distThr*pc(u,v)(2)) {
-                  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-                  if (fabs(n_w_in_c.dot(ni)) > dotThr) {
-                    float p2pl = n_w.dot(pc_w - pc_c_in_w);
-                    if (fabs(p2pl) < p2plThr) {
-                      Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
-                      Ai.bottomRows<3>() = n_w_in_c; 
-                      bi = p2pl;
-                      A += Ai * Ai.transpose();
-                      b += Ai * bi;
-                      err += p2pl;
-                      assoc.emplace_back(i,pc_c.SizeToRead());
-                      pc_c.Insert(pc(u,v));
-                      n_c.Insert(ni);
-                      // if this gets expenseive I could use 
-                      // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
-                      numInl ++;
-                      pl_w.GetCircular(i).lastFrame_ = frame;
-                      pl_w.GetCircular(i).numObs_ ++;
-                      mask(u,v) ++;
-
-                      break;
-                    }
-                  }
+            int32_t u, v;
+            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                  W, n, u,v ))
+              continue;
+            tdp::Vector3fda& n_w =  pl.n_;
+            tdp::Vector3fda& pc_w = pl.p_;
+            const tdp::Vector3fda& ni = n(u,v);
+            tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+            float dist = (pc_w - pc_c_in_w).norm();
+            if (dist < distThr*pc(u,v)(2)) {
+              Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+              if (fabs(n_w_in_c.dot(ni)) > dotThr) {
+                float p2pl = n_w.dot(pc_w - pc_c_in_w);
+                if (fabs(p2pl) < p2plThr) {
+                  Ai.topRows<3>() = pc(u,v).cross(n_w_in_c); 
+                  Ai.bottomRows<3>() = n_w_in_c; 
+                  A += Ai * Ai.transpose();
+                  b += Ai * p2pl;
+                  err += p2pl;
+                  assoc.emplace_back(i,pc_c.SizeToRead());
+                  pc_c.Insert(pc(u,v));
+                  n_c.Insert(ni);
+                  // if this gets expenseive I could use 
+                  // https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+                  numInl ++;
+                  pl_w.GetCircular(i).lastFrame_ = frame;
+                  pl_w.GetCircular(i).numObs_ ++;
+                  mask(u,v) ++;
+                  break;
                 }
               }
             }
@@ -656,9 +686,6 @@ int main( int argc, char* argv[] )
 
           if (numInl > numInlPrev) {
             float H = -((A.eigenvalues()).array().log().sum()).real();
-//            std::cout << numObs << " " << numInl 
-//              << " H " << H << " delta "
-//              << (Hprev-H) << std::endl;
             if ( (H < HThr ||  (Hprev - H) < relLogHChange )
                 && numInl > 6) {
               std::cout << numInl << " " << numObs << " " << numProjected 
