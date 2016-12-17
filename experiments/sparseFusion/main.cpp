@@ -404,10 +404,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
-  tdp::ManagedHostImage<tdp::Vector3bda> rgb_m(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
-
-  tdp::ManagedHostImage<tdp::Vector3fda> pcFull_m(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
   tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
@@ -465,8 +462,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
-  pangolin::Var<bool> showAge("ui.show age",true,true);
-  pangolin::Var<bool> showObs("ui.show # obs",true,true);
+  pangolin::Var<bool> showAge("ui.show age",false,true);
+  pangolin::Var<bool> showObs("ui.show # obs",false,true);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -530,7 +527,7 @@ int main( int argc, char* argv[] )
 
       TICK("add to model");
       tdp::Plane pl;
-      iReadCurW = pl_w.iRead_;
+      iReadCurW = pl_w.iInsert_;
       sizeReadCurW = pc_i.Area();
       for (size_t i=0; i<pc_i.Area(); ++i) {
         pl.p_ = T_wc*pc_i[i];
@@ -603,7 +600,6 @@ int main( int argc, char* argv[] )
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
-    pc_c.MarkRead();
 
     size_t numProjected =0;
     trackingGood = false;
@@ -619,6 +615,8 @@ int main( int argc, char* argv[] )
       mask.Fill(0);
       for (size_t it = 0; it < maxIt; ++it) {
         assoc.clear();
+        pc_c.MarkRead();
+        n_c.MarkRead();
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -663,11 +661,11 @@ int main( int argc, char* argv[] )
             if ((H < HThr || Hprev - H < relLogHChange )
                 && numInl > 6) {
               std::cout << numInl << " " << numObs << " " << numProjected 
-                << " H " << H << " delta " << (Hprev-H) 
-                << " " << -A.eigenvalues().array().log().matrix().transpose()
-                << std::endl;
-              for (auto k : indK) std::cout << k << " " ;
-              std::cout << std::endl;
+                << " H " << H << " delta " << (Hprev-H);
+//                << " " << -A.eigenvalues().array().log().matrix().transpose()
+//                << std::endl;
+//              for (auto k : indK) std::cout << k << " " ;
+//              std::cout << std::endl;
               break;
             }
             logAdaptiveEntropy.Log(H);
@@ -689,7 +687,7 @@ int main( int argc, char* argv[] )
           T_wc = T_wc * tdp::SE3f::Exp_(x);
         }
         if (gui.verbose) {
-          std::cout << " it " << it << ": err=" << err 
+          std::cout << "\tit " << it << ": err=" << err 
             << "\t# inliers: " << numInl
             << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
             << " " <<  x.bottomRows(3).norm()
@@ -774,10 +772,7 @@ int main( int argc, char* argv[] )
       if (showPlanes) {
         for (size_t i=iReadCurW; i<iReadCurW+sizeReadCurW; ++i) {
           tdp::SE3f T = pl_w.GetCircular(i).LocalCosy();
-//          pangolin::glSetFrameOfReference((T_wc*T).matrix());
-          pangolin::glDrawAxis((T_wc*T).matrix(),0.05f);
-//          pangolin::glDraw_z0(0.01,10);
-//          pangolin::glUnsetFrameOfReference();
+          pangolin::glDrawAxis(T.matrix(),0.05f);
         }
       }
 
@@ -814,14 +809,6 @@ int main( int argc, char* argv[] )
       pangolin::glUnsetFrameOfReference();
 
       pangolin::glDrawAxis(0.3f);
-      if (showPcModel) {
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pcFull_m.Area(), GL_FLOAT,
-            3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pcFull_m.ptr_, pcFull_m.SizeBytes(), 0);
-        cbo.Upload(rgb_m.ptr_, rgb_m.SizeBytes(), 0);
-        pangolin::RenderVboCbo(vbo, cbo, true);
-      }
-
       glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
         tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
@@ -855,9 +842,6 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (containerTracking.IsShown()) {
-      if (viewModel.IsShown()) {
-        viewModel.SetImage(rgb_m);
-      }
       if (viewCurrent.IsShown()) {
         viewCurrent.SetImage(rgb);
       }
