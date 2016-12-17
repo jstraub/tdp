@@ -53,6 +53,40 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
+struct Plane {
+  Vector3fda p_; 
+  Vector3fda n_; 
+  Vector3bda rgb_; 
+  Vector3fda dir_; 
+
+  uint32_t lastFrame_;
+  uint32_t numObs_;
+
+  float w_; // weight
+
+  void AddObs(const Vector3fda& p, const Vector3fda& n) {
+    float wNew = w_+1; 
+    p_ = (p_*w_ + p)/wNew;
+    n_ = (n_*w_ + n).normalized();
+    w_ = std::min(100.f, wNew);
+  }
+
+  void AddObs(const Vector3fda& p, const Vector3fda& n, 
+      const Vector3bda& rgb) {
+    float wNew = w_+1; 
+    p_ = (p_*w_ + p)/wNew;
+    n_ = (n_*w_ + n).normalized();
+    rgb_ = ((rgb_.cast<float>()*w_ + rgb.cast<float>())/wNew).cast<uint8_t>();
+    w_ = std::min(100.f, wNew);
+  }
+
+  tdp::SE3f LocalCosy() {
+    Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
+        dir_, n_);
+    return tdp::SE3f(R, p_); 
+  }
+};
+
 //void ExtractNormals(const Image<Vector3fda>& pc, 
 //    const Image<Vector3bda>& rgb,
 //    const Image<uint8_t>& mask, uint32_t W,
@@ -91,9 +125,9 @@ namespace tdp {
 void UniformResampleMask(
     Image<uint8_t>& mask, uint32_t W,
     float subsample,
-  std::mt19937& gen,
-      size_t I, 
-      size_t J 
+    std::mt19937& gen,
+    size_t I, 
+    size_t J 
     ) {
   std::uniform_real_distribution<> coin(0, 1);
   for (size_t i=0; i<I; ++i) {
@@ -169,12 +203,12 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     CameraT& cam,
     const Image<Vector3fda>& pc,
     uint32_t W,
-    Image<Vector3fda>& n
-    int32_t u,
-    int32_t v
+    Image<Vector3fda>& n,
+    int32_t& u,
+    int32_t& v
     ) {
-  tdp::Vector3fda& n_w =  pl.n_;
-  tdp::Vector3fda& pc_w = pl.p_;
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);
   v = floor(x(1)+0.5f);
@@ -209,8 +243,8 @@ bool AccumulateP2Pl(const Plane& pl,
     Eigen::Matrix<float,6,1>& b,
     float& err
     ) {
-  tdp::Vector3fda& n_w =  pl.n_;
-  tdp::Vector3fda& pc_w = pl.p_;
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
   const tdp::Vector3fda& ni = n(u,v);
   tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
   float dist = (pc_w - pc_c_in_w).norm();
@@ -230,41 +264,6 @@ bool AccumulateP2Pl(const Plane& pl,
   }
   return false;
 }
-
-
-struct Plane {
-  Vector3fda p_; 
-  Vector3fda n_; 
-  Vector3bda rgb_; 
-  Vector3fda dir_; 
-
-  uint32_t lastFrame_;
-  uint32_t numObs_;
-
-  float w_; // weight
-
-  void AddObs(const Vector3fda& p, const Vector3fda& n) {
-    float wNew = w_+1; 
-    p_ = (p_*w_ + p)/wNew;
-    n_ = (n_*w_ + n).normalized();
-    w_ = std::min(100.f, wNew);
-  }
-
-  void AddObs(const Vector3fda& p, const Vector3fda& n, 
-      const Vector3bda& rgb) {
-    float wNew = w_+1; 
-    p_ = (p_*w_ + p)/wNew;
-    n_ = (n_*w_ + n).normalized();
-    rgb_ = ((rgb_.cast<float>()*w_ + rgb.cast<float>())/wNew).cast<uint8_t>();
-    w_ = std::min(100.f, wNew);
-  }
-
-  tdp::SE3f LocalCosy() {
-    Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
-        dir_, n_);
-    return tdp::SE3f(R, p_); 
-  }
-};
 
 }    
 
@@ -504,8 +503,8 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
-  size_t iReadCurW = 0;
-  size_t sizeReadCurW = 0;
+  int32_t iReadCurW = 0;
+  int32_t sizeReadCurW = 0;
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -520,7 +519,7 @@ int main( int argc, char* argv[] )
         && (trackingGood || frame == 1)) { // add new observations
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
-      tdp::UniformResampleMask(mask,subsample, gen, 4, 4);
+      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
       TOCK("mask");
       TICK("normals");
       ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
@@ -528,7 +527,7 @@ int main( int argc, char* argv[] )
 
       TICK("add to model");
       tdp::Plane pl;
-      iReadCurW = pc_i.iRead_;
+      iReadCurW = pl_w.iRead_;
       sizeReadCurW = pc_i.Area();
       for (size_t i=0; i<pc_i.Area(); ++i) {
         pl.p_ = T_wc*pc_i[i];
@@ -539,7 +538,7 @@ int main( int argc, char* argv[] )
 
         dpvmf.addObservation(pl.n_);
         uint32_t zi = dpvmf.GetZs().back();
-        uint32_t kMax = 0;
+        int32_t kMax = -1;
         uint32_t nMax = 0;
         for (size_t k=0; k<dpvmf.GetK(); ++k) {
           if (k==zi) continue;
@@ -581,10 +580,6 @@ int main( int argc, char* argv[] )
       std::cout << " # clusters " << dpvmf.GetK() << " " 
         << dpvmf.GetNs().size() << std::endl;
 
-      if (showFullPc) {
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
-      }
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -638,12 +633,13 @@ int main( int argc, char* argv[] )
           k = (k+1) % dpvmf.GetK();
           while (indK[k] < invInd[k].size()) {
             size_t i = invInd[k][indK[k]++];
-            Plane& pl = pl_w.GetCircular(i);
+            tdp::Plane& pl = pl_w.GetCircular(i);
             numProjected++;
             int32_t u, v;
             if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                   W, n, u,v ))
               continue;
+//            std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
 
             if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc, n,
                   u, v, distThr, p2plThr, dotThr, A, Ai, b, err)) {
@@ -707,8 +703,11 @@ int main( int argc, char* argv[] )
       logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
       logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
       T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr && numInlPrev > 10;
+      trackingGood = true; //H <= HThr && numInlPrev > 10;
       TOCK("icp");
+      if (trackingGood) {
+        std::cout << "tracking good" << std::endl;
+      }
 
       if (updatePlanes && trackingGood) {
         TICK("update planes");
@@ -734,6 +733,8 @@ int main( int argc, char* argv[] )
       glDrawPoses(T_wcs,20);
 
       if (showFullPc) {
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
         if ((!showAge && !showObs) || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         } else {
@@ -833,9 +834,9 @@ int main( int argc, char* argv[] )
       glColor4f(0,1,0,1.);
       tdp::SE3f R_wc(T_wc.rotation());
       pangolin::glSetFrameOfReference(R_wc.matrix());
-      vbo.Reinitialise(pangolin::GlArrayBuffer, nc_i.Area(), GL_FLOAT,
+      vbo.Reinitialise(pangolin::GlArrayBuffer, n_i.Area(), GL_FLOAT,
           3, GL_DYNAMIC_DRAW);
-      vbo.Upload(nc_i.ptr_, nc_i.SizeBytes(), 0);
+      vbo.Upload(n_i.ptr_, n_i.SizeBytes(), 0);
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
 
