@@ -630,7 +630,6 @@ int main( int argc, char* argv[] )
         numObs = 0;
 
         std::vector<size_t> indK(dpvmf.GetK(),0);
-//        tdp::eigen_vector<tdp::Vector3fda> ns;
 
         tdp::SE3f T_cw = T_wc.Inverse();
         bool exploredAll = false;
@@ -648,13 +647,13 @@ int main( int argc, char* argv[] )
 
             if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc, n,
                   u, v, distThr, p2plThr, dotThr, A, Ai, b, err)) {
+              pl.lastFrame_ = frame;
+              pl.numObs_ ++;
+              numInl ++;
+              mask(u,v) ++;
               assoc.emplace_back(i,pc_c.SizeToRead());
               pc_c.Insert(pc(u,v));
               n_c.Insert(n(u,v));
-              numInl ++;
-              pl_w.GetCircular(i).lastFrame_ = frame;
-              pl_w.GetCircular(i).numObs_ ++;
-              mask(u,v) ++;
               break;
             }
           }
@@ -708,7 +707,7 @@ int main( int argc, char* argv[] )
       logEigR.Log(0.5*ev.topRows<3>().array().log().matrix());
       logEigt.Log(0.5*ev.bottomRows<3>().array().log().matrix());
       T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr;
+      trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
 
       if (updatePlanes && trackingGood) {
