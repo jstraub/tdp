@@ -241,7 +241,7 @@ bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
   }
 //  if (f != f || fPrev != fPrev || f > 1e9 || iter == maxIter-1) {
   std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
-  Nall = 0;
+  int32_t Nall = 0;
   for (const auto& N : Ns_) {
     std::cout << N << " ";
     Nall += N;
