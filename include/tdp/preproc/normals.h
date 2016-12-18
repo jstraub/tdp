@@ -163,4 +163,11 @@ bool NormalViaScatter(
     uint32_t W, 
     Vector3fda& c);
 
+bool NormalViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& c);
+
 }

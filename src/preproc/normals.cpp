@@ -55,15 +55,16 @@ bool NormalViaVoting(
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
-    Vector3fda& pc0 = pc(u0,v0);
+    const Vector3fda& pc0 = pc(u0,v0);
 
     Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
     if (!IsValidData(n))
       return false;
+//    std::cout << "\t" << n.transpose() << std::endl;
 
     size_t N = 0;
     size_t Nprev = 0;
-    for (float dAng : {45.,45.,45.,15.,15.,15.}) {
+    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
       Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
       float orthoL = cos((90.-dAng)/180.*M_PI);
       float orthoU = cos((90.+dAng)/180.*M_PI);
@@ -79,14 +80,16 @@ bool NormalViaVoting(
           }
         }
       }
-      if (N<3) 
+      if (N<4*W) 
         return false;
       Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
       int id = 0;
       float eval = eig.eigenvalues().minCoeff(&id);
       n = eig.eigenvectors().col(id).normalized();
+//      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
       Nprev = N;
+      N = 0;
     }
     c = n * (n(2)<0.?1.:-1.);
     return true;
@@ -104,7 +107,7 @@ bool NormalViaScatter(
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
-    Vector3fda& pc0 = pc(u0,v0);
+    const Vector3fda& pc0 = pc(u0,v0);
     Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
     size_t N = 0;
     for (size_t u=u0-W; u<u0+W; ++u) {
