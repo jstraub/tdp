@@ -482,7 +482,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",false,true);
-  pangolin::Var<bool> warmStartICP("ui.warmstart ICP",true,true);
+  pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -612,15 +612,13 @@ int main( int argc, char* argv[] )
         for (auto i : id_w) {
           if (dpvmf.GetZs()[i] == k) 
             invInd[k].push_back(i);
-          if (invInd[k].size() >= 10000)
+          if (invInd[k].size() >= 1000)
             break;
         }
-        std::cout << "cluster " << k << ": # " << invInd[k].size() << std::endl;
+        std::cout << "cluster " << k << ": # " << invInd[k].size() 
+          << " of " << dpvmf.GetNs()[k] << std::endl;
       }
       TOCK("dpvmf");
-      std::cout << " # clusters " << dpvmf.GetK() << " " 
-        << dpvmf.GetNs().size() << std::endl;
-
     }
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -666,6 +664,7 @@ int main( int argc, char* argv[] )
         b = Eigen::Matrix<float,6,1>::Zero();
         Ai = Eigen::Matrix<float,6,1>::Zero();
         float err = 0.;
+        float H = 1e10;
         float Hprev = 1e10;
         uint32_t numInl = 0;
         numObs = 0;
@@ -701,7 +700,7 @@ int main( int argc, char* argv[] )
             for (size_t k=0; k<indK.size(); ++k) 
               exploredAll &= indK[k] >= invInd[k].size();
           }
-          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
+          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
               Eigen::ComputeFullU | Eigen::ComputeFullV);
           Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
           T_wc.rotation() = tdp::SO3f(R_wc);
@@ -709,11 +708,11 @@ int main( int argc, char* argv[] )
           // first use already associated data
           for (const auto& ass : assoc) {
             tdp::Plane& pl = pl_w.GetCircular(ass.first);
-            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, 
+            if (AccumulateP2Pl(pl, T_wc, T_cw,
                   pc_c.GetCircular(ass.second), 
                   n_c.GetCircular(ass.second),
                   distThr, p2plThr, dotThr, A, Ai, b, err)) {
-              if (CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
+              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
                 break;
               Hprev = H;
               numObs ++;
@@ -736,7 +735,7 @@ int main( int argc, char* argv[] )
             if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                   W, n, u,v ))
               continue;
-            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v),
+            if (AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
                   distThr, p2plThr, dotThr, A, Ai, b, err)) {
               pl.lastFrame_ = frame;
               pl.numObs_ ++;
@@ -750,7 +749,7 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            if (CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
+            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
               break;
             Hprev = H;
             numObs ++;
@@ -776,7 +775,7 @@ int main( int argc, char* argv[] )
             << std::endl;
         }
         if (x.norm() < 1e-4
-            || CheckEntropyTermination(A, Hprev, HThr, 
+            || tdp::CheckEntropyTermination(A, Hprev, HThr, 
                0.f, negLogEvThr, H)) {
 //          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
@@ -852,9 +851,15 @@ int main( int argc, char* argv[] )
 
       glColor3f(1,0,0);
       if (showNormals) {
+        pangolin::glSetFrameOfReference(T_wc.matrix());
         for (size_t i=0; i<n_i.Area(); ++i) {
           tdp::glDrawLine(pc_i[i], pc_i[i] + scale*n_i[i]);
         }
+        for (size_t i=0; i<n_c.SizeToRead(); ++i) {
+          tdp::glDrawLine(pc_c.GetCircular(i), 
+              pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
+        }
+        pangolin::glUnsetFrameOfReference();
       }
 
       if (showPlanes) {
