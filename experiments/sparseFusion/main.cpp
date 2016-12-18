@@ -489,7 +489,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1,-2.,1.);
-  pangolin::Var<float> relLogHChange("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
+  pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",8,1,15);
@@ -711,14 +711,8 @@ int main( int argc, char* argv[] )
                   pc_c.GetCircular(ass.second), 
                   n_c.GetCircular(ass.second),
                   distThr, p2plThr, dotThr, A, Ai, b, err)) {
-              Eigen::Matrix<float,6,1> negLogEv = A.eigenvalues().real().array().log();
-              float H = negLogEv.sum();
-              if ((H < HThr || Hprev - H < relLogHChange) && numInl > 6
-                  && (negLogEv.array() < negLogEvThr).all()) {
-                std::cout << numInl << " " << numObs << " " << numProjected 
-                  << " H " << H << " delta " << (Hprev-H) << std::endl;
+              if (CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
                 break;
-              }
               Hprev = H;
               numObs ++;
             }
@@ -740,7 +734,6 @@ int main( int argc, char* argv[] )
             if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                   W, n, u,v ))
               continue;
-//            std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
             if (AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v),
                   distThr, p2plThr, dotThr, A, Ai, b, err)) {
               pl.lastFrame_ = frame;
@@ -750,20 +743,13 @@ int main( int argc, char* argv[] )
               assoc.emplace_back(i,pc_c.SizeToRead());
               pc_c.Insert(pc(u,v));
               n_c.Insert(n(u,v));
-//              std::cout << "assoc " << i << ": " << u << "," << v << std::endl;
               break;
             }
           }
 
           if (numInl > numInlPrev) {
-            Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
-            float H = negLogEv.sum();
-            if ((H < HThr || Hprev - H < relLogHChange ) && numInl > 6
-                && (negLogEv.array() < negLogEvThr).all()) {
-              std::cout << numInl << " " << numObs << " " << numProjected 
-                << " H " << H << " delta " << (Hprev-H) << std::endl;
+            if (CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
               break;
-            }
             Hprev = H;
             numObs ++;
           }
@@ -787,14 +773,10 @@ int main( int argc, char* argv[] )
             << " " <<  x.bottomRows(3).norm()
             << std::endl;
         }
-        if (x.norm() < 1e-4) break;
-        Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
-        float H = -negLogEv.sum();
-        std::cout << " H " << H << " " << negLogEv.transpose() << std::endl;
-        if (H < HThr && numInl > 6
-            && (negLogEv.array() < negLogEvThr).all()) {
-          std::cout << numInl << " " << numObs << " " << numProjected 
-            << " H " << H << " delta " << (Hprev-H) << std::endl;
+        if (x.norm() < 1e-4
+            || CheckEntropyTermination(A, Hprev, HThr, 
+               condEntropyThr, negLogEvThr, H)) {
+//          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }
       }
