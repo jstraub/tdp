@@ -775,7 +775,7 @@ int main( int argc, char* argv[] )
         }
         if (x.norm() < 1e-4
             || CheckEntropyTermination(A, Hprev, HThr, 
-               condEntropyThr, negLogEvThr, H)) {
+               0.f, negLogEvThr, H)) {
 //          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }
