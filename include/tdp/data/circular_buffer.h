@@ -63,8 +63,11 @@ class CircularBuffer : public Image<T> {
     }
   }
 
+  size_t SizeToRead(int32_t iRead) const {
+    return (iInsert_-iRead+this->w_)%this->w_;
+  }
   size_t SizeToRead() const {
-    return (iInsert_-iRead_+this->w_)%this->w_;
+    return SizeToRead(iRead_);
   }
  
   int32_t iInsert_;
