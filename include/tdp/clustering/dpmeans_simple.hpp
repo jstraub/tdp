@@ -42,7 +42,7 @@ public:
   virtual T cost();
 
   uint32_t GetK() const {return K_;};
-  const std::vector<uint32_t>& GetNs() const {return Ns_;};
+  const std::vector<int32_t>& GetNs() const {return Ns_;};
   bool GetCenter(uint32_t k, Eigen::Matrix<T,D,1>& mu) const {
     if (k<K_) {mu = mus_[k]; return true; } else { return false; } };
   const Eigen::Matrix<T,D,1>& GetCenter(uint32_t k) const {
@@ -58,7 +58,7 @@ protected:
   eigen_vector<Eigen::Matrix<T,D,1>> mus_;
   eigen_vector<Eigen::Matrix<T,D,1>> xSums_;
   std::vector<uint32_t> zs_;
-  std::vector<uint32_t> Ns_;
+  std::vector<int32_t> Ns_;
 
   /// resets all clusters (mus_ and Ks_) and resizes them to K_
   void resetClusters();
@@ -91,6 +91,9 @@ void DPvMFmeansSimple<T,D>::addObservation(const Eigen::Matrix<T,D,1>& x) {
     xSums_.push_back(x);
     Ns_.push_back(0);
     ++K_;
+//    std::cout << "adding cluster " << mus_.size() << " "
+//      << xSums_.size() << " " << K_ << " "
+//      << x.transpose() << std::endl;
   }
   zs_.push_back(z);
   Ns_[z] ++;
@@ -124,24 +127,22 @@ void DPvMFmeansSimple<T,D>::updateLabels()
     uint32_t z = indOfClosestCluster(xs_[i], sim_closest);
     if (z==zPrev && Ns_[z] == 1) {
       z = indOfClosestCluster(xs_[i], sim_closest, &z);
-      std::cout << "single cluster " << z << " " << zPrev << std::endl;
-    }
-    if (z != zPrev && z < K_) {
-      if (zPrev < K_) {
-        Ns_[zPrev] --;
-        xSums_[zPrev] -= xs_[i];
-      }
-      Ns_[z] --;
-      xSums_[z] += xs_[i];
+//      std::cout << "single cluster " << z << " " << zPrev << std::endl;
     }
     if (z == K_) {
-      std::cout << "adding cluster " << mus_.size() << " "
-        << xSums_.size() << " " << K_ << " "
-        << xs_[i].transpose() << std::endl;
+//      std::cout << "adding cluster " << mus_.size() << " "
+//        << xSums_.size() << " " << K_ << " "
+//        << xs_[i].transpose() << std::endl;
       mus_.push_back(  xs_[i]);
-      xSums_.push_back(xs_[i]);
+      xSums_.push_back(Eigen::Matrix<T,D,1>::Zero());
       Ns_.push_back(0);
       ++K_;
+    }
+    if (z != zPrev) {
+      Ns_[zPrev] --;
+      xSums_[zPrev] -= xs_[i];
+      Ns_[z] ++; 
+      xSums_[z] += xs_[i];
     }
     zs_[i] = z;
   }
@@ -189,13 +190,14 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
       kNew --;
     }
   uint32_t j=0;
-  for(uint32_t k=0; k<K_; ++k) 
-    if(toDelete[k]) { 
-      mus_[j] = mus_[k];
-      xSums_[j] = xSums_[k];
-      Ns_[j] = Ns_[k];
+  for(uint32_t k=0; k<K_; ++k) {
+    mus_[j] = mus_[k];
+    xSums_[j] = xSums_[k];
+    Ns_[j] = Ns_[k];
+    if(!toDelete[k]) { 
       ++j;
     }
+  }
 //  std::cout << "K " << K_ << " -> " << kNew << std::endl;
   K_ = kNew;
   Ns_.resize(K_);
@@ -231,13 +233,20 @@ bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
     f = cost();
     ++iter;
 //    std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
+//    int32_t Nall = 0;
+//    for (const auto& N : Ns_) {
+//      std::cout << N << " ";
+//      Nall += N;
+//    } std::cout << " sum= " << Nall << std::endl;
   }
-  if (f != f || fPrev != fPrev || f > 1e9 || iter == maxIter-1) {
-    std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
-    for (const auto& N : Ns_) {
-      std::cout << N << " ";
-    } std::cout << std::endl;
-  }
+//  if (f != f || fPrev != fPrev || f > 1e9 || iter == maxIter-1) {
+  std::cout << iter << ": f=" << f << " fPrev=" << fPrev << ": ";
+  Nall = 0;
+  for (const auto& N : Ns_) {
+    std::cout << N << " ";
+    Nall += N;
+  } std::cout << " sum= " << Nall << std::endl;
+//  }
   return iter < maxIter;
 }
 
