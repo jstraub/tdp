@@ -45,6 +45,55 @@ void Depth2Normals(
 //}
 #endif
 
+bool NormalViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& c
+    ) {
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+    Vector3fda& pc0 = pc(u0,v0);
+
+    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
+    if (!IsValidData(n))
+      return false;
+
+    size_t N = 0;
+    size_t Nprev = 0;
+    for (float dAng : {45.,45.,45.,15.,15.,15.}) {
+      Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
+      float orthoL = cos((90.-dAng)/180.*M_PI);
+      float orthoU = cos((90.+dAng)/180.*M_PI);
+      for (size_t u=u0-W; u<u0+W; ++u) {
+        for (size_t v=v0-W; v<v0+W; ++v) {
+          if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+            Vector3fda dpc = pc0 - pc(u,v);
+            float ang = dpc.dot(n)/dpc.norm();
+            if (orthoU < ang && ang <= orthoL) {
+              S += dpc*dpc.transpose();
+              N++;
+            }
+          }
+        }
+      }
+      if (N<3) 
+        return false;
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
+      int id = 0;
+      float eval = eig.eigenvalues().minCoeff(&id);
+      n = eig.eigenvectors().col(id).normalized();
+      if (N == Nprev) break;
+      Nprev = N;
+    }
+    c = n * (n(2)<0.?1.:-1.);
+    return true;
+  }
+  return false;
+}
+
 bool NormalViaScatter(
     const Image<Vector3fda>& pc, 
     uint32_t u0, 
@@ -55,13 +104,13 @@ bool NormalViaScatter(
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
-    c = pc(u0,v0);
+    Vector3fda& pc0 = pc(u0,v0);
     Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
     size_t N = 0;
     for (size_t u=u0-W; u<u0+W; ++u) {
       for (size_t v=v0-W; v<v0+W; ++v) {
         if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-          S += (c-pc(u,v))*(c-pc(u,v)).transpose();
+          S += (pc0-pc(u,v))*(pc0-pc(u,v)).transpose();
           N ++;
         }
       }

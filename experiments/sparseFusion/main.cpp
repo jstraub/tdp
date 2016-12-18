@@ -180,7 +180,8 @@ void ExtractNormals(const Image<Vector3fda>& pc,
         && pc[i].norm() < 5. 
         && 0.3 < pc[i].norm() )  {
       uint32_t Wscaled = floor(W*pc[i](2));
-      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
+//      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
+      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
         ids.push_back(i);
         ns.emplace_back(n);
       }
@@ -218,7 +219,8 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
       uint32_t Wscaled = floor(W*pc(u,v)(2));
       tdp::Vector3fda ni = n(u,v);
       if (!tdp::IsValidData(ni)) {
-        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
+//        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
+        if(tdp::NormalViaVoting(pc, u, v, Wscaled, ni)) {
           n(u,v) = ni;
           return true;
         }
