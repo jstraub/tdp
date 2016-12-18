@@ -233,7 +233,6 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
 bool AccumulateP2Pl(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
-    CameraT& cam,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float distThr, 
@@ -261,6 +260,49 @@ bool AccumulateP2Pl(const Plane& pl,
         return true;
       }
     }
+  }
+  return false;
+}
+
+bool AccumulateRot(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    Eigen::Matrix<float,3,3>& N
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr*pc_ci(2)) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        N += n_w * n_ci.transpose();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
+    float Hprev,
+    float HThr, float condEntropyThr, float negLogEvThr,
+    float& H) {
+
+  Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
+  H = negLogEv.sum();
+  if ((H < HThr || Hprev - H < condEntropyThr) 
+      && (negLogEv.array() < negLogEvThr).all()) {
+    std::cout <<  " H " << H << " cond H " << (Hprev-H) 
+      << " neg log evs: " << negLogEv.transpose() << std::endl;
+    return true;
   }
   return false;
 }
@@ -438,6 +480,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",false,true);
+  pangolin::Var<bool> warmStartICP("ui.warmstart ICP",true,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -626,28 +669,62 @@ int main( int argc, char* argv[] )
         numObs = 0;
 
         tdp::SE3f T_cw = T_wc.Inverse();
+        if (warmStartICP) {
+          Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+          bool exploredAll = false;
+          uint32_t k = dis(gen);
+          while (numObs < dpvmf.GetK()*10 && !exploredAll) {
+            k = (k+1) % dpvmf.GetK();
+            while (indK[k] < invInd[k].size()) {
+              size_t i = invInd[k][indK[k]++];
+              tdp::Plane& pl = pl_w.GetCircular(i);
+              numProjected++;
+              int32_t u, v;
+              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                    W, n, u,v ))
+                continue;
+              if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
+                    distThr, p2plThr, dotThr, N)) {
+                pl.lastFrame_ = frame;
+                pl.numObs_ ++;
+                numInl ++;
+                mask(u,v) ++;
+                assoc.emplace_back(i,pc_c.SizeToRead());
+                pc_c.Insert(pc(u,v));
+                n_c.Insert(n(u,v));
+                break;
+              }
+            }
+            exploredAll = true;
+            for (size_t k=0; k<indK.size(); ++k) 
+              exploredAll &= indK[k] >= invInd[k].size();
+          }
+          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
+              Eigen::ComputeFullU | Eigen::ComputeFullV);
+          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
+          T_wc.rotation() = tdp::SO3f(R_wc);
 
-//        // first use already associated data
-//        for (const auto& ass : assoc) {
-//          tdp::Plane& pl = pl_w.GetCircular(ass.first);
-//          if (AccumulateP2Pl(pl, T_wc, T_cw, cam, 
-//                pc_c.GetCircular(ass.second), 
-//                n_c.GetCircular(ass.second),
-//                distThr, p2plThr, dotThr, A, Ai, b, err)) {
-//            numInl ++;
-//            Eigen::Matrix<float,6,1> negLogEv = A.eigenvalues().real().array().log();
-//            float H = negLogEv.sum();
-//            if ((H < HThr || Hprev - H < relLogHChange) && numInl > 6
-//                && (negLogEv.array() < negLogEvThr).all()) {
-//              std::cout << numInl << " " << numObs << " " << numProjected 
-//                << " H " << H << " delta " << (Hprev-H) << std::endl;
-//              break;
-//            }
-//            Hprev = H;
-//            numObs ++;
-//          }
-//        }
-//        std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+          // first use already associated data
+          for (const auto& ass : assoc) {
+            tdp::Plane& pl = pl_w.GetCircular(ass.first);
+            if (AccumulateP2Pl(pl, T_wc, T_cw, cam, 
+                  pc_c.GetCircular(ass.second), 
+                  n_c.GetCircular(ass.second),
+                  distThr, p2plThr, dotThr, A, Ai, b, err)) {
+              Eigen::Matrix<float,6,1> negLogEv = A.eigenvalues().real().array().log();
+              float H = negLogEv.sum();
+              if ((H < HThr || Hprev - H < relLogHChange) && numInl > 6
+                  && (negLogEv.array() < negLogEvThr).all()) {
+                std::cout << numInl << " " << numObs << " " << numProjected 
+                  << " H " << H << " delta " << (Hprev-H) << std::endl;
+                break;
+              }
+              Hprev = H;
+              numObs ++;
+            }
+          }
+          std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+        }
 //        size_t numInl0 = numInl;
         numInlPrev = numInl;
         // associate new data until enough
@@ -679,8 +756,7 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            Eigen::Matrix<float,6,1> negLogEv = 
-              -A.eigenvalues().real().array().log();
+            Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
             float H = negLogEv.sum();
             if ((H < HThr || Hprev - H < relLogHChange ) && numInl > 6
                 && (negLogEv.array() < negLogEvThr).all()) {
