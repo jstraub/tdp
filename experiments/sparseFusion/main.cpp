@@ -474,7 +474,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
+  pangolin::Var<float> subsample("ui.subsample %",0.0009,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
@@ -612,11 +612,17 @@ int main( int argc, char* argv[] )
         for (auto i : id_w) {
           if (dpvmf.GetZs()[i] == k) 
             invInd[k].push_back(i);
-          if (invInd[k].size() >= 1000)
+          if (invInd[k].size() >= 100000)
             break;
         }
         std::cout << "cluster " << k << ": # " << invInd[k].size() 
           << " of " << dpvmf.GetNs()[k] << std::endl;
+        std::sort(invInd[k].begin(), invInd[k].begin(), 
+            [&](uint32_t a, uint32_t b) {
+            return pl_w[a].numObs_ > pl_w[b].numObs_;
+            });
+        std::cout << pl_w[invInd[k][0]].numObs_ 
+          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
       }
       TOCK("dpvmf");
     }
@@ -749,7 +755,8 @@ int main( int argc, char* argv[] )
           }
 
           if (numInl > numInlPrev) {
-            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
+            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+                  negLogEvThr, H))
               break;
             Hprev = H;
             numObs ++;
@@ -757,8 +764,9 @@ int main( int argc, char* argv[] )
           numInlPrev = numInl;
 
           exploredAll = true;
-          for (size_t k=0; k<indK.size(); ++k) 
+          for (size_t k=0; k<indK.size(); ++k) {
             exploredAll &= indK[k] >= invInd[k].size();
+          }
         }
 //        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
@@ -777,17 +785,33 @@ int main( int argc, char* argv[] )
         if (x.norm() < 1e-4
             || tdp::CheckEntropyTermination(A, Hprev, HThr, 
                0.f, negLogEvThr, H)) {
-//          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
+          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }
+      }
+      for (size_t k=0; k<indK.size(); ++k) {
+        std::cout << "used different directions: " << indK[k] 
+          << " of " << invInd[k].size() << std::endl;
       }
       Sigma_mc = A.inverse();
       logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
       float H = ev.array().log().sum();
-      std::cout << " H " << H << " " << ev.array().log().matrix().transpose()
+      std::cout << " H " << H << " neg log evs " 
+        << ev.array().log().matrix().transpose()
         << std::endl;
+
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+      std::cout << eig.eigenvalues().real().transpose() << std::endl;
+      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
+      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+        Eigen::Matrix<float,6,1> Ai;
+        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
+        std::cout << "k " << k << std::endl;
+        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
+      }
+
       logEntropy.Log(H);
       logEigR.Log(ev.topRows<3>().array().log().matrix());
       logEigt.Log(ev.bottomRows<3>().array().log().matrix());
