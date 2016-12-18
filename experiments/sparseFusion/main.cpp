@@ -47,6 +47,8 @@
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>
 #include <tdp/clustering/dpmeans_simple.hpp>
+#include <tdp/features/brief.h>
+#include <tdp/preproc/blur.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -58,6 +60,8 @@ struct Plane {
   Vector3fda n_; 
   Vector3bda rgb_; 
   Vector3fda dir_; 
+
+  Brief feat_;
 
   uint32_t lastFrame_;
   uint32_t numObs_;
@@ -85,6 +89,20 @@ struct Plane {
         dir_, n_);
     return tdp::SE3f(R, p_); 
   }
+
+
+  bool Close(const Plane& other, float dotThr, float distThr, 
+      float p2plThr) {
+    if ((p_ - other.p_).norm() < distThr) {
+      if (fabs(n_.dot(other.n_)) > dotThr) {
+        if (fabs(n_.dot(p_ - other.p_)) < p2plThr) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
 };
 
 //void ExtractNormals(const Image<Vector3fda>& pc, 
@@ -121,6 +139,41 @@ struct Plane {
 //    }
 //  }
 //}
+//
+void UniformResampleEmptyPartsOfMask(
+    Image<uint8_t>& mask, uint32_t W,
+    float subsample,
+    std::mt19937& gen,
+    size_t I, 
+    size_t J 
+    ) {
+  std::uniform_real_distribution<> coin(0, 1);
+  for (size_t i=0; i<I; ++i) {
+    for (size_t j=0; j<J; ++j) {
+      size_t count = 0;
+      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+          if (mask(u,v)) count++;
+        }
+      }
+      if (count == 0) {
+        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+            if (coin(gen) < subsample) {
+              mask(u,v) = 1;
+            }
+          }
+        }
+      } else {
+        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+            if (mask(u,v)) mask(u,v) = 0;
+          }
+        }
+      }
+    }
+  }
+}
  
 void UniformResampleMask(
     Image<uint8_t>& mask, uint32_t W,
@@ -166,6 +219,47 @@ void UniformResampleMask(
 
 void ExtractNormals(const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
+    const Image<uint8_t>& grey,
+    const Image<uint8_t>& mask, uint32_t W, size_t frame,
+    const SE3f& T_wc, 
+    ManagedHostCircularBuffer<Plane>& pl_w,
+    ManagedHostCircularBuffer<Vector3fda>& pc_w,
+    ManagedHostCircularBuffer<Vector3bda>& rgb_w,
+    ManagedHostCircularBuffer<Vector3fda>& n_w) {
+  Plane pl;
+  tdp::Brief feat;
+  Vector3fda n;
+  for (size_t i=0; i<mask.Area(); ++i) {
+    if (mask[i] && tdp::IsValidData(pc[i])
+        && pc[i].norm() < 5. 
+        && 0.3 < pc[i].norm() )  {
+//      uint32_t Wscaled = floor(W*pc[i](2));
+      uint32_t Wscaled = W;
+//      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
+      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
+        feat.pt_(0) = i%mask.w_;
+        feat.pt_(1) = i/mask.w_;
+        feat.orientation_ = 0.; // TODO
+        if (!tdp::ExtractBrief(grey, feat)) 
+          continue;
+        pl.p_ = T_wc*pc[i];
+        pl.n_ = T_wc.rotation()*n;
+        pl.rgb_ = rgb[i];
+        pl.lastFrame_ = frame;
+        pl.numObs_ = 1;
+        pl.feat_ = feat;
+
+        pl_w.Insert(pl);
+        pc_w.Insert(pl.p_);
+        n_w.Insert(pl.n_);
+        rgb_w.Insert(pl.rgb_);
+      }
+    }
+  }
+}
+
+void ExtractNormals(const Image<Vector3fda>& pc, 
+    const Image<Vector3bda>& rgb,
     const Image<uint8_t>& mask, uint32_t W,
     ManagedHostImage<Vector3fda>& pc_c,
     ManagedHostImage<Vector3bda>& rgb_c,
@@ -179,7 +273,8 @@ void ExtractNormals(const Image<Vector3fda>& pc,
     if (mask[i] && tdp::IsValidData(pc[i])
         && pc[i].norm() < 5. 
         && 0.3 < pc[i].norm() )  {
-      uint32_t Wscaled = floor(W*pc[i](2));
+//      uint32_t Wscaled = floor(W*pc[i](2));
+      uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
         ids.push_back(i);
@@ -216,7 +311,8 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
   v = floor(x(1)+0.5f);
   if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
     if (tdp::IsValidData(pc(u,v))) {
-      uint32_t Wscaled = floor(W*pc(u,v)(2));
+//      uint32_t Wscaled = floor(W*pc(u,v)(2));
+      uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
@@ -249,7 +345,7 @@ bool AccumulateP2Pl(const Plane& pl,
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
   float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr*pc_ci(2)) {
+  if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
     if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
@@ -280,7 +376,7 @@ bool AccumulateRot(const Plane& pl,
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
   float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr*pc_ci(2)) {
+  if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
     if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
@@ -445,7 +541,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
-  tdp::ManagedDeviceImage<float> cuGrey(wc,hc);
+
+  tdp::ManagedHostImage<uint8_t> grey(wc, hc);
+  tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
+  tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -474,7 +573,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.0009,0.0001,.001);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
@@ -494,7 +593,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
-  pangolin::Var<int>   W("ui.W ",8,1,15);
+  pangolin::Var<int>   W("ui.W ",6,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
@@ -504,6 +603,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
+  pangolin::Var<bool> showNN("ui.show NN",true,true);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -526,6 +626,38 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
 
+  std::vector<std::pair<size_t, size_t>> mapNN;
+  mapNN.reserve(10000000);
+
+  std::mutex pl_wLock;
+  std::thread mapping([&]() {
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
+    int32_t iReadNext = 0;
+    tdp::Plane pl;
+    while(42) {
+      pl.numObs_ = 0;
+      {
+        std::lock_guard<std::mutex> lock(pl_wLock); 
+        if (pl_w.SizeToRead(iReadNext) > 0) {
+          pl = pl_w.GetCircular(iReadNext);
+        }
+        iRead = pl_w.iRead_;
+        iInsert = pl_w.iInsert_;
+      }
+      if (pl.numObs_ > 0) {
+        float dotThr = cos(angleThr/180.*M_PI);
+        while (iRead !=iInsert) {
+          if (pl.Close(pl_w[iRead], dotThr, distThr, p2plThr))
+            mapNN.emplace_back(iReadNext, iRead);
+          iRead = (iRead+1)%pl_w.w_;
+        }
+        iReadNext = (iReadNext+1)%pl_w.w_;
+      }
+    };
+  });
+
+
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
 
@@ -544,7 +676,6 @@ int main( int argc, char* argv[] )
   mask.Fill(0);
 
   int32_t iReadCurW = 0;
-  int32_t sizeReadCurW = 0;
   size_t frame = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -559,40 +690,32 @@ int main( int argc, char* argv[] )
         && (trackingGood || frame == 1)) { // add new observations
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
-      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
+//      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
+      tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
       TOCK("mask");
-      TICK("normals");
-      ExtractNormals(pc, rgb, mask, W, pc_i, rgb_i, n_i);
-      TOCK("normals");
+      {
+        iReadCurW = pl_w.iInsert_;
+        std::lock_guard<std::mutex> lock(pl_wLock); 
+        TICK("normals");
+        ExtractNormals(pc, rgb, grey, mask, W, frame, T_wc, pl_w, pc_w, rgb_w, n_w);
+        TOCK("normals");
 
-      TICK("add to model");
-      tdp::Plane pl;
-      iReadCurW = pl_w.iInsert_;
-      sizeReadCurW = pc_i.Area();
-      for (size_t i=0; i<pc_i.Area(); ++i) {
-        pl.p_ = T_wc*pc_i[i];
-        pl.n_ = T_wc.rotation()*n_i[i];
-        pl.rgb_ = rgb_i[i];
-        pl.lastFrame_ = frame;
-        pl.numObs_ = 1;
-
-        dpvmf.addObservation(pl.n_);
-        uint32_t zi = dpvmf.GetZs().back();
-        int32_t kMax = -1;
-        uint32_t nMax = 0;
-        for (size_t k=0; k<dpvmf.GetK(); ++k) {
-          if (k==zi) continue;
-          if (nMax < dpvmf.GetNs()[k]) {
-            nMax = dpvmf.GetNs()[k];
-            kMax = k;
+        TICK("add to model");
+        for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
+          tdp::Plane& pl = pl_w[i];
+          dpvmf.addObservation(pl.n_);
+          uint32_t zi = dpvmf.GetZs().back();
+          int32_t kMax = -1;
+          uint32_t nMax = 0;
+          for (size_t k=0; k<dpvmf.GetK(); ++k) {
+            if (k==zi) continue;
+            if (nMax < dpvmf.GetNs()[k]) {
+              nMax = dpvmf.GetNs()[k];
+              kMax = k;
+            }
           }
+          pl.dir_ = dpvmf.GetCenter(kMax);
         }
-        pl.dir_ = dpvmf.GetCenter(kMax);
-
-        pl_w.Insert(pl);
-        pc_w.Insert(pl.p_);
-        n_w.Insert(pl.n_);
-        rgb_w.Insert(pl.rgb_);
       }
       id_w.resize(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
@@ -641,6 +764,11 @@ int main( int argc, char* argv[] )
     pc.CopyFrom(pcs_c.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
+    cuRgb.CopyFrom(rgb);
+    tdp::Rgb2Grey(cuRgb,cuGreyFl,1.);
+    tdp::Blur5(cuGreyFl,cuGrey, 10.);
+    grey.CopyFrom(cuGrey);
+
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
@@ -871,6 +999,12 @@ int main( int argc, char* argv[] )
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
         }
+        if (showNN) {
+          glColor4f(0.3,0.3,0.3,0.3);
+          for (auto& ass : mapNN) {
+            tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
+          }
+        }
       }
 
       glColor3f(1,0,0);
@@ -887,7 +1021,7 @@ int main( int argc, char* argv[] )
       }
 
       if (showPlanes) {
-        for (size_t i=iReadCurW; i<iReadCurW+sizeReadCurW; ++i) {
+        for (size_t i=iReadCurW; i != pl_w.iInsert_; i=(i+1)%pl_w.w_) {
           tdp::SE3f T = pl_w.GetCircular(i).LocalCosy();
           pangolin::glDrawAxis(T.matrix(),0.05f);
         }
