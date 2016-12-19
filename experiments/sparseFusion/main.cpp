@@ -239,7 +239,7 @@ void ExtractNormals(const Image<Vector3fda>& pc,
       if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, n)) {
         feat.pt_(0) = i%mask.w_;
         feat.pt_(1) = i/mask.w_;
-        feat.orientation_ = 0.; // TODO
+        feat.orientation_ = ComputePatchOrientation(grey, feat.pt_);
         if (!tdp::ExtractBrief(grey, feat)) 
           continue;
         pl.p_ = T_wc*pc[i];

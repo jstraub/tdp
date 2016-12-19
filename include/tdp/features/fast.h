@@ -61,6 +61,20 @@ void DetectFast(const Image<uint8_t>& grey, int b,
   }
 }
 
+float ComputePatchOrientation(const Image<uint8_t>& grey,
+    const Vector2ida& pt) {
+  float m01 = 0.;
+  float m10 = 0.;
+  for (int x=-4; x < 5; ++x)
+    for (int y=-4; y < 5; ++y) {
+      m01 += (float)y*(float)grey(pt(0)+x,pt(1)+y); 
+      m10 += (float)x*(float)grey(pt(0)+x,pt(1)+y); 
+    }
+//    std::cout << orientation[i] << ": " << m01 << " " << m10 << std::endl;
+  return atan2(m01, m10);
+}
+
+
 // http://www.vision.cs.chubu.ac.jp/CV-R/pdf/Rublee_iccv2011.pdf
 void DetectOFast(const Image<uint8_t>& grey, int b, 
     float kappaHarris, float harrisThr,
@@ -72,17 +86,7 @@ void DetectOFast(const Image<uint8_t>& grey, int b,
   orientation.Reinitialise(pts.w_, 1);
 
   for (size_t i=0; i<pts.Area(); ++i) {
-    int x0 = pts[i](0);
-    int y0 = pts[i](1);
-    float m01 = 0.;
-    float m10 = 0.;
-    for (int x=-4; x < 5; ++x)
-      for (int y=-4; y < 5; ++y) {
-        m01 += (float)y*(float)grey(x0+x,y0+y); 
-        m10 += (float)x*(float)grey(x0+x,y0+y); 
-      }
-    orientation[i] = atan2(m01, m10);
-//    std::cout << orientation[i] << ": " << m01 << " " << m10 << std::endl;
+    orientation[i] = ComputePatchOrientation(grey, pts[i]);
   }
 
 }
