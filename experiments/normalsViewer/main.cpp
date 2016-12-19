@@ -195,8 +195,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  normalsViaClustering("ui.normals via clustering",true,true);
   pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
   pangolin::Var<bool>  normalsViaScatter("ui.normals via scatter",false,true);
-  pangolin::Var<int>   W("ui.W", 6, 1, 12);
+  pangolin::Var<int>   W("ui.W", 9, 1, 12);
   pangolin::Var<float>  votingInlierThr("ui.voting inlier Thr", 0.5, 0., 1.);
+  pangolin::Var<int>   step("ui.step", 20, 1, 40);
+  pangolin::Var<float>  scale("ui.scale ", 0.05, 0.001, 0.1);
 
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
@@ -270,13 +272,16 @@ int main( int argc, char* argv[] )
         Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
         n.CopyFrom(cuN);
       } else if (normalsViaClustering) {
-        NormalsViaClustering(pc, W, n);
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaClustering(pc, W, step, n);
         cuN.CopyFrom(n);
       } else if (normalsViaVoting) {
-        NormalsViaVoting(pc, W, votingInlierThr, n);
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaVoting(pc, W, step, votingInlierThr, n);
         cuN.CopyFrom(n);
       } else if (normalsViaScatter) {
-        NormalsViaScatter(pc, W, n);
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaScatter(pc, W, step, n);
         cuN.CopyFrom(n);
       }
       TOCK("Compute Normals");
@@ -462,6 +467,15 @@ int main( int argc, char* argv[] )
       vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
       pangolin::RenderVboCbo(vbo, cbo);
+
+      glColor4f(1,0,0,0.8);
+      glLineWidth(0.5f);
+      for (size_t u=W; u<n.w_-W; u+=step) {
+        for (size_t v=W; v<n.h_-W; v+=step) {
+          tdp::glDrawLine(pc(u,v), pc(u,v)+scale*n(u,v));
+        }
+      }
+
       if (runNormals2vMF) {
         pangolin::glUnsetFrameOfReference();
       }

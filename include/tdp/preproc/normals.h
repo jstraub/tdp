@@ -176,17 +176,18 @@ bool NormalViaClustering(
 
 void NormalsViaScatter(
     const Image<Vector3fda>& pc, 
-    uint32_t W, 
+    uint32_t W, uint32_t step,
     Image<Vector3fda>& n);
 
 void NormalsViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t W, float inlierThr,
+    uint32_t W, uint32_t step,
+    float inlierThr,
     Image<Vector3fda>& n);
 
 void NormalsViaClustering(
     const Image<Vector3fda>& pc, 
-    uint32_t W,
+    uint32_t W, uint32_t step,
     Image<Vector3fda>& n);
 
 

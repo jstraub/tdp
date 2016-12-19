@@ -593,7 +593,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
 
-  pangolin::Var<int>   W("ui.W ",6,1,15);
+  pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
@@ -687,7 +687,7 @@ int main( int argc, char* argv[] )
     if (!gui.paused() 
         && frame > 0
         && (runMapping || frame == 1) 
-        && (trackingGood || frame == 1)) { // add new observations
+        && (trackingGood || frame < 10)) { // add new observations
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);

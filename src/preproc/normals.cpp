@@ -92,7 +92,7 @@ bool NormalViaVoting(
       Nprev = N;
       N = 0;
     }
-    c = n * (n(2)<0.?-1.:1.);
+    c = n * (n(2)<0.?1.:-1.);
     return true;
   }
   return false;
@@ -125,7 +125,7 @@ bool NormalViaClustering(
       const Vector3fda& p2 = pc(uR(gen),vR(gen));
       n = ((p0-p1).cross(p0-p2)).normalized();
       if (!IsValidNormal(n)) continue;
-      n *= (n(2)<0.?-1.:1.);
+      n *= (n(2)<0.?1.:-1.);
 //      std::cout << n.transpose() << std::endl;
       dpvmf.addObservation(n);
       if (N % 100 == 30) {
@@ -149,7 +149,7 @@ bool NormalViaClustering(
     }
     auto itBest = std::max_element(dpvmf.GetNs().begin(), dpvmf.GetNs().end());
     c = dpvmf.GetCenter(std::distance(dpvmf.GetNs().begin(), itBest));
-//    c = n * (n(2)<0.?-1.:1.);
+    c = c * (c(2)<0.?1.:-1.);
     return true;
   }
   return false;
@@ -182,7 +182,7 @@ bool NormalViaScatter(
     int id = 0;
     float eval = eig.eigenvalues().minCoeff(&id);
     c = eig.eigenvectors().col(id).normalized();
-    c *= (c(2)<0.?-1.:1.);
+    c *= (c(2)<0.?1.:-1.);
     return true;
   }
   return false;
@@ -190,10 +190,10 @@ bool NormalViaScatter(
 
 void NormalsViaScatter(
     const Image<Vector3fda>& pc, 
-    uint32_t W, 
+    uint32_t W, uint32_t step,
     Image<Vector3fda>& n) {
-  for(size_t u=W; u<n.w_-W; ++u) {
-    for(size_t v=W; v<n.h_-W; ++v) {
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
       if(!NormalViaScatter(pc, u,v,W,n(u,v))) {
         n(u,v) << NAN,NAN,NAN;
       }
@@ -203,10 +203,11 @@ void NormalsViaScatter(
 
 void NormalsViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t W, float inlierThr,
+    uint32_t W, uint32_t step,
+    float inlierThr, 
     Image<Vector3fda>& n) {
-  for(size_t u=W; u<n.w_-W; ++u) {
-    for(size_t v=W; v<n.h_-W; ++v) {
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
       if(!NormalViaVoting(pc, u,v,W,inlierThr, n(u,v))) {
         n(u,v) << NAN,NAN,NAN;
       }
@@ -216,10 +217,10 @@ void NormalsViaVoting(
 
 void NormalsViaClustering(
     const Image<Vector3fda>& pc, 
-    uint32_t W,
+    uint32_t W, uint32_t step,
     Image<Vector3fda>& n) {
-  for(size_t u=W; u<n.w_-W; ++u) {
-    for(size_t v=W; v<n.h_-W; ++v) {
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
       if(!NormalViaClustering(pc, u,v,W,n(u,v))) {
         n(u,v) << NAN,NAN,NAN;
       }
