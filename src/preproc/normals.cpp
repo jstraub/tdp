@@ -130,4 +130,26 @@ bool NormalViaScatter(
   return false;
 }
 
+void NormalsViaScatter(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, 
+    Image<Vector3fda>& n) {
+  for(size_t u=W; u<n.w_-W; ++u) {
+    for(size_t v=W; v<n.h_-W; ++v) {
+      NormalViaScatter(pc, u,v,W,n(u,v));
+    }
+  }
+}
+
+void NormalsViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, 
+    Image<Vector3fda>& n) {
+  for(size_t u=W; u<n.w_-W; ++u) {
+    for(size_t v=W; v<n.h_-W; ++v) {
+      NormalViaVoting(pc, u,v,W, n(u,v));
+    }
+  }
+}
+
 }

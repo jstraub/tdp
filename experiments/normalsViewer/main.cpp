@@ -190,6 +190,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> tsdfDmax("ui.d max",12.,0.1,16.);
 
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
+
+  pangolin::Var<bool>  normalsViaConv("ui.normals via conv",true,true);
+  pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",false,true);
+  pangolin::Var<bool>  normalsViaScatter("ui.normals via scatter",false,true);
+  pangolin::Var<int>   W("ui.W", 6, 1, 12);
+
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
   pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame", false, true);
@@ -259,8 +265,16 @@ int main( int argc, char* argv[] )
       tdp::Image<tdp::Vector3fda> cuN(wc, hc,
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp,
           tdp::Storage::Gpu);
-      Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
-      n.CopyFrom(cuN);
+      if (normalsViaConv) {
+        Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
+        n.CopyFrom(cuN);
+      } else if (normalsViaScatter) {
+        NormalsViaScatter(pc, W, n);
+        cuN.CopyFrom(n);
+      } else if (normalsViaVoting) {
+        NormalsViaVoting(pc, W, n);
+        cuN.CopyFrom(n);
+      }
       TOCK("Compute Normals");
 
       TICK("Compute 3D grads");
@@ -270,7 +284,6 @@ int main( int argc, char* argv[] )
           wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuGrad3Dbufp,
           tdp::Storage::Gpu);
       cuGrad3Ddir.CopyFrom(grad3Ddir);
-
       tdp::Gradient3D(cuGrey, cuD, cuN, cam, gradNormThr, cuGreydu,
           cuGreydv, cuGrad3D);
       cuGrad3Ddir.CopyFrom(cuGrad3D);

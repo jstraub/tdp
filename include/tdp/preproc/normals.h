@@ -170,4 +170,14 @@ bool NormalViaVoting(
     uint32_t W, 
     Vector3fda& c);
 
+void NormalsViaScatter(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, 
+    Image<Vector3fda>& n);
+
+void NormalsViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, 
+    Image<Vector3fda>& n);
+
 }
