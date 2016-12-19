@@ -1,6 +1,7 @@
 
 #include <assert.h>
 #include <tdp/preproc/normals.h>
+#include <tdp/clustering/dpmeans_simple.hpp>
 
 namespace tdp {
 
@@ -49,7 +50,7 @@ bool NormalViaVoting(
     const Image<Vector3fda>& pc, 
     uint32_t u0, 
     uint32_t v0,
-    uint32_t W, 
+    uint32_t W, float inlierThr,
     Vector3fda& c
     ) {
   if ( W <= u0 && u0 < pc.w_-W 
@@ -80,7 +81,7 @@ bool NormalViaVoting(
           }
         }
       }
-      if (N<4*W) 
+      if (N<4*W*W*inlierThr) 
         return false;
       Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
       int id = 0;
@@ -91,7 +92,64 @@ bool NormalViaVoting(
       Nprev = N;
       N = 0;
     }
-    c = n * (n(2)<0.?1.:-1.);
+    c = n * (n(2)<0.?-1.:1.);
+    return true;
+  }
+  return false;
+}
+
+bool NormalViaClustering(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W,
+    Vector3fda& c
+    ) {
+  static std::random_device rd;
+  static std::mt19937 gen(rd());
+
+  DPvMFmeansSimple3f dpvmf(cos(45.*M_PI/180.));
+
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+
+    std::uniform_int_distribution<> uR(u0-W, u0+W);
+    std::uniform_int_distribution<> vR(v0-W, v0+W);
+    Vector3fda n;
+    uint32_t N=0;
+    float pi0=0., pi1=0.;
+    while(pi0 - pi1 < 2.*sqrt(1./N)) {
+      const Vector3fda& p0 = pc(uR(gen),vR(gen));
+      const Vector3fda& p1 = pc(uR(gen),vR(gen));
+      const Vector3fda& p2 = pc(uR(gen),vR(gen));
+      n = ((p0-p1).cross(p0-p2)).normalized();
+      if (!IsValidNormal(n)) continue;
+      n *= (n(2)<0.?-1.:1.);
+//      std::cout << n.transpose() << std::endl;
+      dpvmf.addObservation(n);
+      if (N % 100 == 30) {
+        dpvmf.updateCenters();
+        dpvmf.updateLabels();
+      }
+      N++;
+      pi0 = 0.; pi1 = 0.;
+      for (auto& Ni : dpvmf.GetNs()) if (Ni > pi0) pi0 = Ni;
+      for (auto& Ni : dpvmf.GetNs()) if (Ni > pi1 && pi0!=Ni) pi1 = Ni;
+      pi0 /= N;
+      pi1 /= N;
+
+//      if (N % 100 == 30) {
+////      for (auto& Ni : dpvmf.GetNs()) std::cout << Ni << " ";
+////      std::cout << std::endl;
+//        std::cout << pi0 << " " << pi1  << " " << N 
+//          << " " << pi0 - pi1 << " < " << 2.*sqrt(1./N) 
+//          << std::endl;
+//      }
+    }
+    auto itBest = std::max_element(dpvmf.GetNs().begin(), dpvmf.GetNs().end());
+    c = dpvmf.GetCenter(std::distance(dpvmf.GetNs().begin(), itBest));
+//    c = n * (n(2)<0.?-1.:1.);
     return true;
   }
   return false;
@@ -124,7 +182,7 @@ bool NormalViaScatter(
     int id = 0;
     float eval = eig.eigenvalues().minCoeff(&id);
     c = eig.eigenvectors().col(id).normalized();
-    c *= (c(2)<0.?1.:-1.);
+    c *= (c(2)<0.?-1.:1.);
     return true;
   }
   return false;
@@ -136,20 +194,38 @@ void NormalsViaScatter(
     Image<Vector3fda>& n) {
   for(size_t u=W; u<n.w_-W; ++u) {
     for(size_t v=W; v<n.h_-W; ++v) {
-      NormalViaScatter(pc, u,v,W,n(u,v));
+      if(!NormalViaScatter(pc, u,v,W,n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
     }
   }
 }
 
 void NormalsViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t W, 
+    uint32_t W, float inlierThr,
     Image<Vector3fda>& n) {
   for(size_t u=W; u<n.w_-W; ++u) {
     for(size_t v=W; v<n.h_-W; ++v) {
-      NormalViaVoting(pc, u,v,W, n(u,v));
+      if(!NormalViaVoting(pc, u,v,W,inlierThr, n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
     }
   }
 }
+
+void NormalsViaClustering(
+    const Image<Vector3fda>& pc, 
+    uint32_t W,
+    Image<Vector3fda>& n) {
+  for(size_t u=W; u<n.w_-W; ++u) {
+    for(size_t v=W; v<n.h_-W; ++v) {
+      if(!NormalViaClustering(pc, u,v,W,n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
+    }
+  }
+}
+
 
 }

@@ -192,9 +192,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
 
   pangolin::Var<bool>  normalsViaConv("ui.normals via conv",true,true);
-  pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",false,true);
+  pangolin::Var<bool>  normalsViaClustering("ui.normals via clustering",true,true);
+  pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
   pangolin::Var<bool>  normalsViaScatter("ui.normals via scatter",false,true);
   pangolin::Var<int>   W("ui.W", 6, 1, 12);
+  pangolin::Var<float>  votingInlierThr("ui.voting inlier Thr", 0.5, 0., 1.);
 
   pangolin::Var<bool>  compute3Dgrads("ui.compute3Dgrads",false,true);
   pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
@@ -214,8 +216,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
 
-  pangolin::Var<bool> addGrad3("ui.add Grad3d", true,true);
-  pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
+  pangolin::Var<bool> addGrad3("ui.add Grad3d", false,true);
+  pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", false,true);
   pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
   pangolin::Var<bool> newKf("ui.new KF", true,false);
   pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", true, true);
@@ -252,7 +254,6 @@ int main( int argc, char* argv[] )
     grey.CopyFrom(cuGrey);
     TOCK("Compute grey");
 
-
     TICK("Convert Depth");
     cuDraw.CopyFrom(dRaw);
     ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
@@ -268,11 +269,14 @@ int main( int argc, char* argv[] )
       if (normalsViaConv) {
         Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
         n.CopyFrom(cuN);
-      } else if (normalsViaScatter) {
-        NormalsViaScatter(pc, W, n);
+      } else if (normalsViaClustering) {
+        NormalsViaClustering(pc, W, n);
         cuN.CopyFrom(n);
       } else if (normalsViaVoting) {
-        NormalsViaVoting(pc, W, n);
+        NormalsViaVoting(pc, W, votingInlierThr, n);
+        cuN.CopyFrom(n);
+      } else if (normalsViaScatter) {
+        NormalsViaScatter(pc, W, n);
         cuN.CopyFrom(n);
       }
       TOCK("Compute Normals");

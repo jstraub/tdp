@@ -158,16 +158,20 @@ void Depth2NormalsViaDerivativePyr(
 /// Compute normal via Eig of scatter matrix
 bool NormalViaScatter(
     const Image<Vector3fda>& pc, 
-    uint32_t u0, 
-    uint32_t v0,
+    uint32_t u0, uint32_t v0,
     uint32_t W, 
     Vector3fda& c);
 
 bool NormalViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t u0, 
-    uint32_t v0,
-    uint32_t W, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W, float inlierThr,
+    Vector3fda& c);
+
+bool NormalViaClustering(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W,
     Vector3fda& c);
 
 void NormalsViaScatter(
@@ -177,7 +181,13 @@ void NormalsViaScatter(
 
 void NormalsViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t W, 
+    uint32_t W, float inlierThr,
     Image<Vector3fda>& n);
+
+void NormalsViaClustering(
+    const Image<Vector3fda>& pc, 
+    uint32_t W,
+    Image<Vector3fda>& n);
+
 
 }

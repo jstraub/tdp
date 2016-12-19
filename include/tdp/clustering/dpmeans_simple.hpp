@@ -183,7 +183,7 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
   for(int32_t k=K_-1; k>-1; --k)
     if(Ns_[k] == 0) {
       toDelete[k] = true;
-      std::cout<<"cluster k "<<k<<" empty"<<std::endl;
+//      std::cout<<"cluster k "<<k<<" empty"<<std::endl;
 //#pragma omp parallel for 
       for(uint32_t i=0; i<xs_.size(); ++i)
         if(static_cast<int32_t>(zs_[i]) >= k) zs_[i] -= 1;
