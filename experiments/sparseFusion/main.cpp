@@ -71,8 +71,8 @@ struct Plane {
 
   void AddObs(const Vector3fda& p, const Vector3fda& n) {
     float wNew = w_+1; 
-    p_ = (p_*w_ + p)/wNew;
     n_ = (n_*w_ + n).normalized();
+    p_ += n.dot(p- p_)/wNew * n;
     w_ = std::min(100.f, wNew);
   }
 
@@ -224,6 +224,25 @@ void ExtractNormals(const Image<Vector3fda>& pc,
   }
 }
 
+bool ProjectiveAssoc(const Plane& pl, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Image<Vector3fda>& pc,
+    int32_t& u,
+    int32_t& v
+    ) {
+  const tdp::Vector3fda& pc_w = pl.p_;
+  Eigen::Vector2f x = cam.Project(T_cw*pc_w);
+  u = floor(x(0)+0.5f);
+  v = floor(x(1)+0.5f);
+  if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
+    if (tdp::IsValidData(pc(u,v))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool ProjectiveAssocNormalExtract(const Plane& pl, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
@@ -252,6 +271,36 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
       } else {
         return true;
       }
+    }
+  }
+  return false;
+}
+
+bool AccumulateP2Pl(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    const Vector3fda& pc_ci,
+    float distThr, 
+    float p2plThr, 
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    float p2pl = n_w.dot(pc_w - pc_c_in_w);
+    if (fabs(p2pl) < p2plThr) {
+      Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+      Ai.bottomRows<3>() = n_w_in_c; 
+      A += Ai * Ai.transpose();
+      b += Ai * p2pl;
+      err += p2pl;
+      return true;
     }
   }
   return false;
@@ -323,7 +372,8 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
     float HThr, float condEntropyThr, float negLogEvThr,
     float& H) {
 
-  Eigen::Matrix<float,6,1> negLogEv = -A.eigenvalues().real().array().log();
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+  Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
   H = negLogEv.sum();
   if ((H < HThr || Hprev - H < condEntropyThr) 
       && (negLogEv.array() < negLogEvThr).all()) {
@@ -504,18 +554,19 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
 
-  pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
+  pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
 
-  pangolin::Var<bool> useFAST("ui.use FAST",true,true);
+  pangolin::Var<bool> useFAST("ui.use FAST",false,true);
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
-  pangolin::Var<bool> updatePlanes("ui.update planes",false,true);
+  pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
-  pangolin::Var<float> angleThr("ui.angle Thr",15, 0, 90);
+  pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
+//  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
@@ -533,7 +584,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
-  pangolin::Var<bool> showNN("ui.show NN",true,true);
+  pangolin::Var<bool> showNN("ui.show NN",false,true);
+  pangolin::Var<int> step("ui.step",30,0,100);
 
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
@@ -793,7 +845,8 @@ int main( int argc, char* argv[] )
                   pc_c.GetCircular(ass.second), 
                   n_c.GetCircular(ass.second),
                   distThr, p2plThr, dotThr, A, Ai, b, err)) {
-              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, negLogEvThr, H))
+              if (tdp::CheckEntropyTermination(A, Hprev, HThr,
+                    condEntropyThr, negLogEvThr, H))
                 break;
               Hprev = H;
               numObs ++;
@@ -813,20 +866,28 @@ int main( int argc, char* argv[] )
             tdp::Plane& pl = pl_w.GetCircular(i);
             numProjected++;
             int32_t u, v;
-            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                  W, n, u,v ))
-              continue;
-            if (AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                  distThr, p2plThr, dotThr, A, Ai, b, err)) {
-              pl.lastFrame_ = frame;
-              pl.numObs_ ++;
-              numInl ++;
-              mask(u,v) ++;
-              assoc.emplace_back(i,pc_c.SizeToRead());
-              pc_c.Insert(pc(u,v));
-              n_c.Insert(n(u,v));
-              break;
+            if (angleThr > 0.) {
+              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                    W, n, u,v ))
+                continue;
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+                    distThr, p2plThr, dotThr, A, Ai, b, err))
+                continue;
+            } else {
+              if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
+                continue;
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
+                    distThr, p2plThr, A, Ai, b, err))
+                continue;
             }
+            pl.lastFrame_ = frame;
+            pl.numObs_ ++;
+            numInl ++;
+            mask(u,v) ++;
+            assoc.emplace_back(i,pc_c.SizeToRead());
+            pc_c.Insert(pc(u,v));
+            n_c.Insert(n(u,v));
+            break;
           }
 
           if (numInl > numInlPrev) {
@@ -903,6 +964,8 @@ int main( int argc, char* argv[] )
           tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c.GetCircular(ass.second);
           pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
+          n_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).n_;
+          pc_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).p_;
         }
         TOCK("update planes");
       }
@@ -954,8 +1017,8 @@ int main( int argc, char* argv[] )
         }
       }
 
-      glColor3f(1,0,0);
       if (showNormals) {
+        glColor4f(1,0,0.,0.5);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         for (size_t i=0; i<n_i.Area(); ++i) {
           tdp::glDrawLine(pc_i[i], pc_i[i] + scale*n_i[i]);
@@ -965,6 +1028,11 @@ int main( int argc, char* argv[] )
               pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
         }
         pangolin::glUnsetFrameOfReference();
+        glColor4f(0,1,0,0.5);
+        for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w.GetCircular(i), 
+              pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
+        }
       }
 
       if (showPlanes) {
