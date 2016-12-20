@@ -48,6 +48,7 @@
 #include <tdp/camera/photometric.h>
 #include <tdp/clustering/dpmeans_simple.hpp>
 #include <tdp/features/brief.h>
+#include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -105,41 +106,6 @@ struct Plane {
 
 };
 
-//void ExtractNormals(const Image<Vector3fda>& pc, 
-//    const Image<Vector3bda>& rgb,
-//    const Image<uint8_t>& mask, uint32_t W,
-//    ManagedHostImage<Vector3fda>& pc_c,
-//    ManagedHostImage<Vector3bda>& rgb_c,
-//    ManagedHostImage<Vector3fda>& n_c) {
-//  size_t numObs = 0;
-//  for (size_t i=0; i<mask.Area(); ++i) {
-//    if (mask[i] && tdp::IsValidData(pc[i])
-//        && pc[i].norm() < 5. 
-//        && 0.3 < pc[i].norm() ) 
-//      numObs++;
-//  }
-//  pc_c.Reinitialise(numObs);
-//  rgb_c.Reinitialise(numObs);
-//  n_c.Reinitialise(numObs);
-//  size_t j=0;
-//  for (size_t i=0; i<mask.Area(); ++i) {
-//    if (mask[i] && tdp::IsValidData(pc[i])
-//        && pc[i].norm() < 5. 
-//        && 0.3 < pc[i].norm() )  {
-//      uint32_t u0 = i%mask.w_;
-//      uint32_t v0 = i/mask.w_;
-//      pc_c[j] = pc(u0,v0);
-//      rgb_c[j] = rgb(u0,v0);
-//      uint32_t Wscaled = floor(W*pc_c[j](2));
-//      if (!tdp::NormalViaScatter(pc, u0, v0, Wscaled, n_c[j++])) {
-//        std::cout << "problem with normal computation" << std::endl;
-//        std::cout << u0 << " " << v0 << std::endl;
-//        std::cout << pc_c[j].transpose() << std::endl;
-//      }
-//    }
-//  }
-//}
-//
 void UniformResampleEmptyPartsOfMask(
     Image<uint8_t>& mask, uint32_t W,
     float subsample,
@@ -257,43 +223,6 @@ void ExtractNormals(const Image<Vector3fda>& pc,
     }
   }
 }
-
-void ExtractNormals(const Image<Vector3fda>& pc, 
-    const Image<Vector3bda>& rgb,
-    const Image<uint8_t>& mask, uint32_t W,
-    ManagedHostImage<Vector3fda>& pc_c,
-    ManagedHostImage<Vector3bda>& rgb_c,
-    ManagedHostImage<Vector3fda>& n_c) {
-  std::vector<size_t> ids;
-  eigen_vector<Vector3fda> ns;
-  ids.reserve(1000);
-  ns.reserve(1000);
-  Vector3fda n;
-  for (size_t i=0; i<mask.Area(); ++i) {
-    if (mask[i] && tdp::IsValidData(pc[i])
-        && pc[i].norm() < 5. 
-        && 0.3 < pc[i].norm() )  {
-//      uint32_t Wscaled = floor(W*pc[i](2));
-      uint32_t Wscaled = W;
-//      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, n)) {
-        ids.push_back(i);
-        ns.emplace_back(n);
-      }
-    }
-  }
-  size_t numObs = ids.size();
-  pc_c.Reinitialise(numObs);
-  rgb_c.Reinitialise(numObs);
-  n_c.Reinitialise(numObs);
-  for (size_t j=0; j<ids.size(); ++j) {
-    size_t i= ids[j];
-    pc_c[j] = pc[i];
-    rgb_c[j] = rgb[i];
-    n_c[j] = ns[j];
-  }
-}
-
 
 bool ProjectiveAssocNormalExtract(const Plane& pl, 
     tdp::SE3f& T_cw, 
@@ -577,6 +506,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> scale("ui.scale %",0.1,0.1,1);
 
+  pangolin::Var<bool> useFAST("ui.use FAST",true,true);
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
@@ -604,6 +534,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showNN("ui.show NN",true,true);
+
+  pangolin::Var<int> fastB("ui.FAST b",30,0,100);
+  pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
+  pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -657,6 +591,9 @@ int main( int argc, char* argv[] )
     };
   });
 
+  tdp::ManagedHostImage<tdp::Brief> descs;
+  tdp::ManagedHostImage<tdp::Vector2ida> pts;
+  tdp::ManagedHostImage<float> orientation;
 
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
@@ -691,7 +628,17 @@ int main( int argc, char* argv[] )
       TICK("mask");
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
-      tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
+      if (useFAST) {
+        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+            orientation);
+        mask.Fill(0);
+        for (size_t i=0; i<pts.Area(); ++i) {
+          mask(pts[i](0), pts[i](1)) = 1;
+        }
+//        tdp::ExtractBrief(grey, pts, orientations, gui.frame, descs);
+      } else {
+        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
+      }
       TOCK("mask");
       {
         iReadCurW = pl_w.iInsert_;
