@@ -16,9 +16,9 @@ out vec4 color;
 
 void main() {
   vec4 p_c = T_cw * (vec4(pos_w,1.));
-  vec3 x = vec3(2.*(p_c.x/p_c.z * cam.x + cam.z) / w - 1.,
-                2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.,
-                p_c.z/dMax);
+  vec3 x = vec3((2.*(p_c.x/p_c.z * cam.x + cam.z) / w - 1.),
+                -(2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.),
+                (2.*(p_c.z-dMin)/(dMax-dMin) - 1.));
   gl_Position = vec4(x,1);
   int id = gl_VertexID;
   float a = 255-(id&0xFF000000)>>24;
