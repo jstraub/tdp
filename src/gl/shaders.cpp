@@ -17,6 +17,7 @@ Shaders* Shaders::Instance() {
 Shaders::Shaders() {
   std::string shaderRoot = SHADER_DIR;
 
+
   // shader to render a point cloud with labels
   labelShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("labelShading.vert"));
@@ -37,6 +38,18 @@ Shaders::Shaders() {
   matcapShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
       shaderRoot+std::string("matcap.frag"));
   matcapShader_.Link();
+
+  colorByIdShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("colorById.vert"));
+  colorByIdShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("colorById.frag"));
+  colorByIdShader_.Link();
+
+  colorByIdOwnCamShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("colorByIdOwnCam.vert"));
+  colorByIdOwnCamShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("colorById.frag"));
+  colorByIdOwnCamShader_.Link();
 
   normalMeshShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("normalShading.vert"));

@@ -13,6 +13,8 @@ class Shaders {
   pangolin::GlSlProgram labelShader_;
   pangolin::GlSlProgram valueShader_;
   pangolin::GlSlProgram matcapShader_;
+  pangolin::GlSlProgram colorByIdShader_;
+  pangolin::GlSlProgram colorByIdOwnCamShader_;
  private:
   Shaders();
   ~Shaders() { if (shaders_) delete shaders_; };

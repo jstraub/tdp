@@ -2,8 +2,54 @@
 
 #include <pangolin/gl/gl.hpp>
 #include <tdp/gl/shaders.h>
+#include <tdp/eigen/dense.h>
+#include <tdp/manifold/SE3.h>
 
 namespace tdp {
+
+template<int D, typename Derived>
+void RenderVboIds(
+  pangolin::GlBuffer& vbo,
+  const SE3f& T_cw,
+  const CameraBase<float,D,Derived>& cam,
+  uint32_t w, uint32_t h,
+  float dMin, float dMax) {
+  pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->colorByIdOwnCamShader_;
+  shader.Bind();
+  Eigen::Vector4f camParams = cam.params_.topRows(4);
+  std::cout << camParams.transpose() << " " << w << " " 
+    << h << " " << dMin << " " << dMax << std::endl;
+  shader.SetUniform("cam", camParams(0), camParams(1), camParams(2), camParams(3));
+  shader.SetUniform("T_cw", T_cw.matrix());
+  shader.SetUniform("w", (float)w);
+  shader.SetUniform("h", (float)h);
+  shader.SetUniform("dMin", dMin);
+  shader.SetUniform("dMax", dMax);
+  vbo.Bind();
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  glEnableVertexAttribArray(0);                                               
+  glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+  shader.Unbind();
+  glDisableVertexAttribArray(0);
+  vbo.Unbind();
+}
+
+void RenderVboIds(
+  pangolin::GlBuffer& vbo,
+  const pangolin::OpenGlRenderState& cam
+  ) {
+  pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->colorByIdShader_;
+  shader.Bind();
+  shader.SetUniform("P",cam.GetProjectionMatrix());
+  shader.SetUniform("MV",cam.GetModelViewMatrix());
+  vbo.Bind();
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  glEnableVertexAttribArray(0);                                               
+  glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+  shader.Unbind();
+  glDisableVertexAttribArray(0);
+  vbo.Unbind();
+}
 
 void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,

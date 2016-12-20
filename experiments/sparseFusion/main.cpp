@@ -50,6 +50,7 @@
 #include <tdp/features/brief.h>
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
+#include <tdp/gl/render.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -529,6 +530,13 @@ int main( int argc, char* argv[] )
   pangolin::View& viewNormals = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewNormals);
+
+//  pangolin::View& viewInternal = pangolin::CreateDisplay()
+//    .SetHandler(new pangolin::Handler3D(s_cam));
+//  gui.container().AddDisplay(viewInternal);
+
+  tdp::QuickView viewInternal(w, h);
+  gui.container().AddDisplay(viewInternal);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -1175,6 +1183,27 @@ int main( int argc, char* argv[] )
       vbo.Upload(n_i.ptr_, n_i.SizeBytes(), 0);
       pangolin::RenderVbo(vbo);
       pangolin::glUnsetFrameOfReference();
+    }
+
+//    if (viewInternal.IsShown()) {
+//      viewInternal.Activate(s_cam);
+//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      tdp::RenderVboIds(vbo_w, s_cam);
+//    }
+
+    if (viewInternal.IsShown()) {
+      glPointSize(1);
+      viewInternal.ActivatePixelOrthographic();
+      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      glPushAttrib(GL_VIEWPORT_BIT);
+//      glViewport(0, 0, w, h);
+//      glClearColor(0, 0, 0, 0);
+//      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      tdp::RenderVboIds(vbo_w, T_wc.Inverse(), cam, w, h, dMin, dMax);
+//      tdp::RenderVboIds(vbo_w, s_cam);
+//      glPopAttrib();
+      glFinish();
+      glPointSize(1);
     }
 
     TOCK("Draw 3D");
