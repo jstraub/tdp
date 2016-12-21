@@ -19,7 +19,16 @@ class ProjectiveAssociation {
   void Associate(pangolin::GlBuffer& vbo,
       SE3f T_cw, float dMin, float dMax) {
     fbo_.Bind();
+
+//    glViewport(0,0,w_,h_);
+//    glMatrixMode(GL_PROJECTION);
+//    glLoadIdentity();
+//    glOrtho(-0.5, w_-0.5, -0.5, h_-0.5, -1, 1);
+//    glMatrixMode(GL_MODELVIEW);
+//    glLoadIdentity();
+
     glPushAttrib(GL_VIEWPORT_BIT);
+    glPointSize(1);
     glViewport(0, 0, w_, h_);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -29,7 +38,10 @@ class ProjectiveAssociation {
     glFinish();
   }
   void GetAssoc(tdp::Image<uint32_t>& z) {
-    tex_.Download(z.ptr_, z.SizeBytes(), 0);
+    tex_.Download(z.ptr_, GL_RGBA, GL_UNSIGNED_BYTE);
+    for (size_t i=0; i<z.Area(); ++i) {
+      z[i] &= 0x00FFFFFF; // alpha channel is 255 always
+    }
   }
   void GetAssoc(tdp::Image<uint32_t>& z, tdp::Image<uint8_t>& mask) {
     GetAssoc(z);

@@ -7,7 +7,7 @@ namespace tdp {
 QuickView::QuickView(size_t w, size_t h)
   : pangolin::ImageViewHandler(w,h), pangolin::View(0.),
   gloffsetscale_(0.f,1.f) {
-    this->SetHandler(dynamic_cast<pangolin::Handler*>(this));
+  this->SetHandler(dynamic_cast<pangolin::Handler*>(this));
 }
 
 //QuickView::QuickView(const QuickView& other)

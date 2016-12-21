@@ -38,6 +38,8 @@ target_link_libraries(laplace_beltrami tdp ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(cg cg.cpp)
 target_link_libraries(cg tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+  add_executable(projective_assoc projective_assoc.cpp)
+  target_link_libraries(projective_assoc tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
   add_executable(sl3 SL3.cpp)
   target_link_libraries(sl3 tdp ${GTEST_BOTH_LIBRARIES} pthread)

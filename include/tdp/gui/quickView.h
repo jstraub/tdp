@@ -41,11 +41,11 @@ class QuickView : public pangolin::View, public pangolin::ImageViewHandler {
   void Mouse(View& view, pangolin::MouseButton button, int x, int y,
       bool pressed, int button_state);
 
+  pangolin::GlTexture tex_;
  private:
   std::pair<float,float> gloffsetscale_;
   pangolin::GlPixFormat fmt_;
   int stride_;
-  pangolin::GlTexture tex_;
 };
 
 template <typename T>

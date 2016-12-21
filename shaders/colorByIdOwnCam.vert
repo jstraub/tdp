@@ -16,21 +16,18 @@ out vec4 color;
 
 void main() {
   vec4 p_c = T_cw * (vec4(pos_w,1.));
-  vec3 x = vec3((2.*(p_c.x/p_c.z * cam.x + cam.z) / w - 1.),
-                -(2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.),
+  vec3 x = vec3((2.*(p_c.x/p_c.z * cam.x + cam.z) / w  - 1.),
+                (2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.),
                 (2.*(p_c.z-dMin)/(dMax-dMin) - 1.));
   gl_Position = vec4(x,1);
-  int id = gl_VertexID;
-  float a = 255-(id&0xFF000000)>>24;
+  int id = gl_VertexID; 
+  // alpha channel has to be 1 otherwise other colors are rendered
+  // scaled by alpha
   float r = (id&0x00FF0000)>>16;
   float g = (id&0x0000FF00)>>8;
   float b = id&0x000000FF;
-  //int r = (id&0xFF000000)>>24;
-  //int g = (id&0x00FF0000)>>16;
-  //int b = (id&0x0000FF00)>>8;
-  //int a = id&0x000000FF;
-  color = vec4(r/255., g/255., b/255., 1.);
-  //color = vec4(1.,0,0,1);
+//  color = vec4(100./255., 2./255., 1./255., 1.);
+  color = vec4(b/255., g/255., r/255., 1.);
 }
 
 
