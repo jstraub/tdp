@@ -51,6 +51,7 @@
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
+#include <tdp/camera/projective_labels.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -600,6 +601,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
+  tdp::ManagedHostImage<uint32_t> z(w, h);
 
   tdp::ManagedHostImage<float> age;
 
@@ -718,6 +720,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Brief> descs;
   tdp::ManagedHostImage<tdp::Vector2ida> pts;
   tdp::ManagedHostImage<float> orientation;
+
+  tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
 
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
@@ -1191,20 +1195,6 @@ int main( int argc, char* argv[] )
 //      tdp::RenderVboIds(vbo_w, s_cam);
 //    }
 
-    if (viewInternal.IsShown()) {
-      glPointSize(1);
-      viewInternal.ActivatePixelOrthographic();
-      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-//      glPushAttrib(GL_VIEWPORT_BIT);
-//      glViewport(0, 0, w, h);
-//      glClearColor(0, 0, 0, 0);
-//      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      tdp::RenderVboIds(vbo_w, T_wc.Inverse(), cam, w, h, dMin, dMax);
-//      tdp::RenderVboIds(vbo_w, s_cam);
-//      glPopAttrib();
-      glFinish();
-      glPointSize(1);
-    }
 
     TOCK("Draw 3D");
     if (gui.verbose) std::cout << "draw 2D" << std::endl;
@@ -1212,14 +1202,41 @@ int main( int argc, char* argv[] )
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
 
+    if (viewInternal.IsShown()) {
+      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
+      projAssoc.GetAssoc(z);
+
+      for (size_t i=0; i<z.Area(); ++i) {
+        if (z[i] > 0) std::cout << z[i] << " ";
+      } std::cout << std::endl;
+
+      std::cout << "SetImage" << std::endl;
+//      viewInternal.SetImage(z);
+//std::cout << "Done SetImage" << std::endl;
+      viewInternal.Activate();
+      projAssoc.tex_.RenderToViewport();
+      std::cout << "Done SetImage" << std::endl;
+
+//      glPointSize(1);
+//      viewInternal.ActivatePixelOrthographic();
+//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      tdp::RenderVboIds(vbo_w, T_wc.Inverse(), cam, w, h, dMin, dMax);
+//      glFinish();
+//      glPointSize(1);
+    }
+
     if (containerTracking.IsShown()) {
       if (viewCurrent.IsShown()) {
+        std::cout << "set rgb image" << std::endl;
         viewCurrent.SetImage(rgb);
+        std::cout << "done set rgb image" << std::endl;
       }
       if (viewMask.IsShown()) {
+        std::cout << "set mask image" << std::endl;
         viewMask.SetImage(mask);
       }
     }
+    std::cout << "scroll plots" << std::endl;
     plotdH.ScrollView(1,0);
     plotH.ScrollView(1,0);
     plotObs.ScrollView(1,0);
