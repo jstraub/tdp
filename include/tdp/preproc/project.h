@@ -20,4 +20,11 @@ void ProjectPc(
     Image<Vector3fda>& proj
     );
 
+void ProjectPc(
+    const Image<Vector3fda>& pc,
+    const Image<Vector3fda>& dirs,
+    Image<float>& proj
+    );
+
+
 }

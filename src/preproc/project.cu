@@ -9,6 +9,36 @@ namespace tdp {
 __global__ void KernelProjectPc(
     Image<Vector3fda> pc,
     Image<Vector3fda> dirs,
+    Image<float> proj
+    ) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < pc.w_ && idy < pc.h_) {
+    Vector3fda pc_i = pc(idx,idy);
+    Vector3fda dir_i = dirs(idx,idy);
+    if (IsValidData(pc_i) && IsValidData(dirs_i)) {
+      proj(idx,idy) = pc_i.dot(dir_i);
+    } else {
+      proj(idx,idy) = NAN;
+    }
+  }
+}
+
+void ProjectPc(
+    const Image<Vector3fda>& pc,
+    const Image<Vector3fda>& dirs,
+    Image<float>& proj
+    ) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,pc,32,32);
+  KernelProjectPc<<<blocks,threads>>>(pc,dirs,proj);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+
+__global__ void KernelProjectPc(
+    Image<Vector3fda> pc,
+    Image<Vector3fda> dirs,
     Image<uint16_t> z,
     uint16_t K,
     Image<float> proj
