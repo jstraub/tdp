@@ -541,8 +541,6 @@ int main( int argc, char* argv[] )
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
-  tdp::QuickView viewModel(wc, hc);
-  containerTracking.AddDisplay(viewModel);
   tdp::QuickView viewCurrent(wc, hc);
   containerTracking.AddDisplay(viewCurrent);
   tdp::QuickView viewMask(wc, hc);
@@ -1203,28 +1201,31 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewInternal.IsShown()) {
-      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
-      //projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
-      projAssoc.GetAssoc(z);
-
-      for (size_t i=0; i<z.Area(); ++i) {
-        if (z[i] > 0) std::cout << z[i] << " ";
-      } std::cout << std::endl;
+//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
+      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
+      z.Fill(0);
+      projAssoc.GetAssoc(z, mask);
 
       std::cout << "SetImage" << std::endl;
 //      viewInternal.SetImage(z);
 //std::cout << "Done SetImage" << std::endl;
-      viewInternal.Activate();
-      projAssoc.tex_.RenderToViewport();
+      viewInternal.ActivatePixelOrthographic();
+      viewInternal.glRenderTexture(projAssoc.tex_);
       std::cout << "Done SetImage" << std::endl;
 
 //      glPointSize(1);
 //      viewInternal.ActivatePixelOrthographic();
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
 //      tdp::RenderVboIds(vbo_w, T_wc.Inverse(), cam, w, h, dMin, dMax);
-//      glFinish();
+////      glFinish();
 //      glPointSize(1);
+//
+//      viewInternal.tex_.Download(z.ptr_, GL_RGBA, GL_UNSIGNED_BYTE);
+
+      for (size_t i=0; i<z.Area(); ++i) {
+        if (z[i] > 0) std::cout << z[i] << " ";
+      } std::cout << std::endl;
     }
 
     if (containerTracking.IsShown()) {
