@@ -20,7 +20,7 @@ void main() {
                 (2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.),
                 (2.*(p_c.z-dMin)/(dMax-dMin) - 1.));
   gl_Position = vec4(x,1);
-  int id = gl_VertexID; 
+  int id = gl_VertexID+1; // 0 is going to be unassigned
   // alpha channel has to be 1 otherwise other colors are rendered
   // scaled by alpha
   float r = (id&0x00FF0000)>>16;
