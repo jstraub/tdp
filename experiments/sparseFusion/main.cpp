@@ -1201,18 +1201,22 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewInternal.IsShown()) {
-//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-//      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
-      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
+      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+      TICK("data assoc");
+      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
+      TOCK("data assoc");
+      TICK("extract assoc");
+//      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
       z.Fill(0);
       projAssoc.GetAssoc(z, mask);
+      TOCK("extract assoc");
 
-      std::cout << "SetImage" << std::endl;
-//      viewInternal.SetImage(z);
-//std::cout << "Done SetImage" << std::endl;
-      viewInternal.ActivatePixelOrthographic();
-      viewInternal.glRenderTexture(projAssoc.tex_);
-      std::cout << "Done SetImage" << std::endl;
+//      std::cout << "SetImage" << std::endl;
+////      viewInternal.SetImage(z);
+////std::cout << "Done SetImage" << std::endl;
+//      viewInternal.ActivatePixelOrthographic();
+//      viewInternal.glRenderTexture(projAssoc.tex_);
+//      std::cout << "Done SetImage" << std::endl;
 
 //      glPointSize(1);
 //      viewInternal.ActivatePixelOrthographic();
@@ -1223,9 +1227,9 @@ int main( int argc, char* argv[] )
 //
 //      viewInternal.tex_.Download(z.ptr_, GL_RGBA, GL_UNSIGNED_BYTE);
 
-      for (size_t i=0; i<z.Area(); ++i) {
-        if (z[i] > 0) std::cout << z[i] << " ";
-      } std::cout << std::endl;
+//      for (size_t i=0; i<z.Area(); ++i) {
+//        if (z[i] > 0) std::cout << z[i] << " ";
+//      } std::cout << std::endl;
     }
 
     if (containerTracking.IsShown()) {
