@@ -29,6 +29,9 @@
 #include <tdp/preproc/grey.h>
 #include <tdp/preproc/grey.h>
 #include <tdp/preproc/project.h>
+#include <tdp/preproc/plane.h>
+#include <tdp/gl/render.h>
+#include <tdp/clustering/dpmeans_simple.hpp>
 
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/rig.h>
@@ -86,9 +89,6 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& viewNormals3D = pangolin::CreateDisplay()
-    .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(viewNormals3D);
   pangolin::View& viewPc3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewPc3D);
@@ -201,15 +201,16 @@ int main( int argc, char* argv[] )
     tdp::DPvMFmeansSimple<float,4> dpvmf(cos(lambdaDeg*M_PI/180.)); 
     for (size_t i=0; i<pl.Area(); ++i) {
       if (tdp::IsValidData(pl[i])) {
-        dpvmf.AddObservation(pl[i]); 
+        dpvmf.addObservation(pl[i]); 
       }
     }
     dpvmf.iterateToConvergence(maxIt, eps);
     TOCK("Compute DPvMFClustering");
     z.Fill(0);
+    size_t j=0;
     for (size_t i=0; i<pl.Area(); ++i) {
       if (tdp::IsValidData(pl[i])) {
-        z[i] = dpvmf.GetZs()[i]+1;
+        z[i] = dpvmf.GetZs()[j++]+1;
       }
     }
 

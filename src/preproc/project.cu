@@ -16,7 +16,7 @@ __global__ void KernelProjectPc(
   if (idx < pc.w_ && idy < pc.h_) {
     Vector3fda pc_i = pc(idx,idy);
     Vector3fda dir_i = dirs(idx,idy);
-    if (IsValidData(pc_i) && IsValidData(dirs_i)) {
+    if (IsValidData(pc_i) && IsValidData(dir_i)) {
       proj(idx,idy) = pc_i.dot(dir_i);
     } else {
       proj(idx,idy) = NAN;

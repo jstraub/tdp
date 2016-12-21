@@ -1,4 +1,5 @@
 #include <tdp/preproc/plane.h>
+#include <tdp/cuda/cuda.h>
 
 namespace tdp {
 

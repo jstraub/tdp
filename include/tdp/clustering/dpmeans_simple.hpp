@@ -225,10 +225,11 @@ bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
   uint32_t iter = 0;
   T fPrev = 1e9;
   T f = cost();
+  updateCenters();
 //  std::cout << "f=" << f << " fPrev=" << fPrev << std::endl;
   while (iter < maxIter && fabs(fPrev - f)/f > eps) {
-    updateCenters();
     updateLabels();
+    updateCenters();
     fPrev = f;
     f = cost();
     ++iter;

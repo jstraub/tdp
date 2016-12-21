@@ -19,6 +19,12 @@ inline bool IsValidData(const Vector3fda& x) {
 }
 
 TDP_HOST_DEVICE
+inline bool IsValidData(const Vector4fda& x) {
+  return x(0)==x(0) && x(1)==x(1) && x(2)==x(2) && x(3)==x(3);
+}
+
+
+TDP_HOST_DEVICE
 inline bool IsValidData(const Vector2fda& x) {
   return x(0)==x(0) && x(1)==x(1);
 }
@@ -27,6 +33,7 @@ TDP_HOST_DEVICE
 inline bool IsValidNormal(const Vector3fda& n) {
   return IsValidData(n) && fabs(n.squaredNorm()-1.0f) < 1e-3f;
 }
+
 
 template<typename T>
 TDP_HOST_DEVICE inline bool isNan(const T& val)
