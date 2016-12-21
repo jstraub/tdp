@@ -1203,7 +1203,9 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewInternal.IsShown()) {
-      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
+      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
+      //projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
       projAssoc.GetAssoc(z);
 
       for (size_t i=0; i<z.Area(); ++i) {

@@ -20,7 +20,7 @@ class ProjectiveAssociation {
       SE3f T_cw, float dMin, float dMax) {
     fbo_.Bind();
     glPushAttrib(GL_VIEWPORT_BIT);
-    glViewport(0, 0, 640, 480);
+    glViewport(0, 0, w_, h_);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     tdp::RenderVboIds(vbo, T_cw, cam_, w_, h_, dMin, dMax);
