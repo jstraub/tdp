@@ -71,6 +71,7 @@ protected:
 };
 
 typedef DPvMFmeansSimple<float,3> DPvMFmeansSimple3f; 
+typedef DPvMFmeansSimple<float,4> DPvMFmeansSimple4f; 
 
 // -------------------------------- impl ----------------------------------
 template<class T, int D>

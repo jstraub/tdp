@@ -10,6 +10,7 @@ file(GLOB SRCS
   "./reductions/*cpp"
   "./rtmf/*cpp"
   "./data/*cpp"
+  "./clustering/*cpp"
   "./stats/*cpp"
   "./tsdf/*cpp"
   "./utils/*cpp"
