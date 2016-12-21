@@ -39,23 +39,6 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
-template <typename T>
-Eigen::Matrix<T,4,4> BuildM(const
-    Eigen::Matrix<T,3,1>& u, const Eigen::Matrix<T,3,1>& v) {
-  const T ui = u(0);
-  const T uj = u(1);
-  const T uk = u(2);
-  const T vi = v(0);
-  const T vj = v(1);
-  const T vk = v(2);
-  Eigen::Matrix<T,4,4> M;
-  M << u.transpose()*v, uk*vj-uj*vk,       ui*vk-uk*vi,       uj*vi-ui*vj, 
-       uk*vj-uj*vk,     ui*vi-uj*vj-uk*vk, uj*vi+ui*vj,       ui*vk+uk*vi,
-       ui*vk-uk*vi,     uj*vi+ui*vj,       uj*vj-ui*vi-uk*vk, uj*vk+uk*vj,
-       uj*vi-ui*vj,     ui*vk+uk*vi,       uj*vk+uk*vj,       uk*vk-ui*vi-uj*vj;
-  return M;
-}
-
 int main( int argc, char* argv[] )
 {
   std::string input_uri = "openni2://";
@@ -122,15 +105,15 @@ int main( int argc, char* argv[] )
   viewN2D.Show(true);
   viewGrey.Show(false);
 
-  pangolin::View& plotters = pangolin::Display("plotters");
-  plotters.SetLayout(pangolin::LayoutEqualVertical);
-  pangolin::DataLog logF;
-  pangolin::Plotter plotF(&logF, -100.f,1.f, 0.f,40.f, 10.f, 0.1f);
-  plotters.AddDisplay(plotF);
-  pangolin::DataLog logEig;
-  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -0.f,1.3f, 10.f, 0.1f);
-  plotters.AddDisplay(plotEig);
-  gui.container().AddDisplay(plotters);
+//  pangolin::View& plotters = pangolin::Display("plotters");
+//  plotters.SetLayout(pangolin::LayoutEqualVertical);
+//  pangolin::DataLog logF;
+//  pangolin::Plotter plotF(&logF, -100.f,1.f, 0.f,40.f, 10.f, 0.1f);
+//  plotters.AddDisplay(plotF);
+//  pangolin::DataLog logEig;
+//  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -0.f,1.3f, 10.f, 0.1f);
+//  plotters.AddDisplay(plotEig);
+//  gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<float> grey(wc, hc);
@@ -138,9 +121,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> greydv(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector3fda> cuN(wc, hc);
 
-  tdp::ManagedHostImage<tdp::Vector3fda> projPc(wc, hc);
-  tdp::ManagedDeviceImage<tdp::Vector3fda> cuProjPc(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector4fda> pl(wc, hc);
+  tdp::ManagedDeviceImage<tdp::Vector4fda> cuPl(wc, hc);
 
   tdp::ManagedHostImage<float> proj(wc, hc);
   tdp::ManagedDeviceImage<float> cuProj(wc, hc);
@@ -156,53 +140,27 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(w, h);
   tdp::ManagedDeviceImage<float> cuGrey(wc, hc);
 
-  pangolin::GlBufferCudaPtr cuNbuf(pangolin::GlArrayBuffer, wc*hc,
-      GL_FLOAT, 3, cudaGraphicsMapFlagsNone, GL_DYNAMIC_DRAW);
-
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
+  pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_SHORT,1);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
   tdp::ManagedDeviceImage<float> cuDrawf(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
-  tdp::GeodesicHist<4> normalHist;
-
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> tsdfDmin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> tsdfDmax("ui.d max",12.,0.1,16.);
 
-  pangolin::Var<bool> verbose ("ui.verbose", false,true);
-  pangolin::Var<bool>  computeHist("ui.ComputeHist",true,true);
-  pangolin::Var<bool>  histFrameByFrame("ui.hist frame2frame", false, true);
-  pangolin::Var<float> histScale("ui.hist scale",40.,1.,100.);
-  pangolin::Var<bool> histLogScale("ui.hist log scale",false,true);
-  pangolin::Var<bool>  dispGrid("ui.Show Grid",false,true);
+  pangolin::Var<bool>  verbose ("ui.verbose", false,true);
   pangolin::Var<bool>  dispNormals("ui.Show Normals",true,true);
+  pangolin::Var<bool>  showLabels("ui.Show Labels",true,true);
 
-  pangolin::Var<bool> runNormals2vMF("ui.normals2vMF", true,true);
   pangolin::Var<float> lambdaDeg("ui.lambdaDeg", 65., 1., 180.);
-  pangolin::Var<int> maxIt("ui.max It", 10, 1, 100);
-  pangolin::Var<float> minNchangePerc("ui.Min Nchange", 0.005, 0.001, 0.1);
-
-  pangolin::Var<float> gradNormThr("ui.grad norm thr", 6, 0, 10);
-
-  pangolin::Var<float> kfThr("ui.KF thr", 0.9, 0.5, 1.0);
-  pangolin::Var<bool> newKf("ui.new KF", true,false);
-  pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", true, true);
+  pangolin::Var<int>   maxIt("ui.max It", 100, 1, 100);
+  pangolin::Var<float> eps("ui.eps", 0.005, 0.001, 0.1);
 
   pangolin::Var<float> blurThr("ui.blur Thr", 0.03, 0.01, 0.2);
-
-  std::vector<tdp::vMF<float,3>> vmfs;
-  Eigen::Matrix<float,4,Eigen::Dynamic> xSums;
-
-  tdp::SO3fda R_cvMF;
-  tdp::SO3fda R_wc;
-  tdp::SO3fda R_cw;
-
-  size_t nFramesTracked = 0;
-  float f = 1.;
-  float fKF = 1.;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -217,6 +175,8 @@ int main( int argc, char* argv[] )
     tdp::Image<tdp::Vector3bda> rgb;
     if (!gui.ImageRGB(rgb)) continue;
     TOCK("Read frame");
+    cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
+    tdp::Rgb2Grey(cuRgb,cuGrey);
 
     TICK("Convert Depth");
     cuDraw.CopyFrom(dRaw, cudaMemcpyHostToDevice);
@@ -225,182 +185,51 @@ int main( int argc, char* argv[] )
     tdp::Blur9(cuD, cuDrawf, blurThr);
     tdp::Blur9(cuDrawf, cuD, 0.8*blurThr);
     TOCK("Convert Depth");
-    {
-      TICK("Compute Normals");
-      pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
-      cudaMemset(*cuNbufp,0, hc*wc*sizeof(tdp::Vector3fda));
-      tdp::Image<tdp::Vector3fda> cuN(wc, hc,
-          wc*sizeof(tdp::Vector3fda), (tdp::Vector3fda*)*cuNbufp);
-      Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
-      n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
-      TOCK("Compute Normals");
+    TICK("Compute Normals");
+    Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
+    n.CopyFrom(cuN,cudaMemcpyDeviceToHost);
+    TOCK("Compute Normals");
 
-      if (viewN2D.IsShown()) { 
-        TICK("Compute 2D normals image");
-        tdp::Normals2Image(cuN, cuN2D);
-        n2D.CopyFrom(cuN2D);
-        TOCK("Compute 2D normals image");
+    TICK("Compute Planes");
+    tdp::ComputeUnitPlanes(cuPc, cuN, cuPl);
+    pl.CopyFrom(cuPl);
+    tdp::ProjectPc(cuPc, cuN, cuProj);
+    proj.CopyFrom(cuProj);
+    TOCK("Compute Normals");
+
+    TICK("Compute DPvMFClustering");
+    tdp::DPvMFmeansSimple<float,4> dpvmf(cos(lambdaDeg*M_PI/180.)); 
+    for (size_t i=0; i<pl.Area(); ++i) {
+      if (tdp::IsValidData(pl[i])) {
+        dpvmf.AddObservation(pl[i]); 
       }
-
-      if (runNormals2vMF && (pangolin::Pushed(newKf) || f/fKF < kfThr )) { 
-        tdp::DPvMFmeans dpm(cos(lambdaDeg*M_PI/180.)); 
-        TICK("Compute DPvMFClustering");
-        tdp::ComputevMFMM(n, cuN, dpm, maxIt, minNchangePerc, 
-            cuZ, vmfs);
-        TOCK("Compute DPvMFClustering");
-//        R_cw = R_cw * R_cvMF;
-        R_cw = R_cvMF * R_cw;
-        R_cvMF = tdp::SO3fda();
-        nFramesTracked = 0;
+    }
+    dpvmf.iterateToConvergence(maxIt, eps);
+    TOCK("Compute DPvMFClustering");
+    z.Fill(0);
+    for (size_t i=0; i<pl.Area(); ++i) {
+      if (tdp::IsValidData(pl[i])) {
+        z[i] = dpvmf.GetZs()[i]+1;
       }
-      if (runNormals2vMF) {
-        if (nFramesTracked > 0)
-          tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
-        xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
-        Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
-        for (size_t k=0; k<vmfs.size(); ++k) {
-          //TODO: push this into the writeup!
-          N += vmfs[k].GetTau()
-            *xSums.block<3,1>(0,k).cast<double>()
-            *vmfs[k].GetMu().cast<double>().transpose();
-        }
-        Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
-            Eigen::ComputeFullU|Eigen::ComputeFullV);
-        double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-        Eigen::Matrix3Xd dR = svd.matrixU()
-          *Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
-//        std::cout << dR << std::endl;
-        std::cout << " fit: " << (N*dR).trace()  <<  " " 
-          << (N*dR).trace()/xSums.bottomRows<1>().sum()
-          << " singular values " << svd.singularValues().transpose()
-          << std::endl;
-//        R_cvMF = tdp::SO3fda(dR.cast<float>()) * R_cvMF;
-        R_cvMF = tdp::SO3fda(dR.cast<float>());
-//        R_cvMF = R_cvMF * tdp::SO3fda(dR);
-//
-        f = (N*dR).trace()/xSums.bottomRows<1>().sum();
-        
-        Eigen::Matrix4f M = Eigen::Matrix4f::Zero();
-        for (size_t k=0; k<vmfs.size(); ++k) {
-          Eigen::Vector3f xSum = xSums.block<3,1>(0,k);
-          M += vmfs[k].GetTau()*BuildM(xSum,vmfs[k].GetMu());
-        }
-//        std::cout << M << std::endl;
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix4f> eig(M);
-        Eigen::Vector4f e = eig.eigenvalues()/eig.eigenvalues()(0);
-//        std::cout << e.transpose() << std::endl;
-
-//        logEig.Log(e(0), e(1), e(2), e(3));
-        if (nFramesTracked == 0) { 
-          fKF = f;
-        }
-        logF.Log(f, R_cvMF.Log().norm()*180./M_PI);
-        logEig.Log(e.array().prod(), kfThr, f/fKF);
-        nFramesTracked ++;
-
-        tdp::ManagedHostImage<tdp::Vector3fda> dirs(vmfs.size());
-        tdp::ManagedDeviceImage<tdp::Vector3fda> cuDirs(vmfs.size());
-        for (size_t k=0; k<vmfs.size(); ++k) {
-//          dirs[k] = xSums.block<3,1>(0,k).normalized();
-          dirs[k] = R_cvMF*vmfs[k].GetMu().normalized();
-        }
-        cuDirs.CopyFrom(dirs);
-        tdp::ProjectPc(cuPc, cuDirs, cuZ, vmfs.size(), cuProjPc);
-        projPc.CopyFrom(cuProjPc);
-
-        tdp::ProjectPc(cuPc, cuDirs, cuZ, vmfs.size(), cuProj);
-        proj.CopyFrom(cuProj);
-      }
-
-      if (computeHist) {
-        TICK("Compute Hist");
-        if (histFrameByFrame)
-          normalHist.Reset();
-        normalHist.ComputeGpu(cuN);
-        TOCK("Compute Hist");
-      }
-      cuRgb.CopyFrom(rgb,cudaMemcpyHostToDevice);
-      tdp::Rgb2Grey(cuRgb,cuGrey);
     }
 
-    tdp::SO3f R_wc = (R_cvMF*R_cw).Inverse();
-    tdp::SO3f R_wcPrev = (R_cw).Inverse();
-    tdp::SE3fda T_wc(R_wc);
-    tdp::SE3fda T_wcPrev(R_wcPrev);
+//    tdp::MAPLabelAssignvMFMM(vmfs, R_cvMF, cuN,  cuZ, filterHalfSphere);
+//    xSums = tdp::SufficientStats1stOrder(cuN, cuZ, vmfs.size());
 
     TICK("Render 3D");
     glEnable(GL_DEPTH_TEST);
-    if (viewNormals3D.IsShown()) {
-      viewNormals3D.Activate(s_cam);
-      glLineWidth(1.5f);
-      pangolin::glDrawAxis(1);
-      glColor4f(0,1,0,0.5);
-      if (dispNormals) {
-        //      pangolin::glSetFrameOfReference(T_wc.matrix());
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-        pangolin::RenderVbo(cuNbuf);
-        pangolin::glUnsetFrameOfReference();
-        //      pangolin::glUnsetFrameOfReference();
-      }
-      if (runNormals2vMF) {
-        glColor4f(0,1,1,1);
-        pangolin::glSetFrameOfReference(T_wcPrev.matrix());
-        for (const auto& vmf : vmfs) {
-          tdp::glDrawLine(Eigen::Vector3f::Zero(), vmf.GetMu());
-        }
-        pangolin::glUnsetFrameOfReference();
-        glColor4f(1,1,0,1);
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-        for (size_t k=0; k<xSums.cols(); ++k) {
-          Eigen::Vector3f dir = xSums.block<3,1>(0,k).normalized();
-          tdp::glDrawLine(Eigen::Vector3f::Zero(), dir);
-        }
-        pangolin::glUnsetFrameOfReference();
-      }
-      if (computeHist) {
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-        if (dispGrid) {
-          normalHist.geoGrid_.Render3D();
-        }
-        normalHist.Render3D(histScale, histLogScale);
-        pangolin::glUnsetFrameOfReference();
-      }
-    }
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
-      if (runNormals2vMF) {
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-      }
       tdp::Depth2PCGpu(cuD,cam,cuPc);
       pc.CopyFrom(cuPc);
       vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
-      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
-      pangolin::RenderVboCbo(vbo, cbo);
 
-      projPc.CopyFrom(cuProjPc);
-      vbo.Upload(projPc.ptr_, projPc.SizeBytes(), 0);
-      glColor3f(1,0,0);
-      pangolin::RenderVbo(vbo);
-
-      if (runNormals2vMF) {
-        pangolin::glUnsetFrameOfReference();
-      }
-
-      if (runNormals2vMF) {
-        glColor4f(0,1,1,1);
-        pangolin::glSetFrameOfReference(T_wcPrev.matrix());
-        for (const auto& vmf : vmfs) {
-          Eigen::Vector3f dir = 0.1*vmf.GetMu();
-          tdp::glDrawLine(Eigen::Vector3f::Zero(), dir);
-        }
-        pangolin::glUnsetFrameOfReference();
-        glColor4f(1,1,0,1);
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-        for (size_t k=0; k<xSums.cols(); ++k) {
-          Eigen::Vector3f dir = 0.1*xSums.block<3,1>(0,k).normalized();
-          tdp::glDrawLine(Eigen::Vector3f::Zero(), dir);
-        }
-        pangolin::glUnsetFrameOfReference();
+      if (showLabels) {
+        lbo.Upload(z.ptr_, z.SizeBytes(), 0);
+        tdp::RenderLabeledVbo(vbo, lbo, s_cam, dpvmf.GetK()+1);
+      } else {
+        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+        pangolin::RenderVboCbo(vbo, cbo);
       }
     }
     TOCK("Render 3D");
@@ -410,16 +239,15 @@ int main( int argc, char* argv[] )
     glDisable(GL_DEPTH_TEST);
 
     if (viewZ.IsShown()) {
-      z.CopyFrom(cuZ);
-      for (size_t i=0; i<z.Area(); ++i)
-        z[i] = std::min(z[i],(uint16_t)vmfs.size());
       viewZ.SetImage(z);
     }
-    if (viewN2D.IsShown()) viewN2D.SetImage(n2D);
+    if (viewN2D.IsShown()) {
+      tdp::Normals2Image(cuN, cuN2D);
+      n2D.CopyFrom(cuN2D);
+      viewN2D.SetImage(n2D);
+    }
     if (viewGrey.IsShown()) viewGrey.SetImage(grey);
     if (viewProj.IsShown()) viewProj.SetImage(proj);
-    plotF.ScrollView(1,0);
-    plotEig.ScrollView(1,0);
     TOCK("Render 2D");
 
     // leave in pixel orthographic for slider to render.
