@@ -52,6 +52,7 @@
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
 #include <tdp/preproc/convert.h>
+#include <tdp/utils/timer.hpp>
 #include <tdp/camera/projective_labels.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -658,7 +659,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
-  pangolin::Var<int> maxIt("ui.max iter",20, 1, 20);
+  pangolin::Var<int> maxIt("ui.max iter",30, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -743,7 +744,7 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  tdp::DPvMFmeansSimple3f dpvmf(cos(65.*M_PI/180.));
+  tdp::DPvMFmeansSimple3f dpvmf(cos(50.*M_PI/180.));
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -809,7 +810,10 @@ int main( int argc, char* argv[] )
         }
       }
 
-      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+      vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
+          pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
+          iReadCurW*sizeof(tdp::Vector3fda));
 
       id_w.resize(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
@@ -818,28 +822,31 @@ int main( int argc, char* argv[] )
       std::cout << " # map points: " << pl_w.SizeToRead() 
         << " " << dpvmf.GetZs().size() << std::endl;
       TICK("dpvmf");
-      dpvmf.iterateToConvergence(100, 1e-3);
+      dpvmf.iterateToConvergence(100, 1e-6);
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         if (k >= invInd.size()) {
           invInd.push_back(std::vector<uint32_t>());
-          invInd.back().reserve(1000000);
+          invInd.back().reserve(10000);
         } else {
           invInd[k].clear();
         }
-        for (auto i : id_w) {
-          if (dpvmf.GetZs()[i] == k) 
-            invInd[k].push_back(i);
-          if (invInd[k].size() >= 100000)
-            break;
+
+        if (incrementalAssign) {
+          for (auto i : id_w) {
+            if (dpvmf.GetZs()[i] == k) 
+              invInd[k].push_back(i);
+            if (invInd[k].size() >= 10000)
+              break;
+          }
         }
-        std::cout << "cluster " << k << ": # " << invInd[k].size() 
-          << " of " << dpvmf.GetNs()[k] << std::endl;
-        std::sort(invInd[k].begin(), invInd[k].begin(), 
-            [&](uint32_t a, uint32_t b) {
-            return pl_w[a].numObs_ > pl_w[b].numObs_;
-            });
-        std::cout << pl_w[invInd[k][0]].numObs_ 
-          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
+//        std::cout << "cluster " << k << ": # " << invInd[k].size() 
+//          << " of " << dpvmf.GetNs()[k] << std::endl;
+//        std::sort(invInd[k].begin(), invInd[k].begin(), 
+//            [&](uint32_t a, uint32_t b) {
+//            return pl_w[a].numObs_ > pl_w[b].numObs_;
+//            });
+//        std::cout << pl_w[invInd[k][0]].numObs_ 
+//          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
       }
       TOCK("dpvmf");
     }
@@ -1035,26 +1042,35 @@ int main( int argc, char* argv[] )
 //            std::cout << invInd[k].size() 
 //              << " " << invUV[k].size() << std::endl;
 //          }
+          TICK("accumulate");
+          float tN = 0, numN = 0;
+          float tAcc = 0, numAcc = 0;
+          float tEnt = 0, numEnt = 0;
+          tdp::Timer t0;
           while (numObs < 10000 && !exploredAll) {
             k = (k+1) % dpvmf.GetK();
             while (indK[k] < invInd[k].size()) {
               int32_t u = invUV[k][indK[k]] % z.w_;
               int32_t v = invUV[k][indK[k]] / z.w_;
               size_t i = invInd[k][indK[k]++];
-//              std::cout << u << "," << v << " " << i << std::endl;
               tdp::Plane& pl = pl_w.GetCircular(i);
               numProjected++;
-//              if (tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-//                    W, n, u,v )) {
-//                std::cout << " vs " << u << "," << v << " " << i << std::endl;
-//              }
-              if (!EnsureNormal(pc, W, n, u, v))
+              t0.tic();
+              if (!EnsureNormal(pc, W, n, u, v)) {
+                tN += t0.toc(); numN ++;
                 continue;
+              }
+              tN += t0.toc(); numN ++;
               if (useTexture) {
+
+                t0.tic();
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                      A, Ai, b, err))
+                      A, Ai, b, err)) {
+                  tAcc  += t0.toc(); numAcc ++;
                   continue;
+                }
+                tAcc  += t0.toc(); numAcc ++;
               } else {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
                       distThr, p2plThr, dotThr, A, Ai, b, err))
@@ -1068,21 +1084,28 @@ int main( int argc, char* argv[] )
               n_c.Insert(n(u,v));
               break;
             }
-
             if (numInl > numInlPrev) {
+              t0.tic();
               if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                    negLogEvThr, H))
+                    negLogEvThr, H)) {
+                tEnt  += t0.toc(); numEnt ++;
                 break;
+              }
+              tEnt  += t0.toc(); numEnt ++;
               Hprev = H;
               numObs ++;
             }
             numInlPrev = numInl;
-
             exploredAll = true;
             for (size_t k=0; k<indK.size(); ++k) {
               exploredAll &= indK[k] >= invInd[k].size();
             }
           }
+          TOCK("accumulate");
+          std::cout 
+            << "ICP timings: normals " << tN/numN << " " << tN 
+            << " accumulation " << tAcc/numAcc << " " << tAcc 
+            << " entropy " << tEnt/numEnt << " " << tEnt << std::endl;
         }
 //        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
@@ -1118,15 +1141,15 @@ int main( int argc, char* argv[] )
         << ev.array().log().matrix().transpose()
         << std::endl;
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
-      std::cout << eig.eigenvalues().real().transpose() << std::endl;
-      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
-      for (size_t k=0; k<dpvmf.GetK(); ++k) {
-        Eigen::Matrix<float,6,1> Ai;
-        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
-        std::cout << "k " << k << std::endl;
-        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
-      }
+//      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+//      std::cout << eig.eigenvalues().real().transpose() << std::endl;
+//      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
+//      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+//        Eigen::Matrix<float,6,1> Ai;
+//        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
+//        std::cout << "k " << k << std::endl;
+//        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
+//      }
 
       logEntropy.Log(H);
       logEigR.Log(ev.topRows<3>().array().log().matrix());

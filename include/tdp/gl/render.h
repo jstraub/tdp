@@ -18,8 +18,8 @@ void RenderVboIds(
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->colorByIdOwnCamShader_;
   shader.Bind();
   Eigen::Vector4f camParams = cam.params_.topRows(4);
-  std::cout << camParams.transpose() << " " << w << " " 
-    << h << " " << dMin << " " << dMax << std::endl;
+//  std::cout << camParams.transpose() << " " << w << " " 
+//    << h << " " << dMin << " " << dMax << std::endl;
   shader.SetUniform("cam", camParams(0), camParams(1), camParams(2), camParams(3));
   shader.SetUniform("T_cw", T_cw.matrix());
   shader.SetUniform("w", (float)w);
