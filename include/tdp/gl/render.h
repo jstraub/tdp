@@ -13,7 +13,8 @@ void RenderVboIds(
   const SE3f& T_cw,
   const CameraBase<float,D,Derived>& cam,
   uint32_t w, uint32_t h,
-  float dMin, float dMax) {
+  float dMin, float dMax, 
+  uint32_t numElems) {
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->colorByIdOwnCamShader_;
   shader.Bind();
   Eigen::Vector4f camParams = cam.params_.topRows(4);
@@ -28,10 +29,20 @@ void RenderVboIds(
   vbo.Bind();
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
   glEnableVertexAttribArray(0);                                               
-  glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+  glDrawArrays(GL_POINTS, 0, numElems);
   shader.Unbind();
   glDisableVertexAttribArray(0);
   vbo.Unbind();
+}
+
+template<int D, typename Derived>
+void RenderVboIds(
+  pangolin::GlBuffer& vbo,
+  const SE3f& T_cw,
+  const CameraBase<float,D,Derived>& cam,
+  uint32_t w, uint32_t h,
+  float dMin, float dMax) {
+  return RenderVboIds( vbo, T_cw, cam, w, h, dMin, dMax, vbo.num_elements);
 }
 
 void RenderVboIds(

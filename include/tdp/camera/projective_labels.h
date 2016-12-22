@@ -15,9 +15,10 @@ class ProjectiveAssociation {
   { }
   ~ProjectiveAssociation() {}
 
+
   
   void Associate(pangolin::GlBuffer& vbo,
-      SE3f T_cw, float dMin, float dMax) {
+      SE3f T_cw, float dMin, float dMax, uint32_t numElems) {
     fbo_.Bind();
 
 //    glViewport(0,0,w_,h_);
@@ -32,7 +33,7 @@ class ProjectiveAssociation {
     glViewport(0, 0, w_, h_);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    tdp::RenderVboIds(vbo, T_cw, cam_, w_, h_, dMin, dMax);
+    tdp::RenderVboIds(vbo, T_cw, cam_, w_, h_, dMin, dMax, numElems);
     fbo_.Unbind();
     glPopAttrib();
     glFinish();
@@ -51,14 +52,24 @@ class ProjectiveAssociation {
   }
 
   void Associate(const Image<Vector3fda>& pc_w,
-      SE3f T_cw, float dMin, float dMax) {
+      SE3f T_cw, float dMin, float dMax, uint32_t numElems) {
     if (vbo_.num_elements != pc_w.Area()) {
       vbo_.Reinitialise(pangolin::GlArrayBuffer,pc_w.Area(),GL_FLOAT,3,
         GL_DYNAMIC_DRAW);
     }
     vbo_.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-    return Associate(vbo_, T_cw, dMin, dMax);
+    return Associate(vbo_, T_cw, dMin, dMax, numElems);
   };
+
+  void Associate(pangolin::GlBuffer& vbo,
+      SE3f T_cw, float dMin, float dMax) {
+    return Associate(vbo, T_cw, dMin, dMax, vbo.num_elements);
+  }
+
+  void Associate(const Image<Vector3fda>& pc_w,
+      SE3f T_cw, float dMin, float dMax) {
+    return Associate(pc_w, T_cw, dMin, dMax, pc_w.Area());
+  }
  
   size_t w_, h_;
   CameraBase<float,D,Derived> cam_;

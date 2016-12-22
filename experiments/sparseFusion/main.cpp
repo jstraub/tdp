@@ -51,6 +51,7 @@
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
+#include <tdp/preproc/convert.h>
 #include <tdp/camera/projective_labels.h>
 
 typedef tdp::CameraPoly3f CameraT;
@@ -600,6 +601,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> greyFl(wc,hc);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreyFlSmooth(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector2fda> cuGradGrey(wc,hc);
@@ -685,6 +687,8 @@ int main( int argc, char* argv[] )
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
+  pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
+
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,1000000,GL_UNSIGNED_BYTE,3);
@@ -804,7 +808,9 @@ int main( int argc, char* argv[] )
           pl.dir_ = dpvmf.GetCenter(kMax);
         }
       }
+
       vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+
       id_w.resize(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
       std::random_shuffle(id_w.begin(), id_w.end());
@@ -853,12 +859,13 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
     cuRgb.CopyFrom(rgb);
-    tdp::Rgb2Grey(cuRgb,cuGreyFl,1.);
-    tdp::Blur5(cuGreyFl,cuGrey, 10.);
-    grey.CopyFrom(cuGrey);
+    if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
-    greyFl.CopyFrom(cuGreyFl);
-    tdp::Gradient(cuGreyFl, cuGreyDu, cuGreyDv, cuGradGrey);
+    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
+    grey.CopyFrom(cuGrey);
+    greyFl.CopyFrom(cuGreyFlSmooth);
+    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1006,7 +1013,8 @@ int main( int argc, char* argv[] )
           }
         } else {
           TICK("data assoc");
-          projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
+          projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
+              pl_w.SizeToRead());
           TOCK("data assoc");
           TICK("extract assoc");
           z.Fill(0);
@@ -1023,17 +1031,17 @@ int main( int argc, char* argv[] )
               invUV[dpvmf.GetZs()[z[i]-1]].push_back(i);
             }
           TOCK("extract assoc");
-          for (size_t k=0; k<invInd.size(); ++k) {
-            std::cout << invInd[k].size() 
-              << " " << invUV[k].size() << std::endl;
-          }
+//          for (size_t k=0; k<invInd.size(); ++k) {
+//            std::cout << invInd[k].size() 
+//              << " " << invUV[k].size() << std::endl;
+//          }
           while (numObs < 10000 && !exploredAll) {
             k = (k+1) % dpvmf.GetK();
             while (indK[k] < invInd[k].size()) {
               int32_t u = invUV[k][indK[k]] % z.w_;
               int32_t v = invUV[k][indK[k]] / z.w_;
               size_t i = invInd[k][indK[k]++];
-              std::cout << u << "," << v << " " << i << std::endl;
+//              std::cout << u << "," << v << " " << i << std::endl;
               tdp::Plane& pl = pl_w.GetCircular(i);
               numProjected++;
 //              if (tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
@@ -1147,6 +1155,12 @@ int main( int argc, char* argv[] )
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
+
+    if (showPcCurrent) {
+      vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
+      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+    }
+
     glEnable(GL_DEPTH_TEST);
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
@@ -1217,12 +1231,8 @@ int main( int argc, char* argv[] )
       // render current camera second in the propper frame of
       // reference
       if (showPcCurrent) {
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
-            3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
         pangolin::glSetFrameOfReference(T_wc.matrix());
         if(dispLvl == 0){
-          cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
           pangolin::RenderVboCbo(vbo, cbo, true);
         } else {
           glColor3f(1,0,0);
@@ -1234,14 +1244,9 @@ int main( int argc, char* argv[] )
 
     if (viewAssoc.IsShown()) {
       viewAssoc.Activate(s_cam);
-
       pangolin::glSetFrameOfReference(T_wc.matrix());
       pangolin::glDrawAxis(0.1f);
       if (showPcCurrent) {
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc.Area(), GL_FLOAT,
-            3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
-        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
         pangolin::RenderVboCbo(vbo, cbo, true);
       }
       pangolin::glUnsetFrameOfReference();
@@ -1257,8 +1262,8 @@ int main( int argc, char* argv[] )
     if (viewNormals.IsShown()) {
       viewNormals.Activate(s_cam);
       glColor4f(0,0,1,0.5);
-      vbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
-      pangolin::RenderVbo(vbo_w);
+      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+      pangolin::RenderVbo(nbo_w);
       glColor4f(1,0,0,1.);
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
@@ -1273,50 +1278,11 @@ int main( int argc, char* argv[] )
       pangolin::glUnsetFrameOfReference();
     }
 
-//    if (viewInternal.IsShown()) {
-//      viewInternal.Activate(s_cam);
-//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-//      tdp::RenderVboIds(vbo_w, s_cam);
-//    }
-
-
     TOCK("Draw 3D");
     if (gui.verbose) std::cout << "draw 2D" << std::endl;
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
-
-    if (viewInternal.IsShown()) {
-      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-      TICK("data assoc");
-      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax);
-      TOCK("data assoc");
-      TICK("extract assoc");
-//      projAssoc.Associate(pc_w, T_wc.Inverse(), dMin, dMax);
-      z.Fill(0);
-      projAssoc.GetAssoc(z, mask);
-      TOCK("extract assoc");
-
-//      std::cout << "SetImage" << std::endl;
-////      viewInternal.SetImage(z);
-////std::cout << "Done SetImage" << std::endl;
-//      viewInternal.ActivatePixelOrthographic();
-//      viewInternal.glRenderTexture(projAssoc.tex_);
-//      std::cout << "Done SetImage" << std::endl;
-
-//      glPointSize(1);
-//      viewInternal.ActivatePixelOrthographic();
-//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-//      tdp::RenderVboIds(vbo_w, T_wc.Inverse(), cam, w, h, dMin, dMax);
-////      glFinish();
-//      glPointSize(1);
-//
-//      viewInternal.tex_.Download(z.ptr_, GL_RGBA, GL_UNSIGNED_BYTE);
-
-//      for (size_t i=0; i<z.Area(); ++i) {
-//        if (z[i] > 0) std::cout << z[i] << " ";
-//      } std::cout << std::endl;
-    }
 
     if (containerTracking.IsShown()) {
       if (viewCurrent.IsShown()) {
