@@ -113,6 +113,56 @@ struct Plane {
 };
 
 void UniformResampleEmptyPartsOfMask(
+    const Image<Vector3fda>& pc, 
+    const CameraT& cam,
+    Image<uint8_t>& mask, 
+    uint32_t W,
+    float subsample,
+    std::mt19937& gen,
+    size_t I, 
+    size_t J,
+    size_t w,
+    size_t h
+    ) {
+  std::uniform_real_distribution<> coin(0, 1);
+  for (size_t i=0; i<I; ++i) {
+    for (size_t j=0; j<J; ++j) {
+      size_t count = 0;
+      float dSum = 0, numD = 0;
+      for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
+        for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
+          if (mask(u,v)) count++;
+          if (IsValidData(pc(u,v))) {
+            dSum += pc(u,v)(2);
+            numD ++;
+          }
+        }
+      }
+      const float avgD = dSum/numD;
+//      const float area1 = I/cam.params_(0)*J/cam.params_(1);
+//      const float areaEst = avgD*avgD*area1;
+//      float prob = subsample*areaEst/area1;
+      float prob = subsample*avgD*avgD;
+      if (count == 0) {
+        for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
+          for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
+            if (coin(gen) < prob) {
+              mask(u,v) = 1;
+            }
+          }
+        }
+      } else {
+        for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
+          for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
+            if (mask(u,v)) mask(u,v) = 0;
+          }
+        }
+      }
+    }
+  }
+}
+
+void UniformResampleEmptyPartsOfMask(
     Image<uint8_t>& mask, uint32_t W,
     float subsample,
     std::mt19937& gen,
@@ -140,6 +190,50 @@ void UniformResampleEmptyPartsOfMask(
         for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
           for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
             if (mask(u,v)) mask(u,v) = 0;
+          }
+        }
+      }
+    }
+  }
+}
+
+void UniformResampleMask(
+    const Image<Vector3fda>& pc, 
+    const CameraT& cam,
+    Image<uint8_t>& mask, 
+    uint32_t W,
+    float subsample,
+    std::mt19937& gen,
+    size_t I, 
+    size_t J 
+    ) {
+  std::uniform_real_distribution<> coin(0, 1);
+  for (size_t i=0; i<I; ++i) {
+    for (size_t j=0; j<J; ++j) {
+      size_t count = 0;
+      float dSum = 0, numD = 0;
+      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+          if (mask(u,v)) count++;
+          if (IsValidData(pc(u,v))) {
+            dSum += pc(u,v)(2);
+            numD ++;
+          }
+        }
+      }
+      const float avgD = dSum/numD;
+//      const float area1 = I/cam.params_(0)*J/cam.params_(1);
+//      const float areaEst = avgD*avgD*area1;
+//      float prob = subsample*areaEst/area1;
+      float prob = subsample*avgD*avgD -(float)count/(float)(mask.w_/I*mask.h_/J);
+      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
+        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
+          if (mask(u,v)) {
+            mask(u,v) = 0;
+          } else if (coin(gen) < prob) {
+            mask(u,v) = 1;
+          } else {
+            mask(u,v) = 0;
           }
         }
       }
@@ -346,7 +440,7 @@ bool AccumulateP2Pl(const Plane& pl,
   float dist = (pc_w - pc_c_in_w).norm();
   if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
+    if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
         Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
@@ -384,7 +478,7 @@ bool AccumulateP2Pl(const Plane& pl,
   float dist = (pc_w - pc_c_in_w).norm();
   if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
+    if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
         // p2pl
@@ -428,7 +522,7 @@ bool AccumulateRot(const Plane& pl,
   float dist = (pc_w - pc_c_in_w).norm();
   if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (fabs(n_w_in_c.dot(n_ci)) > dotThr) {
+    if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
         N += n_w * n_ci.transpose();
@@ -636,7 +730,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
+  pangolin::Var<float> subsample("ui.subsample %",0.0005,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
 
@@ -780,7 +874,10 @@ int main( int argc, char* argv[] )
         }
 //        tdp::ExtractBrief(grey, pts, orientations, gui.frame, descs);
       } else {
-        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
+//        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
+//        tdp::UniformResampleMask(pc, cam, mask, W, subsample, gen, 16, 16);
+        tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
+            subsample, gen, 16, 16, w, h);
       }
       TOCK("mask");
       {
@@ -857,7 +954,8 @@ int main( int argc, char* argv[] )
     gui.NextFrames();
 
     int64_t t_host_us_d = 0;
-    TICK("Setup");
+    TICK(
+        "Setup");
     if (gui.verbose) std::cout << "collect d" << std::endl;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
