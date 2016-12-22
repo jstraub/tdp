@@ -730,7 +730,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
-  pangolin::Var<float> subsample("ui.subsample %",0.0005,0.0001,.001);
+  pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
 
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
 
