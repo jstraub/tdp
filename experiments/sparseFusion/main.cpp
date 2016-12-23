@@ -53,8 +53,10 @@
 #include <tdp/gl/render.h>
 #include <tdp/preproc/convert.h>
 #include <tdp/preproc/plane.h>
+#include <tdp/features/lsh.h>
 #include <tdp/utils/timer.hpp>
 #include <tdp/camera/projective_labels.h>
+#include <tdp/ransac/ransac.h>
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -519,6 +521,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
 
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
+
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
@@ -539,6 +542,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<int> maxIt("ui.max iter",30, 1, 20);
 
+
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
@@ -555,6 +559,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
+  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
+  pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
+  pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
+  pangolin::Var<float> ransacInlierThr("ui.inlier thr",6,1,20);
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
@@ -610,6 +618,7 @@ int main( int argc, char* argv[] )
     };
   });
 
+  tdp::ManagedLshForest<14> lsh(11);
   tdp::ManagedHostImage<tdp::Brief> descs;
   tdp::ManagedHostImage<tdp::Vector2ida> pts;
   tdp::ManagedHostImage<float> orientation;
@@ -672,6 +681,41 @@ int main( int argc, char* argv[] )
             T_wc, dpc, pl_w, pc_w, rgb_w, n_w);
         TOCK("normals");
 
+        TICK("match briefs");
+        std::vector<int32_t> assocBA;
+        std::vector<tdp::Brief> featB;
+        std::vector<tdp::Brief> featA;
+        assocBA.reserve(pl_w.SizeToRead(iReadCurW));
+        featB.reserve(pl_w.SizeToRead(iReadCurW));
+        featA.reserve(pl_w.SizeToRead(iReadCurW));
+        for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
+          tdp::Plane& pl = pl_w[i];
+          tdp::Brief* feat;
+          int dist;
+          if (lsh.SearchBest(pl.feat_,dist,feat) && dist < briefMatchThr) {
+            std::cout << dist << " ";
+            assocBA.push_back(i-iReadCurW);
+            featB.push_back(*feat);
+            featA.push_back(pl.feat_);
+          }
+        } std::cout << std::endl;
+        TOCK("match briefs");
+        if (assocBA.size() > 10) {
+          TICK("RANSAC");
+          tdp::P3PBrief p3p;
+          tdp::Ransac<tdp::Brief> ransac(&p3p);
+          size_t numInliers = 0;
+          tdp::SE3f T_ab = ransac.Compute(featA, featB, assocBA, ransacMaxIt,
+              ransacThr, numInliers);
+          TOCK("RANSAC");
+
+          std::cout << "matches: " << assocBA.size() 
+            << " " << assocBA.size()/(float)pl_w.SizeToRead(iReadCurW)
+            << "%;  after RANSAC "
+            << numInliers << " " << numInliers/(float)assocBA.size()
+            << std::endl;
+        }
+
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
@@ -687,6 +731,7 @@ int main( int argc, char* argv[] )
             }
           }
           pl.dir_ = dpvmf.GetCenter(kMax);
+          lsh.Insert(pl.feat_);
         }
       }
 
