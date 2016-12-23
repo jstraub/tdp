@@ -101,6 +101,7 @@ void ExtractNormals(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
+        pl.feat_.p_c_ = pl.p_; // TODO: not going to be updated if pl.p_ is !
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -523,6 +524,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
+  pangolin::Var<bool> runLoopClosure("ui.run loop closure",true,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
@@ -566,6 +568,7 @@ int main( int argc, char* argv[] )
 
   tdp::SE3f T_wc_0;
   tdp::SE3f T_wc = T_wc_0;
+  tdp::SE3f T_wcRansac;
   std::vector<tdp::SE3f> T_wcs;
   Eigen::Matrix<float,6,6> Sigma_mc;
   std::vector<float> logHs;
@@ -650,6 +653,56 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
+    if (runLoopClosure) {
+      TICK("match briefs");
+      std::vector<int32_t> assocBA;
+      std::vector<tdp::Brief> featsB;
+      std::vector<tdp::Brief> featsA;
+      assocBA.reserve(4*subsample*w*h);
+      featsA.reserve( 4*subsample*w*h);
+      featsB.reserve( 4*subsample*w*h);
+      tdp::Brief* featB;
+      tdp::Brief featA;
+      int dist;
+      for (size_t u=0; u<mask.w_; ++u) {
+        for (size_t v=0; v<mask.h_; ++v) {
+          if (mask(u,v)) {
+            featA.pt_(0) = u;
+            featA.pt_(1) = v;
+            featA.p_c_ = pc(u,v);
+            if (tdp::ExtractBrief(grey, featA)
+                && lsh.SearchBest(featA,dist,featB) 
+                && dist < briefMatchThr) {
+//              std::cout << u << "," << v << ": " << dist << std::endl;
+              assocBA.push_back(assocBA.size());
+              featsB.push_back(*featB);
+              featsA.push_back(featA);
+            }
+          }
+        }
+      } 
+      TOCK("match briefs");
+      if (assocBA.size() > 10) {
+        TICK("RANSAC");
+        tdp::P3PBrief p3p;
+        tdp::Ransac<tdp::Brief> ransac(&p3p);
+        size_t numInliers = 0;
+        tdp::SE3f T_ab = ransac.Compute(featsA, featsB, assocBA, ransacMaxIt,
+            ransacThr, numInliers);
+        TOCK("RANSAC");
+
+        std::cout << "matches: " << assocBA.size() 
+          << " " << assocBA.size()/(float)pl_w.SizeToRead(iReadCurW)
+          << "%;  after RANSAC "
+          << numInliers << " " << numInliers/(float)assocBA.size()
+          << std::endl;
+        if (numInliers > ransacInlierThr) {
+          T_wcRansac = T_ab.Inverse();
+        } else {
+          T_wcRansac.translation() << 999,999,999;
+        }
+      }
+    }
 
     if (!gui.paused() && !gui.finished()
         && frame > 0
@@ -680,41 +733,6 @@ int main( int argc, char* argv[] )
         ExtractNormals(pc, rgb, grey, greyFl, gradGrey, mask, W, frame,
             T_wc, dpc, pl_w, pc_w, rgb_w, n_w);
         TOCK("normals");
-
-        TICK("match briefs");
-        std::vector<int32_t> assocBA;
-        std::vector<tdp::Brief> featB;
-        std::vector<tdp::Brief> featA;
-        assocBA.reserve(pl_w.SizeToRead(iReadCurW));
-        featB.reserve(pl_w.SizeToRead(iReadCurW));
-        featA.reserve(pl_w.SizeToRead(iReadCurW));
-        for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
-          tdp::Plane& pl = pl_w[i];
-          tdp::Brief* feat;
-          int dist;
-          if (lsh.SearchBest(pl.feat_,dist,feat) && dist < briefMatchThr) {
-            std::cout << dist << " ";
-            assocBA.push_back(i-iReadCurW);
-            featB.push_back(*feat);
-            featA.push_back(pl.feat_);
-          }
-        } std::cout << std::endl;
-        TOCK("match briefs");
-        if (assocBA.size() > 10) {
-          TICK("RANSAC");
-          tdp::P3PBrief p3p;
-          tdp::Ransac<tdp::Brief> ransac(&p3p);
-          size_t numInliers = 0;
-          tdp::SE3f T_ab = ransac.Compute(featA, featB, assocBA, ransacMaxIt,
-              ransacThr, numInliers);
-          TOCK("RANSAC");
-
-          std::cout << "matches: " << assocBA.size() 
-            << " " << assocBA.size()/(float)pl_w.SizeToRead(iReadCurW)
-            << "%;  after RANSAC "
-            << numInliers << " " << numInliers/(float)assocBA.size()
-            << std::endl;
-        }
 
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
@@ -1114,9 +1132,15 @@ int main( int argc, char* argv[] )
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
 
-      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
+      glColor4f(0.,1.,0.,1.0);
+//      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
+      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
+
+      glColor4f(1.,0.,0.,1.0);
+//      pangolin::glDrawAxis(T_wcRansac.matrix(), 0.05f);
+      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
       glColor4f(1.,1.,0.,0.6);
-      glDrawPoses(T_wcs,20);
+      glDrawPoses(T_wcs,20, 0.03f);
 
       if (showFullPc) {
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
