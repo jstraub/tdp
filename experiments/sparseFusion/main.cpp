@@ -69,6 +69,8 @@ void ExtractNormals(
     const Image<uint8_t>& grey,
     const Image<float>& greyFl,
     const Image<Vector2fda>& gradGrey,
+    const Image<Vector2ida>& pts,
+    const Image<float>& orientation,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
     Image<Vector4fda>& dpc, 
@@ -89,9 +91,31 @@ void ExtractNormals(
       if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, dpc, n)) {
         feat.pt_(0) = i%mask.w_;
         feat.pt_(1) = i/mask.w_;
-        feat.orientation_ = ComputePatchOrientation(grey, feat.pt_);
-        if (!tdp::ExtractBrief(grey, feat)) 
-          continue;
+        feat.desc_.fill(0);
+        // try finding a closeby feature point and get the feature there
+        for (size_t j=0; j<pts.Area(); ++j) {
+//          std::cout << "FAST feat at " << pts[j].transpose() << " for " <<
+//            feat.pt_.transpose() << ": ";
+//          std::cout << (pts[j] - feat.pt_).norm() << " " <<  Wscaled<< std::endl;
+          if ((pts[j].cast<float>() - feat.pt_.cast<float>()).norm() < Wscaled) {
+            feat.orientation_ = orientation[j];
+            if (!tdp::ExtractBrief(grey, feat)) 
+              feat.desc_.fill(0);
+            else {
+              std::cout << "FAST feat at " << pts[j].transpose() << " for " <<
+                feat.pt_.transpose() << std::endl;
+              // TODO: not going to be updated if pl.p_ is !
+              feat.p_c_ = T_wc*pc(pts[j](0), pts[j](1)); 
+              //TODO: predict depth based on plane equation
+              if (feat.p_c_(2) == 0.)
+                feat.desc_.fill(0);
+            }
+            break;
+          }
+        }
+//        feat.orientation_ = ComputePatchOrientation(grey, feat.pt_);
+//        if (!tdp::ExtractBrief(grey, feat)) 
+//          continue;
         pl.p_ = T_wc*pc[i];
         pl.n_ = T_wc.rotation()*n;
         pl.rgb_ = rgb[i];
@@ -101,7 +125,6 @@ void ExtractNormals(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
-        pl.feat_.p_c_ = pl.p_; // TODO: not going to be updated if pl.p_ is !
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -430,6 +453,8 @@ int main( int argc, char* argv[] )
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
+  tdp::QuickView viewGrey(wc, hc);
+  containerTracking.AddDisplay(viewGrey);
   tdp::QuickView viewMask(wc, hc);
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
@@ -552,7 +577,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<int> step("ui.step",30,0,100);
 
-  pangolin::Var<bool> showFAST("ui.show FAST",false,true);
+  pangolin::Var<bool> showFAST("ui.show FAST",true,true);
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
@@ -640,6 +665,13 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
+  std::vector<int32_t> assocBA;
+  std::vector<tdp::Brief> featsB;
+  std::vector<tdp::Brief> featsA;
+  assocBA.reserve(4*subsample*w*h);
+  featsA.reserve( 4*subsample*w*h);
+  featsB.reserve( 4*subsample*w*h);
+
   int32_t iReadCurW = 0;
   size_t frame = 0;
   // Stream and display video
@@ -649,33 +681,26 @@ int main( int argc, char* argv[] )
       T_wc = tdp::SE3f();
     }
     if (runLoopClosure) {
+      // TODO: I did not set orientation propperly when I tried BRIEF
+      // simply on sampled plane locations!!! Try that again.
       TICK("match briefs");
-      std::vector<int32_t> assocBA;
-      std::vector<tdp::Brief> featsB;
-      std::vector<tdp::Brief> featsA;
-      assocBA.reserve(4*subsample*w*h);
-      featsA.reserve( 4*subsample*w*h);
-      featsB.reserve( 4*subsample*w*h);
+      assocBA.clear(); featsA.clear(); featsB.clear();
       tdp::Brief* featB;
       tdp::Brief featA;
       int dist;
-      for (size_t u=0; u<mask.w_; ++u) {
-        for (size_t v=0; v<mask.h_; ++v) {
-          if (mask(u,v)) {
-            featA.pt_(0) = u;
-            featA.pt_(1) = v;
-            featA.p_c_ = pc(u,v);
-            if (tdp::ExtractBrief(grey, featA)
-                && lsh.SearchBest(featA,dist,featB) 
-                && dist < briefMatchThr) {
-//              std::cout << u << "," << v << ": " << dist << std::endl;
-              assocBA.push_back(assocBA.size());
-              featsB.push_back(*featB);
-              featsA.push_back(featA);
-            }
-          }
+      for (size_t i=0; i<pts.Area(); ++i) {
+        featA.pt_ = pts[i];
+        featA.p_c_ = pc(pts[i](0),pts[i](1));
+        featA.orientation_ = orientation[i];
+        if (tdp::ExtractBrief(grey, featA)
+            && lsh.SearchBest(featA,dist,featB) 
+            && dist < briefMatchThr) {
+//            std::cout << u << "," << v << ": " << dist << std::endl;
+          assocBA.push_back(assocBA.size());
+          featsB.push_back(*featB);
+          featsA.push_back(featA);
         }
-      } 
+      }
       TOCK("match briefs");
       if (assocBA.size() > 10) {
         TICK("RANSAC");
@@ -691,6 +716,7 @@ int main( int argc, char* argv[] )
           << "%;  after RANSAC "
           << numInliers << " " << numInliers/(float)assocBA.size()
           << std::endl;
+        std::cout << T_wc.Log(T_ab.Inverse()).transpose() << std::endl;
         if (numInliers > ransacInlierThr) {
           T_wcRansac = T_ab.Inverse();
         } else {
@@ -726,8 +752,11 @@ int main( int argc, char* argv[] )
         iReadCurW = pl_w.iInsert_;
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
-        ExtractNormals(pc, rgb, grey, greyFl, gradGrey, mask, W, frame,
-            T_wc, dpc, pl_w, pc_w, rgb_w, n_w);
+//        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+//            orientation);
+        ExtractNormals(pc, rgb, grey, greyFl, gradGrey, pts,
+            orientation, mask, W, frame, T_wc, dpc, pl_w, pc_w, rgb_w,
+            n_w);
         TOCK("normals");
 
         TICK("add to model");
@@ -807,11 +836,17 @@ int main( int argc, char* argv[] )
     cuRgb.CopyFrom(rgb);
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
-    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+    cuGreyFlSmooth.CopyFrom(cuGreyFl);
+//    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
     tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
     grey.CopyFrom(cuGrey);
     greyFl.CopyFrom(cuGreyFlSmooth);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
+
+    TICK("FAST");
+    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+        orientation);
+    TOCK("FAST");
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1170,6 +1205,12 @@ int main( int argc, char* argv[] )
             tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
           }
         }
+        for (size_t i=0; i<assocBA.size(); ++i) {
+          tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
+          tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
+          std::cout << pA.transpose() << "; "
+            << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+        }
       }
 
       if (showNormals) {
@@ -1252,30 +1293,33 @@ int main( int argc, char* argv[] )
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
-
-    if (containerTracking.IsShown()) {
-      if (viewCurrent.IsShown()) {
-        if (showFAST && !useFAST) {
-          tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
-              orientation);
+    if (viewCurrent.IsShown()) {
+//      if (showFAST && !useFAST) {
+//        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+//            orientation);
+//      }
+      viewCurrent.SetImage(rgb);
+      glColor3f(1,0,0);
+      for (size_t u=0; u<rgb.w_; ++u)
+        for (size_t v=0; v<rgb.h_; ++v) {
+          if (mask(u,v)) {
+            pangolin::glDrawCircle(u,v,1);
+          }
         }
-        viewCurrent.SetImage(rgb);
-        glColor3f(1,0,0);
-        for (size_t u=0; u<rgb.w_; ++u)
-          for (size_t v=0; v<rgb.h_; ++v) {
-            if (mask(u,v)) {
-              pangolin::glDrawCircle(u,v,1);
-            }
-          }
-        if (showFAST) {
-          glColor3f(0,1,0);
-          for (size_t i=0; i<pts.Area(); ++i) {
-            pangolin::glDrawCircle(pts[i](0), pts[i](1), 1);
-          }
+      if (showFAST) {
+        glColor3f(0,1,0);
+        for (size_t i=0; i<pts.Area(); ++i) {
+          pangolin::glDrawCircle(pts[i](0), pts[i](1), 1);
         }
       }
+    }
+
+    if (containerTracking.IsShown()) {
       if (viewMask.IsShown()) {
         viewMask.SetImage(mask);
+      }
+      if (viewGrey.IsShown()) {
+        viewGrey.SetImage(grey);
       }
     }
     std::cout << "scroll plots" << std::endl;
