@@ -642,7 +642,7 @@ int main( int argc, char* argv[] )
       T_wc = tdp::SE3f();
     }
 
-    if (!gui.paused() 
+    if (!gui.paused() && !gui.finished()
         && frame > 0
         && (runMapping || frame == 1) 
         && (trackingGood || frame < 10)) { // add new observations
@@ -737,8 +737,7 @@ int main( int argc, char* argv[] )
     gui.NextFrames();
 
     int64_t t_host_us_d = 0;
-    TICK(
-        "Setup");
+    TICK("Setup");
     if (gui.verbose) std::cout << "collect d" << std::endl;
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
@@ -760,7 +759,7 @@ int main( int argc, char* argv[] )
 
     size_t numProjected =0;
     trackingGood = false;
-    if (frame > 1 && runTracking) { // tracking
+    if (frame > 1 && runTracking && !gui.finished()) { // tracking
       TICK("icp");
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
