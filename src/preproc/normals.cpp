@@ -1,6 +1,7 @@
 
 #include <assert.h>
 #include <tdp/preproc/normals.h>
+#include <tdp/utils/timer.hpp>
 #include <tdp/clustering/dpmeans_simple.hpp>
 
 namespace tdp {
@@ -48,9 +49,9 @@ void Depth2Normals(
 
 bool NormalViaVoting(
     const Image<Vector3fda>& pc, 
-    uint32_t u0, 
-    uint32_t v0,
+    uint32_t u0, uint32_t v0,
     uint32_t W, float inlierThr,
+    Image<Vector4fda>& dpc, 
     Vector3fda& c
     ) {
   if ( W <= u0 && u0 < pc.w_-W 
@@ -62,20 +63,43 @@ bool NormalViaVoting(
     if (!IsValidData(n))
       return false;
 //    std::cout << "\t" << n.transpose() << std::endl;
-
     size_t N = 0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          dpc(u,v).topRows<3>() = pc0 - pc(u,v);
+          dpc(u,v)(3) = dpc(u,v).topRows<3>().norm();
+          ++N;
+        } else {
+          dpc(u,v)(3) == 0.;
+        }
+      }
+    }
+    if (N<4*W*W*inlierThr) 
+      return false;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
     size_t Nprev = 0;
-    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
-      Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
-      float orthoL = cos((90.-dAng)/180.*M_PI);
-      float orthoU = cos((90.+dAng)/180.*M_PI);
+    Eigen::Matrix3f S;
+    float orthoL = 0.;
+    float orthoU = 0.;
+    for (float dAng : {45./180.*M_PI,35./180.*M_PI,25./180.*M_PI,15./180.*M_PI}) {
+//    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
+      S.fill(0.);
+      orthoL = cos(0.5*M_PI-dAng);
+      orthoU = cos(0.5*M_PI+dAng);
       for (size_t u=u0-W; u<u0+W; ++u) {
         for (size_t v=v0-W; v<v0+W; ++v) {
-          if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-            Vector3fda dpc = pc0 - pc(u,v);
-            float ang = dpc.dot(n)/dpc.norm();
-            if (orthoU < ang && ang <= orthoL) {
-              S += dpc*dpc.transpose();
+          if (dpc(u,v)(3) > 0.) {
+            float ang = dpc(u,v).topRows<3>().dot(n);
+            if (orthoU*dpc(u,v)(3) < ang && ang <= orthoL*dpc(u,v)(3)) {
+//              S += dpc(u,v)*dpc(u,v).transpose();
+              S(0,0) += dpc(u,v)(0)*dpc(u,v)(0);
+              S(0,1) += dpc(u,v)(0)*dpc(u,v)(1);
+              S(0,2) += dpc(u,v)(0)*dpc(u,v)(2);
+              S(1,1) += dpc(u,v)(1)*dpc(u,v)(1);
+              S(1,2) += dpc(u,v)(1)*dpc(u,v)(2);
+              S(2,2) += dpc(u,v)(2)*dpc(u,v)(2);
               N++;
             }
           }
@@ -83,9 +107,12 @@ bool NormalViaVoting(
       }
       if (N<4*W*W*inlierThr) 
         return false;
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
+      S(1,0) = S(0,1);
+      S(2,0) = S(0,2);
+      S(2,1) = S(1,2);
       int id = 0;
-      float eval = eig.eigenvalues().minCoeff(&id);
+      eig.computeDirect(S);
+      eig.eigenvalues().minCoeff(&id);
       n = eig.eigenvectors().col(id).normalized();
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
@@ -205,10 +232,11 @@ void NormalsViaVoting(
     const Image<Vector3fda>& pc, 
     uint32_t W, uint32_t step,
     float inlierThr, 
+    Image<Vector4fda>& dpc,
     Image<Vector3fda>& n) {
   for(size_t u=W; u<n.w_-W; u+=step) {
     for(size_t v=W; v<n.h_-W; v+=step) {
-      if(!NormalViaVoting(pc, u,v,W,inlierThr, n(u,v))) {
+      if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v))) {
         n(u,v) << NAN,NAN,NAN;
       }
     }

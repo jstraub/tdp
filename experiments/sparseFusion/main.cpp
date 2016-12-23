@@ -52,6 +52,7 @@
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
 #include <tdp/preproc/convert.h>
+#include <tdp/preproc/plane.h>
 #include <tdp/utils/timer.hpp>
 #include <tdp/camera/projective_labels.h>
 
@@ -60,236 +61,15 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
-struct Plane {
-  Vector3fda p_; 
-  Vector3fda n_; 
-  Vector3bda rgb_; 
-  float grey_;
-  Vector2fda gradGrey_; 
-  Vector3fda dir_; 
-
-  Brief feat_;
-
-  uint32_t lastFrame_;
-  uint32_t numObs_;
-
-  float w_; // weight
-
-  void AddObs(const Vector3fda& p, const Vector3fda& n) {
-    float wNew = w_+1; 
-    n_ = (n_*w_ + n).normalized();
-    p_ += n.dot(p- p_)/wNew * n;
-    w_ = std::min(100.f, wNew);
-  }
-
-  void AddObs(const Vector3fda& p, const Vector3fda& n, 
-      const Vector3bda& rgb) {
-    float wNew = w_+1; 
-    p_ = (p_*w_ + p)/wNew;
-    n_ = (n_*w_ + n).normalized();
-    rgb_ = ((rgb_.cast<float>()*w_ + rgb.cast<float>())/wNew).cast<uint8_t>();
-    w_ = std::min(100.f, wNew);
-  }
-
-  tdp::SE3f LocalCosy() {
-    Eigen::Matrix3f R = tdp::OrthonormalizeFromYZ(
-        dir_, n_);
-    return tdp::SE3f(R, p_); 
-  }
-
-
-  bool Close(const Plane& other, float dotThr, float distThr, 
-      float p2plThr) {
-    if ((p_ - other.p_).norm() < distThr) {
-      if (fabs(n_.dot(other.n_)) > dotThr) {
-        if (fabs(n_.dot(p_ - other.p_)) < p2plThr) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-};
-
-void UniformResampleEmptyPartsOfMask(
+void ExtractNormals(
     const Image<Vector3fda>& pc, 
-    const CameraT& cam,
-    Image<uint8_t>& mask, 
-    uint32_t W,
-    float subsample,
-    std::mt19937& gen,
-    size_t I, 
-    size_t J,
-    size_t w,
-    size_t h
-    ) {
-  std::uniform_real_distribution<> coin(0, 1);
-  for (size_t i=0; i<I; ++i) {
-    for (size_t j=0; j<J; ++j) {
-      size_t count = 0;
-      float dSum = 0, numD = 0;
-      for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
-        for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-          if (mask(u,v)) count++;
-          if (IsValidData(pc(u,v))) {
-            dSum += pc(u,v)(2);
-            numD ++;
-          }
-        }
-      }
-      const float avgD = dSum/numD;
-//      const float area1 = I/cam.params_(0)*J/cam.params_(1);
-//      const float areaEst = avgD*avgD*area1;
-//      float prob = subsample*areaEst/area1;
-      float prob = subsample*avgD*avgD;
-      if (count == 0) {
-        for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
-          for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (coin(gen) < prob) {
-              mask(u,v) = 1;
-            }
-          }
-        }
-      } else {
-        for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
-          for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (mask(u,v)) mask(u,v) = 0;
-          }
-        }
-      }
-    }
-  }
-}
-
-void UniformResampleEmptyPartsOfMask(
-    Image<uint8_t>& mask, uint32_t W,
-    float subsample,
-    std::mt19937& gen,
-    size_t I, 
-    size_t J 
-    ) {
-  std::uniform_real_distribution<> coin(0, 1);
-  for (size_t i=0; i<I; ++i) {
-    for (size_t j=0; j<J; ++j) {
-      size_t count = 0;
-      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-          if (mask(u,v)) count++;
-        }
-      }
-      if (count == 0) {
-        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-            if (coin(gen) < subsample) {
-              mask(u,v) = 1;
-            }
-          }
-        }
-      } else {
-        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-            if (mask(u,v)) mask(u,v) = 0;
-          }
-        }
-      }
-    }
-  }
-}
-
-void UniformResampleMask(
-    const Image<Vector3fda>& pc, 
-    const CameraT& cam,
-    Image<uint8_t>& mask, 
-    uint32_t W,
-    float subsample,
-    std::mt19937& gen,
-    size_t I, 
-    size_t J 
-    ) {
-  std::uniform_real_distribution<> coin(0, 1);
-  for (size_t i=0; i<I; ++i) {
-    for (size_t j=0; j<J; ++j) {
-      size_t count = 0;
-      float dSum = 0, numD = 0;
-      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-          if (mask(u,v)) count++;
-          if (IsValidData(pc(u,v))) {
-            dSum += pc(u,v)(2);
-            numD ++;
-          }
-        }
-      }
-      const float avgD = dSum/numD;
-//      const float area1 = I/cam.params_(0)*J/cam.params_(1);
-//      const float areaEst = avgD*avgD*area1;
-//      float prob = subsample*areaEst/area1;
-      float prob = subsample*avgD*avgD -(float)count/(float)(mask.w_/I*mask.h_/J);
-      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-          if (mask(u,v)) {
-            mask(u,v) = 0;
-          } else if (coin(gen) < prob) {
-            mask(u,v) = 1;
-          } else {
-            mask(u,v) = 0;
-          }
-        }
-      }
-    }
-  }
-}
- 
-void UniformResampleMask(
-    Image<uint8_t>& mask, uint32_t W,
-    float subsample,
-    std::mt19937& gen,
-    size_t I, 
-    size_t J 
-    ) {
-  std::uniform_real_distribution<> coin(0, 1);
-  for (size_t i=0; i<I; ++i) {
-    for (size_t j=0; j<J; ++j) {
-      size_t count = 0;
-      for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-        for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-          if (mask(u,v)) count++;
-        }
-      }
-      float perc = (float)subsample-(float)count/(float)(mask.w_/I*mask.h_/J);
-      std::cout << i << "," << j << ": " << 100*perc 
-        << ", " << count << std::endl;
-      if (perc > 0.) {
-        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-            if (mask(u,v)) {
-              mask(u,v) = 0;
-            } else if (coin(gen) < perc) {
-              mask(u,v) = 1;
-            } else {
-              mask(u,v) = 0;
-            }
-          }
-        }
-      } else {
-        for (size_t u=i*mask.w_/I; u<(i+1)*mask.w_/I; ++u) {
-          for (size_t v=j*mask.h_/J; v<(j+1)*mask.h_/J; ++v) {
-            if (mask(u,v)) mask(u,v) = 0;
-          }
-        }
-      }
-    }
-  }
-}
-
-void ExtractNormals(const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
     const Image<uint8_t>& grey,
     const Image<float>& greyFl,
     const Image<Vector2fda>& gradGrey,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
+    Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
@@ -304,7 +84,7 @@ void ExtractNormals(const Image<Vector3fda>& pc,
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, n)) {
+      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, dpc, n)) {
         feat.pt_(0) = i%mask.w_;
         feat.pt_(1) = i/mask.w_;
         feat.orientation_ = ComputePatchOrientation(grey, feat.pt_);
@@ -349,6 +129,7 @@ bool ProjectiveAssoc(const Plane& pl,
 
 bool EnsureNormal(
     const Image<Vector3fda>& pc,
+    Image<Vector4fda>& dpc,
     uint32_t W,
     Image<Vector3fda>& n,
     int32_t u,
@@ -361,7 +142,7 @@ bool EnsureNormal(
       tdp::Vector3fda ni = n(u,v);
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, ni)) {
+        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni)) {
           n(u,v) = ni;
           return true;
         }
@@ -378,6 +159,7 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     CameraT& cam,
     const Image<Vector3fda>& pc,
     uint32_t W,
+    Image<Vector4fda>& dpc,
     Image<Vector3fda>& n,
     int32_t& u,
     int32_t& v
@@ -387,7 +169,7 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);
   v = floor(x(1)+0.5f);
-  return EnsureNormal(pc, W, n, u, v);
+  return EnsureNormal(pc, dpc, W, n, u, v);
 }
 
 
@@ -689,6 +471,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
+  tdp::ManagedHostImage<tdp::Vector4fda> dpc(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
 
@@ -885,8 +668,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractNormals(pc, rgb, grey, greyFl, gradGrey, mask, W, frame,
-            T_wc, pl_w, pc_w,
-            rgb_w, n_w);
+            T_wc, dpc, pl_w, pc_w, rgb_w, n_w);
         TOCK("normals");
 
         TICK("add to model");
@@ -1019,7 +801,7 @@ int main( int argc, char* argv[] )
               numProjected++;
               int32_t u, v;
               if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, n, u,v ))
+                    W, dpc, n, u,v ))
                 continue;
               if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
                     distThr, p2plThr, dotThr, N)) {
@@ -1073,7 +855,7 @@ int main( int argc, char* argv[] )
               int32_t u, v;
               if (angleThr > 0.) {
                 if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                      W, n, u,v ))
+                      W, dpc, n, u,v ))
                   continue;
                 if (useTexture) {
                   if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
@@ -1154,7 +936,7 @@ int main( int argc, char* argv[] )
               tdp::Plane& pl = pl_w.GetCircular(i);
               numProjected++;
               t0.tic();
-              if (!EnsureNormal(pc, W, n, u, v)) {
+              if (!EnsureNormal(pc, dpc, W, n, u, v)) {
                 tN += t0.toc(); numN ++;
                 continue;
               }
@@ -1201,9 +983,10 @@ int main( int argc, char* argv[] )
           }
           TOCK("accumulate");
           std::cout 
-            << "ICP timings: normals " << tN/numN << " " << tN 
-            << " accumulation " << tAcc/numAcc << " " << tAcc 
-            << " entropy " << tEnt/numEnt << " " << tEnt << std::endl;
+            << "\tICP timings: normals " << tN/numN << " " << tN  << " " << numN
+            << " accumulation " << tAcc/numAcc << " " << tAcc << " " << numAcc
+            << " entropy " << tEnt/numEnt << " " << tEnt << " " << numEnt
+            << std::endl;
         }
 //        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();

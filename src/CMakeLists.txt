@@ -11,6 +11,7 @@ file(GLOB SRCS
   "./rtmf/*cpp"
   "./data/*cpp"
   "./clustering/*cpp"
+  "./features/*cpp"
   "./stats/*cpp"
   "./tsdf/*cpp"
   "./utils/*cpp"
