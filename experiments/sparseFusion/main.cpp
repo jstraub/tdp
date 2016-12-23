@@ -96,6 +96,7 @@ void ExtractNormals(
         pl.gradGrey_ = gradGrey[i];
         pl.grey_ = greyFl[i];
         pl.lastFrame_ = frame;
+        pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
 

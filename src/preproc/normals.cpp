@@ -71,7 +71,7 @@ bool NormalViaVoting(
           dpc(u,v)(3) = dpc(u,v).topRows<3>().norm();
           ++N;
         } else {
-          dpc(u,v)(3) == 0.;
+          dpc(u,v)(3) = 0.;
         }
       }
     }
