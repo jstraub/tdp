@@ -425,17 +425,11 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   gui.container().AddDisplay(viewNormals);
 
-//  pangolin::View& viewInternal = pangolin::CreateDisplay()
-//    .SetHandler(new pangolin::Handler3D(s_cam));
-//  gui.container().AddDisplay(viewInternal);
-
-  tdp::QuickView viewInternal(w, h);
-  gui.container().AddDisplay(viewInternal);
+  tdp::QuickView viewCurrent(wc, hc);
+  gui.container().AddDisplay(viewCurrent);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
-  tdp::QuickView viewCurrent(wc, hc);
-  containerTracking.AddDisplay(viewCurrent);
   tdp::QuickView viewMask(wc, hc);
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
@@ -558,6 +552,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<int> step("ui.step",30,0,100);
 
+  pangolin::Var<bool> showFAST("ui.show FAST",false,true);
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
   pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
   pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
@@ -709,6 +704,7 @@ int main( int argc, char* argv[] )
         && (runMapping || frame == 1) 
         && (trackingGood || frame < 10)) { // add new observations
       TICK("mask");
+
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
       if (useFAST) {
@@ -1259,12 +1255,26 @@ int main( int argc, char* argv[] )
 
     if (containerTracking.IsShown()) {
       if (viewCurrent.IsShown()) {
-        std::cout << "set rgb image" << std::endl;
+        if (showFAST && !useFAST) {
+          tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+              orientation);
+        }
         viewCurrent.SetImage(rgb);
-        std::cout << "done set rgb image" << std::endl;
+        glColor3f(1,0,0);
+        for (size_t u=0; u<rgb.w_; ++u)
+          for (size_t v=0; v<rgb.h_; ++v) {
+            if (mask(u,v)) {
+              pangolin::glDrawCircle(u,v,1);
+            }
+          }
+        if (showFAST) {
+          glColor3f(0,1,0);
+          for (size_t i=0; i<pts.Area(); ++i) {
+            pangolin::glDrawCircle(pts[i](0), pts[i](1), 1);
+          }
+        }
       }
       if (viewMask.IsShown()) {
-        std::cout << "set mask image" << std::endl;
         viewMask.SetImage(mask);
       }
     }
