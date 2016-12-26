@@ -403,12 +403,12 @@ int main( int argc, char* argv[] )
   }
 
   // optionally connect to IMU if it is found.
-  tdp::ImuInterface* imu = nullptr; 
-  if (imu_input_uri.size() > 0) 
-    imu = tdp::OpenImu(imu_input_uri);
-  if (imu) imu->Start();
-  tdp::ImuInterpolator imuInterp(imu,nullptr);
-  imuInterp.Start();
+//  tdp::ImuInterface* imu = nullptr; 
+//  if (imu_input_uri.size() > 0) 
+//    imu = tdp::OpenImu(imu_input_uri);
+//  if (imu) imu->Start();
+//  tdp::ImuInterpolator imuInterp(imu,nullptr);
+//  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
   gui.container().SetLayout(pangolin::LayoutEqual);
@@ -1342,10 +1342,10 @@ int main( int argc, char* argv[] )
     pangolin::FinishFrame();
   }
 
-  imuInterp.Stop();
-  if (imu) imu->Stop();
-  delete imu;
-  std::this_thread::sleep_for(std::chrono::microseconds(500));
+//  imuInterp.Stop();
+//  if (imu) imu->Stop();
+//  delete imu;
+//  std::this_thread::sleep_for(std::chrono::microseconds(500));
   return 0;
 }
 
