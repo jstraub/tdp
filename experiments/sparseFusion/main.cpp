@@ -41,6 +41,7 @@
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
 #include <tdp/preproc/mask.h>
+#include <tdp/camera/ray.h>
 #include <tdp/preproc/curvature.h>
 #include <tdp/geometry/cosy.h>
 #include <tdp/gl/shaders.h>
@@ -73,6 +74,7 @@ void ExtractNormals(
     const Image<float>& orientation,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
+    const CameraT& cam,
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
@@ -82,7 +84,8 @@ void ExtractNormals(
   tdp::Brief feat;
   Vector3fda n;
   for (size_t i=0; i<mask.Area(); ++i) {
-    if (mask[i] && tdp::IsValidData(pc[i])
+    if (mask[i] 
+        && tdp::IsValidData(pc[i])
         && pc[i].norm() < 5. 
         && 0.3 < pc[i].norm() )  {
 //      uint32_t Wscaled = floor(W*pc[i](2));
@@ -102,13 +105,19 @@ void ExtractNormals(
             if (!tdp::ExtractBrief(grey, feat)) 
               feat.desc_.fill(0);
             else {
-              std::cout << "FAST feat at " << pts[j].transpose() << " for " <<
-                feat.pt_.transpose() << std::endl;
+              Vector3fda p = pc(pts[j](0), pts[j](1));
+              if (!IsValidData(p)) {
+                tdp::Rayfda ray(Vector3fda::Zero(), 
+                    cam.Unproject(pts[j](0), pts[j](1), 1.));
+                p = ray.IntersectPlane(pc[i], n);
+              }
+              std::cout << "FAST feat at " << pts[j].transpose() 
+                << " for " << feat.pt_.transpose() 
+                << " pc " << pc(pts[j](0), pts[j](1)).transpose()
+                << " pIntersect " << p.transpose()
+                << std::endl;
               // TODO: not going to be updated if pl.p_ is !
-              feat.p_c_ = T_wc*pc(pts[j](0), pts[j](1)); 
-              //TODO: predict depth based on plane equation
-              if (feat.p_c_(2) == 0.)
-                feat.desc_.fill(0);
+              feat.p_c_ = T_wc*p; 
             }
             break;
           }
@@ -498,7 +507,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
 
-  tdp::ManagedHostImage<uint8_t> grey(wc, hc);
+  tdp::ManagedHostImage<uint8_t> grey(w, h);
   tdp::ManagedHostImage<float> greyFl(wc,hc);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
@@ -688,21 +697,30 @@ int main( int argc, char* argv[] )
       tdp::Brief* featB;
       tdp::Brief featA;
       int dist;
+      std::cout << "have " << pts.Area() << " key points" << std::endl;
       for (size_t i=0; i<pts.Area(); ++i) {
-        featA.pt_ = pts[i];
         featA.p_c_ = pc(pts[i](0),pts[i](1));
+        if (!tdp::IsValidData(featA.p_c_)) 
+          continue;
+        featA.pt_ = pts[i];
         featA.orientation_ = orientation[i];
         if (tdp::ExtractBrief(grey, featA)
             && lsh.SearchBest(featA,dist,featB) 
             && dist < briefMatchThr) {
-//            std::cout << u << "," << v << ": " << dist << std::endl;
+          std::cout << i << " " << assocBA.size() << ": " << dist 
+            << " " << featA.p_c_.transpose()
+            << " " << featB->p_c_.transpose()
+            << std::endl;
           assocBA.push_back(assocBA.size());
           featsB.push_back(*featB);
           featsA.push_back(featA);
+//          std::cout << " " << featsA.back().p_c_.transpose()
+//            << " " << featsB.back().p_c_.transpose()
+//            << std::endl;
         }
       }
       TOCK("match briefs");
-      if (assocBA.size() > 10) {
+      if (assocBA.size() >= ransacInlierThr) {
         TICK("RANSAC");
         tdp::P3PBrief p3p;
         tdp::Ransac<tdp::Brief> ransac(&p3p);
@@ -734,7 +752,7 @@ int main( int argc, char* argv[] )
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
       if (useFAST) {
-        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, pts,
             orientation);
         mask.Fill(0);
         for (size_t i=0; i<pts.Area(); ++i) {
@@ -745,7 +763,7 @@ int main( int argc, char* argv[] )
 //        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
 //        tdp::UniformResampleMask(pc, cam, mask, W, subsample, gen, 16, 16);
         tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
-            subsample, gen, 16, 16, w, h);
+            subsample, gen, 32, 32, w, h);
       }
       TOCK("mask");
       {
@@ -755,7 +773,7 @@ int main( int argc, char* argv[] )
 //        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
 //            orientation);
         ExtractNormals(pc, rgb, grey, greyFl, gradGrey, pts,
-            orientation, mask, W, frame, T_wc, dpc, pl_w, pc_w, rgb_w,
+            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
             n_w);
         TOCK("normals");
 
@@ -1208,10 +1226,12 @@ int main( int argc, char* argv[] )
           }
         }
         for (size_t i=0; i<assocBA.size(); ++i) {
-          tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
-          tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
-          std::cout << pA.transpose() << "; "
-            << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+          if (assocBA[i] > 0) {
+            tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
+            tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
+            std::cout << pA.transpose() << "; "
+              << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+          }
         }
       }
 

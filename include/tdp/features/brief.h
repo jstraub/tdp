@@ -20,6 +20,16 @@ namespace tdp {
     uint32_t lvl_;
     uint32_t frame_;
     float orientation_;
+
+    Brief() :
+      desc_(Vector8uda::Zero()), pt_(0,0), p_c_(NAN,NAN,NAN),
+      lvl_(0), frame_(0), orientation_(0.)
+    {}
+    Brief(const Brief& other) 
+      : desc_(other.desc_), pt_(other.pt_), p_c_(other.p_c_),
+      lvl_(other.lvl_), frame_(other.frame_), 
+      orientation_(other.orientation_)
+    {}
   
     bool IsValid() const { return (desc_.array() > 0).all(); }
   };
