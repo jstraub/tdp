@@ -773,7 +773,9 @@ int main( int argc, char* argv[] )
               kMax = k;
             }
           }
-          pl.dir_ = dpvmf.GetCenter(kMax);
+          if (kMax >= 0) {
+            pl.dir_ = dpvmf.GetCenter(kMax);
+          }
           lsh.Insert(pl.feat_);
         }
       }
