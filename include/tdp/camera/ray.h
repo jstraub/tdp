@@ -38,6 +38,10 @@ struct Ray {
     return p+dir*depth;
   }
 
+  Point3 IntersectPlane(const Point3& p0, const Dir3 n) {
+    return dir * n.dot(p0-p) / n.dot(dir);
+  }
+
   Point3 p;
   Dir3 dir;
 };
