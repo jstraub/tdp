@@ -64,6 +64,49 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
+bool ExtractClosestBrief(
+    const Image<Vector3fda>& pc, 
+    const Image<uint8_t>& grey,
+    const Image<Vector2ida>& pts,
+    const Image<float>& orientation,
+    const Vector3fda& pci,
+    const Vector3fda& ni,
+    const SE3f& T_wc, 
+    const CameraT& cam,
+    size_t W,
+    size_t u, size_t v,
+    Brief& feat) {
+
+  feat.pt_(0) = u;
+  feat.pt_(1) = v;
+  feat.desc_.fill(0);
+  // try finding a closeby feature point and get the feature there
+  for (size_t j=0; j<pts.Area(); ++j) {
+    if ((pts[j].cast<float>() - feat.pt_.cast<float>()).norm() < W) {
+      feat.orientation_ = orientation[j];
+      if (!tdp::ExtractBrief(grey, feat)) 
+        feat.desc_.fill(0);
+      else {
+        Vector3fda p = pc(pts[j](0), pts[j](1));
+        if (!IsValidData(p)) {
+          tdp::Rayfda ray(Vector3fda::Zero(), 
+              cam.Unproject(pts[j](0), pts[j](1), 1.));
+          p = ray.IntersectPlane(pci, ni);
+        }
+        std::cout << "FAST feat at " << pts[j].transpose() 
+          << " for " << feat.pt_.transpose() 
+          << " pc " << pc(pts[j](0), pts[j](1)).transpose()
+          << " pIntersect " << p.transpose()
+          << std::endl;
+        // TODO: not going to be updated if pl.p_ is !
+        feat.p_c_ = T_wc*p; 
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 void ExtractNormals(
     const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
@@ -92,39 +135,8 @@ void ExtractNormals(
       uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, dpc, n)) {
-        feat.pt_(0) = i%mask.w_;
-        feat.pt_(1) = i/mask.w_;
-        feat.desc_.fill(0);
-        // try finding a closeby feature point and get the feature there
-        for (size_t j=0; j<pts.Area(); ++j) {
-//          std::cout << "FAST feat at " << pts[j].transpose() << " for " <<
-//            feat.pt_.transpose() << ": ";
-//          std::cout << (pts[j] - feat.pt_).norm() << " " <<  Wscaled<< std::endl;
-          if ((pts[j].cast<float>() - feat.pt_.cast<float>()).norm() < Wscaled) {
-            feat.orientation_ = orientation[j];
-            if (!tdp::ExtractBrief(grey, feat)) 
-              feat.desc_.fill(0);
-            else {
-              Vector3fda p = pc(pts[j](0), pts[j](1));
-              if (!IsValidData(p)) {
-                tdp::Rayfda ray(Vector3fda::Zero(), 
-                    cam.Unproject(pts[j](0), pts[j](1), 1.));
-                p = ray.IntersectPlane(pc[i], n);
-              }
-              std::cout << "FAST feat at " << pts[j].transpose() 
-                << " for " << feat.pt_.transpose() 
-                << " pc " << pc(pts[j](0), pts[j](1)).transpose()
-                << " pIntersect " << p.transpose()
-                << std::endl;
-              // TODO: not going to be updated if pl.p_ is !
-              feat.p_c_ = T_wc*p; 
-            }
-            break;
-          }
-        }
-//        feat.orientation_ = ComputePatchOrientation(grey, feat.pt_);
-//        if (!tdp::ExtractBrief(grey, feat)) 
-//          continue;
+        ExtractClosestBrief(pc, grey, pts, orientation, 
+            pc[i], n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*pc[i];
         pl.n_ = T_wc.rotation()*n;
         pl.rgb_ = rgb[i];
@@ -748,6 +760,24 @@ int main( int argc, char* argv[] )
         && (runMapping || frame == 1) 
         && (trackingGood || frame < 10)) { // add new observations
       TICK("mask");
+
+      // update plane features
+      tdp::Brief feat;
+      size_t numAdded = 0;
+      for (size_t i=0; i<z.Area(); ++i) {
+        if (z[i] > 0 && tdp::IsValidData(pc[i])
+            && pl_w.GetCircular(z[i]-1).feat_.desc_.sum() > 0)  {
+          if (ExtractClosestBrief(pc, grey, pts, orientation, 
+                T_wc.Inverse()*pl_w.GetCircular(z[i]-1).p_,
+                T_wc.rotation().Inverse()*pl_w.GetCircular(z[i]-1).n_,
+                T_wc, cam, W, 
+              i%mask.w_, i/mask.w_, feat)) {
+            pl_w.GetCircular(z[i]-1).feat_ = feat;
+            numAdded++;
+          }
+        }
+      }
+      std::cout << "num features added to planes" << std::endl;
 
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
