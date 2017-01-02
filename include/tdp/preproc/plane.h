@@ -24,6 +24,7 @@ struct Plane {
 
   Brief feat_;
 
+  uint32_t z_;
   uint32_t lastFrame_;
   uint32_t numObs_;
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
+ne
  * under the MIT license. See the license file LICENSE.
  */
 #include <thread>
@@ -810,12 +811,12 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
-          dpvmf.addObservation(pl.n_);
-          uint32_t zi = dpvmf.GetZs().back();
+          dpvmf.addObservation(&pl.n_, &pl.z_);
+//          uint32_t zi = *dpvmf.GetZs().back();
           int32_t kMax = -1;
           uint32_t nMax = 0;
           for (size_t k=0; k<dpvmf.GetK(); ++k) {
-            if (k==zi) continue;
+            if (k==pl.z_) continue;
             if (nMax < dpvmf.GetNs()[k]) {
               nMax = dpvmf.GetNs()[k];
               kMax = k;
@@ -851,7 +852,7 @@ int main( int argc, char* argv[] )
 
         if (incrementalAssign) {
           for (auto i : id_w) {
-            if (dpvmf.GetZs()[i] == k) 
+            if (*dpvmf.GetZs()[i] == k) 
               invInd[k].push_back(i);
             if (invInd[k].size() >= 10000)
               break;
@@ -1058,8 +1059,8 @@ int main( int argc, char* argv[] )
           }
           for (size_t i=0; i<z.Area(); ++i)
             if (z[i] > 0) {
-              invInd[dpvmf.GetZs()[z[i]-1]].push_back(z[i]-1);
-              invUV[dpvmf.GetZs()[z[i]-1]].push_back(i);
+              invInd[*dpvmf.GetZs()[z[i]-1]].push_back(z[i]-1);
+              invUV[*dpvmf.GetZs()[z[i]-1]].push_back(i);
             }
           TOCK("extract assoc");
 //          for (size_t k=0; k<invInd.size(); ++k) {
