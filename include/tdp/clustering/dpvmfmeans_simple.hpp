@@ -28,7 +28,7 @@ public:
 
   /// Adds an observation (adds obs, computes label, and potentially
   /// adds new cluster depending on label assignment).
-  virtual void addObservation(const Eigen::Matrix<T,D,1>& x);
+  virtual void addObservation(Eigen::Matrix<T,D,1>* x, uint32_t* z);
   /// Updates all labels of all data currently stored with the object.
   virtual void updateLabels();
   /// Updates all centers based on the current data and label
@@ -47,17 +47,17 @@ public:
     if (k<K_) {mu = mus_[k]; return true; } else { return false; } };
   const Eigen::Matrix<T,D,1>& GetCenter(uint32_t k) const {
     if (k<K_) {return mus_[k]; } else { return Eigen::Matrix<T,D,1>::Zero(); } };
-  const std::vector<uint32_t>& GetZs() const { return zs_;};
+  const std::vector<uint32_t*>& GetZs() const { return zs_;};
   bool GetX(uint32_t i, Eigen::Matrix<T,D,1>& x) const {
-    if (i<xs_.size()) {x=xs_[i]; return true; } else { return false; } };
+    if (i<xs_.size()) {x=*xs_[i]; return true; } else { return false; } };
 
 protected:
   T lambda_;
   uint32_t K_;
-  eigen_vector<Eigen::Matrix<T,D,1>> xs_;
+  std::vector<Eigen::Matrix<T,D,1>*> xs_;
+  std::vector<uint32_t*> zs_;
   eigen_vector<Eigen::Matrix<T,D,1>> mus_;
   eigen_vector<Eigen::Matrix<T,D,1>> xSums_;
-  std::vector<uint32_t> zs_;
   std::vector<int32_t> Ns_;
 
   /// resets all clusters (mus_ and Ks_) and resizes them to K_
@@ -83,11 +83,11 @@ DPvMFmeansSimple<T,D>::~DPvMFmeansSimple()
 {}
 
 template<class T, int D>
-void DPvMFmeansSimple<T,D>::addObservation(const Eigen::Matrix<T,D,1>& x) {
+void DPvMFmeansSimple<T,D>::addObservation(Eigen::Matrix<T,D,1>* x, uint32_t* z) {
   xs_.push_back(x); 
   T sim_closest = 0;
-  uint32_t z = indOfClosestCluster(x, sim_closest);
-  if (z == K_) {
+  *z = indOfClosestCluster(*x, sim_closest);
+  if (*z == K_) {
     mus_.push_back(x);
     xSums_.push_back(x);
     Ns_.push_back(0);
@@ -97,7 +97,7 @@ void DPvMFmeansSimple<T,D>::addObservation(const Eigen::Matrix<T,D,1>& x) {
 //      << x.transpose() << std::endl;
   }
   zs_.push_back(z);
-  Ns_[z] ++;
+  Ns_[*z] ++;
 };
 
 template<class T, int D>
@@ -124,17 +124,17 @@ void DPvMFmeansSimple<T,D>::updateLabels()
   if (xs_.size() == 0) return;
   for(uint32_t i=0; i<xs_.size(); ++i) {
     T sim_closest = 0;
-    uint32_t zPrev = zs_[i];
-    uint32_t z = indOfClosestCluster(xs_[i], sim_closest);
+    uint32_t zPrev = *zs_[i];
+    uint32_t z = indOfClosestCluster(*xs_[i], sim_closest);
     if (z==zPrev && Ns_[z] == 1) {
-      z = indOfClosestCluster(xs_[i], sim_closest, &z);
+      z = indOfClosestCluster(*xs_[i], sim_closest, &z);
 //      std::cout << "single cluster " << z << " " << zPrev << std::endl;
     }
     if (z == K_) {
 //      std::cout << "adding cluster " << mus_.size() << " "
 //        << xSums_.size() << " " << K_ << " "
 //        << xs_[i].transpose() << std::endl;
-      mus_.push_back(  xs_[i]);
+      mus_.push_back(*xs_[i]);
       xSums_.push_back(Eigen::Matrix<T,D,1>::Zero());
       Ns_.push_back(0);
       ++K_;
@@ -145,7 +145,7 @@ void DPvMFmeansSimple<T,D>::updateLabels()
       Ns_[z] ++; 
       xSums_[z] += xs_[i];
     }
-    zs_[i] = z;
+    *zs_[i] = z;
   }
 };
 
@@ -187,7 +187,7 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
 //      std::cout<<"cluster k "<<k<<" empty"<<std::endl;
 //#pragma omp parallel for 
       for(uint32_t i=0; i<xs_.size(); ++i)
-        if(static_cast<int32_t>(zs_[i]) >= k) zs_[i] -= 1;
+        if(static_cast<int32_t>(*zs_[i]) >= k) *zs_[i] -= 1;
       kNew --;
     }
   uint32_t j=0;
@@ -213,7 +213,7 @@ T DPvMFmeansSimple<T,D>::cost() {
   T f = lambda_*K_; 
 //  std::cout << "f="<<f<< std::endl;
   for(uint32_t i=0; i<xs_.size(); ++i)  {
-    f += mus_[zs_[i]].dot(xs_[i]);
+    f += mus_[zs_[i]].dot(*xs_[i]);
 //    std::cout << zs_[i] << ", " << xs_[i].transpose() << ", " 
 //      << mus_[zs_[i]].transpose();
 //    std::cout << " f="<<f<< std::endl;
@@ -253,3 +253,4 @@ bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
 }
 
 }
+
