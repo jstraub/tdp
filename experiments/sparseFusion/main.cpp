@@ -1,5 +1,4 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
-ne
  * under the MIT license. See the license file LICENSE.
  */
 #include <thread>
@@ -108,7 +107,7 @@ bool ExtractClosestBrief(
   return false;
 }
 
-void ExtractNormals(
+void ExtractPlanes(
     const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
     const Image<uint8_t>& grey,
@@ -147,6 +146,8 @@ void ExtractNormals(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
+
+
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -286,6 +287,7 @@ bool AccumulateP2Pl(const Plane& pl,
   return false;
 }
 
+/// uses texture as well
 bool AccumulateP2Pl(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
@@ -324,6 +326,74 @@ bool AccumulateP2Pl(const Plane& pl,
         Eigen::Matrix<float,3,6> Jse3;
         Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
              Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
+        bi = grey_ci - pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+        err += lambda*bi;
+        // accumulate
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// uses texture and projective term
+bool AccumulateP2PlProj(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float grey_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    float lambda,
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float bi=0;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (n_w_in_c.dot(n_ci) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        // p2pl projective term
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,3,6> Jse3;
+        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+             Eigen::Matrix3f::Identity();
+        Eigen::Matrix<float,3,6> Jse3Inv;
+        Jse3Inv << SO3mat<float>::invVee(T_wc.rotation().matrix().transpose()*(pc_w-T_wc.translation())), 
+             -T_wc.rotation().matrix().transpose();
+        
+        // one delta u in image coords translates to delta x = z
+        Eigen::Matrix<float,3,1> p_u(pc_ci(2)/cam.params_(0),0,0);
+        Eigen::Matrix<float,3,1> p_v(0,pc_ci(2)/cam.params_(1),0);
+        RejectAfromB(p_u, n, p_u);
+        RejectAfromB(p_v, n, p_v);
+        p_u *= pc_ci(2)/cam.params_(0) / p_u(0);
+        p_v *= pc_ci(2)/cam.params_(1) / p_v(1);
+        Eigen::Matrix<float,3,2> gradP;
+        gradP << (T_wc*p_u), (T_wc*p_v);
+        // p2pl projective
+        Ai = Jse3Inv.transpose() * Jpi.transpose() * gradP.transpose() * n_w;
+        // p2pl
+        Ai.topRows<3>() += pc_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>() += n_w_in_c; 
+        bi = p2pl;
+        A += Ai * Ai.transpose();
+        b += Ai * bi;
+        err += bi;
+        // texture
         Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
         bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
@@ -803,7 +873,7 @@ int main( int argc, char* argv[] )
         TICK("normals");
 //        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
 //            orientation);
-        ExtractNormals(pc, rgb, grey, greyFl, gradGrey, pts,
+        ExtractPlanes(pc, rgb, grey, greyFl, gradGrey, pts,
             orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
             n_w);
         TOCK("normals");
@@ -1087,7 +1157,6 @@ int main( int argc, char* argv[] )
               }
               tN += t0.toc(); numN ++;
               if (useTexture) {
-
                 t0.tic();
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
