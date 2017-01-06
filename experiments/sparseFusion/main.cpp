@@ -94,11 +94,11 @@ bool ExtractClosestBrief(
               cam.Unproject(pts[j](0), pts[j](1), 1.));
           p = ray.IntersectPlane(pci, ni);
         }
-        std::cout << "FAST feat at " << pts[j].transpose() 
-          << " for " << feat.pt_.transpose() 
-          << " pc " << pc(pts[j](0), pts[j](1)).transpose()
-          << " pIntersect " << p.transpose()
-          << std::endl;
+//        std::cout << "FAST feat at " << pts[j].transpose() 
+//          << " for " << feat.pt_.transpose() 
+//          << " pc " << pc(pts[j](0), pts[j](1)).transpose()
+//          << " pIntersect " << p.transpose()
+//          << std::endl;
         // TODO: not going to be updated if pl.p_ is !
         feat.p_c_ = T_wc*p; 
       }
@@ -147,8 +147,6 @@ void ExtractPlanes(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
-
-
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -377,20 +375,33 @@ bool AccumulateP2PlProj(const Plane& pl,
              -T_wc.rotation().matrix().transpose();
         
         // one delta u in image coords translates to delta x = z
+        Eigen::Matrix<float,3,1> tmp(0,0,0);
         Eigen::Matrix<float,3,1> p_u(pc_ci(2)/cam.params_(0),0,0);
         Eigen::Matrix<float,3,1> p_v(0,pc_ci(2)/cam.params_(1),0);
+//        std::cout << "--" << std::endl;
+//        std::cout << p_u.transpose() << std::endl;
         // TODO check this n_ci or n_w
-        RejectAfromB(p_u, n_ci, p_u);
-        RejectAfromB(p_v, n_ci, p_v);
-        p_u *= pc_ci(2)/cam.params_(0) / p_u(0);
-        p_v *= pc_ci(2)/cam.params_(1) / p_v(1);
+        RejectAfromB(p_u, n_ci, tmp);
+        p_u = tmp * pc_ci(2)/cam.params_(0) / tmp(0);
+//        std::cout << p_u.transpose() << std::endl;
+//        std::cout << n_ci.transpose() << std::endl;
+        RejectAfromB(p_v, n_ci, tmp);
+//        std::cout << p_u.transpose() << std::endl;
+        p_v = tmp * pc_ci(2)/cam.params_(1) / tmp(1);
         Eigen::Matrix<float,3,2> gradP;
         gradP << (T_wc*p_u), (T_wc*p_v);
         // p2pl projective
         Ai = Jse3Inv.transpose() * Jpi.transpose() * gradP.transpose() * n_w;
+//        std::cout << Ai.transpose() << std::endl;
+//        std::cout << Jse3Inv << std::endl;
+//        std::cout << Jpi << std::endl;
+//        std::cout << gradP << std::endl;
+//        std::cout << n_w.transpose() << std::endl;
+//        Ai.fill(0.);
         // p2pl
         Ai.topRows<3>() += pc_ci.cross(n_w_in_c); 
         Ai.bottomRows<3>() += n_w_in_c; 
+        std::cout << Ai.transpose() << std::endl;
         bi = p2pl;
         A += Ai * Ai.transpose();
         b += Ai * bi;
@@ -643,6 +654,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",true,true);
+  pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
   pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",false,true);
   pangolin::Var<float> lambdaTex("ui.ilamb Tex",0.1,0.0,1.);
 
@@ -792,10 +804,10 @@ int main( int argc, char* argv[] )
         if (tdp::ExtractBrief(grey, featA)
             && lsh.SearchBest(featA,dist,featB) 
             && dist < briefMatchThr) {
-          std::cout << i << " " << assocBA.size() << ": " << dist 
-            << " " << featA.p_c_.transpose()
-            << " " << featB->p_c_.transpose()
-            << std::endl;
+//          std::cout << i << " " << assocBA.size() << ": " << dist 
+//            << " " << featA.p_c_.transpose()
+//            << " " << featB->p_c_.transpose()
+//            << std::endl;
           assocBA.push_back(assocBA.size());
           featsB.push_back(*featB);
           featsA.push_back(featA);
@@ -1167,6 +1179,13 @@ int main( int argc, char* argv[] )
                   continue;
                 }
                 tAcc  += t0.toc(); numAcc ++;
+              } else if (useProj) {
+                if (!AccumulateP2PlProj(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                      grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+                      A, Ai, b, err)) {
+                  tAcc  += t0.toc(); numAcc ++;
+                  continue;
+                }
               } else {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
                       distThr, p2plThr, dotThr, A, Ai, b, err))
@@ -1331,8 +1350,8 @@ int main( int argc, char* argv[] )
           if (assocBA[i] > 0) {
             tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
             tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
-            std::cout << pA.transpose() << "; "
-              << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+//            std::cout << pA.transpose() << "; "
+//              << featsB[assocBA[i]].p_c_.transpose() << std::endl;
           }
         }
       }
