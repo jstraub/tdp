@@ -343,7 +343,8 @@ bool AccumulateP2PlProj(const Plane& pl,
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
-    const Vector3fda& pc_ci,
+    const Image<Vector3fda>& pc_c,
+    uint32_t u, uint32_t v,
     const Vector3fda& n_ci,
     float grey_ci,
     float distThr, 
@@ -357,6 +358,7 @@ bool AccumulateP2PlProj(const Plane& pl,
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
+  const tdp::Vector3fda& pc_ci = pc_c(u,v);
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
   float bi=0;
   float dist = (pc_w - pc_c_in_w).norm();
@@ -374,29 +376,34 @@ bool AccumulateP2PlProj(const Plane& pl,
         Jse3Inv << SO3mat<float>::invVee(T_wc.rotation().matrix().transpose()*(pc_w-T_wc.translation())), 
              -T_wc.rotation().matrix().transpose();
         
+        std::cout << "--" << std::endl;
         // one delta u in image coords translates to delta x = z
-        Eigen::Matrix<float,3,1> tmp(0,0,0);
-        Eigen::Matrix<float,3,1> p_u(pc_ci(2)/cam.params_(0),0,0);
-        Eigen::Matrix<float,3,1> p_v(0,pc_ci(2)/cam.params_(1),0);
-//        std::cout << "--" << std::endl;
-//        std::cout << p_u.transpose() << std::endl;
-        // TODO check this n_ci or n_w
-        RejectAfromB(p_u, n_ci, tmp);
-        p_u = tmp * pc_ci(2)/cam.params_(0) / tmp(0);
-//        std::cout << p_u.transpose() << std::endl;
-//        std::cout << n_ci.transpose() << std::endl;
-        RejectAfromB(p_v, n_ci, tmp);
-//        std::cout << p_u.transpose() << std::endl;
-        p_v = tmp * pc_ci(2)/cam.params_(1) / tmp(1);
+//        Eigen::Matrix<float,3,1> tmp(0,0,0);
+//        Eigen::Matrix<float,3,1> p_u(pc_ci(2)/cam.params_(0),0,0);
+//        Eigen::Matrix<float,3,1> p_v(0,pc_ci(2)/cam.params_(1),0);
+////        std::cout << p_u.transpose() << std::endl;
+//        RejectAfromB(p_u, n_ci, tmp);
+//        p_u = T_wc.rotation()*(tmp * pc_ci(2)/cam.params_(0) / tmp(0));
+//        std::cout << tmp.transpose() <<  "; " << tmp.dot(n_ci) << std::endl;
+////        std::cout << n_ci.transpose() << std::endl;
+//        RejectAfromB(p_v, n_ci, tmp);
+////        std::cout << p_u.transpose() << std::endl;
+//        p_v = T_wc.rotation()*(tmp * pc_ci(2)/cam.params_(1) / tmp(1));
+//        std::cout << tmp.transpose() <<  "; " << tmp.dot(n_ci) << std::endl;
+        // could do better by exploiting robust computation if n (above)
+        Eigen::Matrix<float,3,1> p_u = T_wc.rotation()*(pc_c(u+1,v) - pc_c(u,v));
+        Eigen::Matrix<float,3,1> p_v = T_wc.rotation()*(pc_c(u,v+1) - pc_c(u,v));
         Eigen::Matrix<float,3,2> gradP;
-        gradP << (T_wc*p_u), (T_wc*p_v);
+        gradP << p_u, p_v;
         // p2pl projective
         Ai = Jse3Inv.transpose() * Jpi.transpose() * gradP.transpose() * n_w;
-//        std::cout << Ai.transpose() << std::endl;
+        std::cout << Ai.transpose() << std::endl;
 //        std::cout << Jse3Inv << std::endl;
 //        std::cout << Jpi << std::endl;
 //        std::cout << gradP << std::endl;
 //        std::cout << n_w.transpose() << std::endl;
+//        std::cout << gradP.transpose()*n_w << std::endl;
+//        std::cout << p_u.dot(p_v) << std::endl;
 //        Ai.fill(0.);
         // p2pl
         Ai.topRows<3>() += pc_ci.cross(n_w_in_c); 
@@ -1180,7 +1187,7 @@ int main( int argc, char* argv[] )
                 }
                 tAcc  += t0.toc(); numAcc ++;
               } else if (useProj) {
-                if (!AccumulateP2PlProj(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                if (!AccumulateP2PlProj(pl, T_wc, T_cw, cam, pc,u,v, n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
                       A, Ai, b, err)) {
                   tAcc  += t0.toc(); numAcc ++;
