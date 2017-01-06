@@ -31,7 +31,7 @@
 #include <tdp/preproc/project.h>
 #include <tdp/preproc/plane.h>
 #include <tdp/gl/render.h>
-#include <tdp/clustering/dpmeans_simple.hpp>
+#include <tdp/clustering/dpvmfmeans_simple.hpp>
 
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/rig.h>
@@ -198,19 +198,20 @@ int main( int argc, char* argv[] )
     TOCK("Compute Normals");
 
     TICK("Compute DPvMFClustering");
-    tdp::DPvMFmeansSimple<float,4> dpvmf(cos(lambdaDeg*M_PI/180.)); 
+    tdp::DPvMFmeansSimple<float,4,Eigen::DontAlign> dpvmf(cos(lambdaDeg*M_PI/180.)); 
     for (size_t i=0; i<pl.Area(); ++i) {
       if (tdp::IsValidData(pl[i])) {
-        dpvmf.addObservation(pl[i]); 
+        dpvmf.addObservation(&pl[i], &z[i]); 
       }
     }
     dpvmf.iterateToConvergence(maxIt, eps);
     TOCK("Compute DPvMFClustering");
-    z.Fill(0);
+//    z.Fill(0);
     size_t j=0;
     for (size_t i=0; i<pl.Area(); ++i) {
       if (tdp::IsValidData(pl[i])) {
-        z[i] = dpvmf.GetZs()[j++]+1;
+//        z[i] = (*dpvmf.GetZs()[j++])+1;
+        z[i] ++;
       }
     }
 

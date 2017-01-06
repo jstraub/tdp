@@ -44,10 +44,11 @@
 #include <tdp/camera/ray.h>
 #include <tdp/preproc/curvature.h>
 #include <tdp/geometry/cosy.h>
+#include <tdp/geometry/vectors.h>
 #include <tdp/gl/shaders.h>
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>
-#include <tdp/clustering/dpmeans_simple.hpp>
+#include <tdp/clustering/dpvmfmeans_simple.hpp>
 #include <tdp/features/brief.h>
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
@@ -378,8 +379,9 @@ bool AccumulateP2PlProj(const Plane& pl,
         // one delta u in image coords translates to delta x = z
         Eigen::Matrix<float,3,1> p_u(pc_ci(2)/cam.params_(0),0,0);
         Eigen::Matrix<float,3,1> p_v(0,pc_ci(2)/cam.params_(1),0);
-        RejectAfromB(p_u, n, p_u);
-        RejectAfromB(p_v, n, p_v);
+        // TODO check this n_ci or n_w
+        RejectAfromB(p_u, n_ci, p_u);
+        RejectAfromB(p_v, n_ci, p_v);
         p_u *= pc_ci(2)/cam.params_(0) / p_u(0);
         p_v *= pc_ci(2)/cam.params_(1) / p_v(1);
         Eigen::Matrix<float,3,2> gradP;
@@ -746,7 +748,7 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  tdp::DPvMFmeansSimple3f dpvmf(cos(50.*M_PI/180.));
+  tdp::DPvMFmeansSimple3fda dpvmf(cos(50.*M_PI/180.));
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;

@@ -2,7 +2,7 @@
 #include <assert.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/utils/timer.hpp>
-#include <tdp/clustering/dpmeans_simple.hpp>
+#include <tdp/clustering/managed_dpvmfmeans_simple.hpp>
 
 namespace tdp {
 
@@ -135,7 +135,7 @@ bool NormalViaClustering(
   static std::random_device rd;
   static std::mt19937 gen(rd());
 
-  DPvMFmeansSimple3f dpvmf(cos(45.*M_PI/180.));
+  ManagedDPvMFmeansSimple3fda dpvmf(cos(45.*M_PI/180.));
 
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W

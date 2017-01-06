@@ -16,7 +16,7 @@ namespace tdp {
 /// This implementation is ment as a lightweight alternative for small
 /// number of datapoints or if you just want to have a look at how the
 /// algorithm works.
-template<class T, int D>
+template<class T, int D, int Options>
 class DPvMFmeansSimple
 {
 public:
@@ -28,7 +28,7 @@ public:
 
   /// Adds an observation (adds obs, computes label, and potentially
   /// adds new cluster depending on label assignment).
-  virtual void addObservation(Eigen::Matrix<T,D,1>* x, uint32_t* z);
+  virtual void addObservation(Eigen::Matrix<T,D,1,Options>* x, uint16_t* z);
   /// Updates all labels of all data currently stored with the object.
   virtual void updateLabels();
   /// Updates all centers based on the current data and label
@@ -43,21 +43,21 @@ public:
 
   uint32_t GetK() const {return K_;};
   const std::vector<int32_t>& GetNs() const {return Ns_;};
-  bool GetCenter(uint32_t k, Eigen::Matrix<T,D,1>& mu) const {
+  bool GetCenter(uint32_t k, Eigen::Matrix<T,D,1,Options>& mu) const {
     if (k<K_) {mu = mus_[k]; return true; } else { return false; } };
-  const Eigen::Matrix<T,D,1>& GetCenter(uint32_t k) const {
-    if (k<K_) {return mus_[k]; } else { return Eigen::Matrix<T,D,1>::Zero(); } };
-  const std::vector<uint32_t*>& GetZs() const { return zs_;};
-  bool GetX(uint32_t i, Eigen::Matrix<T,D,1>& x) const {
+  const Eigen::Matrix<T,D,1,Options>& GetCenter(uint32_t k) const {
+    if (k<K_) {return mus_[k]; } else { return Eigen::Matrix<T,D,1,Options>::Zero(); } };
+  const std::vector<uint16_t*>& GetZs() const { return zs_;};
+  bool GetX(uint32_t i, Eigen::Matrix<T,D,1,Options>& x) const {
     if (i<xs_.size()) {x=*xs_[i]; return true; } else { return false; } };
 
 protected:
   T lambda_;
   uint32_t K_;
-  std::vector<Eigen::Matrix<T,D,1>*> xs_;
-  std::vector<uint32_t*> zs_;
-  eigen_vector<Eigen::Matrix<T,D,1>> mus_;
-  eigen_vector<Eigen::Matrix<T,D,1>> xSums_;
+  std::vector<Eigen::Matrix<T,D,1,Options>*> xs_;
+  std::vector<uint16_t*> zs_;
+  eigen_vector<Eigen::Matrix<T,D,1,Options>> mus_;
+  eigen_vector<Eigen::Matrix<T,D,1,Options>> xSums_;
   std::vector<int32_t> Ns_;
 
   /// resets all clusters (mus_ and Ks_) and resizes them to K_
@@ -66,30 +66,30 @@ protected:
   void removeEmptyClusters();
   /// Computes the index of the closest cluster (may be K_ in which
   /// case a new cluster has to be added).
-  uint32_t indOfClosestCluster(const Eigen::Matrix<T,D,1>& x, T& sim_closest,
-      uint32_t* zExclude=nullptr);
+  uint16_t indOfClosestCluster(const Eigen::Matrix<T,D,1,Options>& x, T& sim_closest,
+      uint16_t* zExclude=nullptr);
 };
 
-typedef DPvMFmeansSimple<float,3> DPvMFmeansSimple3f; 
-typedef DPvMFmeansSimple<float,4> DPvMFmeansSimple4f; 
+typedef DPvMFmeansSimple<float,3,Eigen::DontAlign> DPvMFmeansSimple3fda; 
+typedef DPvMFmeansSimple<float,4,Eigen::DontAlign> DPvMFmeansSimple4fda; 
 
 // -------------------------------- impl ----------------------------------
-template<class T, int D>
-DPvMFmeansSimple<T,D>::DPvMFmeansSimple(T lambda)
+template<class T, int D, int Options>
+DPvMFmeansSimple<T,D,Options>::DPvMFmeansSimple(T lambda)
   : lambda_(lambda), K_(0)
 {}
-template<class T, int D>
-DPvMFmeansSimple<T,D>::~DPvMFmeansSimple()
+template<class T, int D, int Options>
+DPvMFmeansSimple<T,D,Options>::~DPvMFmeansSimple()
 {}
 
-template<class T, int D>
-void DPvMFmeansSimple<T,D>::addObservation(Eigen::Matrix<T,D,1>* x, uint32_t* z) {
+template<class T, int D, int Options>
+void DPvMFmeansSimple<T,D,Options>::addObservation(Eigen::Matrix<T,D,1,Options>* x, uint16_t* z) {
   xs_.push_back(x); 
   T sim_closest = 0;
   *z = indOfClosestCluster(*x, sim_closest);
   if (*z == K_) {
-    mus_.push_back(x);
-    xSums_.push_back(x);
+    mus_.push_back(*x);
+    xSums_.push_back(*x);
     Ns_.push_back(0);
     ++K_;
 //    std::cout << "adding cluster " << mus_.size() << " "
@@ -100,11 +100,11 @@ void DPvMFmeansSimple<T,D>::addObservation(Eigen::Matrix<T,D,1>* x, uint32_t* z)
   Ns_[*z] ++;
 };
 
-template<class T, int D>
-uint32_t DPvMFmeansSimple<T,D>::indOfClosestCluster(const
-    Eigen::Matrix<T,D,1>& x, T& sim_closest, uint32_t* zExclude)
+template<class T, int D, int Options>
+uint16_t DPvMFmeansSimple<T,D,Options>::indOfClosestCluster(const
+    Eigen::Matrix<T,D,1,Options>& x, T& sim_closest, uint16_t* zExclude)
 {
-  uint32_t z_i = K_;
+  uint16_t z_i = K_;
   sim_closest = lambda_;
   for (uint32_t k=0; k<K_; ++k) {
     if (zExclude && k == *zExclude)
@@ -118,14 +118,14 @@ uint32_t DPvMFmeansSimple<T,D>::indOfClosestCluster(const
   return z_i;
 };
 
-template<class T, int D>
-void DPvMFmeansSimple<T,D>::updateLabels()
+template<class T, int D, int Options>
+void DPvMFmeansSimple<T,D,Options>::updateLabels()
 {
   if (xs_.size() == 0) return;
   for(uint32_t i=0; i<xs_.size(); ++i) {
     T sim_closest = 0;
-    uint32_t zPrev = *zs_[i];
-    uint32_t z = indOfClosestCluster(*xs_[i], sim_closest);
+    uint16_t zPrev = *zs_[i];
+    uint16_t z = indOfClosestCluster(*xs_[i], sim_closest);
     if (z==zPrev && Ns_[z] == 1) {
       z = indOfClosestCluster(*xs_[i], sim_closest, &z);
 //      std::cout << "single cluster " << z << " " << zPrev << std::endl;
@@ -135,23 +135,23 @@ void DPvMFmeansSimple<T,D>::updateLabels()
 //        << xSums_.size() << " " << K_ << " "
 //        << xs_[i].transpose() << std::endl;
       mus_.push_back(*xs_[i]);
-      xSums_.push_back(Eigen::Matrix<T,D,1>::Zero());
+      xSums_.push_back(Eigen::Matrix<T,D,1,Options>::Zero());
       Ns_.push_back(0);
       ++K_;
     }
     if (z != zPrev) {
       Ns_[zPrev] --;
-      xSums_[zPrev] -= xs_[i];
+      xSums_[zPrev] -= *xs_[i];
       Ns_[z] ++; 
-      xSums_[z] += xs_[i];
+      xSums_[z] += *xs_[i];
     }
     *zs_[i] = z;
   }
 };
 
 // General update centers assumes Euclidean
-template<class T, int D>
-void DPvMFmeansSimple<T,D>::updateCenters()
+template<class T, int D, int Options>
+void DPvMFmeansSimple<T,D,Options>::updateCenters()
 {
   if (xs_.size() == 0) return;
 //  resetClusters();
@@ -167,8 +167,8 @@ void DPvMFmeansSimple<T,D>::updateCenters()
   removeEmptyClusters();
 };
 
-template<class T, int D>
-void DPvMFmeansSimple<T,D>::resetClusters() {
+template<class T, int D, int Options>
+void DPvMFmeansSimple<T,D,Options>::resetClusters() {
   Ns_.resize(K_, 0);
   for(uint32_t k=0; k<K_; ++k) {
     mus_[k].fill(0);
@@ -176,8 +176,8 @@ void DPvMFmeansSimple<T,D>::resetClusters() {
   }
 };
 
-template<class T, int D>
-void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
+template<class T, int D, int Options>
+void DPvMFmeansSimple<T,D,Options>::removeEmptyClusters() {
   if (K_ < 1) return;
   uint32_t kNew = K_;
   std::vector<bool> toDelete(K_,false);
@@ -208,12 +208,12 @@ void DPvMFmeansSimple<T,D>::removeEmptyClusters() {
 //    std::cout << mus_[k].transpose() << std::endl;
 };
 
-template<class T, int D>
-T DPvMFmeansSimple<T,D>::cost() {
+template<class T, int D, int Options>
+T DPvMFmeansSimple<T,D,Options>::cost() {
   T f = lambda_*K_; 
 //  std::cout << "f="<<f<< std::endl;
   for(uint32_t i=0; i<xs_.size(); ++i)  {
-    f += mus_[zs_[i]].dot(*xs_[i]);
+    f += mus_[*zs_[i]].dot(*xs_[i]);
 //    std::cout << zs_[i] << ", " << xs_[i].transpose() << ", " 
 //      << mus_[zs_[i]].transpose();
 //    std::cout << " f="<<f<< std::endl;
@@ -221,8 +221,8 @@ T DPvMFmeansSimple<T,D>::cost() {
   return f;
 }
 
-template<class T, int D>
-bool DPvMFmeansSimple<T,D>::iterateToConvergence(uint32_t maxIter, T eps) {
+template<class T, int D, int Options>
+bool DPvMFmeansSimple<T,D,Options>::iterateToConvergence(uint32_t maxIter, T eps) {
   uint32_t iter = 0;
   T fPrev = 1e9;
   T f = cost();
