@@ -547,6 +547,10 @@ int main( int argc, char* argv[] )
       pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
+  pangolin::OpenGlRenderState normalsCam(
+      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
+      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& viewPc3D = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
@@ -688,6 +692,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showNN("ui.show NN",false,true);
+  pangolin::Var<bool> showLoopClose("ui.show loopClose",true,true);
   pangolin::Var<int> step("ui.step",30,0,100);
 
   pangolin::Var<bool> showFAST("ui.show FAST",true,true);
@@ -1315,9 +1320,11 @@ int main( int argc, char* argv[] )
 //      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
 
-      glColor4f(1.,0.,0.,1.0);
-//      pangolin::glDrawAxis(T_wcRansac.matrix(), 0.05f);
-      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
+      if (showLoopClose) {
+        glColor4f(1.,0.,0.,1.0);
+        //      pangolin::glDrawAxis(T_wcRansac.matrix(), 0.05f);
+        pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
+      }
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
@@ -1353,12 +1360,14 @@ int main( int argc, char* argv[] )
             tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
           }
         }
-        for (size_t i=0; i<assocBA.size(); ++i) {
-          if (assocBA[i] > 0) {
-            tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
-            tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
-//            std::cout << pA.transpose() << "; "
-//              << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+        if (showLoopClose) {
+          for (size_t i=0; i<assocBA.size(); ++i) {
+            if (assocBA[i] > 0) {
+              tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
+              tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
+              //std::cout << pA.transpose() << "; "
+              //  << featsB[assocBA[i]].p_c_.transpose() << std::endl;
+            }
           }
         }
       }
@@ -1420,7 +1429,13 @@ int main( int argc, char* argv[] )
     }
 
     if (viewNormals.IsShown()) {
-      viewNormals.Activate(s_cam);
+      Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
+      std::cout << Tview << std::endl;
+      Tview.topRightCorner<3,1>().fill(0.);
+      Tview(2,3) = -3;
+      normalsCam.GetModelViewMatrix() = Tview;
+      std::cout << Tview << std::endl;
+      viewNormals.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
       nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       pangolin::RenderVbo(nbo_w);
