@@ -338,6 +338,66 @@ bool AccumulateP2Pl(const Plane& pl,
   return false;
 }
 
+/// uses texture and normal as well
+bool AccumulateP2Pl(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float grey_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    float gamma,
+    float lambda,
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float bi=0;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (n_w_in_c.dot(n_ci) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        // p2pl
+        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>() = n_w_in_c; 
+        bi = p2pl;
+        A += Ai * Ai.transpose();
+        b += Ai * bi;
+        err += bi;
+        // normal
+        Ai.topRows<3>() = n_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>().fill(0.); 
+        bi = n_ci.dot(n_w_in_c);
+        A += gamma*(Ai * Ai.transpose());
+        b += gamma*(Ai * bi);
+        err += gamma*bi;
+        // texture
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,3,6> Jse3;
+        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+             Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
+        bi = grey_ci - pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+        err += lambda*bi;
+        // accumulate
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // uses texture and projective term
 bool AccumulateP2PlProj(const Plane& pl, 
     tdp::SE3f& T_wc, 
@@ -665,9 +725,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",true,true);
+  pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
   pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",false,true);
-  pangolin::Var<float> lambdaTex("ui.ilamb Tex",0.1,0.0,1.);
+  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -1182,15 +1244,21 @@ int main( int argc, char* argv[] )
                 continue;
               }
               tN += t0.toc(); numN ++;
+              t0.tic();
               if (useTexture) {
-                t0.tic();
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
                       A, Ai, b, err)) {
                   tAcc  += t0.toc(); numAcc ++;
                   continue;
                 }
-                tAcc  += t0.toc(); numAcc ++;
+              } else if (useNormals) {
+                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                      grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+                      A, Ai, b, err)) {
+                  tAcc  += t0.toc(); numAcc ++;
+                  continue;
+                }
               } else if (useProj) {
                 if (!AccumulateP2PlProj(pl, T_wc, T_cw, cam, pc,u,v, n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
@@ -1203,6 +1271,7 @@ int main( int argc, char* argv[] )
                       distThr, p2plThr, dotThr, A, Ai, b, err))
                   continue;
               }
+              tAcc  += t0.toc(); numAcc ++;
               pl.lastFrame_ = frame;
               pl.numObs_ ++;
               numInl ++;
