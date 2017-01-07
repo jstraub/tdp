@@ -1584,12 +1584,14 @@ int main( int argc, char* argv[] )
         viewGrey.SetImage(grey);
       }
     }
-    std::cout << "scroll plots" << std::endl;
-    plotdH.ScrollView(1,0);
-    plotH.ScrollView(1,0);
-    plotObs.ScrollView(1,0);
-    plotEig.ScrollView(1,0);
-    plotEv.ScrollView(1,0);
+    if (!gui.finished()) {
+      std::cout << "scroll plots" << std::endl;
+      plotdH.ScrollView(1,0);
+      plotH.ScrollView(1,0);
+      plotObs.ScrollView(1,0);
+      plotEig.ScrollView(1,0);
+      plotEv.ScrollView(1,0);
+    }
 
     TOCK("Draw 2D");
 
