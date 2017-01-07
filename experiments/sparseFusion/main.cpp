@@ -723,7 +723,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
-  pangolin::Var<bool> runLoopClosure("ui.run loop closure",true,true);
+  pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
@@ -731,7 +731,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
-  pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",false,true);
+  pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
 
@@ -741,12 +741,12 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
-  pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1,-2.,1.);
+  pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.01,0.1,0.1);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.001,0.01,0.001);
-  pangolin::Var<int> maxIt("ui.max iter",10, 1, 20);
+  pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -759,7 +759,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showNN("ui.show NN",false,true);
-  pangolin::Var<bool> showLoopClose("ui.show loopClose",true,true);
+  pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",30,0,100);
 
   pangolin::Var<bool> showFAST("ui.show FAST",true,true);
@@ -862,6 +862,9 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (runLoopClosure.GuiChanged()) {
+      showLoopClose = runLoopClosure;
+    }
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
@@ -942,6 +945,17 @@ int main( int argc, char* argv[] )
         }
       }
       std::cout << "num features added to planes" << std::endl;
+
+      if (incrementalAssign) {
+        // update mask only once to know where to insert new planes
+        TICK("data assoc");
+        projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
+            pl_w.SizeToRead());
+        TOCK("data assoc");
+        TICK("extract assoc");
+        z.Fill(0);
+        projAssoc.GetAssoc(z, mask);
+      }
 
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
@@ -1170,6 +1184,12 @@ int main( int argc, char* argv[] )
                         grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
                         A, Ai, b, err))
                     continue;
+                } else if (useNormals) {
+                  if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                        grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+                        A, Ai, b, err)) {
+                    continue;
+                  }
                 } else {
                   if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
                         distThr, p2plThr, dotThr, A, Ai, b, err))
@@ -1376,6 +1396,7 @@ int main( int argc, char* argv[] )
         }
         TOCK("update planes");
       }
+
     }
 
     frame ++;
