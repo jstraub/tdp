@@ -598,6 +598,9 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logEig;
   pangolin::Plotter plotEig(&logEig, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
   plotters.AddDisplay(plotEig);
+  pangolin::DataLog logEv;
+  pangolin::Plotter plotEv(&logEv, -100.f,1.f, -1.f,1.f, .1f, 0.1f);
+  plotters.AddDisplay(plotEv);
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -1262,9 +1265,8 @@ int main( int argc, char* argv[] )
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
       float H = ev.array().log().sum();
-      std::cout << " H " << H << " neg log evs " 
-        << ev.array().log().matrix().transpose()
-        << std::endl;
+      std::cout << " H " << H << " neg log evs " << 
+        ev.array().log().matrix().transpose() << std::endl;
 
 //      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
 //      std::cout << eig.eigenvalues().real().transpose() << std::endl;
@@ -1278,6 +1280,7 @@ int main( int argc, char* argv[] )
 
       logEntropy.Log(H);
       logEig.Log(ev.array().log().matrix());
+      logEv.Log(Q.col(0));
       T_wcs.push_back(T_wc);
       trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
@@ -1488,6 +1491,7 @@ int main( int argc, char* argv[] )
     plotH.ScrollView(1,0);
     plotObs.ScrollView(1,0);
     plotEig.ScrollView(1,0);
+    plotEv.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
