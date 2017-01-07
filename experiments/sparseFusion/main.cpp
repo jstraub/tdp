@@ -595,12 +595,9 @@ int main( int argc, char* argv[] )
   pangolin::DataLog logEntropy;
   pangolin::Plotter plotH(&logEntropy, -100.f,1.f, -30.f,0.f, .1f, 0.1f);
   plotters.AddDisplay(plotH);
-  pangolin::DataLog logEigR;
-  pangolin::Plotter plotEigR(&logEigR, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
-  plotters.AddDisplay(plotEigR);
-  pangolin::DataLog logEigt;
-  pangolin::Plotter plotEigt(&logEigt, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
-  plotters.AddDisplay(plotEigt);
+  pangolin::DataLog logEig;
+  pangolin::Plotter plotEig(&logEig, -100.f,1.f, -5.f,1.f, .1f, 0.1f);
+  plotters.AddDisplay(plotEig);
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -1280,8 +1277,7 @@ int main( int argc, char* argv[] )
 //      }
 
       logEntropy.Log(H);
-      logEigR.Log(ev.topRows<3>().array().log().matrix());
-      logEigt.Log(ev.bottomRows<3>().array().log().matrix());
+      logEig.Log(ev.array().log().matrix());
       T_wcs.push_back(T_wc);
       trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
@@ -1491,8 +1487,7 @@ int main( int argc, char* argv[] )
     plotdH.ScrollView(1,0);
     plotH.ScrollView(1,0);
     plotObs.ScrollView(1,0);
-    plotEigR.ScrollView(1,0);
-    plotEigt.ScrollView(1,0);
+    plotEig.ScrollView(1,0);
 
     TOCK("Draw 2D");
 
