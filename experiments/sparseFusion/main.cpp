@@ -373,13 +373,16 @@ bool AccumulateP2Pl(const Plane& pl,
         A += Ai * Ai.transpose();
         b += Ai * bi;
         err += bi;
+//        std::cout << "--" << std::endl;
+//        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // normal
-        Ai.topRows<3>() = n_ci.cross(n_w_in_c); 
+        Ai.topRows<3>() = -n_ci.cross(n_w_in_c); 
         Ai.bottomRows<3>().fill(0.); 
-        bi = n_ci.dot(n_w_in_c);
+        bi = n_ci.dot(n_w_in_c) - 1.;
         A += gamma*(Ai * Ai.transpose());
         b += gamma*(Ai * bi);
         err += gamma*bi;
+//        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
         Eigen::Matrix<float,3,6> Jse3;
@@ -390,6 +393,7 @@ bool AccumulateP2Pl(const Plane& pl,
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
         err += lambda*bi;
+//        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // accumulate
         return true;
       }
@@ -724,7 +728,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
-  pangolin::Var<bool> useTexture("ui.use Tex in ICP",true,true);
+  pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
   pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",false,true);
@@ -740,8 +744,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> HThr("ui.H Thr",-16.,-20,-10);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
-  pangolin::Var<int> maxIt("ui.max iter",30, 1, 20);
-
+  pangolin::Var<float> icpdRThr("ui.dR Thr",0.01,0.1,0.1);
+  pangolin::Var<float> icpdtThr("ui.dt Thr",0.001,0.01,0.001);
+  pangolin::Var<int> maxIt("ui.max iter",10, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1318,9 +1323,9 @@ int main( int argc, char* argv[] )
             << " " <<  x.bottomRows(3).norm()
             << std::endl;
         }
-        if (x.norm() < 1e-4
-            || tdp::CheckEntropyTermination(A, Hprev, HThr, 
-               0.f, negLogEvThr, H)) {
+        if (x.topRows<3>().norm()*180./M_PI < icpdRThr
+            && x.bottomRows<3>().norm() < icpdtThr
+            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f, negLogEvThr, H)) {
           std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }
@@ -1337,9 +1342,8 @@ int main( int argc, char* argv[] )
       std::cout << " H " << H << " neg log evs " << 
         ev.array().log().matrix().transpose() << std::endl;
 
-//      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
-//      std::cout << eig.eigenvalues().real().transpose() << std::endl;
-//      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
 //      for (size_t k=0; k<dpvmf.GetK(); ++k) {
 //        Eigen::Matrix<float,6,1> Ai;
 //        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
@@ -1349,7 +1353,11 @@ int main( int argc, char* argv[] )
 
       logEntropy.Log(H);
       logEig.Log(ev.array().log().matrix());
-      logEv.Log(Q.col(0));
+      Eigen::Matrix<float,6,1> q0 = Q.col(0);
+      uint32_t maxId = 0;
+      q0.array().abs().maxCoeff(&maxId);
+      q0 *= (q0(maxId) > 0? 1.: -1.);
+      logEv.Log(q0);
       T_wcs.push_back(T_wc);
       trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
@@ -1498,11 +1506,8 @@ int main( int argc, char* argv[] )
 
     if (viewNormals.IsShown()) {
       Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
-      std::cout << Tview << std::endl;
-      Tview.topRightCorner<3,1>().fill(0.);
-      Tview(2,3) = -3;
+      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -3;
       normalsCam.GetModelViewMatrix() = Tview;
-      std::cout << Tview << std::endl;
       viewNormals.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
       nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
