@@ -1071,10 +1071,12 @@ int main( int argc, char* argv[] )
     greyFl.CopyFrom(cuGreyFlSmooth);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
 
-    TICK("FAST");
-    tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
-        orientation);
-    TOCK("FAST");
+    if (runLoopClosure) {
+      TICK("FAST");
+      tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
+          orientation);
+      TOCK("FAST");
+    }
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1212,14 +1214,15 @@ int main( int argc, char* argv[] )
               break;
             }
 
-            if (numInl > numInlPrev) {
+            if (numInl > numInlPrev
+                && k == 0) {
               if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
                     negLogEvThr, H))
                 break;
               Hprev = H;
               numObs ++;
+              numInlPrev = numInl;
             }
-            numInlPrev = numInl;
 
             exploredAll = true;
             for (size_t k=0; k<indK.size(); ++k) {
