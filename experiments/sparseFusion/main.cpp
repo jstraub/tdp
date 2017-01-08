@@ -149,7 +149,7 @@ void ExtractPlanes(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
-        pl.r_ = pc[i](2)/cam.params_(0); // unprojected radius in m
+        pl.r_ = W*pc[i](2)/cam.params_(0); // unprojected radius in m
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -762,7 +762,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
-  pangolin::Var<bool> showSurfels("ui.show surfels",false,true);
+  pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",30,0,100);
@@ -788,7 +788,7 @@ int main( int argc, char* argv[] )
 
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
-  pangolin::GlBuffer rbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,1);
+  pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,1000000,GL_FLOAT,1);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1439,13 +1439,11 @@ int main( int argc, char* argv[] )
       if (showFullPc) {
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
-//        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-//        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
-        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
-            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
-            iReadCurW*sizeof(tdp::Vector3fda));
-        rbo.Upload(&rs.ptr_[iReadCurW], rs.SizeToRead(iReadCurW)*sizeof(float), 
-            iReadCurW*sizeof(float));
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+//        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
+//            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
+//            iReadCurW*sizeof(tdp::Vector3fda));
         if ((!showAge && !showObs && !showSurfels) || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         } else if (showAge || showObs) {
@@ -1469,36 +1467,47 @@ int main( int argc, char* argv[] )
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
         } else if (showSurfels) {
+//          rbo.Upload(&rs.ptr_[iReadCurW], rs.SizeToRead(iReadCurW)*sizeof(float), 
+//              iReadCurW*sizeof(float));
+          rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
+          std::cout << "render surfels" << std::endl;
           pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
+          glEnable(GL_PROGRAM_POINT_SIZE);
+          glEnable(GL_POINT_SPRITE);
           shader.Bind();
+          pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
           pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
           shader.SetUniform("Tinv",MV);
-          shader.SetUniform("cam",cam.params_(0),cam.params_(1),
-              cam.params_(2),cam.params_(3));
-          shader.SetUniform("cols",w);
-          shader.SetUniform("rows",h);
+          shader.SetUniform("P",P);
           shader.SetUniform("maxZ",dMax);
 
           vbo_w.Bind();
           glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+          cbo_w.Bind();
+          glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
           nbo_w.Bind();
-          glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+          glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0); 
           rbo.Bind();
-          glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+          glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 0, 0); 
 
           glEnableVertexAttribArray(0);
           glEnableVertexAttribArray(1);
           glEnableVertexAttribArray(2);
+          glEnableVertexAttribArray(3);
 
-          glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+          glDrawArrays(GL_POINTS, 0, vbo_w.num_elements);
 
-          glDisableVertexAttribArray(2);
+          glDisableVertexAttribArray(3);
           rbo.Unbind();
-          glDisableVertexAttribArray(1);
+          glDisableVertexAttribArray(2);
           nbo_w.Unbind();
+          glDisableVertexAttribArray(1);
+          cbo_w.Unbind();
           glDisableVertexAttribArray(0);
           vbo_w.Unbind();
           shader.Unbind();
+          glDisable(GL_PROGRAM_POINT_SIZE);
+          glDisable(GL_POINT_SPRITE);
         }
         if (showNN) {
           glColor4f(0.3,0.3,0.3,0.3);
