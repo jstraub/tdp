@@ -9,7 +9,7 @@ out vec4 outColor;
 
 void main() {
 
-  vec3 ray = normalize(vec3((vec2(gl_FragCoord) - cam.xy) / cam.zw, 1.f));
+  vec3 ray = normalize(vec3((vec2(gl_FragCoord) - cam.zw) / cam.xy, 1.f));
   vec3 pIntersect = (dot(posC.xyz, nC.xyz) / dot(ray, nC.xyz)) * ray;
 
   vec3 diff = posC - pIntersect;

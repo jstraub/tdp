@@ -29,6 +29,7 @@ struct Plane {
   uint32_t numObs_;
 
   float w_; // weight
+  float r_; // radius
 
   void AddObs(const Vector3fda& p, const Vector3fda& n);
   void AddObs(const Vector3fda& p, const Vector3fda& n, const Vector3bda& rgb);

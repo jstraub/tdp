@@ -4,7 +4,7 @@ layout (location = 1) in vec3 n;
 layout (location = 2) in float r;
 
 uniform mat4 Tinv;
-uniform vec4 cam; //cu, cv, fu, fv
+uniform vec4 cam; //fu, fv, cu, cv
 uniform float cols;
 uniform float rows;
 uniform float maxZ;
@@ -12,15 +12,15 @@ uniform float maxZ;
 // Project into the camera plane (into -1 to 1)
 vec3 projectCamPlane(vec3 p)
 {
-  return vec3(((((cam.z * p.x) / p.z) + cam.x) - (cols * 0.5)) / (cols * 0.5),
-              ((((cam.w * p.y) / p.z) + cam.y) - (rows * 0.5)) / (rows * 0.5),
+  return vec3(((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
+              ((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
               p.z / maxZ);
 }
 // Project into the image plane (into pixels)
 vec3 projectImgPlane(vec3 p)
 {
-  return vec3(((cam.z * p.x) / p.z) + cam.x,
-              ((cam.w * p.y) / p.z) + cam.y,
+  return vec3(((cam.x * p.x) / p.z) + cam.z,
+              ((cam.y * p.y) / p.z) + cam.w,
               p.z);
 }
 
