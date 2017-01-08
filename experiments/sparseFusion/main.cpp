@@ -149,7 +149,8 @@ void ExtractPlanes(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.feat_ = feat;
-        pl.r_ = W*pc[i](2)/cam.params_(0); // unprojected radius in m
+//        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
+        pl.r_ = pc[i](2)/cam.params_(0); // unprojected radius in m
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
