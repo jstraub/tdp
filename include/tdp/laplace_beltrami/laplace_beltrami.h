@@ -47,6 +47,12 @@ void GetSamples(const Image<tdp::Vector3fda>& pc,
                 ManagedHostImage<Vector3fda>& samples,
                 int nSamples);
 
+void GetSamples_seed(const Image<Vector3fda>& pc,
+                    ManagedHostImage<Vector3fda>& samples,
+                    int nSamples,
+                    std::random_device rd/*seed*/);
+
+
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){
 
@@ -108,9 +114,21 @@ Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
                                          const float eps,
                                          float alpha);
 
+//template<typename T>
+void showSparseMatrix(const Eigen::SparseMatrix<float>& S,
+                      const int nCols=10,
+                      const int nRows=10);
+
+//TODO:
+//template<typename T>
+//bool compareSparseMatrices(const Eigen::SparseMatrix<T>& S1,
+//                           const Eigen::SparseMatirx<T>& S2){
+
+//}
+
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
-                         const Eigen::SparseMatrix<float>& L,
-                         int idEv);
+                                    const Eigen::SparseMatrix<float>& L,
+                                    int idEv);
 
 void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
                           int numEv,
@@ -138,6 +156,9 @@ void f_rbf(const Image<Vector3fda>& pc,
            const float alpha,
            Eigen::VectorXf& f );
 
+void f_indicator(const Image<Vector3fda>& pc,
+                        const int p_idx,
+                        Eigen::VectorXf& f);
 //std::vector<float> f_rbf(const Image<Vector3fda>& pc,
 //           const Vector3fda& p,
 //           const float alpha);

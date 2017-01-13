@@ -179,9 +179,9 @@ int main(int argc, char* argv[]){
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
-  pangolin::View& viewPc = pangolin::CreateDisplay()
+  pangolin::View& viewPc_s = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  container.AddDisplay(viewPc);
+  container.AddDisplay(viewPc_s);
   pangolin::View& viewPc_t = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(t_cam));
   container.AddDisplay(viewPc_t);
@@ -211,7 +211,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<float> alpha2("ui. alpha2", 0.001, 0.001, 0.5); //variance of rbf kernel for defining function on manifold
   pangolin::Var<int> nBins("ui. nBins", 10, 10,100);
   //--Correspondence Matrix C estimation
-  pangolin::Var<int> numEv("ui.numEv",50,10,300); //min=1, max=pc_s.Area()
+  pangolin::Var<int> numEv("ui.numEv",100,50,1000); //min=1, max=pc_s.Area()
   pangolin::Var<int> numCst("ui.numCst",numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
@@ -241,8 +241,11 @@ int main(int argc, char* argv[]){
       tdp::LoadPointCloudFromMesh(input, pc_all);
       //std::cout << "input pc: " << input << std::endl;
       //std::cout << "triangle meshs loaded. Num points:  " << pc_all.Area() << std::endl;
-//      getSamples(pc_all, pc_s, nSamples);
-//      getSamples(pc_all, pc_t, nSamples);
+      //std::random_device rd;
+      //std::cout << "rd: " < rd << std::endl;
+      tdp::GetSamples(pc_all, pc_s, nSamples);
+      pc_t.ResizeCopyFrom(pc_s);
+      //tdp::GetSamples(pc_all, pc_t, nSamples);
   }else{
       std::srand(101);
       GetSphericalPc(pc_s, nSamples);
@@ -257,10 +260,10 @@ int main(int argc, char* argv[]){
 //  ann_t.ComputeKDtree(pc_t);
 
   // use those OpenGL buffers
-  pangolin::GlBuffer vbo, vbo_t, vbo_cmtx,
+  pangolin::GlBuffer vbo_s, vbo_t, vbo_cmtx,
                      vbo_f, vbo_g,  //point clouds
                      vbo_f0, vbo_g0,
-                     valuebo_f, valuebo_g, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
+                     valuebo_s, valuebo_t, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
                      valuebo_f0, valuebo_g0;
 
   //-- upload point cloud positions
@@ -324,7 +327,8 @@ int main(int argc, char* argv[]){
 
         if (argc>1){
             tdp::GetSamples(pc_all, pc_s, nSamples);
-            tdp::GetSamples(pc_all, pc_t, nSamples);
+            //tdp::GetSamples(pc_all, pc_t, nSamples);
+            pc_t.ResizeCopyFrom(pc_s);
         } else{
             std::srand(101);
             GetSphericalPc(pc_s, nSamples);
@@ -332,8 +336,8 @@ int main(int argc, char* argv[]){
             GetSphericalPc(pc_t, nSamples);
         }
 
-        vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
+        vbo_s.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+        vbo_s.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
         vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
         vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
 
@@ -355,6 +359,11 @@ int main(int argc, char* argv[]){
         t0.toctic("GetLaplacians");
         laplacianChanged = true;
         std::cout << "laplacian changed" << std::endl;
+        //Print out
+//        std::cout << "L_s: \n" << std::endl;
+//        tdp::showSparseMatrix(L_s,10,10);
+//        std::cout << "\n\nL_t: \n" << std::endl;
+//        tdp::showSparseMatrix(L_t,10,10);
     }
 
 
@@ -375,14 +384,14 @@ int main(int argc, char* argv[]){
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
 
-      valuebo_f.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_f.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
+      valuebo_s.Reinitialise(pangolin::GlArrayBuffer, evector_s.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_s.Upload(&evector_s(0), sizeof(float)*evector_s.rows(), 0);
       std::cout << evector_s.minCoeff() << " " << evector_s.maxCoeff() << std::endl;
       minVal = evector_s.minCoeff()-1e-3;
       maxVal = evector_s.maxCoeff();
 
-      valuebo_g.Reinitialise(pangolin::GlArrayBuffer, evector_t.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_g.Upload(&evector_t(0), sizeof(float)*evector_t.rows(), 0);
+      valuebo_t.Reinitialise(pangolin::GlArrayBuffer, evector_t.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_t.Upload(&evector_t(0), sizeof(float)*evector_t.rows(), 0);
       std::cout << evector_t.minCoeff() << " " << evector_t.maxCoeff() << std::endl;
       minVal_t = evector_t.minCoeff()-1e-3;
       maxVal_t = evector_t.maxCoeff();
@@ -420,6 +429,7 @@ int main(int argc, char* argv[]){
           //g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
           //std::cout << "g_l: " << g_l.transpose() << std::endl;
 
+          //todo: check if it's right to use rbf to calculate C matrix
           tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha2, f_w); //todo: check if I can use this same alpha2?
           tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha2, g_w);
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
@@ -515,10 +525,13 @@ int main(int argc, char* argv[]){
 
         //Show function transfer
         //--pick a point 10
+        //w for world, l for local
         Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
         Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
 
-        tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+        //todo: check transferring using indicator function
+        //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+        tdp::f_indicator(pc_s, 0, f0_w);
         f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
         g0_l = C*f0_l;
         g0_w = T_wl*g0_l;
@@ -528,7 +541,7 @@ int main(int argc, char* argv[]){
         //tdp::f_rbf(pc_t, pc_t[tId], alpha2, g0_w);
 
         vbo_f0.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-        vbo.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
+        vbo_s.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
         vbo_t.Reinitialise(pangolin::GlArrayBuffer, pc_t.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
         vbo_t.Upload(pc_t.ptr_, pc_t.SizeBytes(), 0);
 
@@ -556,8 +569,8 @@ int main(int argc, char* argv[]){
     glEnable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (viewPc.IsShown()) {
-      viewPc.Activate(s_cam);
+    if (viewPc_s.IsShown()) {
+      viewPc_s.Activate(s_cam);
       pangolin::glDrawAxis(0.1);
 
       glPointSize(2.);
@@ -569,20 +582,20 @@ int main(int argc, char* argv[]){
       shader.SetUniform("MV", s_cam.GetModelViewMatrix());
       shader.SetUniform("minValue", minVal);
       shader.SetUniform("maxValue", maxVal);
-      valuebo_f.Bind();
+      valuebo_s.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-      vbo.Bind();
+      vbo_s.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
       glEnableVertexAttribArray(0);
       glEnableVertexAttribArray(1);
       glPointSize(4.);
-      glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
       shader.Unbind();
       glDisableVertexAttribArray(1);
-      valuebo_f.Unbind();
+      valuebo_s.Unbind();
       glDisableVertexAttribArray(0);
-      vbo.Unbind();
+      vbo_s.Unbind();
 
 
       // draw lines connecting the means
@@ -611,7 +624,7 @@ int main(int argc, char* argv[]){
         shader_t.SetUniform("MV", t_cam.GetModelViewMatrix());
         shader_t.SetUniform("minValue", minVal_t);
         shader_t.SetUniform("maxValue", maxVal_t);
-        valuebo_g.Bind();
+        valuebo_t.Bind();
         glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
         vbo_t.Bind();
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -622,7 +635,7 @@ int main(int argc, char* argv[]){
         glDrawArrays(GL_POINTS, 0, vbo_t.num_elements);
         shader_t.Unbind();
         glDisableVertexAttribArray(1);
-        valuebo_g.Unbind();
+        valuebo_t.Unbind();
         glDisableVertexAttribArray(0);
         vbo_t.Unbind();
 
@@ -785,19 +798,19 @@ int main(int argc, char* argv[]){
       //(showFTransfer)? valuebo_f0.Bind(): valuebo_f.Bind();
       valuebo_f0.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-      vbo.Bind();
+      vbo_s.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
       glEnableVertexAttribArray(0);
       glEnableVertexAttribArray(1);
       glPointSize(4.);
-      glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
       shader.Unbind();
       glDisableVertexAttribArray(1);
       //(showFTransfer)? valuebo_f0.Unbind(): valuebo_f.Unbind();
       valuebo_f0.Unbind();
       glDisableVertexAttribArray(0);
-      vbo.Unbind();
+      vbo_s.Unbind();
 
     }
 

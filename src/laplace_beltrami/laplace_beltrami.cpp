@@ -93,12 +93,12 @@ void GetGrid(ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
     }
 }
 
-void GetSamples(const Image<tdp::Vector3fda>& pc,
+void GetSamples(const Image<Vector3fda>& pc,
                 ManagedHostImage<Vector3fda>& samples,
                 int nSamples){
     samples.Reinitialise(nSamples,1);
     //random number generator
-    std::random_device rd;
+    std::random_device rd; //seed
     std::mt19937 rng(rd());
     std::uniform_int_distribution<int> uni(0, pc.Area()-1);
     for(int i=0; i<samples.Area(); ++i){
@@ -106,6 +106,21 @@ void GetSamples(const Image<tdp::Vector3fda>& pc,
         samples[i] = pc[idx];
     }
 }
+
+void GetSamples_seed(const Image<Vector3fda>& pc,
+                    ManagedHostImage<Vector3fda>& samples,
+                    int nSamples,
+                    std::random_device rd/*seed*/){
+    samples.Reinitialise(nSamples,1);
+    //random number generator
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<int> uni(0, pc.Area()-1);
+    for(int i=0; i<samples.Area(); ++i){
+        int idx = uni(rng);
+        samples[i] = pc[idx];
+    }
+}
+
 
 Eigen::Matrix3f getLocalRot(const Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<Matrix3fda>& es){
 
@@ -360,6 +375,24 @@ Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
     return L;
 }
 
+//template<typename T>
+void showSparseMatrix(const Eigen::SparseMatrix<float>& S,
+                      const int nCols,
+                      const int nRows){
+    //prints out first nCols and nRows of the Laplacian matrix
+    assert(nCols <= S.cols());
+    std::cout << "cols, rows:  " << S.cols() << ", " << S.rows() << std::endl;
+    for (int i=0; i<nCols; ++i){
+        for (Eigen::SparseMatrix<float>::InnerIterator it(S,i); it; ++it){
+            if (it.row() < nRows){
+                std::cout << "\n\ncol index should be i: " <<it.col() <<std::endl;
+                std::cout << "row index: " << it.row() << std::endl;
+                std::cout << "val:" << it.value() <<std::endl;
+            }
+        }
+    }
+}
+
 void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
                           int numEv,
                           eigen_vector<Eigen::VectorXf>& evectors){
@@ -510,6 +543,18 @@ void f_rbf(const Image<Vector3fda>& pc,
         //std::cout << "f(i):  " << f(i) << std::endl;
     }
     //std::cout << "f_rbf done" << std::endl;
+}
+
+void f_indicator(const Image<Vector3fda>& pc,
+                        const int p_idx,
+                        Eigen::VectorXf& f){
+    for (int i=0; i<pc.Area(); ++i){
+        if (i == p_idx){
+            f(i) = 1.0f;
+        } else{
+            f(i)= 0.0f;
+        }
+    }
 }
 
 
