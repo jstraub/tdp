@@ -21,6 +21,7 @@ bool inside_surface(tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t
   return inside;
 }
 
+// TODO: Slow by a factor of 8 (each point calculated 8 times)
 IntersectionType intersect_type(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
   bool hasInside = false, hasOutside = false;
 
@@ -34,8 +35,8 @@ IntersectionType intersect_type(Plane plane, size_t i, size_t j, size_t k, Eigen
 
         // Non negative distance implies that the vertex is on the side of the plane that would
         // be included in the volume
-        hasOutside |= out < 0;
-        hasInside  |= out >= 0;
+        hasOutside |= out > 0;
+        hasInside  |= out <= 0;
       }
 
   if (hasInside && hasOutside) {
@@ -122,7 +123,7 @@ float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f 
     v[t] = tmp[ordered_index_from_index[index][t]];
   }
 
-  // Lets also store 6 lists for the set if vertices on each face,
+  // Lets also store 6 lists for the set of vertices on each face,
   // allowing us to reconstruct triangles on said faces as is necessary
   // TODO: Finish this
 
@@ -155,6 +156,7 @@ float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f 
 
   float lambda;
   // TODO: Finish this
+  float numerator = -1; 
 
   // Given the set of vertices, we can now compute the volume bounded by the polygon and rectangular prism.
   // Note that the volume we are interested in is the volume that includes the point v0
