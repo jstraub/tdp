@@ -45,28 +45,39 @@
 #include <tdp/reconstruction/volumeReconstruction.h>
 #include "test.h"
 
-void calculate_volumes(Eigen::Matrix<float, 3, Eigen::Dynamic>& points,
-                      float *boundingLength, float* center,
-                      int min, int max, int step, float expectedVolume) {
-  std::cout << "Expected: " << expectedVolume << std::endl;
-  // cylindrical tsdf
-  CIsoSurface surface;
+void render_plane(tdp::Reconstruction::Plane plane,
+                  pangolin::Var<bool>& show_normal,
+                  pangolin::GlBuffer& vbo,
+                  Eigen::Vector3f boundingLength,
+                  Eigen::Vector3f center) {
+  float minX = center(0) - boundingLength(0) / 2;
+  float maxX = center(0) + boundingLength(0) / 2;
+  float minY = center(1) - boundingLength(1) / 2;
+  float maxY = center(1) + boundingLength(1) / 2;
 
-  for (int discretization = min; discretization <= max; discretization += step) {
-    tdp::ManagedHostVolume<tdp::TSDFval> tsdf(discretization, discretization, discretization);
-    float scale[3] = {
-      boundingLength[0] / (discretization - 1),
-      boundingLength[1] / (discretization - 1),
-      boundingLength[2] / (discretization - 1)
-    };
+  float vertexStore[4 * 3];
+  vertexStore[0 * 3 + 0] = minX;
+  vertexStore[0 * 3 + 1] = minY;
+  vertexStore[0 * 3 + 2] = plane.find_z_coordinate(minX, minY);
+  vertexStore[1 * 3 + 0] = minX;
+  vertexStore[1 * 3 + 1] = maxY;
+  vertexStore[1 * 3 + 2] = plane.find_z_coordinate(minX, maxY);
+  vertexStore[2 * 3 + 0] = maxX;
+  vertexStore[2 * 3 + 1] = maxY;
+  vertexStore[2 * 3 + 2] = plane.find_z_coordinate(maxX, maxY);
+  vertexStore[3 * 3 + 0] = maxX;
+  vertexStore[3 * 3 + 1] = minY;
+  vertexStore[3 * 3 + 2] = plane.find_z_coordinate(maxX, minY);
 
-    tdp::TsdfShapeFields::build_tsdf(tsdf, points, scale, center);
-    surface.GenerateSurface(&tsdf, 0.0f, scale[0], scale[1], scale[2], 1.0f, 1.0f);
-    if (!surface.IsSurfaceValid()) {
-      pango_print_error("Unable to generate surface");
+  vbo.Reinitialise(pangolin::GlArrayBuffer, 4,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vbo.Upload(vertexStore, sizeof(float) * 4 * 3, 0);
+
+  if (vbo.IsValid()) {
+    pangolin::RenderVbo(vbo);
+
+    if (show_normal) {
+      // TODO: Figure out how to render an arrow
     }
-
-    std::cout << discretization << " " << surface.getVolume() << std::endl;
   }
 }
 
@@ -78,42 +89,29 @@ int main( int argc, char* argv[] )
   // Generate the same point cloud each time
   srand(0);
   int num_points = 22 * 1000;
-  float boundingLength  [3];
-  float center          [3];
+
+  Eigen::Vector3f boundingLength;
+  Eigen::Vector3f center;
   Eigen::Matrix<float, 3, Eigen::Dynamic> points(3, num_points);
+
   float volume = tdp::TsdfShapeFields::make_cylindrical_point_cloud(points, boundingLength, center);
   std::cout << "Built Point Cloud" << std::endl;
-
-  //calculate_volumes(points, boundingLength, center, 128, 128, 4, volume);
+  std::cout << "Bounding Length: " << boundingLength.transpose() << std::endl;
+  std::cout << "Center: " << center.transpose() << std::endl;
+  std::cout << "Volume: " << volume << std::endl;
 
   int discretization = 128;
-  float scale[3] = {
-    boundingLength[0] / (discretization - 1),
-    boundingLength[1] / (discretization - 1),
-    boundingLength[2] / (discretization - 1)
-  };
+  Eigen::Vector3f scale = boundingLength / (discretization - 1);
 
   // cylindrical tsdf
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(discretization, discretization, discretization);
-  float xScale = scale[0];
-  float yScale = scale[1];
-  float zScale = scale[2];
+  float xScale = scale(0);
+  float yScale = scale(1);
+  float zScale = scale(2);
 
   tdp::TsdfShapeFields::build_tsdf(tsdf, points, scale, center);
   std::cout << "Finished building TSDF" << std::endl;
 
-  float d_left = 0.44f;
-  float d_right = -1.75f;
-
-  tdp::Reconstruction::Plane p_left(0, 0, 1, d_left);
-  tdp::Reconstruction::Plane p_right(0, 0, -1, d_right);
-
-  Eigen::Vector3f n_scale(scale[0], scale[1], scale[2]);
-
-  std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, p_left, p_right, n_scale) << std::endl;
-  std::cout << "True volume: " << 3.14159 * .15 * .15 * (-d_right - d_left) << std::endl;
-
-  /*
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -156,16 +154,26 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
 
-  // load and compile shader
-  //std::string shaderRoot = SHADER_DIR;
-  //pangolin::GlSlProgram colorPc;
-  //colorPc.AddShaderFromFile(pangolin::GlSlVertexShader,
-  //    shaderRoot+std::string("normalShading.vert"));
-  //colorPc.AddShaderFromFile(pangolin::GlSlGeometryShader,
-  //    shaderRoot+std::string("normalShading.geom"));
-  //colorPc.AddShaderFromFile(pangolin::GlSlFragmentShader,
-  //    shaderRoot+std::string("normalShading.frag"));
-  //colorPc.Link();
+  float maxd = sqrt(boundingLength[0] * boundingLength[0] + boundingLength[1] * boundingLength[1] + boundingLength[2] * boundingLength[2]);
+  // Plane 1 cutoffs
+  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, 0, boundingLength[0]);
+  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, boundingLength[1]);
+  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, 0, boundingLength[2]);
+  pangolin::Var<float> pl1_d("ui.plane_1 d", maxd / 3,              0, maxd);
+  pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", false, true);
+  pangolin::Var<bool>  pl1_show_normal("ui.plane_1 show normal", false, true);
+  pangolin::GlBuffer vbo_pl1;
+
+  // Plane 2 cutoffs
+  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0,  0, boundingLength[0]);
+  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0,  0, boundingLength[1]);
+  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1,  0, boundingLength[2]);
+  pangolin::Var<float> pl2_d("ui.plane_2 d", maxd * 2 / 3,               0, maxd);
+  pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
+  pangolin::Var<bool>  pl2_show_normal("ui.plane_2 show normal", false, true);
+  pangolin::GlBuffer vbo_pl2;
+
+  pangolin::Var<bool> recomputeVolume("ui.recompute volume", true, false);
 
   tdp::ManagedHostImage<float> tsdfSlice(tsdf.w_, tsdf.h_);
 
@@ -199,25 +207,6 @@ int main( int argc, char* argv[] )
       surface.getIndices(indexStore);
       surface.getColors(colorStore);
 
-      int64_t end = pangolin::Time_us(pangolin::TimeNow());
-      std::cout << "GenerateSurface time: " << (mid - start) / 1e6 << std::endl;
-      std::cout << "copy time: " << (end - mid) / 1e6 << std::endl;
-      std::cout << "Number of Vertices: " << nVertices << std::endl;
-      std::cout << "Number of Triangles: " << nTriangles << std::endl;
-      std::cout << "Volume: " << surface.getVolume() << std::endl;
-      std::cout << "Expect: " << volume << std::endl;
-      std::cout << wThr << " " << fThr << std::endl;
-      //  for (size_t i = 0; i < 4; i++) {
-      //      std::cout << vertexStore[3 * i] << " ";
-      //      std::cout << vertexStore[3 * i + 1] << " ";
-      //      std::cout << vertexStore[3 * i + 2] << std::endl;
-      //  }
-      //  for (size_t i = 0; i < 4; i++) {
-      //      std::cout << indexStore[3 * i] << " ";
-      //      std::cout << indexStore[3 * i + 1] << " ";
-      //      std::cout << indexStore[3 * i + 2] << std::endl;
-      //  }
-      //
       vbo.Reinitialise(pangolin::GlArrayBuffer, nVertices,  GL_FLOAT,         3, GL_DYNAMIC_DRAW);
       cbo.Reinitialise(pangolin::GlArrayBuffer, nVertices,  GL_UNSIGNED_BYTE, 3, GL_DYNAMIC_DRAW);
       ibo.Reinitialise(pangolin::GlElementArrayBuffer, nTriangles, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
@@ -245,7 +234,7 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
-//    pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
+    // pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
     if (vbo.IsValid() && cbo.IsValid() && ibo.IsValid()) {
       vbo.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -276,6 +265,19 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(vbo_pc);
     }
 
+    int sign = pl1_flip_normal ? -1 : 1;
+    tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
+
+    sign = pl2_flip_normal ? -1 : 1;
+    tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
+
+    render_plane(pl1, pl1_show_normal, vbo_pl1, boundingLength, center);
+    render_plane(pl2, pl2_show_normal, vbo_pl2, boundingLength, center);
+
+    if (pangolin::Pushed(recomputeVolume)) {
+      std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, pl1, pl2, scale) << std::endl;
+    }
+
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
     viewTsdfSliveView.Show(showTSDFslice);
@@ -292,7 +294,6 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
-  */
+
   return 0;
 }
-
