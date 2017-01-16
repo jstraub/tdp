@@ -46,10 +46,14 @@
 #include "test.h"
 
 void render_plane(tdp::Reconstruction::Plane plane,
+                  pangolin::Var<bool>& flip_normal,
                   pangolin::Var<bool>& show_normal,
                   pangolin::GlBuffer& vbo,
+                  pangolin::GlBuffer& ibo,
+                  auto& shader,
                   Eigen::Vector3f boundingLength,
                   Eigen::Vector3f center) {
+  // TODO: Find a better way to do this. Possibly w/ plane intersecting bounding box
   float minX = center(0) - boundingLength(0) / 2;
   float maxX = center(0) + boundingLength(0) / 2;
   float minY = center(1) - boundingLength(1) / 2;
@@ -69,11 +73,41 @@ void render_plane(tdp::Reconstruction::Plane plane,
   vertexStore[3 * 3 + 1] = minY;
   vertexStore[3 * 3 + 2] = plane.find_z_coordinate(maxX, minY);
 
-  vbo.Reinitialise(pangolin::GlArrayBuffer, 4,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo.Upload(vertexStore, sizeof(float) * 4 * 3, 0);
+  unsigned int indexStore[2 * 3];
+  if (flip_normal) {
+    indexStore[0 * 3 + 0] = 0;
+    indexStore[0 * 3 + 1] = 1;
+    indexStore[0 * 3 + 2] = 3;
+    indexStore[1 * 3 + 0] = 3;
+    indexStore[1 * 3 + 1] = 1;
+    indexStore[1 * 3 + 2] = 2;
+  } else {
+    indexStore[0 * 3 + 0] = 0;
+    indexStore[0 * 3 + 1] = 3;
+    indexStore[0 * 3 + 2] = 1;
+    indexStore[1 * 3 + 0] = 1;
+    indexStore[1 * 3 + 1] = 3;
+    indexStore[1 * 3 + 2] = 2;
+  }
 
-  if (vbo.IsValid()) {
-    pangolin::RenderVbo(vbo);
+  vbo.Reinitialise(pangolin::GlArrayBuffer, 4,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  ibo.Reinitialise(pangolin::GlElementArrayBuffer, 2, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
+  vbo.Upload(vertexStore, sizeof(float) * 4 * 3, 0);
+  ibo.Upload(indexStore,  sizeof(unsigned int) * 2 * 3, 0);
+
+  if (vbo.IsValid() && ibo.IsValid()) {
+    vbo.Bind();
+    glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+    shader.Bind();
+    ibo.Bind();
+    glDrawElements(GL_TRIANGLES,ibo.num_elements * 3, ibo.datatype, 0);
+    ibo.Unbind();
+    shader.Unbind();
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+    vbo.Unbind();
 
     if (show_normal) {
       // TODO: Figure out how to render an arrow
@@ -154,6 +188,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
 
+  pangolin::Var<bool> showPointCloud("ui.show point cloud", false, true);
+
+  // TODO: Use theta and phi angles to determine orientation of the plane. the radius is then "d"
+  //       This can then let us put bounds min and max on the possibile orientations
   float maxd = sqrt(boundingLength[0] * boundingLength[0] + boundingLength[1] * boundingLength[1] + boundingLength[2] * boundingLength[2]);
   // Plane 1 cutoffs
   pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, 0, boundingLength[0]);
@@ -162,7 +200,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pl1_d("ui.plane_1 d", maxd / 3,              0, maxd);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", false, true);
   pangolin::Var<bool>  pl1_show_normal("ui.plane_1 show normal", false, true);
-  pangolin::GlBuffer vbo_pl1;
+  pangolin::GlBuffer   pl1_vbo;
+  pangolin::GlBuffer   pl1_ibo;
 
   // Plane 2 cutoffs
   pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0,  0, boundingLength[0]);
@@ -171,7 +210,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pl2_d("ui.plane_2 d", maxd * 2 / 3,               0, maxd);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
   pangolin::Var<bool>  pl2_show_normal("ui.plane_2 show normal", false, true);
-  pangolin::GlBuffer vbo_pl2;
+  pangolin::GlBuffer   pl2_vbo;
+  pangolin::GlBuffer   pl2_ibo;
 
   pangolin::Var<bool> recomputeVolume("ui.recompute volume", true, false);
 
@@ -234,6 +274,7 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
+    // Render the Marching Cubes Mesh
     // pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
     if (vbo.IsValid() && cbo.IsValid() && ibo.IsValid()) {
       vbo.Bind();
@@ -261,21 +302,25 @@ int main( int argc, char* argv[] )
       cbo.Unbind();
       vbo.Unbind();
 
-      glColor3f(1,0,0);
-      pangolin::RenderVbo(vbo_pc);
+      int sign = pl1_flip_normal ? -1 : 1;
+      tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
+
+      sign = pl2_flip_normal ? -1 : 1;
+      tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
+
+      render_plane(pl1, pl1_flip_normal, pl1_show_normal, pl1_vbo, pl1_ibo, shader, boundingLength, center);
+      render_plane(pl2, pl2_flip_normal, pl2_show_normal, pl2_vbo, pl2_ibo, shader, boundingLength, center);
+
+      if (pangolin::Pushed(recomputeVolume)) {
+        std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, pl1, pl2, scale) << std::endl;
+      }
+
     }
 
-    int sign = pl1_flip_normal ? -1 : 1;
-    tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
-
-    sign = pl2_flip_normal ? -1 : 1;
-    tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
-
-    render_plane(pl1, pl1_show_normal, vbo_pl1, boundingLength, center);
-    render_plane(pl2, pl2_show_normal, vbo_pl2, boundingLength, center);
-
-    if (pangolin::Pushed(recomputeVolume)) {
-      std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, pl1, pl2, scale) << std::endl;
+    // Draw point cloud if desired
+    if (showPointCloud) {
+      glColor3f(1,0,0);
+      pangolin::RenderVbo(vbo_pc);
     }
 
     glDisable(GL_DEPTH_TEST);
