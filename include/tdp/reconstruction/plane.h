@@ -15,8 +15,12 @@ namespace Reconstruction {
       ~Plane()
         {}
 
-      float distance_to(Eigen::Vector3f point) {
+      float distance_to(Eigen::Vector3f point) const {
           return m_normal.dot(point) - m_dist_to_origin;
+      }
+
+      float find_z_coordinate(float x, float y) const {
+        return (m_dist_to_origin - m_normal(0) * x - m_normal(1) * y) / m_normal(2);
       }
 
     private:
