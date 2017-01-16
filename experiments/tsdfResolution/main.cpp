@@ -43,7 +43,8 @@
 #include <stdlib.h>
 
 void calculate_volumes(Eigen::Matrix<float, 3, Eigen::Dynamic>& points,
-                      float *boundingLength, float* center,
+                       Eigen::Vector3f& boundingLength,
+                       Eigen::Vector3f& center,
                       int min, int max, int step, float expectedVolume) {
   std::cout << "Expected: " << expectedVolume << std::endl;
   // cylindrical tsdf
@@ -51,14 +52,10 @@ void calculate_volumes(Eigen::Matrix<float, 3, Eigen::Dynamic>& points,
 
   for (int discretization = min; discretization <= max; discretization += step) {
     tdp::ManagedHostVolume<tdp::TSDFval> tsdf(discretization, discretization, discretization);
-    float scale[3] = {
-      boundingLength[0] / (discretization - 1),
-      boundingLength[1] / (discretization - 1),
-      boundingLength[2] / (discretization - 1)
-    };
+    Eigen::Vector3f scale = boundingLength / (discretization - 1);
 
     tdp::TsdfShapeFields::build_tsdf(tsdf, points, scale, center);
-    surface.GenerateSurface(&tsdf, 0.0f, scale[0], scale[1], scale[2], 1.0f, 1.0f);
+    surface.GenerateSurface(&tsdf, 0.0f, scale(0), scale(1), scale(2), 1.0f, 1.0f);
     if (!surface.IsSurfaceValid()) {
       pango_print_error("Unable to generate surface");
     }
@@ -74,26 +71,22 @@ int main( int argc, char* argv[] )
   // Generate the same point cloud each time
   srand(0);
   int num_points = 22 * 1000;
-  float boundingLength  [3];
-  float center          [3];
+
+  Eigen::Vector3f boundingLength;
+  Eigen::Vector3f center;
+
   Eigen::Matrix<float, 3, Eigen::Dynamic> points(3, num_points);
   float volume = tdp::TsdfShapeFields::make_cylindrical_point_cloud(points, boundingLength, center);
   std::cout << "Built Point Cloud" << std::endl;
 
   //calculate_volumes(points, boundingLength, center, 128, 128, 4, volume);
-  
   int discretization = 128;
-  float scale[3] = {
-    boundingLength[0] / (discretization - 1),
-    boundingLength[1] / (discretization - 1),
-    boundingLength[2] / (discretization - 1)
-  };
-
+  Eigen::Vector3f scale = boundingLength / (discretization - 1);
   // cylindrical tsdf
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(discretization, discretization, discretization);
-  float xScale = scale[0];
-  float yScale = scale[1];
-  float zScale = scale[2];
+  float xScale = scale(0);
+  float yScale = scale(1);
+  float zScale = scale(2);
 
   tdp::TsdfShapeFields::build_tsdf(tsdf, points, scale, center);
   std::cout << "Finished building TSDF" << std::endl;
