@@ -198,7 +198,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, boundingLength[1]);
   pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, 0, boundingLength[2]);
   pangolin::Var<float> pl1_d("ui.plane_1 d", maxd / 3,              0, maxd);
-  pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", false, true);
+  pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
   pangolin::Var<bool>  pl1_show_normal("ui.plane_1 show normal", false, true);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
@@ -301,26 +301,27 @@ int main( int argc, char* argv[] )
       glDisableVertexAttribArray(0);
       cbo.Unbind();
       vbo.Unbind();
-
-      int sign = pl1_flip_normal ? -1 : 1;
-      tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
-
-      sign = pl2_flip_normal ? -1 : 1;
-      tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
-
-      render_plane(pl1, pl1_flip_normal, pl1_show_normal, pl1_vbo, pl1_ibo, shader, boundingLength, center);
-      render_plane(pl2, pl2_flip_normal, pl2_show_normal, pl2_vbo, pl2_ibo, shader, boundingLength, center);
-
-      if (pangolin::Pushed(recomputeVolume)) {
-        std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, pl1, pl2, scale) << std::endl;
-      }
-
     }
 
     // Draw point cloud if desired
     if (showPointCloud) {
       glColor3f(1,0,0);
       pangolin::RenderVbo(vbo_pc);
+    }
+
+    // Draw Intersecting Planes
+    auto& shader = tdp::Shaders::Instance()->normalMeshShader_;
+    int sign = pl1_flip_normal ? -1 : 1;
+    tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
+
+    sign = pl2_flip_normal ? -1 : 1;
+    tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
+
+    render_plane(pl1, pl1_flip_normal, pl1_show_normal, pl1_vbo, pl1_ibo, shader, boundingLength, center);
+    render_plane(pl2, pl2_flip_normal, pl2_show_normal, pl2_vbo, pl2_ibo, shader, boundingLength, center);
+
+    if (pangolin::Pushed(recomputeVolume)) {
+      std::cout << "Estimated volume: " << tdp::Reconstruction::volume_in_bounds(tsdf, pl1, pl2, scale) << std::endl;
     }
 
     glDisable(GL_DEPTH_TEST);
