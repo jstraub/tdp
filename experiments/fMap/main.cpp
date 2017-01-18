@@ -70,7 +70,52 @@ int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
     g_w.maxCoeff(&target_r,&target_c);
     return target_r;
 }
+float getHeatKernel(const Eigen::MatrixXf& LB_basis,
+                   const Eigen::VectorXf& LB_evals,
+                   const tdp::Vector3fda& start_w,
+                   const tdp::Vector3fda& end_w,
+                   const int t){
+    /*Calculates heat kernel from source to target at time t
+     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
+     * LB_evals: Corresponding eigenvalues
+     * start, end: points on the manifold from whose Laplacian the evectors
+     *                 calculated from
+     */
+    int nEvecs = LB_basis.cols();
+    Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
+    tdp::Vector3fda start_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*start_w);
+    tdp::Vector3fda end_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*end_w);
 
+    float hk = 0;
+    for (int i=0; i<nEvecs; ++i){
+        int dot = LB_basis.col(i).dot(start_l)*LB_basis.col(i).dot(end_l);
+        hk += exp(-LB_evals(i)*t)*dot;
+    }
+    return hk;
+}
+
+float getHKS(const Eigen::MatrixXf& LB_basis,
+             const Eigen::VectorXf& LB_evals,
+             const tdp::Vector3fda& x_w,
+             const int t){
+    /*Calculates heat kernel from source to target at time t
+     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
+     * LB_evals: Corresponding eigenvalues
+     * x_w     : points on the manifold from whose Laplacian the evectors
+     *           calculated from
+     * t       : time
+     */
+    int nEvecs = LB_basis.cols();
+    Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
+    tdp::Vector3fda x_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*x_w);
+
+    float hk = 0;
+    for (int i=0; i<nEvecs; ++i){
+        int dot = pow(LB_basis.col(i).dot(start_l),2);
+        hk += exp(-LB_evals(i)*t)*dot;
+    }
+    return hk;
+}
 
 void Test_simplePc(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
@@ -82,7 +127,9 @@ void Test_simplePc(){
     float alpha = 0.01;
     float alpha2 = 0.1;
 
-    int numCst = numEv;//pc_s.Area();
+    int numPW = numEv;//number of pointwise correspondences
+    int numHKS = 100; //number of heat kernel signature correspondences
+    int numCst = numPW + numHKS;//pc_s.Area();
     int numQ = pc_s.Area();
     // build kd tree
     tdp::ANN ann_s, ann_t;
@@ -113,7 +160,7 @@ void Test_simplePc(){
 
     // --construct F(design matrix) using point correspondences
 
-    for (int i=0; i< (int)numCst; ++i){
+    for (int i=0; i< (int)numPW; ++i){
 
         tdp::f_rbf(pc_s, pc_s[i], alpha2, f_w); //todo: check if I can use this same alpha?
         tdp::f_rbf(pc_t, pc_t[i], alpha2, g_w);
@@ -123,6 +170,15 @@ void Test_simplePc(){
         F.row(i) = f_l;
         G.row(i) = g_l;
     }
+    //todo: add heat kernel signatures as constraints
+    for (int i=0; i<(int)numHKS; ++i){
+        f_l = getHKS(S_wl,S_evals,pc_s[0],i);//heat kernel at timestap i//todo: check at which point for S and T manifolds
+        g_l = getHKS(T_wl,T_evals,pc_t[0],i);//heat kernel at timestap i
+
+        F.row(i+numPW) = f_l;
+        G.row(i+numHKS) = g_l;
+    }
+
 
     // solve least-square
     C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
@@ -147,8 +203,6 @@ void Test_simplePc(){
 
 
 }
-
-
 
 int main(int argc, char* argv[]){
   // Create OpenGL window - guess sensible dimensions
@@ -196,6 +250,7 @@ int main(int argc, char* argv[]){
   container.AddDisplay(viewG);
 
   // Add variables to pangolin GUI
+  pangolin::Var<bool> sameManifolds("ui.same manifolds", true, false);//todo: make it a tick
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
   pangolin::Var<bool> showMeans("ui.show means", true, false);
   pangolin::Var<bool> runQuery("ui.run queries", true, false);
@@ -275,8 +330,8 @@ int main(int argc, char* argv[]){
 //  vbo_cmtx.Upload(pc_grid.ptr_, pc_grid.SizeBytes(), 0);
 
   // Declare variables
-  Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),
-                             L_t(pc_t.Area(), pc_t.Area());
+  Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),//Laplacian of manifold S
+                             L_t(pc_t.Area(), pc_t.Area());//Laplacian of manifold T
   Eigen::VectorXf evector_s,//(L_s.rows());
                   evector_t;//(L_t.rows());
   Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
@@ -400,8 +455,8 @@ int main(int argc, char* argv[]){
       std::cout << "basisChanged" << std::endl;
       }
 
-    if (pangolin::Pushed(showFMap) || basisChanged ||
-                numCst.GuiChanged()|| alpha2.GuiChanged()){
+    if (pangolin::Pushed(showFMap) || sameManifolds.GuiChanged() ||
+            basisChanged ||numCst.GuiChanged()|| alpha2.GuiChanged()){
 
       F.resize((int)numCst, (int)numEv);
       G.resize((int)numCst, (int)numEv);
@@ -413,12 +468,22 @@ int main(int argc, char* argv[]){
       // as the center and getting numCst (closest) points around it
       Eigen::VectorXi sIds((int)numCst), tIds((int)numCst);
       Eigen::VectorXf sDists((int)numCst), tDists((int)numCst);
-      ann_s.Search(pc_s[0], (int)numCst, 1e-9, sIds, sDists);
-      ann_t.Search(pc_t[0], (int)numCst, 1e-9, tIds, tDists);
+      if (!sameManifolds){
+        ann_s.Search(pc_s[0], (int)numCst, 1e-9, sIds, sDists);
+        ann_t.Search(pc_t[0], (int)numCst, 1e-9, tIds, tDists);
+      } else{
+          //todo: rewrite cleaner
+        for (int i=0; i<(int)numCst; ++i){
+            sIds(i) = i;
+            tIds(i) = i;
+        }
+      }
+      std::cout << "sameManifolds?: " << sameManifolds << std::endl;
+      std::cout << "sIds: " << sIds.transpose() << std::endl;
+      std::cout << "tIds: " << tIds. transpose() << std::endl;
       // --construct F(design matrix) using point correspondences
       for (int i=0; i<(int)numCst; ++i){
           //ann_t.Search(pc_s[i], 1, 1e-9, nnIds, dists);
-          //std::cout << "match idx: " << i << ", " << nnIds(0) << std::endl;
           //tdp::f_rbf(pc_s, pc_s[i], alpha, f_w); //todo: check if I can use this same alpha?
           //tdp::f_rbf(pc_t, pc_t[nnIds(0)], alpha, g_w);
           //std::cout << "f_w: " /*<< f_w.transpose() */<< std::endl;
@@ -430,8 +495,8 @@ int main(int argc, char* argv[]){
           //std::cout << "g_l: " << g_l.transpose() << std::endl;
 
           //todo: check if it's right to use rbf to calculate C matrix
-          tdp::f_rbf(pc_s, pc_s[sIds[i]], alpha2, f_w); //todo: check if I can use this same alpha2?
-          tdp::f_rbf(pc_t, pc_t[tIds[i]], alpha2, g_w);
+          tdp::f_rbf(pc_s, pc_s[sIds(i)], alpha2, f_w); //todo: check if I can use this same alpha2?
+          tdp::f_rbf(pc_t, pc_t[tIds(i)], alpha2, g_w);
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
           g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
 
@@ -531,6 +596,7 @@ int main(int argc, char* argv[]){
 
         //todo: check transferring using indicator function
         //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+        std::cout << "p: " << pc_s[0] << std::endl;
         tdp::f_indicator(pc_s, 0, f0_w);
         f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
         g0_l = C*f0_l;
