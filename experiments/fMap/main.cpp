@@ -109,15 +109,38 @@ float getHKS(const Eigen::MatrixXf& LB_basis,
     Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
     tdp::Vector3fda x_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*x_w);
 
-    float hk = 0;
+    float hks = 0;
     for (int i=0; i<nEvecs; ++i){
-        int dot = pow(LB_basis.col(i).dot(start_l),2);
-        hk += exp(-LB_evals(i)*t)*dot;
+        int dot = pow(LB_basis.col(i).dot(x_l),2);
+        hks += exp(-LB_evals(i)*t)*dot;
     }
-    return hk;
+    return hks;
 }
 
-void Test_simplePc(){
+float getWKS(const Eigen::MatrixXf& LB_basis,
+             const Eigen::VectorXf& LB_evals,
+             const tdp::Vector3fda& x_w,
+             const int t){
+    /*Calculates heat kernel from source to target at time t
+     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
+     * LB_evals: Corresponding eigenvalues
+     * x_w     : points on the manifold from whose Laplacian the evectors
+     *           calculated from
+     * t       : time
+     */
+    int nEvecs = LB_basis.cols();
+    Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
+    tdp::Vector3fda x_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*x_w);
+
+    float wks = 0;
+    for (int i=0; i<nEvecs; ++i){
+        int dot = pow(LB_basis.col(i).dot(x_l),2);
+        hk += exp(-LB_evals(i)*t)*dot;
+    }
+    return wks;
+
+
+}void Test_simplePc(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
     tdp::ManagedHostImage<tdp::Vector3fda> pc_t = tdp::GetSimplePc();
     // parameters
