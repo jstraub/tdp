@@ -6,7 +6,7 @@ namespace tdp {
 namespace Reconstruction {
 
 // Returns true if a voxel is completely inside the surface
-bool inside_surface(tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t y, size_t z) {
+bool inside_surface(const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t y, size_t z) {
   bool inside = true;
 
   inside &= tsdf(x    , y    , z    ).f <= 0;
@@ -22,13 +22,13 @@ bool inside_surface(tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t
 }
 
 // TODO: Slow by a factor of 8 (each point calculated 8 times)
-IntersectionType intersect_type(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
+IntersectionType intersect_type(const Plane plane, size_t i, size_t j, size_t k, const tdp::Vector3fda scale) {
   bool hasInside = false, hasOutside = false;
 
   for (int dx = 0; dx <= 1; dx++)
     for (int dy = 0; dy <= 1; dy++)
       for(int dz = 0; dz <= 1; dz++) {
-        Eigen::Vector3f x((i + dx) * scale(0), (j + dy) * scale(1), (k + dz) * scale(2));
+        tdp::Vector3fda x((i + dx) * scale(0), (j + dy) * scale(1), (k + dz) * scale(2));
 
         // Calculate the distance to the plane from each corner
         float out = plane.distance_to(x);
@@ -51,7 +51,7 @@ IntersectionType intersect_type(Plane plane, size_t i, size_t j, size_t k, Eigen
   }
 }
 
-int find_v0(Plane plane, Eigen::Vector3f* tmp) {
+int find_v0(const Plane plane, const tdp::Vector3fda* tmp) {
 
   // Note that if d is negative, then we could flip the signs of the normal, and d to make it positive
   // the maximization assumes postive d
@@ -88,7 +88,7 @@ const int ordered_index_from_index[8][8] = {
  * Returns the percentage of the volume of the voxel that is on the "positive" side of the
  * plane as defined by the normal of the plane
  */
-float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f scale) {
+float percent_volume(const Plane plane, size_t i, size_t j, size_t k, const tdp::Vector3fda scale) {
   // If we let the plane with the given normal sweep from d = inifinity downwards, let v0 be defined as
   // the first vertex it would intersect, v7 be the last vertex it would intersect, and let all other vertices
   // be numbered according to the right hand rule
@@ -106,19 +106,19 @@ float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f 
   // then we just need to figure out which vertex is "first" and then from that we have a deterministic
   // mapping from numbers (0-7) -> (v0 - v7).
 
-  Eigen::Vector3f tmp[8] = {
-    Eigen::Vector3f((i    ) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i + 1) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2)),
-    Eigen::Vector3f((i    ) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2))
+  tdp::Vector3fda tmp[8] = {
+    tdp::Vector3fda((i    ) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
+    tdp::Vector3fda((i + 1) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
+    tdp::Vector3fda((i + 1) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
+    tdp::Vector3fda((i    ) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
+    tdp::Vector3fda((i    ) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
+    tdp::Vector3fda((i + 1) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
+    tdp::Vector3fda((i + 1) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2)),
+    tdp::Vector3fda((i    ) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2))
   };
 
   int index = find_v0(plane, tmp);
-  Eigen::Vector3f v[8];
+  tdp::Vector3fda v[8];
   for (int t = 0; t < 8; t++) {
     v[t] = tmp[ordered_index_from_index[index][t]];
   }
@@ -140,23 +140,23 @@ float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f 
   // P4: Intersection on E0->3, E3->6, E6->7
   // P5: Intersection on E3->4 or P4
 
-  Eigen::Vector3f p[6];
-  Eigen::Vector3f E01 = tmp[1] - tmp[0];
-  Eigen::Vector3f E14 = tmp[4] - tmp[1];
-  Eigen::Vector3f E47 = tmp[7] - tmp[4];
-  Eigen::Vector3f E15 = tmp[5] - tmp[1];
-  Eigen::Vector3f E02 = tmp[2] - tmp[0];
-  Eigen::Vector3f E25 = tmp[5] - tmp[2];
-  Eigen::Vector3f E57 = tmp[7] - tmp[5];
-  Eigen::Vector3f E26 = tmp[6] - tmp[2];
-  Eigen::Vector3f E03 = tmp[3] - tmp[0];
-  Eigen::Vector3f E36 = tmp[6] - tmp[3];
-  Eigen::Vector3f E67 = tmp[7] - tmp[6];
-  Eigen::Vector3f E34 = tmp[4] - tmp[3];
+  tdp::Vector3fda p[6];
+  tdp::Vector3fda E01 = tmp[1] - tmp[0];
+  tdp::Vector3fda E14 = tmp[4] - tmp[1];
+  tdp::Vector3fda E47 = tmp[7] - tmp[4];
+  tdp::Vector3fda E15 = tmp[5] - tmp[1];
+  tdp::Vector3fda E02 = tmp[2] - tmp[0];
+  tdp::Vector3fda E25 = tmp[5] - tmp[2];
+  tdp::Vector3fda E57 = tmp[7] - tmp[5];
+  tdp::Vector3fda E26 = tmp[6] - tmp[2];
+  tdp::Vector3fda E03 = tmp[3] - tmp[0];
+  tdp::Vector3fda E36 = tmp[6] - tmp[3];
+  tdp::Vector3fda E67 = tmp[7] - tmp[6];
+  tdp::Vector3fda E34 = tmp[4] - tmp[3];
 
   float lambda;
   // TODO: Finish this
-  float numerator = -1; 
+  float numerator = -1;
 
   // Given the set of vertices, we can now compute the volume bounded by the polygon and rectangular prism.
   // Note that the volume we are interested in is the volume that includes the point v0
@@ -176,11 +176,11 @@ float percent_volume(Plane plane, size_t i, size_t j, size_t k, Eigen::Vector3f 
   scale should be the x, y, z sidelength values
   Assumes that the normal of the left and right planes point towards each other. e.g. n_l dot n_r < 0
  */
-float volume_in_bounds(
-        tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
-        Plane p_left,
-        Plane p_right,
-        Eigen::Vector3f scale
+float volume_in_bounds_with_voxel_counting(
+        const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+        const Plane p_left,
+        const Plane p_right,
+        const tdp::Vector3fda scale
 ) {
   // Cases:
   //   Surface Voxel -> ignore
@@ -227,6 +227,31 @@ float volume_in_bounds(
     }
 
     return volume;
+}
+
+float volume_in_bounds_with_tsdf_modification(
+      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const Plane p_left,
+      const Plane p_right,
+      const tdp::Vector3fda scale) {
+  tdp::ManagedHostVolume<tdp::TSDFval> copy(tsdf.w_, tsdf.h_, tsdf.d_);
+  for (size_t k = 0; k < tsdf.d_; k++)
+    for (size_t j = 0; j < tsdf.h_; j++)
+      for (size_t i = 0; i < tsdf.w_; i++) {
+        // Make a copy of each element
+        copy(i, j, k) = tsdf(i, j, k);
+
+        tdp::Vector3fda point(0, 0, 0);
+
+        copy(i, j, k).f = std::max(
+          {copy(i, j, k).f, p_left.distance_to(point), p_right.distance_to(point)},
+          [](const float& i1, const float& i2) {
+            return i1 < i2;
+          });
+
+      }
+
+  return 0;
 }
 
 }

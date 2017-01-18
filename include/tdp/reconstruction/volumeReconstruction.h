@@ -23,30 +23,36 @@ namespace Reconstruction {
   //  * The input scale lets us transform the voxel into the same coordinate system as the
   //    input plane
   IntersectionType intersect_type(
-      Plane plane,
+      const Plane plane,
       size_t i, size_t j, size_t k,
-      Eigen::Vector3f scale
+      const Vector3fda scale
   );
 
   // Returns the index in the input array of the vertex that should be labeled v0
-  int find_v0(Plane plane, Eigen::Vector3f* tmp);
+  int find_v0(const Plane plane, const Vector3fda* tmp);
 
   /*
    * Returns the percentage of the volume of the voxel that is on the "positive" side of the
    * plane as defined by the normal of the plane
    */
   float percent_volume(
-      Plane plane,
+      const Plane plane,
       size_t i, size_t j, size_t k,
-      Eigen::Vector3f scale
+      const Vector3fda scale
   );
 
-  float volume_in_bounds(
-      tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
-      Plane p_left,
-      Plane p_right,
-      Eigen::Vector3f scale
+  float volume_in_bounds_with_voxel_counting(
+      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const Plane p_left,
+      const Plane p_right,
+      const Vector3fda scale
   );
 
+  float volume_in_bounds_with_tsdf_modification(
+      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const Plane p_left,
+      const Plane p_right,
+      const Vector3fda scale
+  );
 }
 }
