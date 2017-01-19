@@ -63,7 +63,22 @@ void test_check_plane_distances() {
     test_check_plane_dist_to_origin(3, 1, 1, 1, -1, 1/sqrt(3));
 }
 
+// Expecting points at x, y, z = 0.5
+void test_polygon_intersection() {
+    tdp::Reconstruction::Plane plane(-1, -1, -1, -1/2.0);
+    tdp::Vector3fda corner1(0, 0, 0);
+    tdp::Vector3fda corner2(1, 1, 1);
+
+    tdp::Vector3fda polygon[6];
+    tdp::Reconstruction::get_vertices_of_intersection(polygon, plane, corner1, corner2);
+
+    for (int i = 0; i < 6; i++) {
+      std::cout << i << ": " << polygon[i].transpose() << std::endl;
+    }
+}
+
 void runtests() {
     test_find_v0();
     test_check_plane_distances();
+    test_polygon_intersection();
 }

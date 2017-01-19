@@ -26,6 +26,10 @@ namespace Reconstruction {
         return (m_dist_to_origin - m_normal(0) * x - m_normal(1) * y) / m_normal(2);
       }
 
+      Vector3fda normal() const {
+        return m_normal;
+      }
+
     private:
       const Vector3fda m_normal;
       const float m_original_magnitude;

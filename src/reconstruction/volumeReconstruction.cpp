@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 
 #include <tdp/reconstruction/volumeReconstruction.h>
 
@@ -87,57 +88,92 @@ int find_v0(const Plane plane, const Vector3fda* tmp) {
   return index;
 }
 
-// first dimension specifies the index of the corner to be denoted v0
-// the second dimension lists the mapping from (v0 - v7) -> (0 - 7)
-// i.e. ordered_index_from_index[i][j] gives the index of vj given that v0 = i
-const int ordered_index_from_index[8][8] = {
-  {0,1,3,4,5,2,7,6},
-  {1,2,0,5,6,3,4,7},
-  {2,3,1,6,7,0,5,4},
-  {3,0,2,7,4,1,6,5},
-  {4,5,0,7,6,1,3,2},
-  {5,6,1,4,7,2,0,3},
-  {6,7,2,5,4,3,1,0},
-  {7,4,3,6,5,0,2,1}
-};
+static bool good_intersection(const Plane plane,
+                             const Vector3fda v,
+                             const Vector3fda e) {
 
-/*
- * Returns the percentage of the volume of the voxel that is on the "positive" side of the
- * plane as defined by the normal of the plane
- */
-float percent_volume(const Plane plane,
-                    size_t i,
-                    size_t j,
-                    size_t k,
-                    const Vector3fda grid0,
-                    const Vector3fda dGrid,
-                    const SE3f T_wG) {
-  // If we let the plane with the given normal sweep from d = inifinity downwards, let v0 be defined as
-  // the first vertex it would intersect, v7 be the last vertex it would intersect, and let all other vertices
-  // be numbered according to the right hand rule
+  float denominator = plane.normal().dot(e);
+  if (denominator == 0) {
+    return false;
+  }
+  float numerator = -plane.distance_to(v);
+  float lambda = numerator / denominator;
+  return lambda >= 0 && lambda <= 1;
+}
+static inline Vector3fda get_intersection(const Plane plane,
+                                   const Vector3fda v,
+                                   const Vector3fda e) {
+  return v + (-plane.distance_to(v) / plane.normal().dot(e)) * e;
+}
+static Vector3fda find_intersection_along_edges_with_right_hand_rule(
+        const Plane plane,
+        const Vector3fda v0,
+        const Vector3fda e0,
+        const Vector3fda v1,
+        const Vector3fda e1,
+        const Vector3fda v2,
+        const Vector3fda e2) {
+  float lambda;
 
-  // further let us number the vertices of the cube from 0 - 7 as follows
-  // (i    , j    , k    ) -> 0
-  // (i + 1, j    , k    ) -> 1
-  // (i + 1, j + 1, k    ) -> 2
-  // (i    , j + 1, k    ) -> 3
-  // (i    ,      , k + 1) -> 4
-  // (i + 1, j    , k + 1) -> 5
-  // (i + 1, j + 1, k + 1) -> 6
-  // (i    , j + 1, k + 1) -> 7
+  if (good_intersection(plane, v0, e0)) {
+    return get_intersection(plane, v0, e0);
+  } else if (good_intersection(plane, v1, e1)) {
+    return get_intersection(plane, v1, e1);
+  } else if (good_intersection(plane, v2, e2)) {
+    return get_intersection(plane, v2, e2);
+  } else {
+    std::cerr << "ERROR: No Intersection found" << std::endl;
+    exit(1);
+  }
+}
+
+// Corners must be opposite and polygon must be of length 6
+void get_vertices_of_intersection(Vector3fda* polygon,
+                                  const Plane plane,
+                                  const Vector3fda corner1,
+                                  const Vector3fda corner2) {
+  // For explanatory reasons, let us number the vertices of a unit cube from 0 - 7 as follows
+  // (x    , y    , z    ) -> 0
+  // (x + 1, y    , z    ) -> 1
+  // (x + 1, y + 1, z    ) -> 2
+  // (x    , y + 1, z    ) -> 3
+  // (x    ,      , z + 1) -> 4
+  // (x + 1, y    , z + 1) -> 5
+  // (x + 1, y + 1, z + 1) -> 6
+  // (x    , y + 1, z + 1) -> 7
+  float minX = std::min(corner1(0), corner2(0)),
+        minY = std::min(corner1(1), corner2(1)),
+        minZ = std::min(corner1(2), corner2(2));
+  float maxX = std::max(corner1(0), corner2(0)),
+        maxY = std::max(corner1(1), corner2(1)),
+        maxZ = std::max(corner1(2), corner2(2));
+
+  Vector3fda tmp[8] = {
+    Vector3fda(minX, minY, minZ),
+    Vector3fda(maxX, minY, minZ),
+    Vector3fda(maxX, maxY, minZ),
+    Vector3fda(minX, maxY, minZ),
+    Vector3fda(minX, minY, maxZ),
+    Vector3fda(maxX, minY, maxZ),
+    Vector3fda(maxX, maxY, maxZ),
+    Vector3fda(minX, maxY, maxZ)
+  };
 
   // then we just need to figure out which vertex is "first" and then from that we have a deterministic
   // mapping from numbers (0-7) -> (v0 - v7).
 
-  Vector3fda tmp[8] = {
-    tsdf_point_to_real_space_point(i    , j    , k    , grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i + 1, j    , k    , grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i + 1, j + 1, k    , grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i    , j + 1, k    , grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i    , j    , k + 1, grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i + 1, j    , k + 1, grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i + 1, j + 1, k + 1, grid0, dGrid, T_wG),
-    tsdf_point_to_real_space_point(i    , j + 1, k + 1, grid0, dGrid, T_wG)
+  // first dimension specifies the index of the corner to be denoted v0
+  // the second dimension lists the mapping from (v0 - v7) -> (0 - 7)
+  // i.e. ordered_index_from_index[i][j] gives the index of vj given that v0 = i
+  const int ordered_index_from_index[8][8] = {
+    {0,1,3,4,5,2,7,6},
+    {1,2,0,5,6,3,4,7},
+    {2,3,1,6,7,0,5,4},
+    {3,0,2,7,4,1,6,5},
+    {4,5,0,7,6,1,3,2},
+    {5,6,1,4,7,2,0,3},
+    {6,7,2,5,4,3,1,0},
+    {7,4,3,6,5,0,2,1}
   };
 
   int index = find_v0(plane, tmp);
@@ -145,11 +181,6 @@ float percent_volume(const Plane plane,
   for (int t = 0; t < 8; t++) {
     v[t] = tmp[ordered_index_from_index[index][t]];
   }
-
-  // Lets also store 6 lists for the set of vertices on each face,
-  // allowing us to reconstruct triangles on said faces as is necessary
-  // TODO: Finish this
-
 
   // Now given v0 - v7, we can calculate for the exact vertices of the intersections in an order that would
   // define a polygon. There are at most 6 vertices that arise from the intersection of a plane and a
@@ -163,23 +194,45 @@ float percent_volume(const Plane plane,
   // P4: Intersection on E0->3, E3->6, E6->7
   // P5: Intersection on E3->4 or P4
 
-  Vector3fda p[6];
-  Vector3fda E01 = tmp[1] - tmp[0];
-  Vector3fda E14 = tmp[4] - tmp[1];
-  Vector3fda E47 = tmp[7] - tmp[4];
-  Vector3fda E15 = tmp[5] - tmp[1];
-  Vector3fda E02 = tmp[2] - tmp[0];
-  Vector3fda E25 = tmp[5] - tmp[2];
-  Vector3fda E57 = tmp[7] - tmp[5];
-  Vector3fda E26 = tmp[6] - tmp[2];
-  Vector3fda E03 = tmp[3] - tmp[0];
-  Vector3fda E36 = tmp[6] - tmp[3];
-  Vector3fda E67 = tmp[7] - tmp[6];
-  Vector3fda E34 = tmp[4] - tmp[3];
+  Vector3fda E01 = v[1] - v[0];
+  Vector3fda E14 = v[4] - v[1];
+  Vector3fda E47 = v[7] - v[4];
+  Vector3fda E15 = v[5] - v[1];
+  Vector3fda E02 = v[2] - v[0];
+  Vector3fda E25 = v[5] - v[2];
+  Vector3fda E57 = v[7] - v[5];
+  Vector3fda E26 = v[6] - v[2];
+  Vector3fda E03 = v[3] - v[0];
+  Vector3fda E36 = v[6] - v[3];
+  Vector3fda E67 = v[7] - v[6];
+  Vector3fda E34 = v[4] - v[3];
 
-  float lambda;
-  // TODO: Finish this
-  float numerator = -1;
+  polygon[0] = find_intersection_along_edges_with_right_hand_rule(plane, v[0], E01, v[1], E14, v[4], E47);
+  polygon[2] = find_intersection_along_edges_with_right_hand_rule(plane, v[0], E02, v[2], E25, v[5], E57);
+  polygon[4] = find_intersection_along_edges_with_right_hand_rule(plane, v[0], E03, v[3], E36, v[6], E67);
+
+  polygon[1] = good_intersection(plane, v[1], E15) ? get_intersection(plane, v[1], E15) : polygon[0];
+  polygon[3] = good_intersection(plane, v[2], E26) ? get_intersection(plane, v[2], E26) : polygon[2];
+  polygon[5] = good_intersection(plane, v[3], E34) ? get_intersection(plane, v[3], E34) : polygon[4];
+}
+
+
+/*
+ * Returns the percentage of the volume of the voxel that is on the "positive" side of the
+ * plane as defined by the normal of the plane
+ */
+float percent_volume(const Plane plane,
+                    size_t i,
+                    size_t j,
+                    size_t k,
+                    const Vector3fda grid0,
+                    const Vector3fda dGrid,
+                    const SE3f T_wG) {
+  Vector3fda corner1 = tsdf_point_to_real_space_point(i    , j    , k    , grid0, dGrid, T_wG);
+  Vector3fda corner2 = tsdf_point_to_real_space_point(i + 1, j + 1, k + 1, grid0, dGrid, T_wG);
+
+  Vector3fda p[6];
+  get_vertices_of_intersection(p, plane, corner1, corner2);
 
   // Given the set of vertices, we can now compute the volume bounded by the polygon and rectangular prism.
   // Note that the volume we are interested in is the volume that includes the point v0

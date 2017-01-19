@@ -33,6 +33,11 @@ namespace Reconstruction {
   // Returns the index in the input array of the vertex that should be labeled v0
   int find_v0(const Plane plane, const Vector3fda* tmp);
 
+  void get_vertices_of_intersection(Vector3fda* polygon,
+                                    const Plane plane,
+                                    const Vector3fda corner1,
+                                    const Vector3fda corner2);
+
   /*
    * Returns the percentage of the volume of the voxel that is on the "positive" side of the
    * plane as defined by the normal of the plane
