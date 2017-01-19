@@ -25,7 +25,9 @@ namespace Reconstruction {
   IntersectionType intersect_type(
       const Plane plane,
       size_t i, size_t j, size_t k,
-      const Vector3fda scale
+      const Vector3fda grid0,
+      const Vector3fda dGrid,
+      const SE3f T_wG
   );
 
   // Returns the index in the input array of the vertex that should be labeled v0
@@ -38,18 +40,22 @@ namespace Reconstruction {
   float percent_volume(
       const Plane plane,
       size_t i, size_t j, size_t k,
-      const Vector3fda scale
+      const Vector3fda grid0,
+      const Vector3fda dGrid,
+      const SE3f T_wG
   );
 
   float volume_in_bounds_with_voxel_counting(
-      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const ManagedHostVolume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
-      const Vector3fda scale
+      const Vector3fda grid0,
+      const Vector3fda dGrid,
+      const SE3f T_wG
   );
 
   float volume_in_bounds_with_tsdf_modification(
-      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const ManagedHostVolume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
       const Vector3fda scale

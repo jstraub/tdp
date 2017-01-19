@@ -5,8 +5,19 @@
 namespace tdp {
 namespace Reconstruction {
 
+static Vector3fda tsdf_point_to_real_space_point(
+              size_t i,
+              size_t j,
+              size_t k,
+              Vector3fda grid0,
+              Vector3fda dGrid,
+              SE3f T_wG) {
+  Vector3fda base(i * dGrid(0), j * dGrid(1), k * dGrid(2));
+  return T_wG * (base + grid0);
+}
+
 // Returns true if a voxel is completely inside the surface
-bool inside_surface(const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, size_t y, size_t z) {
+bool inside_surface(const ManagedHostVolume<TSDFval>& tsdf, size_t x, size_t y, size_t z) {
   bool inside = true;
 
   inside &= tsdf(x    , y    , z    ).f <= 0;
@@ -22,13 +33,19 @@ bool inside_surface(const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf, size_t x, 
 }
 
 // TODO: Slow by a factor of 8 (each point calculated 8 times)
-IntersectionType intersect_type(const Plane plane, size_t i, size_t j, size_t k, const tdp::Vector3fda scale) {
+IntersectionType intersect_type(const Plane plane,
+                                size_t i,
+                                size_t j,
+                                size_t k,
+                                const Vector3fda grid0,
+                                const Vector3fda dGrid,
+                                const SE3f T_wG) {
   bool hasInside = false, hasOutside = false;
 
   for (int dx = 0; dx <= 1; dx++)
     for (int dy = 0; dy <= 1; dy++)
       for(int dz = 0; dz <= 1; dz++) {
-        tdp::Vector3fda x((i + dx) * scale(0), (j + dy) * scale(1), (k + dz) * scale(2));
+        Vector3fda x = tsdf_point_to_real_space_point(i + dx, j + dy, k + dz, grid0, dGrid, T_wG);
 
         // Calculate the distance to the plane from each corner
         float out = plane.distance_to(x);
@@ -51,7 +68,7 @@ IntersectionType intersect_type(const Plane plane, size_t i, size_t j, size_t k,
   }
 }
 
-int find_v0(const Plane plane, const tdp::Vector3fda* tmp) {
+int find_v0(const Plane plane, const Vector3fda* tmp) {
 
   // Note that if d is negative, then we could flip the signs of the normal, and d to make it positive
   // the maximization assumes postive d
@@ -88,7 +105,13 @@ const int ordered_index_from_index[8][8] = {
  * Returns the percentage of the volume of the voxel that is on the "positive" side of the
  * plane as defined by the normal of the plane
  */
-float percent_volume(const Plane plane, size_t i, size_t j, size_t k, const tdp::Vector3fda scale) {
+float percent_volume(const Plane plane,
+                    size_t i,
+                    size_t j,
+                    size_t k,
+                    const Vector3fda grid0,
+                    const Vector3fda dGrid,
+                    const SE3f T_wG) {
   // If we let the plane with the given normal sweep from d = inifinity downwards, let v0 be defined as
   // the first vertex it would intersect, v7 be the last vertex it would intersect, and let all other vertices
   // be numbered according to the right hand rule
@@ -106,19 +129,19 @@ float percent_volume(const Plane plane, size_t i, size_t j, size_t k, const tdp:
   // then we just need to figure out which vertex is "first" and then from that we have a deterministic
   // mapping from numbers (0-7) -> (v0 - v7).
 
-  tdp::Vector3fda tmp[8] = {
-    tdp::Vector3fda((i    ) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    tdp::Vector3fda((i + 1) * scale(0), (j    ) * scale(1), (k    ) * scale(2)),
-    tdp::Vector3fda((i + 1) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    tdp::Vector3fda((i    ) * scale(0), (j + 1) * scale(1), (k    ) * scale(2)),
-    tdp::Vector3fda((i    ) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    tdp::Vector3fda((i + 1) * scale(0), (j    ) * scale(1), (k + 1) * scale(2)),
-    tdp::Vector3fda((i + 1) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2)),
-    tdp::Vector3fda((i    ) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2))
+  Vector3fda tmp[8] = {
+    tsdf_point_to_real_space_point(i    , j    , k    , grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i + 1, j    , k    , grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i + 1, j + 1, k    , grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i    , j + 1, k    , grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i    , j    , k + 1, grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i + 1, j    , k + 1, grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i + 1, j + 1, k + 1, grid0, dGrid, T_wG),
+    tsdf_point_to_real_space_point(i    , j + 1, k + 1, grid0, dGrid, T_wG)
   };
 
   int index = find_v0(plane, tmp);
-  tdp::Vector3fda v[8];
+  Vector3fda v[8];
   for (int t = 0; t < 8; t++) {
     v[t] = tmp[ordered_index_from_index[index][t]];
   }
@@ -140,19 +163,19 @@ float percent_volume(const Plane plane, size_t i, size_t j, size_t k, const tdp:
   // P4: Intersection on E0->3, E3->6, E6->7
   // P5: Intersection on E3->4 or P4
 
-  tdp::Vector3fda p[6];
-  tdp::Vector3fda E01 = tmp[1] - tmp[0];
-  tdp::Vector3fda E14 = tmp[4] - tmp[1];
-  tdp::Vector3fda E47 = tmp[7] - tmp[4];
-  tdp::Vector3fda E15 = tmp[5] - tmp[1];
-  tdp::Vector3fda E02 = tmp[2] - tmp[0];
-  tdp::Vector3fda E25 = tmp[5] - tmp[2];
-  tdp::Vector3fda E57 = tmp[7] - tmp[5];
-  tdp::Vector3fda E26 = tmp[6] - tmp[2];
-  tdp::Vector3fda E03 = tmp[3] - tmp[0];
-  tdp::Vector3fda E36 = tmp[6] - tmp[3];
-  tdp::Vector3fda E67 = tmp[7] - tmp[6];
-  tdp::Vector3fda E34 = tmp[4] - tmp[3];
+  Vector3fda p[6];
+  Vector3fda E01 = tmp[1] - tmp[0];
+  Vector3fda E14 = tmp[4] - tmp[1];
+  Vector3fda E47 = tmp[7] - tmp[4];
+  Vector3fda E15 = tmp[5] - tmp[1];
+  Vector3fda E02 = tmp[2] - tmp[0];
+  Vector3fda E25 = tmp[5] - tmp[2];
+  Vector3fda E57 = tmp[7] - tmp[5];
+  Vector3fda E26 = tmp[6] - tmp[2];
+  Vector3fda E03 = tmp[3] - tmp[0];
+  Vector3fda E36 = tmp[6] - tmp[3];
+  Vector3fda E67 = tmp[7] - tmp[6];
+  Vector3fda E34 = tmp[4] - tmp[3];
 
   float lambda;
   // TODO: Finish this
@@ -177,10 +200,12 @@ float percent_volume(const Plane plane, size_t i, size_t j, size_t k, const tdp:
   Assumes that the normal of the left and right planes point towards each other. e.g. n_l dot n_r < 0
  */
 float volume_in_bounds_with_voxel_counting(
-        const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+        const ManagedHostVolume<TSDFval>& tsdf,
         const Plane p_left,
         const Plane p_right,
-        const tdp::Vector3fda scale
+        const Vector3fda grid0,
+        const Vector3fda dGrid,
+        const SE3f T_wG
 ) {
   // Cases:
   //   Surface Voxel -> ignore
@@ -202,8 +227,8 @@ float volume_in_bounds_with_voxel_counting(
         if (!inside_surface(tsdf, i, j, k))
           continue;
 
-        IntersectionType left_intersection  = intersect_type(p_left,  i, j, k, scale);
-        IntersectionType right_intersection = intersect_type(p_right, i, j, k, scale);
+        IntersectionType left_intersection  = intersect_type(p_left,  i, j, k, grid0, dGrid, T_wG);
+        IntersectionType right_intersection = intersect_type(p_right, i, j, k, grid0, dGrid, T_wG);
 
         // Ignore voxels that are outside of the specified planes
         if (left_intersection == IntersectionType::OUTSIDE ||
@@ -223,25 +248,25 @@ float volume_in_bounds_with_voxel_counting(
           // both planes
           percentVolume = 1.0f;
         }
-        volume += scale[0] * scale[1] * scale[2] * percentVolume;
+        volume += dGrid(0) * dGrid(1) * dGrid(2) * percentVolume;
     }
 
     return volume;
 }
 
 float volume_in_bounds_with_tsdf_modification(
-      const tdp::ManagedHostVolume<tdp::TSDFval>& tsdf,
+      const ManagedHostVolume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
-      const tdp::Vector3fda scale) {
-  tdp::ManagedHostVolume<tdp::TSDFval> copy(tsdf.w_, tsdf.h_, tsdf.d_);
+      const Vector3fda scale) {
+  ManagedHostVolume<TSDFval> copy(tsdf.w_, tsdf.h_, tsdf.d_);
   for (size_t k = 0; k < tsdf.d_; k++)
     for (size_t j = 0; j < tsdf.h_; j++)
       for (size_t i = 0; i < tsdf.w_; i++) {
         // Make a copy of each element
         copy(i, j, k) = tsdf(i, j, k);
 
-        tdp::Vector3fda point(0, 0, 0);
+        Vector3fda point(0, 0, 0);
 
         copy(i, j, k).f = std::max(
           {copy(i, j, k).f, p_left.distance_to(point), p_right.distance_to(point)},

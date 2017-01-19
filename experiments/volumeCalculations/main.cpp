@@ -159,13 +159,10 @@ int main( int argc, char* argv[] )
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x"
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
-  std::cout << grid0 << std::endl;
-  std::cout << dGrid << std::endl;
 
   float xScale = dGrid(0);
   float yScale = dGrid(1);
   float zScale = dGrid(2);
-  tdp::Vector3fda scale(xScale, yScale, zScale);
   tdp::Vector3fda boundingLength(xScale * (tsdf.w_ - 1), yScale * (tsdf.h_ - 1), zScale * (tsdf.d_ - 1));
   tdp::Vector3fda center(xScale * (tsdf.w_ - 1.0) / 2, yScale * (tsdf.h_ - 1) / 2, zScale * (tsdf.d_ - 1) / 2);
 
@@ -282,7 +279,7 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(recomputeVolume)) {
       std::cout << "Estimated volume: "
-                << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(tsdf, pl1, pl2, scale)
+                << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(tsdf, pl1, pl2, grid0, dGrid, T_wG)
                 << std::endl;
     }
 
