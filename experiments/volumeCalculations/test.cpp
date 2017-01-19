@@ -37,8 +37,8 @@ void test_find_v0() {
         tdp::Vector3fda((i    ) * scale(0), (j + 1) * scale(1), (k + 1) * scale(2))
     };
 
-    test_find_v0_helper(1, tdp::Reconstruction::Plane( 1,  1,  1,  sqrt(3.0)/3), tmp, 6);
-    test_find_v0_helper(2, tdp::Reconstruction::Plane(-1, -1, -1, -sqrt(3.0)/3), tmp, 0);
+    test_find_v0_helper(1, tdp::Reconstruction::Plane( 1,  1,  1,  sqrt(3.0)/3), tmp, 0);
+    test_find_v0_helper(2, tdp::Reconstruction::Plane(-1, -1, -1, -sqrt(3.0)/3), tmp, 6);
 }
 
 void test_check_plane_dist_to_origin(int testNum, float x, float y, float z, float d, float expected) {
@@ -63,9 +63,9 @@ void test_check_plane_distances() {
     test_check_plane_dist_to_origin(3, 1, 1, 1, -1, 1/sqrt(3));
 }
 
-// Expecting points at x, y, z = 0.5
+// Expecting points to be in same direction as plane orientation. hexagon should appear
 void test_polygon_intersection() {
-    tdp::Reconstruction::Plane plane(-1, -1, -1, -1/2.0);
+    tdp::Reconstruction::Plane plane(1, 1, 1, 3 / 2.0);
     tdp::Vector3fda corner1(0, 0, 0);
     tdp::Vector3fda corner2(1, 1, 1);
 

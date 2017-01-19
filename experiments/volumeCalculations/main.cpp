@@ -51,49 +51,40 @@ void render_plane(tdp::Reconstruction::Plane plane,
                   pangolin::GlBuffer& vbo,
                   pangolin::GlBuffer& ibo,
                   auto& shader,
-                  tdp::Vector3fda boundingLength,
-                  tdp::Vector3fda center) {
-  // TODO: Find a better way to do this. Possibly w/ plane intersecting bounding box
-  float minX = center(0) - boundingLength(0) / 2;
-  float maxX = center(0) + boundingLength(0) / 2;
-  float minY = center(1) - boundingLength(1) / 2;
-  float maxY = center(1) + boundingLength(1) / 2;
+                  tdp::Vector3fda corner1,
+                  tdp::Vector3fda corner2) {
+  size_t numVertices = 6;
+  size_t numTriangles = 4;
 
-  float vertexStore[4 * 3];
-  vertexStore[0 * 3 + 0] = minX;
-  vertexStore[0 * 3 + 1] = minY;
-  vertexStore[0 * 3 + 2] = plane.find_z_coordinate(minX, minY);
-  vertexStore[1 * 3 + 0] = minX;
-  vertexStore[1 * 3 + 1] = maxY;
-  vertexStore[1 * 3 + 2] = plane.find_z_coordinate(minX, maxY);
-  vertexStore[2 * 3 + 0] = maxX;
-  vertexStore[2 * 3 + 1] = maxY;
-  vertexStore[2 * 3 + 2] = plane.find_z_coordinate(maxX, maxY);
-  vertexStore[3 * 3 + 0] = maxX;
-  vertexStore[3 * 3 + 1] = minY;
-  vertexStore[3 * 3 + 2] = plane.find_z_coordinate(maxX, minY);
+  float vertexStore[numVertices * 3];
+  unsigned int indexStore[numTriangles * 3];
 
-  unsigned int indexStore[2 * 3];
+  // find the intersecting polygon between the plane and the bounding box of the TSDF
+  tdp::Vector3fda polygon[6];
   if (flip_normal) {
-    indexStore[0 * 3 + 0] = 0;
-    indexStore[0 * 3 + 1] = 1;
-    indexStore[0 * 3 + 2] = 3;
-    indexStore[1 * 3 + 0] = 3;
-    indexStore[1 * 3 + 1] = 1;
-    indexStore[1 * 3 + 2] = 2;
+    tdp::Reconstruction::get_vertices_of_intersection(polygon, plane.flip(), corner1, corner2);
   } else {
-    indexStore[0 * 3 + 0] = 0;
-    indexStore[0 * 3 + 1] = 3;
-    indexStore[0 * 3 + 2] = 1;
-    indexStore[1 * 3 + 0] = 1;
-    indexStore[1 * 3 + 1] = 3;
-    indexStore[1 * 3 + 2] = 2;
+    tdp::Reconstruction::get_vertices_of_intersection(polygon, plane.flip(), corner1, corner2);
   }
 
-  vbo.Reinitialise(pangolin::GlArrayBuffer, 4,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  ibo.Reinitialise(pangolin::GlElementArrayBuffer, 2, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
-  vbo.Upload(vertexStore, sizeof(float) * 4 * 3, 0);
-  ibo.Upload(indexStore,  sizeof(unsigned int) * 2 * 3, 0);
+  // copy the data into the buffers
+  for (int i = 0; i < numVertices; i++) {
+    vertexStore[i * 3 + 0] = polygon[i](0);
+    vertexStore[i * 3 + 1] = polygon[i](1);
+    vertexStore[i * 3 + 2] = polygon[i](2);
+  }
+
+  for (int i = 0; i < numTriangles; i++) {
+    indexStore[i * 3 + 0] = 0;
+    indexStore[i * 3 + 1] = i + 1;
+    indexStore[i * 3 + 2] = i + 2;
+  }
+
+  // Load the data into the opengl buffers
+  vbo.Reinitialise(pangolin::GlArrayBuffer, numVertices,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  ibo.Reinitialise(pangolin::GlElementArrayBuffer, numTriangles, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
+  vbo.Upload(vertexStore, sizeof(float) * numVertices * 3, 0);
+  ibo.Upload(indexStore,  sizeof(unsigned int) * numTriangles * 3, 0);
 
   if (vbo.IsValid() && ibo.IsValid()) {
     vbo.Bind();
@@ -160,12 +151,13 @@ int main( int argc, char* argv[] )
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
 
-  float xScale = dGrid(0);
-  float yScale = dGrid(1);
-  float zScale = dGrid(2);
-  tdp::Vector3fda boundingLength(xScale * (tsdf.w_ - 1), yScale * (tsdf.h_ - 1), zScale * (tsdf.d_ - 1));
-  tdp::Vector3fda center(xScale * (tsdf.w_ - 1.0) / 2, yScale * (tsdf.h_ - 1) / 2, zScale * (tsdf.d_ - 1) / 2);
+  // Define opposite corners properly scaled to real world coordinates
+  tdp::Vector3fda corner1(0, 0, 0);
+  tdp::Vector3fda corner2((tsdf.w_ - 1) * dGrid(0), (tsdf.h_ - 1) * dGrid(1), (tsdf.d_ - 1) * dGrid(2));
 
+  // Finish converting to real space
+  corner1 = T_wG * (corner1 + grid0);
+  corner2 = T_wG * (corner2 + grid0);
   std::cout << "Finished building TSDF" << std::endl;
 
   // Create OpenGL window - guess sensible dimensions
@@ -214,21 +206,28 @@ int main( int argc, char* argv[] )
 
   // TODO: Use theta and phi angles to determine orientation of the plane. the radius is then "d"
   //       This can then let us put bounds min and max on the possibile orientations
-  float maxd = boundingLength.norm();
+  float minX = std::min(corner1(0), corner2(0)),
+        minY = std::min(corner1(1), corner2(1)),
+        minZ = std::min(corner1(2), corner2(2));
+  float maxX = std::max(corner1(0), corner2(0)),
+        maxY = std::max(corner1(1), corner2(1)),
+        maxZ = std::max(corner1(2), corner2(2));
+  float maxD = tdp::Vector3fda(maxX - minX, maxY - minY, maxZ - minZ).norm();
+
   // Plane 1 cutoffs
-  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, 0, boundingLength(0));
-  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, boundingLength(1));
-  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, 0, boundingLength(2));
-  pangolin::Var<float> pl1_d("ui.plane_1 d", maxd / 3,              0, maxd);
+  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, minX, maxX);
+  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, minY, maxY);
+  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, minZ, maxZ);
+  pangolin::Var<float> pl1_d("ui.plane_1 d",   (maxZ - minZ) / 2,    0, maxD);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
 
   // Plane 2 cutoffs
-  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0,  0, boundingLength(0));
-  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0,  0, boundingLength(1));
-  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1,  0, boundingLength(2));
-  pangolin::Var<float> pl2_d("ui.plane_2 d", maxd * 2 / 3,               0, maxd);
+  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0, minX, maxX);
+  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, minY, maxY);
+  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1, minZ, maxZ);
+  pangolin::Var<float> pl2_d("ui.plane_2 d",   (maxZ - minZ) / 2,    0, maxD);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;
@@ -274,8 +273,8 @@ int main( int argc, char* argv[] )
     sign = pl2_flip_normal ? -1 : 1;
     tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
 
-    render_plane(pl1, pl1_flip_normal, pl1_vbo, pl1_ibo, shader, boundingLength, center);
-    render_plane(pl2, pl2_flip_normal, pl2_vbo, pl2_ibo, shader, boundingLength, center);
+    render_plane(pl1, pl1_flip_normal, pl1_vbo, pl1_ibo, shader, corner1, corner2);
+    render_plane(pl2, pl2_flip_normal, pl2_vbo, pl2_ibo, shader, corner1, corner2);
 
     if (pangolin::Pushed(recomputeVolume)) {
       std::cout << "Estimated volume: "

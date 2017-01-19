@@ -70,17 +70,15 @@ IntersectionType intersect_type(const Plane plane,
 }
 
 int find_v0(const Plane plane, const Vector3fda* tmp) {
-
-  // Note that if d is negative, then we could flip the signs of the normal, and d to make it positive
-  // the maximization assumes postive d
+  // Finds the point furthest from the plane given it's normal
   int index = 0;
-  float maxVal = plane.distance_to(tmp[0]);
+  float minVal = plane.distance_to(tmp[0]);
 
   for (int i = 1; i < 8; i++) {
     float val = plane.distance_to(tmp[i]);
 
-    if (val > maxVal) {
-      maxVal = val;
+    if (val < minVal) {
+      minVal = val;
       index = i;
     }
   }
@@ -128,6 +126,7 @@ static Vector3fda find_intersection_along_edges_with_right_hand_rule(
 }
 
 // Corners must be opposite and polygon must be of length 6
+// the polygon found will have the same orientation as the original plane
 void get_vertices_of_intersection(Vector3fda* polygon,
                                   const Plane plane,
                                   const Vector3fda corner1,
