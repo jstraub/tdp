@@ -7,9 +7,12 @@ namespace Reconstruction {
 
   class Plane {
     public:
-      Plane(float nx, float ny, float nz, float dist_to_origin)
-        : m_normal(Vector3fda(nx, ny, nz).normalized()),
-          m_dist_to_origin(dist_to_origin)
+      // NOTE: This constructor assumes equations of the form
+      // nx * x + ny * y + nz * z = d
+      Plane(float nx, float ny, float nz, float d)
+        : m_original_magnitude(Vector3fda(nx,ny,nz).norm()),
+          m_normal(Vector3fda(nx, ny, nz).normalized()),
+          m_dist_to_origin(d / m_original_magnitude)
         {}
 
       ~Plane()
@@ -25,6 +28,7 @@ namespace Reconstruction {
 
     private:
       const Vector3fda m_normal;
+      const float m_original_magnitude;
       const float m_dist_to_origin;
   };
 
