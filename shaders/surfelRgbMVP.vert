@@ -56,6 +56,6 @@ void main() {
     vec2 cxs = vec2(min(c1.x, min(c2.x, min(c3.x, c4.x))), max(c1.x, max(c2.x, max(c3.x, c4.x))));
     vec2 cys = vec2(min(c1.y, min(c2.y, min(c3.y, c4.y))), max(c1.y, max(c2.y, max(c3.y, c4.y))));
     // set the size to the maximum side length of the bounding box
-    gl_PointSize = max(0, max(abs(cxs.y-cxs.x), abs(cys.y-cys.x))); //r;
+    gl_PointSize = max(1.5, max(abs(cxs.y-cxs.x), abs(cys.y-cys.x))); //r;
   }
 }

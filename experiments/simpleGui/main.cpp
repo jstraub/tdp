@@ -61,8 +61,10 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(d_cam);
   // add a simple image viewer
   tdp::QuickView viewN2D(w,h);
-  gui.container().AddDisplay(viewN2D);
-
+//  gui.container().AddDisplay(viewN2D);
+  d_cam.SetLayout(pangolin::LayoutOverlay);
+  d_cam.AddDisplay(viewN2D);
+  viewN2D.SetBounds(0,0.3,0,0.3);
   // camera model for computing point cloud and normals
   tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
   
