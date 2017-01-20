@@ -158,6 +158,7 @@ int main( int argc, char* argv[] )
   // Finish converting to real space
   corner1 = T_wG * (corner1 + grid0);
   corner2 = T_wG * (corner2 + grid0);
+
   std::cout << "Finished building TSDF" << std::endl;
 
   // Create OpenGL window - guess sensible dimensions
@@ -218,7 +219,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, minX, maxX);
   pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, minY, maxY);
   pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, minZ, maxZ);
-  pangolin::Var<float> pl1_d("ui.plane_1 d",   (maxZ - minZ) / 2,    0, maxD);
+  pangolin::Var<float> pl1_d("ui.plane_1 d",   minZ + (maxZ - minZ) / 2,    0, maxD);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
@@ -227,7 +228,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0, minX, maxX);
   pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, minY, maxY);
   pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1, minZ, maxZ);
-  pangolin::Var<float> pl2_d("ui.plane_2 d",   (maxZ - minZ) / 2,    0, maxD);
+  pangolin::Var<float> pl2_d("ui.plane_2 d",   minZ + (maxZ - minZ) / 2,    0, maxD);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;

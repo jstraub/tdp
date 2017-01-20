@@ -90,7 +90,7 @@ static bool good_intersection(const Plane plane,
                              const Vector3fda v,
                              const Vector3fda e) {
 
-  float denominator = plane.normal().dot(e);
+  float denominator = plane.unit_normal().dot(e);
   if (denominator == 0) {
     return false;
   }
@@ -101,7 +101,7 @@ static bool good_intersection(const Plane plane,
 static inline Vector3fda get_intersection(const Plane plane,
                                    const Vector3fda v,
                                    const Vector3fda e) {
-  return v + (-plane.distance_to(v) / plane.normal().dot(e)) * e;
+  return v + (-plane.distance_to(v) / plane.unit_normal().dot(e)) * e;
 }
 static Vector3fda find_intersection_along_edges_with_right_hand_rule(
         const Plane plane,

@@ -35,8 +35,12 @@ namespace Reconstruction {
           return Plane(-v, -d);
       }
 
-      Vector3fda normal() const {
+      Vector3fda unit_normal() const {
         return m_normal;
+      }
+
+      float distance_to_origin() const {
+        return m_dist_to_origin;
       }
 
     private:
