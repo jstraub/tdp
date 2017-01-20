@@ -33,6 +33,39 @@ bool inside_surface(const ManagedHostVolume<TSDFval>& tsdf, size_t x, size_t y, 
   return inside;
 }
 
+IntersectionType intersect_type(const Plane plane,
+                                const Vector3fda corner1,
+                                const Vector3fda corner2) {
+  float x[2] = {corner1(0), corner2(0)};
+  float y[2] = {corner1(1), corner2(1)};
+  float z[2] = {corner1(2), corner2(2)};
+
+  bool hasInside = false, hasOutside = false;
+  for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 2; j++)
+      for (int k = 0; k < 2; k++) {
+        Vector3fda p(x[i], y[j], z[k]);
+
+        // Calculate the distance to the plane from each corner
+        float out = plane.distance_to(p);
+
+        // Non negative distance implies that the vertex is on the side of the plane that would
+        // be included in the volume
+        hasOutside |= out > 0;
+        hasInside  |= out <= 0;
+      }
+  if (hasInside && hasOutside) {
+    return IntersectionType::INTERSECTS;
+  } else if (hasInside && !hasOutside) {
+    return IntersectionType::INSIDE;
+  } else if (!hasInside && hasOutside) {
+    return IntersectionType::OUTSIDE;
+  } else {
+    std::cerr << "Error: Found impossible point that is not inside, not outside, and doesn't intersect a plane" << std::endl;
+    exit(1);
+  }
+}
+
 // TODO: Slow by a factor of 8 (each point calculated 8 times)
 IntersectionType intersect_type(const Plane plane,
                                 size_t i,

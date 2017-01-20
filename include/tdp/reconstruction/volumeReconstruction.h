@@ -30,6 +30,12 @@ namespace Reconstruction {
       const SE3f T_wG
   );
 
+  IntersectionType intersect_type(
+      const Plane plane,
+      const Vector3fda corner1,
+      const Vector3fda corner2
+  );
+
   // Returns the index in the input array of the vertex that should be labeled v0
   int find_v0(const Plane plane, const Vector3fda* tmp);
 

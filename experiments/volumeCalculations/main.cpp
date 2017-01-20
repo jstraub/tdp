@@ -46,8 +46,9 @@
 #include <tdp/reconstruction/volumeReconstruction.h>
 #include "test.h"
 
+#define PI 3.14159265358979f
+
 void render_plane(tdp::Reconstruction::Plane plane,
-                  pangolin::Var<bool>& flip_normal,
                   pangolin::GlBuffer& vbo,
                   pangolin::GlBuffer& ibo,
                   auto& shader,
@@ -61,11 +62,7 @@ void render_plane(tdp::Reconstruction::Plane plane,
 
   // find the intersecting polygon between the plane and the bounding box of the TSDF
   tdp::Vector3fda polygon[6];
-  if (flip_normal) {
-    tdp::Reconstruction::get_vertices_of_intersection(polygon, plane.flip(), corner1, corner2);
-  } else {
-    tdp::Reconstruction::get_vertices_of_intersection(polygon, plane.flip(), corner1, corner2);
-  }
+  tdp::Reconstruction::get_vertices_of_intersection(polygon, plane, corner1, corner2);
 
   // copy the data into the buffers
   for (int i = 0; i < numVertices; i++) {
@@ -87,18 +84,9 @@ void render_plane(tdp::Reconstruction::Plane plane,
   ibo.Upload(indexStore,  sizeof(unsigned int) * numTriangles * 3, 0);
 
   if (vbo.IsValid() && ibo.IsValid()) {
-    vbo.Bind();
-    glVertexPointer(vbo.count_per_element, vbo.datatype, 0, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-
-    shader.Bind();
-    ibo.Bind();
-    glDrawElements(GL_TRIANGLES,ibo.num_elements * 3, ibo.datatype, 0);
-    ibo.Unbind();
-    shader.Unbind();
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    vbo.Unbind();
+    tdp::RenderVboIbo(vbo, ibo);
+    //glColor3f(1,0,0);
+    //pangolin::RenderVbo(vbo);
   }
 }
 
@@ -150,6 +138,7 @@ int main( int argc, char* argv[] )
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x"
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
+  std::cout << "Scale: " << dGrid.transpose() << std::endl;
 
   // Define opposite corners properly scaled to real world coordinates
   tdp::Vector3fda corner1(0, 0, 0);
@@ -213,23 +202,37 @@ int main( int argc, char* argv[] )
   float maxX = std::max(corner1(0), corner2(0)),
         maxY = std::max(corner1(1), corner2(1)),
         maxZ = std::max(corner1(2), corner2(2));
-  float maxD = tdp::Vector3fda(maxX - minX, maxY - minY, maxZ - minZ).norm();
+
+  float farX = std::max(std::abs(minX), std::abs(maxX));
+  float farY = std::max(std::abs(minY), std::abs(maxY));
+  float farZ = std::max(std::abs(minZ), std::abs(maxZ));
+  float closeX = std::min(std::abs(minX), std::abs(maxX));
+  float closeY = std::min(std::abs(minY), std::abs(maxY));
+  float closeZ = std::min(std::abs(minZ), std::abs(maxZ));
+  float maxD = tdp::Vector3fda(farX, farY, farZ).norm();
+  float minD = tdp::Vector3fda(closeX, closeY, closeZ).norm();
 
   // Plane 1 cutoffs
-  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, minX, maxX);
-  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, minY, maxY);
-  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, minZ, maxZ);
-  pangolin::Var<float> pl1_d("ui.plane_1 d",   minZ + (maxZ - minZ) / 2,    0, maxD);
+  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, 0, 1);
+  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, 1);
+  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, 0, 1);
+  pangolin::Var<float> pl1_d("ui.plane_1 d",   (maxD + minD) / 2,    -maxD, maxD);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
+  //pangolin::Var<float> pl1_rho("ui.plane_1 rho",   minD,   minD, maxD);
+  //pangolin::Var<float> pl1_theta("ui.plane_1 theta", 0, -PI, PI);
+  //pangolin::Var<float> pl1_phi("ui.plane_1 phi",     0,   0, PI);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
 
   // Plane 2 cutoffs
-  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0, minX, maxX);
-  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, minY, maxY);
-  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1, minZ, maxZ);
-  pangolin::Var<float> pl2_d("ui.plane_2 d",   minZ + (maxZ - minZ) / 2,    0, maxD);
+  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0, 0, 1);
+  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, 0, 1);
+  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1, 0, 1);
+  pangolin::Var<float> pl2_d("ui.plane_2 d",   (maxD + minD) / 2,    -maxD, maxD);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
+  //pangolin::Var<float> pl2_rho("ui.plane_2 rho",   minD,   minD, maxD);
+  //pangolin::Var<float> pl2_theta("ui.plane_2 theta", 0, -PI, PI);
+  //pangolin::Var<float> pl2_phi("ui.plane_2 phi",     0,   0, PI);
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;
 
@@ -266,7 +269,7 @@ int main( int argc, char* argv[] )
     //   pangolin::RenderVbo(vbo_pc);
     // }
 
-    // Draw Intersecting Planes
+    // Draw Intersecting Planes if in frame
     auto& shader = tdp::Shaders::Instance()->normalMeshShader_;
     int sign = pl1_flip_normal ? -1 : 1;
     tdp::Reconstruction::Plane pl1(sign * pl1_nx, sign * pl1_ny, sign * pl1_nz, sign * pl1_d);
@@ -274,8 +277,17 @@ int main( int argc, char* argv[] )
     sign = pl2_flip_normal ? -1 : 1;
     tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
 
-    render_plane(pl1, pl1_flip_normal, pl1_vbo, pl1_ibo, shader, corner1, corner2);
-    render_plane(pl2, pl2_flip_normal, pl2_vbo, pl2_ibo, shader, corner1, corner2);
+    //tdp::Reconstruction::Plane pl1(pl1_rho, pl1_theta, pl1_phi);
+    //tdp::Reconstruction::Plane pl2(pl2_rho, pl2_theta, pl2_phi);
+
+    if (tdp::Reconstruction::intersect_type(pl1, corner1, corner2) ==
+        tdp::Reconstruction::IntersectionType::INTERSECTS) {
+      render_plane(pl1, pl1_vbo, pl1_ibo, shader, corner1, corner2);
+    }
+    if (tdp::Reconstruction::intersect_type(pl2, corner1, corner2) ==
+        tdp::Reconstruction::IntersectionType::INTERSECTS) {
+      render_plane(pl2, pl2_vbo, pl2_ibo, shader, corner1, corner2);
+    }
 
     if (pangolin::Pushed(recomputeVolume)) {
       std::cout << "Estimated volume: "

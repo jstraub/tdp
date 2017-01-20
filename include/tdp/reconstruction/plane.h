@@ -22,6 +22,14 @@ namespace Reconstruction {
           m_dist_to_origin(d / m_original_magnitude)
         {}
 
+      Plane(float rho, float theta, float phi)
+        : m_original_magnitude(1),
+          m_normal(Vector3fda(sin(phi) * cos(theta),
+                              sin(phi) * sin(theta),
+                              cos(phi)).normalized()),
+          m_dist_to_origin(rho)
+        {}
+
       ~Plane()
         {}
 
