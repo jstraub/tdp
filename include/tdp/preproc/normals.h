@@ -167,7 +167,8 @@ bool NormalViaVoting(
     uint32_t u0, uint32_t v0,
     uint32_t W, float inlierThr,
     Image<Vector4fda>& dpc, 
-    Vector3fda& c);
+    Vector3fda& c,
+    Vector3fda& p);
 
 bool NormalViaClustering(
     const Image<Vector3fda>& pc, 

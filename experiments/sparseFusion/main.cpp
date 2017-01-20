@@ -65,6 +65,37 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
+std::string MakeUniqueFilename(const std::string& filename)
+{
+    if(pangolin::FileExists(filename) ) {
+        const size_t dot = filename.find_last_of('.');
+
+        std::string fn;
+        std::string ext;
+
+        if(dot == filename.npos) {
+            fn = filename;
+            ext = "";
+        }else{
+            fn = filename.substr(0, dot);
+            ext = filename.substr(dot);
+        }
+
+        int id = 1;
+        std::string new_file;
+        do {
+            id++;
+            std::stringstream ss;
+            ss << fn << "_" << std::setw(6) << std::setfill('0') << id << ext;
+            new_file = ss.str();
+        } while(pangolin::FileExists(new_file) );
+
+        return new_file;
+    }else{
+        return filename;
+    }
+}
+
 bool ExtractClosestBrief(
     const Image<Vector3fda>& pc, 
     const Image<uint8_t>& grey,
@@ -128,7 +159,7 @@ void ExtractPlanes(
     ) {
   Plane pl;
   tdp::Brief feat;
-  Vector3fda n;
+  Vector3fda n, p;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i] 
         && tdp::IsValidData(pc[i])
@@ -137,10 +168,11 @@ void ExtractPlanes(
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5, dpc, n)) {
+      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5,
+            dpc, n, p)) {
         ExtractClosestBrief(pc, grey, pts, orientation, 
-            pc[i], n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
-        pl.p_ = T_wc*pc[i];
+            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
+        pl.p_ = T_wc*p;
         pl.n_ = T_wc.rotation()*n;
         pl.rgb_ = rgb[i];
         pl.gradGrey_ = gradGrey[i];
@@ -150,7 +182,7 @@ void ExtractPlanes(
         pl.numObs_ = 1;
         pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
-        pl.r_ = pc[i](2)/cam.params_(0); // unprojected radius in m
+        pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -182,7 +214,7 @@ bool ProjectiveAssoc(const Plane& pl,
 }
 
 bool EnsureNormal(
-    const Image<Vector3fda>& pc,
+    Image<Vector3fda>& pc,
     Image<Vector4fda>& dpc,
     uint32_t W,
     Image<Vector3fda>& n,
@@ -194,10 +226,12 @@ bool EnsureNormal(
 //      uint32_t Wscaled = floor(W*pc(u,v)(2));
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
+      tdp::Vector3fda pi;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni)) {
+        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni, pi)) {
           n(u,v) = ni;
+          pc(u,v) = pi;
           return true;
         }
       } else {
@@ -211,7 +245,7 @@ bool EnsureNormal(
 bool ProjectiveAssocNormalExtract(const Plane& pl, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
-    const Image<Vector3fda>& pc,
+    Image<Vector3fda>& pc,
     uint32_t W,
     Image<Vector4fda>& dpc,
     Image<Vector3fda>& n,
@@ -613,12 +647,13 @@ int main( int argc, char* argv[] )
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
-      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
+      pangolin::ProjectionMatrix(1280,960,840,840,639.5,479.5,0.1,1000),
+//      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   pangolin::OpenGlRenderState normalsCam(
       pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      pangolin::ModelViewLookAt(0,0.0,-2.2, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& viewPc3D = pangolin::CreateDisplay()
@@ -631,10 +666,15 @@ int main( int argc, char* argv[] )
 
   pangolin::View& viewNormals = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-  gui.container().AddDisplay(viewNormals);
+//  gui.container().AddDisplay(viewNormals);
+  viewPc3D.SetLayout(pangolin::LayoutOverlay);
+  viewPc3D.AddDisplay(viewNormals);
+  viewNormals.SetBounds(0.,0.4,0.6,1.);
 
   tdp::QuickView viewCurrent(wc, hc);
-  gui.container().AddDisplay(viewCurrent);
+//  gui.container().AddDisplay(viewCurrent);
+  viewPc3D.AddDisplay(viewCurrent);
+  viewCurrent.SetBounds(0.,0.3,0.,0.3);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -717,14 +757,13 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
   tdp::ManagedHostImage<tdp::Vector3fda> n_i;
 
+  pangolin::Var<bool> record("ui.record",false,true);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
   pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
-
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
-
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
@@ -736,7 +775,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
-  pangolin::Var<bool> incrementalAssign("ui.incremental assign ICP",true,true);
+  pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
 
@@ -1474,7 +1513,7 @@ int main( int argc, char* argv[] )
           std::cout << "render surfels" << std::endl;
           pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
           glEnable(GL_PROGRAM_POINT_SIZE);
-          glEnable(GL_POINT_SPRITE);
+//          glEnable(GL_POINT_SPRITE);
           shader.Bind();
           pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
           pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
@@ -1508,7 +1547,7 @@ int main( int argc, char* argv[] )
           vbo_w.Unbind();
           shader.Unbind();
           glDisable(GL_PROGRAM_POINT_SIZE);
-          glDisable(GL_POINT_SPRITE);
+//          glDisable(GL_POINT_SPRITE);
         }
         if (showNN) {
           glColor4f(0.3,0.3,0.3,0.3);
@@ -1586,7 +1625,7 @@ int main( int argc, char* argv[] )
 
     if (viewNormals.IsShown()) {
       Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
-      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -3;
+      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -2.2;
       normalsCam.GetModelViewMatrix() = Tview;
       viewNormals.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
@@ -1650,6 +1689,11 @@ int main( int argc, char* argv[] )
     }
 
     TOCK("Draw 2D");
+    if (record) {
+      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
+      name = std::string(name.begin(), name.end()-4);
+      gui.container().SaveOnRender(name);
+    }
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.

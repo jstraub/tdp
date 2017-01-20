@@ -52,7 +52,8 @@ bool NormalViaVoting(
     uint32_t u0, uint32_t v0,
     uint32_t W, float inlierThr,
     Image<Vector4fda>& dpc, 
-    Vector3fda& c
+    Vector3fda& c,
+    Vector3fda& p
     ) {
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
@@ -86,6 +87,7 @@ bool NormalViaVoting(
     for (float dAng : {45./180.*M_PI,35./180.*M_PI,25./180.*M_PI,15./180.*M_PI}) {
 //    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
       S.fill(0.);
+      p.fill(0.);
       orthoL = cos(0.5*M_PI-dAng);
       orthoU = cos(0.5*M_PI+dAng);
       for (size_t u=u0-W; u<u0+W; ++u) {
@@ -100,6 +102,7 @@ bool NormalViaVoting(
               S(1,1) += dpc(u,v)(1)*dpc(u,v)(1);
               S(1,2) += dpc(u,v)(1)*dpc(u,v)(2);
               S(2,2) += dpc(u,v)(2)*dpc(u,v)(2);
+              p += pc(u,v);
               N++;
             }
           }
@@ -110,6 +113,7 @@ bool NormalViaVoting(
       S(1,0) = S(0,1);
       S(2,0) = S(0,2);
       S(2,1) = S(1,2);
+      p /= N;
       int id = 0;
       eig.computeDirect(S);
       eig.eigenvalues().minCoeff(&id);
@@ -234,9 +238,10 @@ void NormalsViaVoting(
     float inlierThr, 
     Image<Vector4fda>& dpc,
     Image<Vector3fda>& n) {
+  Vector3fda p;
   for(size_t u=W; u<n.w_-W; u+=step) {
     for(size_t v=W; v<n.h_-W; v+=step) {
-      if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v))) {
+      if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v), p)) {
         n(u,v) << NAN,NAN,NAN;
       }
     }
