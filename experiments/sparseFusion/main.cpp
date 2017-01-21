@@ -792,7 +792,7 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
-  pangolin::Var<float> curvThr("ui.curv Thr",0.1,0.01,1.0);
+  pangolin::Var<float> curvThr("ui.curv Thr",0.06,0.01,1.0);
   pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
@@ -895,7 +895,7 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  tdp::DPvMFmeansSimple3fda dpvmf(cos(35.*M_PI/180.));
+  tdp::DPvMFmeansSimple3fda dpvmf(cos(65.*M_PI/180.));
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -1015,6 +1015,7 @@ int main( int argc, char* argv[] )
         z.Fill(0);
         idsCur.clear();
         projAssoc.GetAssoc(z, mask, idsCur);
+        std::random_shuffle(idsCur.begin(), idsCur.end());
         TOCK("extract assoc");
       }
 
@@ -1109,20 +1110,24 @@ int main( int argc, char* argv[] )
 //          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
       }
       // only use ids that were found by projecting into the current pose
-//      if (incrementalAssign) {
-//        for (auto i : idsCur) {
-//          uint32_t k = *dpvmf.GetZs()[i];
-//          if (invInd[k].size() < 10000)
-//            invInd[k].push_back(i);
-//        }
-//      }
       if (incrementalAssign) {
-        for (auto i : id_w) {
+        for (auto i : idsCur) {
+          if (i >= dpvmf.GetZs().size()) {
+            std::cout << "goikng to crash: " << i << " >= "
+              << dpvmf.GetZs().size() << std::endl;
+          }
           uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
         }
       }
+//      if (incrementalAssign) {
+//        for (auto i : id_w) {
+//          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+//          if (invInd[k].size() < 10000)
+//            invInd[k].push_back(i);
+//        }
+//      }
       TOCK("dpvmf");
     }
 

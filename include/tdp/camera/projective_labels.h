@@ -38,6 +38,8 @@ class ProjectiveAssociation {
     glPopAttrib();
     glFinish();
   }
+  
+  /// z_i == 0 means not associated; z_i > 0 means associated to z_i-1
   void GetAssoc(tdp::Image<uint32_t>& z) {
     tex_.Download(z.ptr_, GL_RGBA, GL_UNSIGNED_BYTE);
     for (size_t i=0; i<z.Area(); ++i) {
@@ -56,7 +58,7 @@ class ProjectiveAssociation {
     for (size_t i=0; i<z.Area(); ++i) {
       mask[i] = z[i]>0? 1: 0; 
       if (mask[i])
-        ids.push_back(z[i]);
+        ids.push_back(z[i]-1);
     }
   }
 
