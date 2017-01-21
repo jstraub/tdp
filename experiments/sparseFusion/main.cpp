@@ -160,6 +160,7 @@ void ExtractPlanes(
   Plane pl;
   tdp::Brief feat;
   Vector3fda n, p;
+  float curv;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i] 
         && tdp::IsValidData(pc[i])
@@ -169,11 +170,12 @@ void ExtractPlanes(
       uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5,
-            dpc, n, p)) {
+            dpc, n, curv, p)) {
         ExtractClosestBrief(pc, grey, pts, orientation, 
             p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*p;
         pl.n_ = T_wc.rotation()*n;
+        pl.curvature_ = curv;
         pl.rgb_ = rgb[i];
         pl.gradGrey_ = gradGrey[i];
         pl.grey_ = greyFl[i];
@@ -218,6 +220,7 @@ bool EnsureNormal(
     Image<Vector4fda>& dpc,
     uint32_t W,
     Image<Vector3fda>& n,
+    Image<float>& curv,
     int32_t u,
     int32_t v
     ) {
@@ -227,11 +230,13 @@ bool EnsureNormal(
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
       tdp::Vector3fda pi;
+      float curvi;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni, pi)) {
+        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni, curvi, pi)) {
           n(u,v) = ni;
           pc(u,v) = pi;
+          curv(u,v) = curvi;
           return true;
         }
       } else {
@@ -249,6 +254,7 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     uint32_t W,
     Image<Vector4fda>& dpc,
     Image<Vector3fda>& n,
+    Image<float>& curv,
     int32_t& u,
     int32_t& v
     ) {
@@ -257,7 +263,7 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);
   v = floor(x(1)+0.5f);
-  return EnsureNormal(pc, dpc, W, n, u, v);
+  return EnsureNormal(pc, dpc, W, n, curv, u, v);
 }
 
 
@@ -717,6 +723,7 @@ int main( int argc, char* argv[] )
   memset(n2D.ptr_,0,n2D.SizeBytes());
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
+  tdp::ManagedHostImage<float> curv(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
   tdp::ManagedHostImage<tdp::Vector4fda> dpc(wc, hc);
@@ -1036,7 +1043,11 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
-          dpvmf.addObservation(&pl.n_, &pl.z_);
+          if (pl.curvature_ < curvThr) {
+            dpvmf.addObservation(&pl.n_, &pl.z_);
+          } else {
+            pl.z_ = 0xFFFF; // high curvature cluster
+          }
 //          uint32_t zi = *dpvmf.GetZs().back();
           int32_t kMax = -1;
           uint32_t nMax = 0;
@@ -1053,7 +1064,6 @@ int main( int argc, char* argv[] )
           lsh.Insert(pl.feat_);
         }
       }
-
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
       vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
           pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
@@ -1173,7 +1183,7 @@ int main( int argc, char* argv[] )
               numProjected++;
               int32_t u, v;
               if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, u,v ))
+                    W, dpc, n, curv, u,v ))
                 continue;
               if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
                     distThr, p2plThr, dotThr, N)) {
@@ -1227,7 +1237,7 @@ int main( int argc, char* argv[] )
               int32_t u, v;
               if (angleThr > 0.) {
                 if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                      W, dpc, n, u,v ))
+                      W, dpc, n, curv, u,v ))
                   continue;
                 if (useTexture) {
                   if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
@@ -1315,7 +1325,7 @@ int main( int argc, char* argv[] )
               tdp::Plane& pl = pl_w.GetCircular(i);
               numProjected++;
               t0.tic();
-              if (!EnsureNormal(pc, dpc, W, n, u, v)) {
+              if (!EnsureNormal(pc, dpc, W, n, curv, u, v)) {
                 tN += t0.toc(); numN ++;
                 continue;
               }

@@ -52,7 +52,8 @@ bool NormalViaVoting(
     uint32_t u0, uint32_t v0,
     uint32_t W, float inlierThr,
     Image<Vector4fda>& dpc, 
-    Vector3fda& c,
+    Vector3fda& ni,
+    float& curvature,
     Vector3fda& p
     ) {
   if ( W <= u0 && u0 < pc.w_-W 
@@ -116,14 +117,14 @@ bool NormalViaVoting(
       p /= N;
       int id = 0;
       eig.computeDirect(S);
-      eig.eigenvalues().minCoeff(&id);
+      curvature = eig.eigenvalues().minCoeff(&id);
       n = eig.eigenvectors().col(id).normalized();
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
       Nprev = N;
       N = 0;
     }
-    c = n * (n(2)<0.?1.:-1.);
+    ni = n * (n(2)<0.?1.:-1.);
     return true;
   }
   return false;
@@ -237,12 +238,14 @@ void NormalsViaVoting(
     uint32_t W, uint32_t step,
     float inlierThr, 
     Image<Vector4fda>& dpc,
-    Image<Vector3fda>& n) {
+    Image<Vector3fda>& n,
+    Image<float>& curv) {
   Vector3fda p;
   for(size_t u=W; u<n.w_-W; u+=step) {
     for(size_t v=W; v<n.h_-W; v+=step) {
-      if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v), p)) {
+      if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v), curv(u,v), p)) {
         n(u,v) << NAN,NAN,NAN;
+        curv(u,v) = NAN;
       }
     }
   }

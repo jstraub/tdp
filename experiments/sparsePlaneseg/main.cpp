@@ -73,6 +73,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> pc(w, h);
   tdp::ManagedHostImage<tdp::Vector4fda> dpc(w, h);
   tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
+  tdp::ManagedHostImage<float> curv(w, h);
   tdp::ManagedHostImage<uint16_t> z(w, h);
 
   // device image: image in GPU memory
@@ -90,6 +91,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.1,0.1,0.3);
   pangolin::Var<float> angThr("ui.ang Thr",12.,10.,30.);
   pangolin::Var<float> distThr("ui.dist Thr",0.5,0.5,3.);
+  pangolin::Var<float> curvThr("ui.curv Thr",0.01,0.01,0.1);
   pangolin::Var<float> inlierThr("ui.plane inl Thr",0.5, 0.5, 1.0);
   pangolin::Var<int> W("ui.W",10,10,100);
   pangolin::Var<int> nPlanes("ui.nPlanes",100,100,1000);
@@ -122,7 +124,7 @@ int main( int argc, char* argv[] )
     // compute point cloud (on CPU)
     tdp::Depth2PC(d,cam,pc);
 
-    tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n);
+    tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n, curv);
 
     std::stringstream ss;
     ss << "./sparsePlaneSeg_" << nPlanes << ".csv";
@@ -134,10 +136,14 @@ int main( int argc, char* argv[] )
     pls.MarkRead(); 
     z.Fill(0);
     uint32_t numCovered = 0;
+    uint32_t j = 0;
     for (int n=0; n<nPlanes; ++n) {
-      int j = ids[n];
-      tdp::Plane pl;
-      tdp::NormalViaVoting(pc, j%w, j/w, W, inlierThr, dpc, pl.n_, pl.p_);
+      tdp::Plane pl; 
+      pl.curvature_ = 1.;
+      while(pl.curvature_ > curvThr) {
+        int l = ids[j++];
+        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_, pl.curvature_, pl.p_);
+      }
       pls.Insert(pl);
       for (size_t i=0; i<z.Area(); ++i) {
         if (z[i] == 0) {

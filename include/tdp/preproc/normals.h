@@ -167,7 +167,8 @@ bool NormalViaVoting(
     uint32_t u0, uint32_t v0,
     uint32_t W, float inlierThr,
     Image<Vector4fda>& dpc, 
-    Vector3fda& c,
+    Vector3fda& ni,
+    float& curvature,
     Vector3fda& p);
 
 bool NormalViaClustering(
@@ -186,7 +187,8 @@ void NormalsViaVoting(
     uint32_t W, uint32_t step,
     float inlierThr,
     Image<Vector4fda>& dpc,
-    Image<Vector3fda>& n);
+    Image<Vector3fda>& n,
+    Image<float>& curv);
 
 void NormalsViaClustering(
     const Image<Vector3fda>& pc, 
