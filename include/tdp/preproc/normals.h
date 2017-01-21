@@ -183,7 +183,7 @@ void NormalsViaScatter(
     Image<Vector3fda>& n);
 
 void NormalsViaVoting(
-    const Image<Vector3fda>& pc, 
+    Image<Vector3fda>& pc, 
     uint32_t W, uint32_t step,
     float inlierThr,
     Image<Vector4fda>& dpc,

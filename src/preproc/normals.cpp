@@ -234,7 +234,7 @@ void NormalsViaScatter(
 }
 
 void NormalsViaVoting(
-    const Image<Vector3fda>& pc, 
+    Image<Vector3fda>& pc, 
     uint32_t W, uint32_t step,
     float inlierThr, 
     Image<Vector4fda>& dpc,
@@ -246,6 +246,8 @@ void NormalsViaVoting(
       if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v), curv(u,v), p)) {
         n(u,v) << NAN,NAN,NAN;
         curv(u,v) = NAN;
+      } else {
+        pc(u,v) = p;
       }
     }
   }

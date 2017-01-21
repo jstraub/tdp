@@ -85,12 +85,8 @@ int main( int argc, char* argv[] )
   // add a simple image viewer
   tdp::QuickView viewSeg(w,h);
   tdp::QuickView viewCurv(w,h);
-//  gui.container().AddDisplay(viewN2D);
-  d_cam.SetLayout(pangolin::LayoutOverlay);
-  d_cam.AddDisplay(viewSeg);
-  d_cam.AddDisplay(viewCurv);
-  viewSeg.SetBounds(0,0.3,0,0.3);
-  viewCurv.SetBounds(0,0.3,0.3,0.6);
+  gui.container().AddDisplay(viewSeg);
+  gui.container().AddDisplay(viewCurv);
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -112,13 +108,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<float> scale("ui.scale",0.1,0.1,0.2);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.1,0.1,0.3);
-  pangolin::Var<float> angThr("ui.ang Thr",12.,10.,30.);
-  pangolin::Var<float> distThr("ui.dist Thr",0.5,0.5,3.);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0.1,0.3);
+  pangolin::Var<float> angThr("ui.ang Thr",15.,10.,30.);
+  pangolin::Var<float> distThr("ui.dist Thr",10.,0.5,3.);
   pangolin::Var<float> curvThr("ui.curv Thr",0.01,0.01,0.1);
   pangolin::Var<float> inlierThr("ui.plane inl Thr",0.5, 0.5, 1.0);
   pangolin::Var<int> W("ui.W",9,1,15);
-  pangolin::Var<int> nPlanes("ui.nPlanes",100,100,1000);
+  pangolin::Var<int> nPlanes("ui.nPlanes",1000,100,1000);
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pls(100000);
 
@@ -155,7 +151,6 @@ int main( int argc, char* argv[] )
     tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n, curv);
     std::cout << "normals computed" << std::endl;
 
-
     std::vector<int> ids(w*h);
     std::iota(ids.begin(), ids.end(), 0);
     std::random_shuffle(ids.begin(), ids.end());
@@ -168,8 +163,13 @@ int main( int argc, char* argv[] )
       pl.curvature_ = 1.;
       while(pl.curvature_ > curvThr && j < ids.size()) {
         int l = ids[j++];
-        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_,
-            pl.curvature_, pl.p_);
+        if (tdp::IsValidData(pc[l]) && tdp::IsValidData(n[l])) {
+          pl.n_ = n[l];
+          pl.p_ = pc[l];
+          pl.curvature_ = curv[l];
+        }
+//        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_,
+//            pl.curvature_, pl.p_);
       }
       pls.Insert(pl);
       for (size_t i=0; i<z.Area(); ++i) {
