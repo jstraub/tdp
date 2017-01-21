@@ -20,17 +20,30 @@
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
+#include <tdp/camera/camera_poly.h>
+#include <tdp/camera/camera_base.h>
+#include <tdp/camera/rig.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/preproc/normals.h>
+#include <tdp/data/circular_buffer.h>
+#include <tdp/preproc/plane.h>
+#include <tdp/gl/gl_draw.h>
 
 #include <tdp/gui/gui.hpp>
 #include <tdp/io/tinyply.h>
 
+typedef tdp::CameraPoly3f CameraT;
+
 int main( int argc, char* argv[] )
 {
-  const std::string input_uri = std::string(argv[1]);
-  const std::string option = (argc > 2) ? std::string(argv[2]) : "";
+  std::string input_uri = std::string(argv[1]);
+  std::string calibPath = "";
+  if( argc > 1 ) {
+    input_uri = std::string(argv[1]);
+    calibPath = (argc > 2) ? std::string(argv[2]) : "";
+//    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+  }
 
   // Open Video by URI
   pangolin::VideoRecordRepeat video(input_uri, "./video.pango");
@@ -40,6 +53,16 @@ int main( int argc, char* argv[] )
     pango_print_error("No video streams from device.\n");
     return 1;
   }
+
+  tdp::Rig<CameraT> rig;
+  if (calibPath.size() > 0) {
+    rig.FromFile(calibPath,true);
+    std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
+    rig.CorrespondOpenniStreams2Cams(streams);
+  } else {
+    return 2;
+  }
+  CameraT cam = rig.cams_[1]; // for NYU
 
   tdp::GUI gui(1200,800,video);
 
@@ -61,12 +84,13 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(d_cam);
   // add a simple image viewer
   tdp::QuickView viewSeg(w,h);
+  tdp::QuickView viewCurv(w,h);
 //  gui.container().AddDisplay(viewN2D);
   d_cam.SetLayout(pangolin::LayoutOverlay);
   d_cam.AddDisplay(viewSeg);
+  d_cam.AddDisplay(viewCurv);
   viewSeg.SetBounds(0,0.3,0,0.3);
-  // camera model for computing point cloud and normals
-  tdp::Camera<float> cam(Eigen::Vector4f(550,550,319.5,239.5)); 
+  viewCurv.SetBounds(0,0.3,0.3,0.6);
   
   // host image: image in CPU memory
   tdp::ManagedHostImage<float> d(w, h);
@@ -93,10 +117,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> distThr("ui.dist Thr",0.5,0.5,3.);
   pangolin::Var<float> curvThr("ui.curv Thr",0.01,0.01,0.1);
   pangolin::Var<float> inlierThr("ui.plane inl Thr",0.5, 0.5, 1.0);
-  pangolin::Var<int> W("ui.W",10,10,100);
+  pangolin::Var<int> W("ui.W",9,1,15);
   pangolin::Var<int> nPlanes("ui.nPlanes",100,100,1000);
 
-  tdp::ManagedCircularBuffer<tdp::Plane> pls(100000);
+  tdp::ManagedHostCircularBuffer<tdp::Plane> pls(100000);
+
+  std::stringstream ss;
+  ss << "./sparsePlaneSeg_" << nPlanes << ".csv";
+  std::ofstream out(ss.str());
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -125,24 +153,23 @@ int main( int argc, char* argv[] )
     tdp::Depth2PC(d,cam,pc);
 
     tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n, curv);
+    std::cout << "normals computed" << std::endl;
 
-    std::stringstream ss;
-    ss << "./sparsePlaneSeg_" << nPlanes << ".csv";
-    std::ofstream out(ss.str());
 
-    std::vector<int> ids;
+    std::vector<int> ids(w*h);
     std::iota(ids.begin(), ids.end(), 0);
-    std::shuffle(ids.begin(), ids.end());
+    std::random_shuffle(ids.begin(), ids.end());
     pls.MarkRead(); 
     z.Fill(0);
     uint32_t numCovered = 0;
     uint32_t j = 0;
-    for (int n=0; n<nPlanes; ++n) {
+    for (int m=0; m<nPlanes; ++m) {
       tdp::Plane pl; 
       pl.curvature_ = 1.;
-      while(pl.curvature_ > curvThr) {
+      while(pl.curvature_ > curvThr && j < ids.size()) {
         int l = ids[j++];
-        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_, pl.curvature_, pl.p_);
+        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_,
+            pl.curvature_, pl.p_);
       }
       pls.Insert(pl);
       for (size_t i=0; i<z.Area(); ++i) {
@@ -151,18 +178,18 @@ int main( int argc, char* argv[] )
           plO.p_ = pc[i];
           plO.n_ = n[i];
           if (pl.Close(plO, dotThr, distThr, p2plThr)) {
-            z[i] = n+1;
+            z[i] = m+1;
             numCovered ++;
           }
         }
       }
       out << numCovered << " ";
     }
-    uint32_t N = 0
+    uint32_t N = 0;
 //    for (size_t i=0; i<pc.Area(); ++i) if (tdp::IsValidData(pc[i]) N ++;
-    for (size_t i=0; i<n.Area(); ++i) if (tdp::IsValidData(n[i]) N ++;
+    for (size_t i=0; i<n.Area(); ++i) if (tdp::IsValidData(n[i])) N ++;
     out << N << std::endl;
-    out.close();
+    out.flush();
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -185,6 +212,7 @@ int main( int argc, char* argv[] )
     // SHowFrames renders the raw input streams (in our case RGB and D)
     gui.ShowFrames();
     viewSeg.SetImage(z);
+    viewCurv.SetImage(curv);
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -196,6 +224,7 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
+  out.close();
   return 0;
 }
 

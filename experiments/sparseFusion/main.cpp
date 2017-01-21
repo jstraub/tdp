@@ -792,6 +792,7 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
+  pangolin::Var<float> curvThr("ui.curv Thr",0.1,0.01,1.0);
   pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);

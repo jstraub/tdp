@@ -146,6 +146,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> grey(wc, hc);
   tdp::ManagedHostImage<float> greydu(wc, hc);
   tdp::ManagedHostImage<float> greydv(wc, hc);
+  tdp::ManagedHostImage<float> curv(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
   tdp::ManagedHostImage<tdp::Vector4fda> dpc(wc, hc);
   tdp::ManagedDeviceImage<tdp::Vector3fda> cuPc(wc, hc);
@@ -278,7 +279,7 @@ int main( int argc, char* argv[] )
         cuN.CopyFrom(n);
       } else if (normalsViaVoting) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-        NormalsViaVoting(pc, W, step, votingInlierThr, dpc, n);
+        NormalsViaVoting(pc, W, step, votingInlierThr, dpc, n, curv);
         cuN.CopyFrom(n);
       } else if (normalsViaScatter) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
