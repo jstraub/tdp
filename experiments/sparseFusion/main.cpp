@@ -905,6 +905,8 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
+  std::vector<uint32_t> idsCur;
+  idsCur.reserve(w*h);
   std::vector<int32_t> assocBA;
   std::vector<tdp::Brief> featsB;
   std::vector<tdp::Brief> featsA;
@@ -1009,7 +1011,9 @@ int main( int argc, char* argv[] )
         TOCK("data assoc");
         TICK("extract assoc");
         z.Fill(0);
-        projAssoc.GetAssoc(z, mask);
+        idsCur.clear();
+        projAssoc.GetAssoc(z, mask, idsCur);
+        TOCK("extract assoc");
       }
 
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
@@ -1085,14 +1089,14 @@ int main( int argc, char* argv[] )
           invInd[k].clear();
         }
 
-        if (incrementalAssign) {
-          for (auto i : id_w) {
-            if (*dpvmf.GetZs()[i] == k) 
-              invInd[k].push_back(i);
-            if (invInd[k].size() >= 10000)
-              break;
-          }
-        }
+//        if (incrementalAssign) {
+//          for (auto i : id_w) {
+//            if (*dpvmf.GetZs()[i] == k) 
+//              invInd[k].push_back(i);
+//            if (invInd[k].size() >= 10000)
+//              break;
+//          }
+//          }
 //        std::cout << "cluster " << k << ": # " << invInd[k].size() 
 //          << " of " << dpvmf.GetNs()[k] << std::endl;
 //        std::sort(invInd[k].begin(), invInd[k].begin(), 
@@ -1101,6 +1105,21 @@ int main( int argc, char* argv[] )
 //            });
 //        std::cout << pl_w[invInd[k][0]].numObs_ 
 //          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
+      }
+      // only use ids that were found by projecting into the current pose
+//      if (incrementalAssign) {
+//        for (auto i : idsCur) {
+//          uint32_t k = *dpvmf.GetZs()[i];
+//          if (invInd[k].size() < 10000)
+//            invInd[k].push_back(i);
+//        }
+//      }
+      if (incrementalAssign) {
+        for (auto i : id_w) {
+          uint32_t k = *dpvmf.GetZs()[i];
+          if (invInd[k].size() < 10000)
+            invInd[k].push_back(i);
+        }
       }
       TOCK("dpvmf");
     }
