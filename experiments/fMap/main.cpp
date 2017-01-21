@@ -83,12 +83,12 @@ float getHeatKernel(const Eigen::MatrixXf& LB_basis,
      */
     int nEvecs = LB_basis.cols();
     Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
-    tdp::Vector3fda start_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*start_w);
-    tdp::Vector3fda end_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*end_w);
+    //tdp::Vector3fda start_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*start_w);
+    //tdp::Vector3fda end_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*end_w);
 
     float hk = 0;
     for (int i=0; i<nEvecs; ++i){
-        int dot = LB_basis.col(i).dot(start_l)*LB_basis.col(i).dot(end_l);
+        int dot = LB_basis.col(i).dot(start_w)*LB_basis.col(i).dot(end_w);
         hk += exp(-LB_evals(i)*t)*dot;
     }
     return hk;
@@ -117,6 +117,31 @@ float getHKS(const Eigen::MatrixXf& LB_basis,
     return hks;
 }
 
+Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_basis,
+                       const Eigen::VectorXf& LB_evals,
+                       const std::vector& ts){
+    /*Calculates heat kernel from source to target at time t
+     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
+     * LB_evals: Corresponding eigenvalues
+     * ts      : timesteps
+     */
+    nPoints = LB_basis.rows();
+    nEvecs = LB_basis.cols();
+
+    Eigen::MatrixXf hks(nPoints, ts.size());
+    const Eigen::MatrixXf evec_squared = LB_basis.^2;
+    for (int i=0; i<ts.size(); ++i){
+      int t = ts[i];
+      Eigen::VectorXf exp_eval = (-LB_evals.*ts[i]).exp();
+      hks.col(i) = evec_squared*exp_eval;
+    } 
+    return hks;
+
+    //to continue:
+    - hks -> project to LB_basis by apply fullPiv on each row
+    - each result is f_l -> Add it to F matrix
+}
+
 float getWKS(const Eigen::MatrixXf& LB_basis,
              const Eigen::VectorXf& LB_evals,
              const tdp::Vector3fda& x_w,
@@ -138,9 +163,10 @@ float getWKS(const Eigen::MatrixXf& LB_basis,
         hk += exp(-LB_evals(i)*t)*dot;
     }
     return wks;
+}
 
 
-}void Test_simplePc(){
+void Test_simplePc(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
     tdp::ManagedHostImage<tdp::Vector3fda> pc_t = tdp::GetSimplePc();
     // parameters
