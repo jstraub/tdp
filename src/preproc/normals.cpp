@@ -117,7 +117,7 @@ bool NormalViaVoting(
       p /= N;
       int id = 0;
       eig.computeDirect(S);
-      curvature = eig.eigenvalues().minCoeff(&id);
+      curvature = sqrtf(eig.eigenvalues().minCoeff(&id));
       n = eig.eigenvectors().col(id).normalized();
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;

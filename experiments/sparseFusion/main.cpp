@@ -895,7 +895,7 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  tdp::DPvMFmeansSimple3fda dpvmf(cos(50.*M_PI/180.));
+  tdp::DPvMFmeansSimple3fda dpvmf(cos(35.*M_PI/180.));
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -917,6 +917,7 @@ int main( int argc, char* argv[] )
 
   int32_t iReadCurW = 0;
   size_t frame = 0;
+  size_t numNonPlanar = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -1048,12 +1049,11 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
-          if (pl.curvature_ < curvThr) {
-            dpvmf.addObservation(&pl.n_, &pl.z_);
-          } else {
-            pl.z_ = 0xFFFF; // high curvature cluster
+          if (pl.curvature_ > curvThr) {
+            pl.z_ = 0xFFFF; // mark high curvature cluster as outlier
+            numNonPlanar ++;
           }
-//          uint32_t zi = *dpvmf.GetZs().back();
+          dpvmf.addObservation(&pl.n_, &pl.z_);
           int32_t kMax = -1;
           uint32_t nMax = 0;
           for (size_t k=0; k<dpvmf.GetK(); ++k) {
@@ -1079,10 +1079,11 @@ int main( int argc, char* argv[] )
       std::random_shuffle(id_w.begin(), id_w.end());
       TOCK("add to model");
       std::cout << " # map points: " << pl_w.SizeToRead() 
-        << " " << dpvmf.GetZs().size() << std::endl;
+        << " " << dpvmf.GetZs().size() << " non planar: " 
+        << numNonPlanar << std::endl;
       TICK("dpvmf");
       dpvmf.iterateToConvergence(100, 1e-6);
-      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+      for (size_t k=0; k<dpvmf.GetK()+1; ++k) {
         if (k >= invInd.size()) {
           invInd.push_back(std::vector<uint32_t>());
           invInd.back().reserve(10000);
@@ -1117,7 +1118,7 @@ int main( int argc, char* argv[] )
 //      }
       if (incrementalAssign) {
         for (auto i : id_w) {
-          uint32_t k = *dpvmf.GetZs()[i];
+          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
         }
@@ -1168,16 +1169,16 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
 
-      std::uniform_int_distribution<> dis(0, dpvmf.GetK()-1);
+      std::uniform_int_distribution<> dis(0, dpvmf.GetK());
       
-      std::vector<size_t> indK(dpvmf.GetK(),0);
+      std::vector<size_t> indK(dpvmf.GetK()+1,0);
       for (size_t it = 0; it < maxIt; ++it) {
         if (it % 1 == 0) {
           mask.Fill(0);
           assoc.clear();
           pc_c.MarkRead();
           n_c.MarkRead();
-          indK = std::vector<size_t>(dpvmf.GetK(),0);
+          indK = std::vector<size_t>(dpvmf.GetK()+1,0);
           numProjected = 0;
         }
 
@@ -1196,7 +1197,7 @@ int main( int argc, char* argv[] )
           bool exploredAll = false;
           uint32_t k = dis(gen);
           while (numObs < dpvmf.GetK()*10 && !exploredAll) {
-            k = (k+1) % dpvmf.GetK();
+            k = (k+1) % (dpvmf.GetK()+1);
             while (indK[k] < invInd[k].size()) {
               size_t i = invInd[k][indK[k]++];
               tdp::Plane& pl = pl_w.GetCircular(i);
@@ -1249,7 +1250,7 @@ int main( int argc, char* argv[] )
         uint32_t k = dis(gen);
         if (incrementalAssign) {
           while (numObs < 10000 && !exploredAll) {
-            k = (k+1) % dpvmf.GetK();
+            k = (k+1) % (dpvmf.GetK()+1);
             while (indK[k] < invInd[k].size()) {
               size_t i = invInd[k][indK[k]++];
               tdp::Plane& pl = pl_w.GetCircular(i);
@@ -1323,8 +1324,9 @@ int main( int argc, char* argv[] )
           }
           for (size_t i=0; i<z.Area(); ++i)
             if (z[i] > 0) {
-              invInd[*dpvmf.GetZs()[z[i]-1]].push_back(z[i]-1);
-              invUV[*dpvmf.GetZs()[z[i]-1]].push_back(i);
+              uint32_t k = std::min((uint32_t)*dpvmf.GetZs()[z[i]-1], dpvmf.GetK());
+              invInd[k].push_back(z[i]-1);
+              invUV[k].push_back(i);
             }
           TOCK("extract assoc");
 //          for (size_t k=0; k<invInd.size(); ++k) {
@@ -1337,7 +1339,7 @@ int main( int argc, char* argv[] )
           float tEnt = 0, numEnt = 0;
           tdp::Timer t0;
           while (numObs < 10000 && !exploredAll) {
-            k = (k+1) % dpvmf.GetK();
+            k = (k+1) % (dpvmf.GetK()+1);
             while (indK[k] < invInd[k].size()) {
               int32_t u = invUV[k][indK[k]] % z.w_;
               int32_t v = invUV[k][indK[k]] / z.w_;
@@ -1432,7 +1434,8 @@ int main( int argc, char* argv[] )
         }
       }
       for (size_t k=0; k<indK.size(); ++k) {
-        std::cout << "used different directions: " << indK[k] 
+        std::cout << "used different directions " << k << "/" 
+          << (dpvmf.GetK()+1) << ": " << indK[k] 
           << " of " << invInd[k].size() << std::endl;
       }
       Sigma_mc = A.inverse();
