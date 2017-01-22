@@ -119,12 +119,6 @@ void showSparseMatrix(const Eigen::SparseMatrix<float>& S,
                       const int nCols=10,
                       const int nRows=10);
 
-//TODO:
-//template<typename T>
-//bool compareSparseMatrices(const Eigen::SparseMatrix<T>& S1,
-//                           const Eigen::SparseMatirx<T>& S2){
-
-//}
 
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
                                     const Eigen::SparseMatrix<float>& L,
@@ -138,6 +132,11 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
                        int numEv,
                        Eigen::MatrixXf& basis);
 
+void decomposeLaplacian(const Eigen::SparseMatrix<float>& L,
+                        int numEv,
+                        Eigen::VectorXf& evalues,
+                        Eigen::MatrixXf& evectors
+                        );
 
 Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
                                  const Eigen::SparseMatrix<float>& L);

@@ -94,52 +94,36 @@ float getHeatKernel(const Eigen::MatrixXf& LB_basis,
     return hk;
 }
 
-float getHKS(const Eigen::MatrixXf& LB_basis,
-             const Eigen::VectorXf& LB_evals,
-             const tdp::Vector3fda& x_w,
-             const int t){
-    /*Calculates heat kernel from source to target at time t
-     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
-     * LB_evals: Corresponding eigenvalues
-     * x_w     : points on the manifold from whose Laplacian the evectors
-     *           calculated from
-     * t       : time
-     */
-    int nEvecs = LB_basis.cols();
-    Eigen::MatrixXf LB_basis_t = LB_basis.transpose();
-    tdp::Vector3fda x_l = (LB_basis_t*LB_basis).fullPivLu().solve(LB_basis_t*x_w);
-
-    float hks = 0;
-    for (int i=0; i<nEvecs; ++i){
-        int dot = pow(LB_basis.col(i).dot(x_l),2);
-        hks += exp(-LB_evals(i)*t)*dot;
-    }
-    return hks;
-}
-
-Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_basis,
+Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
                        const Eigen::VectorXf& LB_evals,
-                       const std::vector& ts){
+                       int nSteps){
     /*Calculates heat kernel from source to target at time t
-     * LB_basis: Laplace-Beltrami basis. Each col = Laplacian's evector
-     * LB_evals: Corresponding eigenvalues
-     * ts      : timesteps
+     * LB_evecs: Laplace-Beltrami basis. Each col = Laplacian's evector.
+     * LB_evals: Corresponding eigenvalues. Assumes an increasing order.
+     * nSteps  : number of timesteps.
+     * tmin and tmax are calculated from largest evalue and smallest,
+     * non-trivial evalue
      */
-    nPoints = LB_basis.rows();
-    nEvecs = LB_basis.cols();
+    int nPoints = LB_evecs.rows();
+    int nEvecs = LB_evecs.cols();
+    float tmin = 4*log(10)/LB_evals(LB_evals.size()-1);
+    float tmax = 4*log(10)/LB_evals(1); //smallest, non-trivial
+    std::cout << "smallest eval: (zero?) " << LB_evals(0) << std::endl;
+    Eigen::VectorXf ts = Eigen::VectorXf::LinSpaced(nSteps, log(tmin), log(tmax));
+    std::cout << ts.size() << std::endl;
+
 
     Eigen::MatrixXf hks(nPoints, ts.size());
-    const Eigen::MatrixXf evec_squared = LB_basis.^2;
+    const Eigen::MatrixXf evec_squared = LB_evecs.array().square();
     for (int i=0; i<ts.size(); ++i){
-      int t = ts[i];
-      Eigen::VectorXf exp_eval = (-LB_evals.*ts[i]).exp();
+      Eigen::VectorXf exp_eval = (-LB_evals.array()*ts[i]).exp();
       hks.col(i) = evec_squared*exp_eval;
     } 
     return hks;
 
     //to continue:
-    - hks -> project to LB_basis by apply fullPiv on each row
-    - each result is f_l -> Add it to F matrix
+    //- hks -> project to LB_basis by apply fullPiv on each row
+    //- each result is f_l -> Add it to F matrix
 }
 
 float getWKS(const Eigen::MatrixXf& LB_basis,
@@ -160,7 +144,7 @@ float getWKS(const Eigen::MatrixXf& LB_basis,
     float wks = 0;
     for (int i=0; i<nEvecs; ++i){
         int dot = pow(LB_basis.col(i).dot(x_l),2);
-        hk += exp(-LB_evals(i)*t)*dot;
+        wks += exp(-LB_evals(i)*t)*dot;
     }
     return wks;
 }
@@ -177,9 +161,10 @@ void Test_simplePc(){
     float alpha2 = 0.1;
 
     int numPW = numEv;//number of pointwise correspondences
-    int numHKS = 100; //number of heat kernel signature correspondences
+    int numHKS = 10; //number of heat kernel signature correspondences
     int numCst = numPW + numHKS;//pc_s.Area();
     int numQ = pc_s.Area();
+    int nSteps = 10;//timesteps for HKS
     // build kd tree
     tdp::ANN ann_s, ann_t;
     ann_s.ComputeKDtree(pc_s);
@@ -190,16 +175,24 @@ void Test_simplePc(){
     Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
     Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
     Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
+    Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
+;
 
     L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
     L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
-    tdp::getLaplacianBasis(L_s, numEv, S_wl);
-    tdp::getLaplacianBasis(L_t, numEv, T_wl);
+//    tdp::getLaplacianBasis(L_s, numEv, S_wl);
+//    tdp::getLaplacianBasis(L_t, numEv, T_wl);
+    tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl);
+    tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
 
     std::cout << "Basis ---" << std::endl;
     std::cout << S_wl << std::endl;
     std::cout << "-----------------" << std::endl;
     std::cout << T_wl << std::endl;
+    std::cout << "Evals ---" << std::endl;
+    std::cout << S_evals.transpose() << std::endl;
+    std::cout << T_evals.transpose() << std::endl;
+
 
     //--playing around here
     Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
@@ -220,13 +213,13 @@ void Test_simplePc(){
         G.row(i) = g_l;
     }
     //todo: add heat kernel signatures as constraints
-    for (int i=0; i<(int)numHKS; ++i){
-        f_l = getHKS(S_wl,S_evals,pc_s[0],i);//heat kernel at timestap i//todo: check at which point for S and T manifolds
-        g_l = getHKS(T_wl,T_evals,pc_t[0],i);//heat kernel at timestap i
+    std::cout << "CALCULATEING HKS ---" <<std::endl;
+    std::cout << getHKS(S_wl,S_evals,nSteps) << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
+    std::cout << getHKS(T_wl,T_evals,nSteps) << std::endl;//heat kernel at timestap i
 
-        F.row(i+numPW) = f_l;
-        G.row(i+numHKS) = g_l;
-    }
+ //       F.row(i+numPW) = f_l;
+ //       G.row(i+numHKS) = g_l;
+
 
 
     // solve least-square
@@ -253,7 +246,9 @@ void Test_simplePc(){
 
 }
 
+
 int main(int argc, char* argv[]){
+   //Test_simplePc();
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -382,7 +377,9 @@ int main(int argc, char* argv[]){
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),//Laplacian of manifold S
                              L_t(pc_t.Area(), pc_t.Area());//Laplacian of manifold T
   Eigen::VectorXf evector_s,//(L_s.rows());
-                  evector_t;//(L_t.rows());
+                  evector_t,//(L_t.rows());
+                  S_evals,//evalues of Laplacian of S. Increasing order.
+                  T_evals;//evalues of Laplacian of T. Increasing order.
   Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
                   T_wl,//(L_t.rows(),(int)numEv),
                   F,//((int)numCst, (int)numEv),
@@ -475,15 +472,20 @@ int main(int argc, char* argv[]){
                 numEv.GuiChanged() || nBins.GuiChanged()){
       S_wl.resize(L_s.rows(),(int)numEv);
       T_wl.resize(L_t.rows(),(int)numEv);
+      S_evals.resize((int)numEv);
+      T_evals.resize((int)numEv);
+
       std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       std::cout << "t_wl resized: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
       tdp::Timer t0;
-      tdp::getLaplacianBasis(L_s, numEv, S_wl);
+      //tdp::getLaplacianBasis(L_s, numEv, S_wl);
+      tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl);
       evector_s = S_wl.col(1); // first non-trivial evector
       means_s = tdp::getLevelSetMeans(pc_s, evector_s, (int)nBins); //means based on the evector_s's nBins level sets
 
-      tdp::getLaplacianBasis(L_t, numEv, T_wl);
+      //tdp::getLaplacianBasis(L_t, numEv, T_wl);
+      tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
       evector_t = T_wl.col(1); // first non-trivial evector
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");

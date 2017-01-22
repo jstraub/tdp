@@ -424,14 +424,13 @@ void getLaplacianEvectors(const Eigen::SparseMatrix<float>& L,
 void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
                        int numEv,
                        Eigen::MatrixXf& basis){
-    // Each row contains an evector
+    // Each column contains an evector
     // returns numEv by L.rows() matrix
 
     assert(0<numEv && numEv<=L.rows());
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
-    // Retrieve results
     // Construct eigen solver object, requesting the largest idEv number of eigenvalues
     Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
             Spectra::SparseGenMatProd<float> > eigs(&op, numEv, std::min(2*(numEv)+1, (int)L.rows()));
@@ -440,10 +439,44 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
     eigs.init();
     int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
 
+    // Retrieve results
     if(eigs.info() == Spectra::SUCCESSFUL) {
         for (int i=0; i<numEv; ++i){
             basis.col(i) = eigs.eigenvectors().col(i).real();
             //std::cout << "i, evec: " << i << ", " << evectors[i].transpose() << std::endl;
+        }
+    } else{
+        std::cout << "<----failed to get laplacian evectors--->" << std::endl;
+    }
+}
+
+void decomposeLaplacian(const Eigen::SparseMatrix<float>& L,
+                        int numEv,
+                        Eigen::VectorXf& evalues,
+                        Eigen::MatrixXf& evectors
+                        ){
+    /* Returns
+     * evectors: Each column contains an evector
+     * evalues: a vector with corresponding evalues. Increasing order.
+     */
+
+    assert(0<numEv && numEv<=L.rows());
+    // Construct matrix operation object using the wrapper class SparseGenMatProd
+    Spectra::SparseGenMatProd<float> op(L);
+
+    // Construct eigen solver object, requesting the largest idEv number of eigenvalues
+    Spectra::GenEigsSolver<float, Spectra::SMALLEST_REAL,
+            Spectra::SparseGenMatProd<float> > eigs(&op, numEv, std::min(2*(numEv)+1, (int)L.rows()));
+
+    // Initialize and compute
+    eigs.init();
+    int nconv = eigs.compute(1000,1e-10, Spectra::SMALLEST_REAL);
+
+    // Retrieve results
+    if(eigs.info() == Spectra::SUCCESSFUL) {
+        evalues = eigs.eigenvalues().real();
+        for (int i=0; i<numEv; ++i){
+            evectors.col(i) = eigs.eigenvectors().col(i).real();
         }
     } else{
         std::cout << "<----failed to get laplacian evectors--->" << std::endl;
@@ -458,6 +491,7 @@ inline Eigen::VectorXf getLaplacianEvector(const eigen_vector<Eigen::VectorXf>& 
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
                                     const Eigen::SparseMatrix<float>& L,
                                     int idEv){
+    //TODO: DEPRECATE THIS!
     // Construct matrix operation object using the wrapper class SparseGenMatProd
     Spectra::SparseGenMatProd<float> op(L);
 
