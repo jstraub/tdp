@@ -580,6 +580,7 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
   return false;
 }
 
+
 void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
     values, int32_t id, float value) {
   for(int i=4; i>=0; --i) {
@@ -814,6 +815,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
+  pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.1,0.0,1.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.1,0.0,1.);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -881,11 +884,19 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
   nn.Fill(tdp::Vector5ida::Ones()*-1);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
 
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(10000000);
 
+  int32_t iReadCurW = 0;
+  size_t frame = 0;
+
   std::mutex pl_wLock;
+  std::mutex nnLock;
+  std::mutex mapLock;
+  std::mutex dpvmfLock;
   std::thread mapping([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
@@ -898,6 +909,9 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         if (pl_w.SizeToRead(iReadNext) > 0) {
           pl = pl_w.GetCircular(iReadNext);
+          if (frame - pl.lastFrame_ < 10) {
+            pl.numObs_ = 0; // reset and wait until the point has been observed for a bit
+          }
         }
         iRead = pl_w.iRead_;
         iInsert = pl_w.iInsert_;
@@ -906,12 +920,69 @@ int main( int argc, char* argv[] )
         values.fill(std::numeric_limits<float>::max());
         tdp::Vector5ida& ids = nn[iReadNext];
         while (iRead !=iInsert) {
-          AddToSortedIndexList(ids, values, iRead, pl.p2plDist(pl_w[iRead].p_));
+          AddToSortedIndexList(ids, values, iRead, (pl.p_-pl_w[iRead].p_).squaredNorm());
+//          AddToSortedIndexList(ids, values, iRead, pl.p2plDist(pl_w[iRead].p_));
 //          if (pl.Close(pl_w[iRead], cos(angleThr/180.*M_PI), distThr, p2plThr))
 //            mapNN.emplace_back(iReadNext, iRead);
           iRead = (iRead+1)%pl_w.w_;
         }
+        // for map constraints
+        // TODO: should be updated as pairs are reobserved
+        for (int i=0; i<5; ++i) {
+          mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+          mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+        }
+        // just for visualization
+        for (int i=0; i<5; ++i) mapNN.emplace_back(iReadNext, ids[i]);
         iReadNext = (iReadNext+1)%pl_w.w_;
+        {
+          std::lock_guard<std::mutex> lock(nnLock); 
+          mapObsDot.iInsert_ = iReadNext;
+          mapObsP2Pl.iInsert_ = iReadNext;
+          nn.iInsert_ = iReadNext;
+        }
+      }
+    };
+  });
+
+  std::thread regularization([&]() {
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
+    int32_t iReadNext = 0;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    tdp::Vector3fda Jn(0,0,0);
+    tdp::Vector3fda Jp(0,0,0);
+    while(42) {
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        iReadNext = nn.RandomIndex(gen);
+        iRead = nn.iRead_;
+        iInsert = nn.iInsert_;
+      }
+      tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+      tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+      Jn = tdp::Vector3fda::Zero();
+      Jp = tdp::Vector3fda::Zero();
+      for (int i=0; i<5; ++i) {
+        if (ids[i] > -1) {
+          const tdp::Plane& plO = pl_w.GetCircular(ids[i]);
+          Jn += 2.*(pl.n_.dot(plO.n_)-mapObsDot.GetCircular(iReadNext)[i])*plO.n_;
+          Jn += 2.*(pl.p2plDist(plO.p_)-mapObsP2Pl.GetCircular(iReadNext)[i])*(plO.p_-pl.p_);
+          if (pl.curvature_ < curvThr) {
+            dpvmfLock.lock();
+            Jn += lambdaReg*dpvmf.GetCenter(pl.z_);
+            dpvmfLock.unlock();
+          }
+          Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl.GetCircular(iReadNext)[i])*pl.n_;
+        }
+      }
+      {
+        std::lock_guard<std::mutex> mapGuard(mapLock);
+        pl_w.n_ = (pl_w.n_- alphaGrad * Jn).normalized();
+        pl_w.p_ = pl_w.p_- alphaGrad * Jp;
+        pc_w.GetCircular(iReadNext) = pl_w.p_;
+        n_w.GetCircular(iReadNext) = pl_w.n_;
       }
     };
   });
@@ -949,8 +1020,6 @@ int main( int argc, char* argv[] )
   featsA.reserve( 4*subsample*w*h);
   featsB.reserve( 4*subsample*w*h);
 
-  int32_t iReadCurW = 0;
-  size_t frame = 0;
   size_t numNonPlanar = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -1117,7 +1186,9 @@ int main( int argc, char* argv[] )
         << " " << dpvmf.GetZs().size() << " non planar: " 
         << numNonPlanar << std::endl;
       TICK("dpvmf");
+      dpvmfLock.lock();
       dpvmf.iterateToConvergence(100, 1e-6);
+      dpvmfLock.unlock();
       for (size_t k=0; k<dpvmf.GetK()+1; ++k) {
         if (k >= invInd.size()) {
           invInd.push_back(std::vector<uint32_t>());
@@ -1509,6 +1580,7 @@ int main( int argc, char* argv[] )
       }
 
       if (updatePlanes && trackingGood) {
+        std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
         for (const auto& ass : assoc) {
           tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
@@ -1519,7 +1591,6 @@ int main( int argc, char* argv[] )
         }
         TOCK("update planes");
       }
-
     }
 
     frame ++;

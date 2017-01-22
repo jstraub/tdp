@@ -2,6 +2,7 @@
  * under the MIT license. See the license file LICENSE.
  */
 #pragma once 
+#include <random>
 #include <assert.h>
 #include <tdp/data/image.h>
 #include <tdp/data/allocator.h>
@@ -33,6 +34,11 @@ class CircularBuffer : public Image<T> {
     } else {
       return this->ptr_[(iInsert_+i+this->w_)%this->w_];
     }
+  }
+
+  int32_t RandomIndex( std::mt19937& gen) const {
+    std::uniform_int_distribution<int> unif(0,(int)SizeToRead()-1);
+    return (iRead_+unif(gen))%this->w_
   }
 
   void Insert(const T& data) {
