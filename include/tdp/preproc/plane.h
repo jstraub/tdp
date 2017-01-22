@@ -39,6 +39,8 @@ struct Plane {
 
   bool Close(const Plane& other, float dotThr, float distThr, float p2plThr);
 
+  float p2plDist(const Vector3fda& p);
+
 };
 
 }

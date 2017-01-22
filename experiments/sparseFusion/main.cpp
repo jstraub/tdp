@@ -580,6 +580,35 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
   return false;
 }
 
+void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
+    values, int32_t id, float value) {
+  for(int i=4; i>=0; --i) {
+    if (value > values[i]) {
+      if (i == 3) 
+        values[4] = value; 
+      else if (i == 2) {
+        values[4] = values[3];
+        values[3] = value; 
+      } else if (i == 1) {
+        values[4] = values[3];
+        values[3] = values[2];
+        values[2] = value; 
+      } else if (i == 0) {
+        values[4] = values[3];
+        values[3] = values[2];
+        values[2] = values[1];
+        values[1] = value; 
+      }
+      return;
+    }
+  }
+  values[4] = values[3];
+  values[3] = values[2];
+  values[2] = values[1];
+  values[1] = values[0];
+  values[0] = value; 
+}
+
 }    
 
 int main( int argc, char* argv[] )
@@ -850,6 +879,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
+  nn.Fill(tdp::Vector5ida::Ones()*-1);
 
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(10000000);
@@ -860,6 +891,7 @@ int main( int argc, char* argv[] )
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
     tdp::Plane pl;
+    tdp::Vector5fda values;
     while(42) {
       pl.numObs_ = 0;
       {
@@ -871,10 +903,12 @@ int main( int argc, char* argv[] )
         iInsert = pl_w.iInsert_;
       }
       if (pl.numObs_ > 0) {
-        float dotThr = cos(angleThr/180.*M_PI);
+        values.fill(std::numeric_limits<float>::max());
+        tdp::Vector5ida& ids = nn[iReadNext];
         while (iRead !=iInsert) {
-          if (pl.Close(pl_w[iRead], dotThr, distThr, p2plThr))
-            mapNN.emplace_back(iReadNext, iRead);
+          AddToSortedIndexList(ids, values, iRead, pl.p2plDist(pl_w[iRead].p_));
+//          if (pl.Close(pl_w[iRead], cos(angleThr/180.*M_PI), distThr, p2plThr))
+//            mapNN.emplace_back(iReadNext, iRead);
           iRead = (iRead+1)%pl_w.w_;
         }
         iReadNext = (iReadNext+1)%pl_w.w_;

@@ -40,4 +40,8 @@ bool Plane::Close(const Plane& other, float dotThr, float distThr,
   return false;
 }
 
+float Plane::p2plDist(const Vector3fda& p) {
+  return n_.dot(p - p_);
+}
+
 }
