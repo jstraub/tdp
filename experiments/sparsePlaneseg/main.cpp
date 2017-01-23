@@ -95,6 +95,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n(w, h);
   tdp::ManagedHostImage<float> curv(w, h);
   tdp::ManagedHostImage<uint16_t> z(w, h);
+  tdp::ManagedHostImage<uint8_t> mask(w, h);
 
   // device image: image in GPU memory
   tdp::ManagedDeviceImage<uint16_t> cuDraw(w, h);
@@ -108,10 +109,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<float> scale("ui.scale",0.1,0.1,0.2);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0.1,0.3);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.05,0.1,0.3);
   pangolin::Var<float> angThr("ui.ang Thr",15.,10.,30.);
   pangolin::Var<float> distThr("ui.dist Thr",10.,0.5,3.);
-  pangolin::Var<float> curvThr("ui.curv Thr",0.01,0.01,0.1);
+  pangolin::Var<float> curvThr("ui.curv Thr",0.06,0.01,0.1);
   pangolin::Var<float> inlierThr("ui.plane inl Thr",0.5, 0.5, 1.0);
   pangolin::Var<int> W("ui.W",9,1,15);
   pangolin::Var<int> nPlanes("ui.nPlanes",1000,100,1000);
@@ -123,7 +124,7 @@ int main( int argc, char* argv[] )
   std::ofstream out(ss.str());
 
   // Stream and display video
-  while(!pangolin::ShouldQuit())
+  while(!pangolin::ShouldQuit() && !gui.finished())
   {
     float dotThr = cos(angThr*M_PI/180.);
 
@@ -156,6 +157,7 @@ int main( int argc, char* argv[] )
     std::random_shuffle(ids.begin(), ids.end());
     pls.MarkRead(); 
     z.Fill(0);
+    mask.Fill(0);
     uint32_t numCovered = 0;
     uint32_t j = 0;
     for (int m=0; m<nPlanes; ++m) {
@@ -168,6 +170,10 @@ int main( int argc, char* argv[] )
           pl.p_ = pc[l];
           pl.curvature_ = curv[l];
         }
+        for (size_t u=std::max(0,(int)(l%w)-W); u < std::min((int)w, (int)(l%w)+W); ++u)
+          for (size_t v=std::max(0,(int)(l/w)-W); v < std::min((int)h, (int)(l/w)+W); ++v)
+            if (tdp::IsValidData(pc(u,v)) && tdp::IsValidData(n(u,v)))
+              mask(u,v) = 1;
 //        tdp::NormalViaVoting(pc, l%w, l/w, W, inlierThr, dpc, pl.n_,
 //            pl.curvature_, pl.p_);
       }
@@ -183,12 +189,14 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      out << numCovered << " ";
+      uint32_t numTouched = 0;
+      for (size_t i=0; i<mask.Area(); ++i) if(mask[i]>0) numTouched++;
+      out << numCovered << " " << numTouched << " ";
     }
     uint32_t N = 0;
 //    for (size_t i=0; i<pc.Area(); ++i) if (tdp::IsValidData(pc[i]) N ++;
     for (size_t i=0; i<n.Area(); ++i) if (tdp::IsValidData(n[i])) N ++;
-    out << N << std::endl;
+    out << N << " " << N << std::endl;
     out.flush();
 
     // Draw 3D stuff
