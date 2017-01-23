@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-with open("../build/sparsePlaneSeg_1000.csv","r") as f:
+with open("./sparsePlaneSeg_NYU_1000.csv","r") as f:
+#with open("../build/sparsePlaneSeg_1000.csv","r") as f:
   x = np.loadtxt(f);
   N = x.shape[1]-1
 x = (x.T / x[:,-1])[:N,:]
