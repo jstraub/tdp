@@ -164,7 +164,6 @@ void Test_simplePc(){
     int numHKS = 10; //number of heat kernel signature correspondences
     int numCst = numPW + numHKS;//pc_s.Area();
     int numQ = pc_s.Area();
-    int nSteps = 10;//timesteps for HKS
     // build kd tree
     tdp::ANN ann_s, ann_t;
     ann_s.ComputeKDtree(pc_s);
@@ -173,8 +172,9 @@ void Test_simplePc(){
     // construct laplacian matrices
     Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area());
     Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
-    Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv);//cols are evectors
-    Eigen::MatrixXf T_wl(L_t.rows(),(int)numEv);
+    Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv),//cols are evectors
+                    T_wl(L_t.rows(),(int)numEv),
+                    S_desc, T_desc;
     Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
 ;
 
@@ -212,15 +212,25 @@ void Test_simplePc(){
         F.row(i) = f_l;
         G.row(i) = g_l;
     }
-    //todo: add heat kernel signatures as constraints
+    //-----Add  heat kernel signatures as constraints
     std::cout << "CALCULATEING HKS ---" <<std::endl;
-    std::cout << getHKS(S_wl,S_evals,nSteps) << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
-    std::cout << getHKS(T_wl,T_evals,nSteps) << std::endl;//heat kernel at timestap i
+    S_desc = getHKS(S_wl,S_evals,numHKS);
+    T_desc = getHKS(T_wl,T_evals,numHKS);
+    S_desc_l = toLocal(S_wl, S_HWS); //columne is a feature
+    T_desc_l = toLocal(T_wl, T_HWS);
+    
+    assert(S_desc_l.cols() == numHKS);
+    for (int i=0; i<numHKS; +i){
+      F.row(numPW+i) = S_desc_l.col(i);
+      G.row(numPW_i) = T_desc_l.col(i);
+    }
+    std::cout << S_desc << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
+    std::cout << T_desc << std::endl;//heat kernel at timestap i
 
- //       F.row(i+numPW) = f_l;
- //       G.row(i+numHKS) = g_l;
-
-
+        //F.row(i+numPW) = f_l;
+        //G.row(i+numHKS) = g_l;
+    //----Add operator constratins
+    //
 
     // solve least-square
     C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
@@ -309,6 +319,7 @@ int main(int argc, char* argv[]){
   //--Correspondence Matrix C estimation
   pangolin::Var<int> numEv("ui.numEv",100,50,1000); //min=1, max=pc_s.Area()
   pangolin::Var<int> numCst("ui.numCst",numEv/*std::min(20*numEv, pc_s.Area())*/,numEv,nSamples);
+  pangolin::Var<int> nSteps("ui.nSteps for HKS", 100, 50,300); //number of timesteps for HKS
   //-- viz color coding
   pangolin::Var<float>minVal("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal("ui. max Val",0.01,1,0);
@@ -386,6 +397,8 @@ int main(int argc, char* argv[]){
                   T_evals;//evalues of Laplacian of T. Increasing order.
   Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
                   T_wl,//(L_t.rows(),(int)numEv),
+                  S_desc, //(L_s rows(), (int)nSteps
+                  T_desc,
                   F,//((int)numCst, (int)numEv),
                   G,//((int)numCst, (int)numEv),
                   C;//((int)numEv, (int)numEv);
@@ -478,18 +491,21 @@ int main(int argc, char* argv[]){
       T_wl.resize(L_t.rows(),(int)numEv);
       S_evals.resize((int)numEv);
       T_evals.resize((int)numEv);
+      S_desc.resize(L_s.rows(), (int)nSteps);
+      T_desc.resize(L_t.rows(), (int)nSteps);
+
 
       std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       std::cout << "t_wl resized: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
       tdp::Timer t0;
-      //tdp::getLaplacianBasis(L_s, numEv, S_wl);
       tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl);
+      S_desc = getHKS(S_wl, S_evals, (int)nSteps);
       evector_s = S_wl.col(1); // first non-trivial evector
       means_s = tdp::getLevelSetMeans(pc_s, evector_s, (int)nBins); //means based on the evector_s's nBins level sets
 
-      //tdp::getLaplacianBasis(L_t, numEv, T_wl);
       tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
+      T_desc = getHKS(T_wl, T_evals, (int)nSteps);
       evector_t = T_wl.col(1); // first non-trivial evector
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
@@ -640,22 +656,44 @@ int main(int argc, char* argv[]){
         queryChanged = true;
         std::cout << "<--DONE fMap-->" << std::endl;
     }
-    if (queryChanged && showFTransfer){
-        std::cout << "showFTransfer: " << showFTransfer << std::endl;
+//    if (queryChanged && showFTransfer){
+//        std::cout << "showFTransfer: " << showFTransfer << std::endl;
 
-        //Show function transfer
-        //--pick a point 10
-        //w for world, l for local
-        Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
-        Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
+//        //Show function transfer
+//        //--pick a point 10
+//        //w for world, l for local
+//        Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
+//        Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
 
-        //todo: check transferring using indicator function
-        //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
-        std::cout << "p: " << pc_s[0] << std::endl;
-        tdp::f_indicator(pc_s, 0, f0_w);
-        f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
-        g0_l = C*f0_l;
-        g0_w = T_wl*g0_l;
+//        //todo: check transferring using indicator function
+//        //todo: make 0 as a variable
+//        //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+//        std::cout << "p: " << pc_s[0] << std::endl;
+//        tdp::f_indicator(pc_s, 0, f0_w);
+//        f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
+//        g0_l = C*f0_l;
+//        g0_w = T_wl*g0_l;
+    if (queryChanged){
+        if(showFTransfer){
+            std::cout << "showFTransfer---" << showFTransfer << std::endl;
+            //--pick a point 10
+            Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
+            Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
+
+            //check transferring using indicator function
+            //todo: make 0 as a variable
+            //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
+            std::cout << "p: " << pc_s[0] << std::endl;
+            tdp::f_indicator(pc_s, 0, f0_w);
+            f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
+            g0_l = C*f0_l;
+            g0_w = T_wl*g0_l;
+        } else if (showDesc){
+            std::cout << "Show HKS descriptor---" << std::endl;
+            f0_w = S_hks.col(0);
+            f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
+            g0_w = T_hks.col(0);
+        }
 
         // Alternative
         //int tId = getCorrespondence(pc_s, pc_t, S_wl, T_wl, C, alpha2, i); //guessed id in second manifold
