@@ -23,7 +23,6 @@ if (CUDA_FOUND)
   add_subdirectory(./twoViewSimulator)
   add_subdirectory(./meshBrowser)
   add_subdirectory(./dpmeansSeg)
-  #  add_subdirectory(./kmeans)
 
   if (GTSAM_FOUND)
     add_subdirectory(./imuDepthFusion)
@@ -51,6 +50,7 @@ if (CUDA_FOUND)
   add_subdirectory(./skinning)
   add_subdirectory(./laplace_beltrami)
   add_subdirectory(./fMap)
-  #add_subdirectory(./kmeans)
+  add_subdirectory(./hayleyTest)
+
 
 endif()

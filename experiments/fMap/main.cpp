@@ -242,13 +242,10 @@ void Test_simplePc(){
         std::cout << "guess: \n" << pc_t[tId].transpose() << std::endl;
         std::cout << "true: \n" << pc_t[nnIds(0)].transpose() << std::endl;
     }
-
-
 }
 
 
 int main(int argc, char* argv[]){
-   //Test_simplePc();
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
@@ -336,19 +333,24 @@ int main(int argc, char* argv[]){
   tdp::ManagedHostImage<tdp::Vector3fda> pc_grid((int)numEv*(int)numEv,1);
 
   if(argc > 1){
-      const std::string input = std::string(argv[1]);
+      //if only one path given, p_t will be copied from p_s
+      input = std::string(argv[1]);
       tdp::LoadPointCloudFromMesh(input, pc_all);
-      //std::cout << "input pc: " << input << std::endl;
-      //std::cout << "triangle meshs loaded. Num points:  " << pc_all.Area() << std::endl;
-      //std::random_device rd;
-      //std::cout << "rd: " < rd << std::endl;
+      std::cout << "input pc_s: " << input << std::endl;
       tdp::GetSamples(pc_all, pc_s, nSamples);
+
+      if (argc >2){
+          input = std::string(argv[2]);
+          tdp::LoadPointCloudFromMesh(input, pc_all);
+          tdp::GetSamples(pc_all, pc_t, nSamples);
+          std::cout << "input pc_t: " << input << std::endl;
+      } else{
       pc_t.ResizeCopyFrom(pc_s);
-      //tdp::GetSamples(pc_all, pc_t, nSamples);
-  }else{
+      }
+
+  } else {
       std::srand(101);
       GetSphericalPc(pc_s, nSamples);
-//      std::srand(200);
       std::srand(101);
       GetSphericalPc(pc_t, nSamples);
   }
@@ -362,8 +364,10 @@ int main(int argc, char* argv[]){
   pangolin::GlBuffer vbo_s, vbo_t, vbo_cmtx,
                      vbo_f, vbo_g,  //point clouds
                      vbo_f0, vbo_g0,
+
                      valuebo_s, valuebo_t, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
-                     valuebo_f0, valuebo_g0;
+                     valuebo_f0, valuebo_g0,
+                     valuebo_desc_s, valuebo_desc_t; //shape descriptor values (hks,wks)
 
   //-- upload point cloud positions
 //  vbo.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
