@@ -101,7 +101,7 @@ void render_surface_normals(const float* vertices,
       tdp::Vector3fda v3(vertices[3 * c3 + 0], vertices[3 * c3 + 1], vertices[3 * c3 + 2]);
       tdp::Vector3fda centroid = (v1 + v2 + v3) / 3;
 
-      tdp::Vector3fda normal = (v2 - v1).cross(v3 - v1).normalized() / 10;
+      tdp::Vector3fda normal = (v2 - v1).cross(v3 - v1).normalized() / 100;
 
       tdp::Vector3fda endpoint = centroid + normal;
       glVertex3f(centroid(0), centroid(1), centroid(2));
