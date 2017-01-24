@@ -10,15 +10,20 @@ static Vector3fda tsdf_point_to_real_space_point(
               size_t i,
               size_t j,
               size_t k,
-              Vector3fda grid0,
-              Vector3fda dGrid,
-              SE3f T_wG) {
+              const Vector3fda grid0,
+              const Vector3fda dGrid,
+              const SE3f T_wG) {
   Vector3fda base(i * dGrid(0), j * dGrid(1), k * dGrid(2));
   return T_wG * (base + grid0);
 }
 
 // Returns true if a voxel is completely inside the surface
-bool inside_surface(const Volume<TSDFval>& tsdf, size_t x, size_t y, size_t z) {
+bool inside_surface(const Volume<TSDFval>& tsdf,
+                    size_t x, size_t y, size_t z,
+                    const Vector3fda grid0,
+                    const Vector3fda dGrid,
+                    const SE3f T_wG,
+                    const std::function<bool(Vector3fda)>& extra_filter) {
   bool inside = true;
 
   inside &= tsdf(x    , y    , z    ).f <= 0;
@@ -29,6 +34,8 @@ bool inside_surface(const Volume<TSDFval>& tsdf, size_t x, size_t y, size_t z) {
   inside &= tsdf(x + 1, y    , z + 1).f <= 0;
   inside &= tsdf(x    , y + 1, z + 1).f <= 0;
   inside &= tsdf(x + 1, y + 1, z + 1).f <= 0;
+
+  inside &= extra_filter(tsdf_point_to_real_space_point(x, y, z, grid0, dGrid, T_wG));
 
   return inside;
 }
@@ -311,7 +318,8 @@ float volume_in_bounds_with_voxel_counting(
         const Plane p_right,
         const Vector3fda grid0,
         const Vector3fda dGrid,
-        const SE3f T_wG
+        const SE3f T_wG,
+        const std::function<bool(Vector3fda)>& extra_filter
 ) {
   // Cases:
   //   Surface Voxel -> ignore
@@ -331,7 +339,7 @@ float volume_in_bounds_with_voxel_counting(
       for (size_t i = 0; i < tsdf.w_ - 1; i++) {
 
         // Ignore voxels that are outside of the surface we'd like to reconstruct
-        if (!inside_surface(distances, i, j, k))
+        if (!inside_surface(distances, i, j, k, grid0, dGrid, T_wG, extra_filter))
           continue;
 
         // IntersectionType left_intersection  = intersect_type(p_left,  i, j, k, grid0, dGrid, T_wG);

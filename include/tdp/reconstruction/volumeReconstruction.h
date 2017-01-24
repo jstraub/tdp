@@ -4,7 +4,7 @@
 
 #include <tdp/reconstruction/plane.h>
 
-#include <vector>
+#include <functional>
 
 namespace tdp {
 namespace Reconstruction {
@@ -64,7 +64,8 @@ namespace Reconstruction {
       const Plane p_right,
       const Vector3fda grid0,
       const Vector3fda dGrid,
-      const SE3f T_wG
+      const SE3f T_wG,
+      const std::function<bool(Vector3fda)>& extra_filter
   );
 
   float volume_in_bounds_with_tsdf_modification(

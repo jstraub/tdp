@@ -424,7 +424,9 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(recomputeVolume) && !first) {
       std::cout << "Estimated volume: "
-                << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(tsdf, pl1, pl2, grid0, dGrid, T_wG)
+                << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(
+                            tsdf, pl1, pl2, grid0, dGrid, T_wG,
+                            make_inside_surface_filter(centroids, normals, ann, nnIds, dists))
                 << std::endl;
     }
 
