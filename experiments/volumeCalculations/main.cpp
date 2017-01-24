@@ -48,6 +48,30 @@
 
 #define PI 3.14159265358979f
 
+void render_surface_normals(const float* vertices,
+                            const size_t numVertices,
+                            const uint32_t* indices,
+                            const size_t numTriangles) {
+    glColor3f(1,0,0);
+    glBegin(GL_LINES);
+    for (size_t i = 0; i < numTriangles; i++) {
+      size_t c1 = indices[3 * i + 0],
+             c2 = indices[3 * i + 1],
+             c3 = indices[3 * i + 2];
+      tdp::Vector3fda v1(vertices[3 * c1 + 0], vertices[3 * c1 + 1], vertices[3 * c1 + 2]);
+      tdp::Vector3fda v2(vertices[3 * c2 + 0], vertices[3 * c2 + 1], vertices[3 * c2 + 2]);
+      tdp::Vector3fda v3(vertices[3 * c3 + 0], vertices[3 * c3 + 1], vertices[3 * c3 + 2]);
+      tdp::Vector3fda centroid = (v1 + v2 + v3) / 3;
+
+      tdp::Vector3fda normal = (v2 - v1).cross(v3 - v1).normalized() / 10;
+
+      tdp::Vector3fda endpoint = centroid + normal;
+      glVertex3f(centroid(0), centroid(1), centroid(2));
+      glVertex3f(endpoint(0), endpoint(1), endpoint(2));
+    }
+    glEnd();
+}
+
 void render_bounding_box_corners(
                   pangolin::GlBuffer& vbo,
                   const tdp::Vector3fda& corner1,
@@ -272,12 +296,21 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;
 
+  // Saving raw data for filtering analysis
+  size_t numVertices = 0;
+  size_t numTriangles = 0;
+  float* vertexStore = new float[numVertices * 3];
+  uint32_t* indexStore = new uint32_t[numTriangles * 3];
+
   pangolin::Var<bool> recomputeVolume("ui.recompute volume", true, false);
 
   tdp::ManagedHostImage<float> tsdfSlice(tsdf.w_, tsdf.h_);
 
   bool first = true;
+  pangolin::Var<bool> render_bounding_box("ui.show bounding box", false, true);
   pangolin::GlBuffer boundingBoxVbo;
+
+  pangolin::Var<bool> render_normals("ui.render surface normals", false, true);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -289,6 +322,14 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(recomputeMesh)) {
       tdp::ComputeMesh(tsdf, grid0, dGrid,
           T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);
+      delete[] vertexStore;
+      delete[] indexStore;
+      numVertices = meshVbo.num_elements;
+      numTriangles = meshIbo.num_elements;
+      vertexStore = new float[numVertices * 3];
+      indexStore = new uint32_t[numTriangles * 3];
+      meshVbo.Download(vertexStore, sizeof(float) * numVertices * 3, 0);
+      meshIbo.Download(indexStore, sizeof(uint32_t) * numTriangles * 3, 0);
     }
 
     // Draw 3D stuff
@@ -299,11 +340,18 @@ int main( int argc, char* argv[] )
     pangolin::glDrawAxis(0.1);
 
     // draw bounding box
-    render_bounding_box_corners(boundingBoxVbo, corner1, corner2);
+    if (render_bounding_box) {
+      render_bounding_box_corners(boundingBoxVbo, corner1, corner2);
+    }
 
     // Render the Marching Cubes Mesh
     // pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
     tdp::RenderVboIboCbo(meshVbo, meshIbo, meshCbo);
+
+    // Render the surface normals to make sure the triangles are properly oriented
+    if (render_normals) {
+      render_surface_normals(vertexStore, numVertices, indexStore, numTriangles);
+    }
 
     // Draw point cloud if desired
     // if (showPointCloud) {
@@ -352,6 +400,8 @@ int main( int argc, char* argv[] )
     // finish this frame
     pangolin::FinishFrame();
   }
+  delete[] vertexStore;
+  delete[] indexStore;
 
   return 0;
 }
