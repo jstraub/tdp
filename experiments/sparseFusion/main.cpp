@@ -585,20 +585,30 @@ void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
     values, int32_t id, float value) {
   for(int i=4; i>=0; --i) {
     if (value > values[i]) {
-      if (i == 3) 
+      if (i == 3) { 
         values[4] = value; 
-      else if (i == 2) {
+        ids[4] = id;
+      } else if (i == 2) {
         values[4] = values[3];
         values[3] = value; 
+        ids[4] = ids[3];
+        ids[3] = id; 
       } else if (i == 1) {
         values[4] = values[3];
         values[3] = values[2];
         values[2] = value; 
+        ids[4] = ids[3];
+        ids[3] = ids[2];
+        ids[2] = id; 
       } else if (i == 0) {
         values[4] = values[3];
         values[3] = values[2];
         values[2] = values[1];
         values[1] = value; 
+        ids[4] = ids[3];
+        ids[3] = ids[2];
+        ids[2] = ids[1];
+        ids[1] = id; 
       }
       return;
     }
@@ -608,6 +618,11 @@ void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
   values[2] = values[1];
   values[1] = values[0];
   values[0] = value; 
+  ids[4] = ids[3];
+  ids[3] = ids[2];
+  ids[2] = ids[1];
+  ids[1] = ids[0];
+  ids[0] = id; 
 }
 
 }    
@@ -815,8 +830,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
-  pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.1,0.0,1.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.1,0.0,1.);
+  pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.00,0.01,1.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.01,0.0,1.);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -887,11 +902,38 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
 
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(1000000);
+
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(10000000);
 
   int32_t iReadCurW = 0;
   size_t frame = 0;
+
+  tdp::ManagedLshForest<14> lsh(11);
+  tdp::ManagedHostImage<tdp::Brief> descs;
+  tdp::ManagedHostImage<tdp::Vector2ida> pts;
+  tdp::ManagedHostImage<float> orientation;
+
+  tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
+
+  std::vector<std::pair<size_t, size_t>> assoc;
+  assoc.reserve(10000);
+
+  uint32_t numObs = 0;
+  uint32_t numInlPrev = 0;
+
+  tdp::DPvMFmeansSimple3fda dpvmf(cos(65.*M_PI/180.));
+
+  std::vector<std::vector<uint32_t>> invInd;
+  std::vector<size_t> id_w;
+  id_w.reserve(1000000);
+
+//  std::random_device rd;
+  std::mt19937 gen(19023);
+
+  mask.Fill(0);
 
   std::mutex pl_wLock;
   std::mutex nnLock;
@@ -909,9 +951,9 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         if (pl_w.SizeToRead(iReadNext) > 0) {
           pl = pl_w.GetCircular(iReadNext);
-          if (frame - pl.lastFrame_ < 10) {
-            pl.numObs_ = 0; // reset and wait until the point has been observed for a bit
-          }
+//          if (frame - pl.lastFrame_ < 10) {
+//            pl.numObs_ = 0; // reset and wait until the point has been observed for a bit
+//          }
         }
         iRead = pl_w.iRead_;
         iInsert = pl_w.iInsert_;
@@ -920,12 +962,17 @@ int main( int argc, char* argv[] )
         values.fill(std::numeric_limits<float>::max());
         tdp::Vector5ida& ids = nn[iReadNext];
         while (iRead !=iInsert) {
-          AddToSortedIndexList(ids, values, iRead, (pl.p_-pl_w[iRead].p_).squaredNorm());
+          if (iRead != iReadNext) {
+            tdp::AddToSortedIndexList(ids, values, iRead,
+                (pl.p_-pl_w[iRead].p_).squaredNorm());
 //          AddToSortedIndexList(ids, values, iRead, pl.p2plDist(pl_w[iRead].p_));
 //          if (pl.Close(pl_w[iRead], cos(angleThr/180.*M_PI), distThr, p2plThr))
 //            mapNN.emplace_back(iReadNext, iRead);
+          }
           iRead = (iRead+1)%pl_w.w_;
         }
+//        std::cout << iReadNext << ": vals " << values.transpose() << "; ids " 
+//          << ids.transpose() << std::endl;
         // for map constraints
         // TODO: should be updated as pairs are reobserved
         for (int i=0; i<5; ++i) {
@@ -949,67 +996,57 @@ int main( int argc, char* argv[] )
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    tdp::Vector3fda Jn(0,0,0);
-    tdp::Vector3fda Jp(0,0,0);
+//    std::random_device rd_;
+    std::mt19937 gen_(0);
     while(42) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-        iReadNext = nn.RandomIndex(gen);
+        // this segfaults for some reason
+//        iReadNext = nn.RandomIndex(gen_);
         iRead = nn.iRead_;
         iInsert = nn.iInsert_;
       }
-      tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
-      tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-      Jn = tdp::Vector3fda::Zero();
-      Jp = tdp::Vector3fda::Zero();
-      for (int i=0; i<5; ++i) {
-        if (ids[i] > -1) {
-          const tdp::Plane& plO = pl_w.GetCircular(ids[i]);
-          Jn += 2.*(pl.n_.dot(plO.n_)-mapObsDot.GetCircular(iReadNext)[i])*plO.n_;
-          Jn += 2.*(pl.p2plDist(plO.p_)-mapObsP2Pl.GetCircular(iReadNext)[i])*(plO.p_-pl.p_);
-          if (pl.curvature_ < curvThr) {
-            dpvmfLock.lock();
-            Jn += lambdaReg*dpvmf.GetCenter(pl.z_);
-            dpvmfLock.unlock();
+      // compute gradient
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Vector3fda& Jn = Jn_w[iReadNext];
+        tdp::Vector3fda& Jp = Jp_w[iReadNext];
+        Jn = tdp::Vector3fda::Zero();
+        Jp = tdp::Vector3fda::Zero();
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1) {
+            const tdp::Plane& plO = pl_w[ids[i]];
+            Jn += 2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext][i])*plO.n_;
+            Jn += 2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*(plO.p_-pl.p_);
+            if (pl.curvature_ < curvThr) {
+              dpvmfLock.lock();
+              Jn += -lambdaReg*dpvmf.GetCenter(pl.z_);
+              dpvmfLock.unlock();
+            }
+            Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*pl.n_;
           }
-          Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl.GetCircular(iReadNext)[i])*pl.n_;
         }
       }
-      {
+      // apply gradient
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Vector3fda& Jn = Jn_w[iReadNext];
+        tdp::Vector3fda& Jp = Jp_w[iReadNext];
         std::lock_guard<std::mutex> mapGuard(mapLock);
-        pl_w.n_ = (pl_w.n_- alphaGrad * Jn).normalized();
-        pl_w.p_ = pl_w.p_- alphaGrad * Jp;
-        pc_w.GetCircular(iReadNext) = pl_w.p_;
-        n_w.GetCircular(iReadNext) = pl_w.n_;
+        pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
+        pl.p_ -= alphaGrad * Jp;
+        pc_w[iReadNext] = pl.p_;
+        n_w[iReadNext] = pl.n_;
       }
+//      std::cout << "map updated " << iReadNext << " " 
+//        << (alphaGrad * Jn.transpose()) << "; "
+//        << (alphaGrad * Jp.transpose()) << std::endl;
     };
   });
 
-  tdp::ManagedLshForest<14> lsh(11);
-  tdp::ManagedHostImage<tdp::Brief> descs;
-  tdp::ManagedHostImage<tdp::Vector2ida> pts;
-  tdp::ManagedHostImage<float> orientation;
-
-  tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
-
-  std::vector<std::pair<size_t, size_t>> assoc;
-  assoc.reserve(10000);
-
-  uint32_t numObs = 0;
-  uint32_t numInlPrev = 0;
-
-  tdp::DPvMFmeansSimple3fda dpvmf(cos(65.*M_PI/180.));
-
-  std::vector<std::vector<uint32_t>> invInd;
-  std::vector<size_t> id_w;
-  id_w.reserve(1000000);
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-
-  mask.Fill(0);
 
   std::vector<uint32_t> idsCur;
   idsCur.reserve(w*h);

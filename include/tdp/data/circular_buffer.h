@@ -38,7 +38,7 @@ class CircularBuffer : public Image<T> {
 
   int32_t RandomIndex( std::mt19937& gen) const {
     std::uniform_int_distribution<int> unif(0,(int)SizeToRead()-1);
-    return (iRead_+unif(gen))%this->w_
+    return (iRead_+unif(gen))%this->w_;
   }
 
   void Insert(const T& data) {
