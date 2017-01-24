@@ -42,11 +42,49 @@
 #include <math.h>
 #include <cmath>
 #include <stdlib.h>
+#include <functional>
 #include <tdp/reconstruction/plane.h>
 #include <tdp/reconstruction/volumeReconstruction.h>
 #include "test.h"
 
 #define PI 3.14159265358979f
+
+inline std::function<bool(tdp::Vector3fda)> make_inside_surface_filter(
+        tdp::ManagedHostImage<tdp::Vector3fda>& centroids,
+        tdp::ManagedHostImage<tdp::Vector3fda>& normals,
+        tdp::ANN& ann,
+        Eigen::VectorXi& nnIds,
+        Eigen::VectorXf& dists) {
+  // points pass the filter if they lie inside the surface
+  return [&](tdp::Vector3fda point) {
+    ann.Search(point, 1, 1e-7, nnIds, dists);
+    size_t id = nnIds(0);
+    return (centroids(id, 0) - point).dot(normals(id, 0)) < 0;
+  };
+}
+
+void set_up_ann(
+        tdp::ManagedHostImage<tdp::Vector3fda>& centroids,
+        tdp::ManagedHostImage<tdp::Vector3fda>& normals,
+        tdp::ANN& ann,
+        const float* vertices,
+        const size_t numVertices,
+        const uint32_t* indices,
+        const size_t numTriangles) {
+  centroids.Reinitialise(numTriangles, 1);
+  normals.Reinitialise(numTriangles, 1);
+  for (size_t i = 0; i < numTriangles; i++) {
+    size_t c1 = indices[3 * i + 0],
+           c2 = indices[3 * i + 1],
+           c3 = indices[3 * i + 2];
+    tdp::Vector3fda v1(vertices[3 * c1 + 0], vertices[3 * c1 + 1], vertices[3 * c1 + 2]);
+    tdp::Vector3fda v2(vertices[3 * c2 + 0], vertices[3 * c2 + 1], vertices[3 * c2 + 2]);
+    tdp::Vector3fda v3(vertices[3 * c3 + 0], vertices[3 * c3 + 1], vertices[3 * c3 + 2]);
+    centroids(i, 0) = (v1 + v2 + v3) / 3;
+    normals(i, 0) = (v2 - v1).cross(v3 - v1).normalized();
+  }
+  ann.ComputeKDtree(centroids);
+}
 
 void render_surface_normals(const float* vertices,
                             const size_t numVertices,
@@ -312,6 +350,13 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> render_normals("ui.render surface normals", false, true);
 
+  // Variables used for filtering points during volume calculations
+  tdp::ManagedHostImage<tdp::Vector3fda> centroids;
+  tdp::ManagedHostImage<tdp::Vector3fda> normals;
+  tdp::ANN ann;
+  Eigen::VectorXi nnIds(1);
+  Eigen::VectorXf dists(1);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -330,6 +375,7 @@ int main( int argc, char* argv[] )
       indexStore = new uint32_t[numTriangles * 3];
       meshVbo.Download(vertexStore, sizeof(float) * numVertices * 3, 0);
       meshIbo.Download(indexStore, sizeof(uint32_t) * numTriangles * 3, 0);
+      set_up_ann(centroids, normals, ann, vertexStore, numVertices, indexStore, numTriangles);
     }
 
     // Draw 3D stuff
