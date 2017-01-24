@@ -7,21 +7,25 @@ mpl.rc('font',size=40)
 mpl.rc('lines',linewidth=4.)
 figSize = (14, 12)
 
-with open("./sparsePlaneSeg_NYU_1000.csv","r") as f:
-#with open("../build/sparsePlaneSeg_1000.csv","r") as f:
+#with open("./sparsePlaneSeg_NYU_1000.csv","r") as f:
+with open("../build/sparsePlaneSeg_1000.csv","r") as f:
   x = np.loadtxt(f);
-  N = x.shape[1]-1
+xObs = x[:,1::2]
+x = x[:,0::2]
+N = x.shape[1]-1
+xObs = (xObs.T / xObs[:,-1])[:N,:]
 x = (x.T / x[:,-1])[:N,:]
 print x.shape
+print xObs.shape
 
 y = np.zeros_like(x)
 for i in range(x.shape[1]):
   y[:,i] = 18**2*np.arange(N).astype(np.float)/(640.*480)
-
+#
 plt.figure()
-plt.plot(y,x)
+plt.plot(xObs,x,'.',alpha=0.1)
 plt.ylim([0,1])
-
+#
 c1 = colorScheme("labelMap")["turquoise"]
 c2 = colorScheme("labelMap")["orange"]
 c3 = colorScheme("labelMap")["blue"]
