@@ -4,6 +4,8 @@
 
 #include <tdp/reconstruction/plane.h>
 
+#include <vector>
+
 namespace tdp {
 namespace Reconstruction {
 
@@ -57,7 +59,7 @@ namespace Reconstruction {
   );
 
   float volume_in_bounds_with_voxel_counting(
-      const ManagedHostVolume<TSDFval>& tsdf,
+      const Volume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
       const Vector3fda grid0,
@@ -66,10 +68,12 @@ namespace Reconstruction {
   );
 
   float volume_in_bounds_with_tsdf_modification(
-      const ManagedHostVolume<TSDFval>& tsdf,
+      const Volume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
-      const Vector3fda scale
+      const Vector3fda grid0,
+      const Vector3fda dGrid,
+      const SE3f T_wG
   );
 }
 }

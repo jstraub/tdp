@@ -18,7 +18,7 @@ static Vector3fda tsdf_point_to_real_space_point(
 }
 
 // Returns true if a voxel is completely inside the surface
-bool inside_surface(const ManagedHostVolume<TSDFval>& tsdf, size_t x, size_t y, size_t z) {
+bool inside_surface(const Volume<TSDFval>& tsdf, size_t x, size_t y, size_t z) {
   bool inside = true;
 
   inside &= tsdf(x    , y    , z    ).f <= 0;
@@ -278,6 +278,27 @@ float percent_volume(const Plane plane,
   return 0.0f;
 }
 
+static void find_distances(
+        Volume<TSDFval>& distances,
+        const Volume<TSDFval>& tsdf,
+        const Plane p_left,
+        const Plane p_right,
+        const Vector3fda grid0,
+        const Vector3fda dGrid,
+        const SE3f T_wG) {
+  for (size_t k = 0; k < tsdf.d_ - 1; k++)
+    for (size_t j = 0; j < tsdf.h_ - 1; j++)
+      for (size_t i = 0; i < tsdf.w_ - 1; i++) {
+        Vector3fda point = tsdf_point_to_real_space_point(i, j, k, grid0, dGrid, T_wG);
+        distances(i, j, k).w = tsdf(i, j, k).w;
+        distances(i, j, k).f = std::max(
+          {tsdf(i, j, k).f, p_left.distance_to(point), p_right.distance_to(point)},
+          [](const float& i1, const float& i2) {
+            return i1 < i2;
+          });
+      }
+}
+
 /*
   left and right should be the coefficients for the hessian normal form of the plane n dot x = d.
   assume the indices are such that 0 -> x, 1 -> y, 2 -> z, 3 -> d
@@ -285,7 +306,7 @@ float percent_volume(const Plane plane,
   Assumes that the normal of the left and right planes point towards each other. e.g. n_l dot n_r < 0
  */
 float volume_in_bounds_with_voxel_counting(
-        const ManagedHostVolume<TSDFval>& tsdf,
+        const Volume<TSDFval>& tsdf,
         const Plane p_left,
         const Plane p_right,
         const Vector3fda grid0,
@@ -301,7 +322,8 @@ float volume_in_bounds_with_voxel_counting(
   // Sources of error
   //    * lack of surface voxel volume (hollow cylinder of volume)
   //    * if we add surface voxels that are not on the intersecting plane then we miss 2 rings of voxels
-
+  ManagedHostVolume<TSDFval> distances(tsdf.w_, tsdf.h_, tsdf.d_);
+  find_distances(distances, tsdf, p_left, p_right, grid0, dGrid, T_wG);
   float volume = 0.0;
 
   for (size_t k = 0; k < tsdf.d_ - 1; k++)
@@ -309,58 +331,43 @@ float volume_in_bounds_with_voxel_counting(
       for (size_t i = 0; i < tsdf.w_ - 1; i++) {
 
         // Ignore voxels that are outside of the surface we'd like to reconstruct
-        if (!inside_surface(tsdf, i, j, k))
+        if (!inside_surface(distances, i, j, k))
           continue;
 
-        IntersectionType left_intersection  = intersect_type(p_left,  i, j, k, grid0, dGrid, T_wG);
-        IntersectionType right_intersection = intersect_type(p_right, i, j, k, grid0, dGrid, T_wG);
+        // IntersectionType left_intersection  = intersect_type(p_left,  i, j, k, grid0, dGrid, T_wG);
+        // IntersectionType right_intersection = intersect_type(p_right, i, j, k, grid0, dGrid, T_wG);
 
-        // Ignore voxels that are outside of the specified planes
-        if (left_intersection == IntersectionType::OUTSIDE ||
-            right_intersection == IntersectionType::OUTSIDE)
-          continue;
+        // // Ignore voxels that are outside of the specified planes
+        // if (left_intersection == IntersectionType::OUTSIDE ||
+        //     right_intersection == IntersectionType::OUTSIDE)
+        //   continue;
 
-        float percentVolume = 0.0f;
+        // float percentVolume = 0.0f;
 
-        if (left_intersection == IntersectionType::INTERSECTS) {
-          // If we intersect with the left plane
-          //percentVolume = percent_volume(p_left, i, j, k, scale);
-        } else if (right_intersection == IntersectionType::INTERSECTS) {
-          // If we intersect with the right plane
-          //percentVolume = percent_volume(p_right, i, j, k, scale);
-        } else {
-          // Only other case is that the voxel lies entirely within the confines of
-          // both planes
-          percentVolume = 1.0f;
-        }
-        volume += dGrid(0) * dGrid(1) * dGrid(2) * percentVolume;
-    }
+        // if (left_intersection == IntersectionType::INTERSECTS) {
+        //   // If we intersect with the left plane
+        //   //percentVolume = percent_volume(p_left, i, j, k, scale);
+        // } else if (right_intersection == IntersectionType::INTERSECTS) {
+        //   // If we intersect with the right plane
+        //   //percentVolume = percent_volume(p_right, i, j, k, scale);
+        // } else {
+        //   // Only other case is that the voxel lies entirely within the confines of
+        //   // both planes
+        //   percentVolume = 1.0f;
+        // }
+        // volume += dGrid(0) * dGrid(1) * dGrid(2) * percentVolume;
+        volume += dGrid(0) * dGrid(1) * dGrid(2);
+      }
 
-    return volume;
+  return volume;
 }
 
 float volume_in_bounds_with_tsdf_modification(
-      const ManagedHostVolume<TSDFval>& tsdf,
+      const Volume<TSDFval>& tsdf,
       const Plane p_left,
       const Plane p_right,
       const Vector3fda scale) {
   ManagedHostVolume<TSDFval> copy(tsdf.w_, tsdf.h_, tsdf.d_);
-  for (size_t k = 0; k < tsdf.d_; k++)
-    for (size_t j = 0; j < tsdf.h_; j++)
-      for (size_t i = 0; i < tsdf.w_; i++) {
-        // Make a copy of each element
-        copy(i, j, k) = tsdf(i, j, k);
-
-        Vector3fda point(0, 0, 0);
-
-        copy(i, j, k).f = std::max(
-          {copy(i, j, k).f, p_left.distance_to(point), p_right.distance_to(point)},
-          [](const float& i1, const float& i2) {
-            return i1 < i2;
-          });
-
-      }
-
   return 0;
 }
 

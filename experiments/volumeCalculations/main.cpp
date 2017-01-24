@@ -48,12 +48,40 @@
 
 #define PI 3.14159265358979f
 
-void render_plane(tdp::Reconstruction::Plane plane,
+void render_bounding_box_corners(
+                  pangolin::GlBuffer& vbo,
+                  const tdp::Vector3fda& corner1,
+                  const tdp::Vector3fda& corner2) {
+  size_t numVertices = 8;
+  float x[2] = {corner1(0), corner2(0)};
+  float y[2] = {corner1(1), corner2(1)};
+  float z[2] = {corner1(2), corner2(2)};
+  float vertexStore[numVertices * 3];
+
+  size_t vertex = 0;
+  for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 2; j++)
+      for (int k = 0; k < 2; k++, vertex++) {
+        vertexStore[vertex * 3 + 0] = x[i];
+        vertexStore[vertex * 3 + 1] = y[j];
+        vertexStore[vertex * 3 + 2] = z[k];
+      }
+
+  vbo.Reinitialise(pangolin::GlArrayBuffer, numVertices,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
+  vbo.Upload(vertexStore, sizeof(float) * numVertices * 3, 0);
+
+  if (vbo.IsValid()) {
+    glColor3f(0, 1, 0);
+    pangolin::RenderVbo(vbo);
+  }
+}
+
+void render_plane(const tdp::Reconstruction::Plane& plane,
                   pangolin::GlBuffer& vbo,
                   pangolin::GlBuffer& ibo,
                   auto& shader,
-                  tdp::Vector3fda corner1,
-                  tdp::Vector3fda corner2) {
+                  const tdp::Vector3fda& corner1,
+                  const tdp::Vector3fda& corner2) {
   size_t numVertices = 6;
   size_t numTriangles = 4;
 
@@ -84,9 +112,18 @@ void render_plane(tdp::Reconstruction::Plane plane,
   ibo.Upload(indexStore,  sizeof(unsigned int) * numTriangles * 3, 0);
 
   if (vbo.IsValid() && ibo.IsValid()) {
+    // make the plane blue
+    glColor3f(0,0,1);
     tdp::RenderVboIbo(vbo, ibo);
-    //glColor3f(1,0,0);
-    //pangolin::RenderVbo(vbo);
+    // Render a line pointing in the direction of the normal as well
+    // Make it red to contrast with the plane
+    // Keep in mind that the scale size is in terms of meters, so decrease unit normal
+    tdp::Vector3fda other_endpoint = polygon[0] + 0.1 * plane.unit_normal();
+    glColor3f(1,0,0);
+    glBegin(GL_LINES);
+       glVertex3f(polygon[0](0), polygon[0](1), polygon[0](2));
+       glVertex3f(other_endpoint(0), other_endpoint(1), other_endpoint(2));
+    glEnd();
   }
 }
 
@@ -138,6 +175,10 @@ int main( int argc, char* argv[] )
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x"
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
+  std::cout << "0, 0, 0: " << grid0.transpose() << std::endl;
+  std::cout << "256, 256, 256: "
+            << (T_wG * ((tdp::Vector3fda(256 * dGrid(0), 256 * dGrid(1), 256 * dGrid(2))) + grid0)).transpose()
+            << std::endl;
   std::cout << "Scale: " << dGrid.transpose() << std::endl;
 
   // Define opposite corners properly scaled to real world coordinates
@@ -187,15 +228,16 @@ int main( int argc, char* argv[] )
 
   // Add some variables to GUI
   pangolin::Var<float> marchCubeswThr("ui.weight thr",1,1,100);
-  pangolin::Var<float> marchCubesfThr("ui.tsdf value thr",1.,0.01,0.5);
+  pangolin::Var<float> marchCubesfThr("ui.tsdf value thr",1.,0.01,2);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
 
   pangolin::Var<bool> showPointCloud("ui.show point cloud", false, true);
 
-  // TODO: Use theta and phi angles to determine orientation of the plane. the radius is then "d"
-  //       This can then let us put bounds min and max on the possibile orientations
+  // Using cartesian coordinates instead of spherical because the TSDF is not
+  // centered at the origin. So it is a tad difficult to manually move planes
+  // around to properly cut the arm in spherical coordinates.
   float minX = std::min(corner1(0), corner2(0)),
         minY = std::min(corner1(1), corner2(1)),
         minZ = std::min(corner1(2), corner2(2));
@@ -213,32 +255,29 @@ int main( int argc, char* argv[] )
   float minD = tdp::Vector3fda(closeX, closeY, closeZ).norm();
 
   // Plane 1 cutoffs
-  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 0, 0, 1);
+  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 1, 0, 1);
   pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, 1);
-  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 1, 0, 1);
-  pangolin::Var<float> pl1_d("ui.plane_1 d",   (maxD + minD) / 2,    -maxD, maxD);
+  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 0, 0, 1);
+  pangolin::Var<float> pl1_d("ui.plane_1 d",   -maxD / 3,    -maxD, maxD);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
-  //pangolin::Var<float> pl1_rho("ui.plane_1 rho",   minD,   minD, maxD);
-  //pangolin::Var<float> pl1_theta("ui.plane_1 theta", 0, -PI, PI);
-  //pangolin::Var<float> pl1_phi("ui.plane_1 phi",     0,   0, PI);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
 
   // Plane 2 cutoffs
-  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 0, 0, 1);
+  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 1, 0, 1);
   pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, 0, 1);
-  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 1, 0, 1);
-  pangolin::Var<float> pl2_d("ui.plane_2 d",   (maxD + minD) / 2,    -maxD, maxD);
+  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 0, 0, 1);
+  pangolin::Var<float> pl2_d("ui.plane_2 d",   maxD / 3,    -maxD, maxD);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
-  //pangolin::Var<float> pl2_rho("ui.plane_2 rho",   minD,   minD, maxD);
-  //pangolin::Var<float> pl2_theta("ui.plane_2 theta", 0, -PI, PI);
-  //pangolin::Var<float> pl2_phi("ui.plane_2 phi",     0,   0, PI);
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;
 
   pangolin::Var<bool> recomputeVolume("ui.recompute volume", true, false);
 
   tdp::ManagedHostImage<float> tsdfSlice(tsdf.w_, tsdf.h_);
+
+  bool first = true;
+  pangolin::GlBuffer boundingBoxVbo;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -259,6 +298,9 @@ int main( int argc, char* argv[] )
     // draw the axis
     pangolin::glDrawAxis(0.1);
 
+    // draw bounding box
+    render_bounding_box_corners(boundingBoxVbo, corner1, corner2);
+
     // Render the Marching Cubes Mesh
     // pangolin::RenderVboIboCbo(vbo, ibo, cbo, true, true);
     tdp::RenderVboIboCbo(meshVbo, meshIbo, meshCbo);
@@ -277,9 +319,6 @@ int main( int argc, char* argv[] )
     sign = pl2_flip_normal ? -1 : 1;
     tdp::Reconstruction::Plane pl2(sign * pl2_nx, sign * pl2_ny, sign * pl2_nz, sign * pl2_d);
 
-    //tdp::Reconstruction::Plane pl1(pl1_rho, pl1_theta, pl1_phi);
-    //tdp::Reconstruction::Plane pl2(pl2_rho, pl2_theta, pl2_phi);
-
     if (tdp::Reconstruction::intersect_type(pl1, corner1, corner2) ==
         tdp::Reconstruction::IntersectionType::INTERSECTS) {
       render_plane(pl1, pl1_vbo, pl1_ibo, shader, corner1, corner2);
@@ -289,11 +328,13 @@ int main( int argc, char* argv[] )
       render_plane(pl2, pl2_vbo, pl2_ibo, shader, corner1, corner2);
     }
 
-    if (pangolin::Pushed(recomputeVolume)) {
+    if (pangolin::Pushed(recomputeVolume) && !first) {
       std::cout << "Estimated volume: "
                 << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(tsdf, pl1, pl2, grid0, dGrid, T_wG)
                 << std::endl;
     }
+
+    first = false;
 
     glDisable(GL_DEPTH_TEST);
     // Draw 2D stuff
