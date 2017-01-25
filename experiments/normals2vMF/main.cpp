@@ -264,11 +264,12 @@ int main( int argc, char* argv[] )
             *xSums.block<3,1>(0,k).cast<double>()
             *vmfs[k].GetMu().cast<double>().transpose();
         }
-        Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
-            Eigen::ComputeFullU|Eigen::ComputeFullV);
-        double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-        Eigen::Matrix3Xd dR = svd.matrixU()
-          *Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
+//        Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
+//            Eigen::ComputeFullU|Eigen::ComputeFullV);
+//        double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
+//        Eigen::Matrix3Xd dR = svd.matrixU()
+//          *Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
+        Eigen::Matrix3d dR = tdp::ProjectOntoSO3<double>(N);
 //        std::cout << dR << std::endl;
         std::cout << " fit: " << (N*dR).trace()  <<  " " 
           << (N*dR).trace()/xSums.bottomRows<1>().sum()

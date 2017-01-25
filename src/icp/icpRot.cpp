@@ -40,9 +40,10 @@ void ComputeProjectiveRotation(
       // solve for R using SVD
       Eigen::Matrix3d N(Nda.cast<double>());
       error = N.trace()/count;
-      Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
-          Eigen::ComputeFullU | Eigen::ComputeFullV);
-      Eigen::Matrix3f dR = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
+//      Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
+//          Eigen::ComputeFullU | Eigen::ComputeFullV);
+//      Eigen::Matrix3f dR = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
+      Eigen::Matrix3f dR = tdp::ProjectOntoSO3<float>(N);
       std::cout << N <<  std::endl;
       std::cout << dR <<  std::endl;
       // apply x to the transformation

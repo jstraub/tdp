@@ -822,6 +822,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
+  pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
@@ -929,7 +930,8 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  tdp::DPvMFmeansSimple3fda dpvmf(cos(65.*M_PI/180.));
+  float lambDPvMFmeans = cos(65.*M_PI/180.);
+  tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -952,12 +954,6 @@ int main( int argc, char* argv[] )
     while(42) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
-//        if (pl_w.SizeToRead(iReadNext) > 0) {
-//          pl = pl_w.GetCircular(iReadNext);
-//          if (frame - pl.lastFrame_ < 10) {
-//            pl.numObs_ = 0; // reset and wait until the point has been observed for a bit
-//          }
-//        }
         iRead = pl_w.iRead_;
         iInsert = pl_w.iInsert_;
       }
@@ -999,8 +995,6 @@ int main( int argc, char* argv[] )
     if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-        // this segfaults for some reason
-//        iReadNext = nn.RandomIndex(gen_);
         iRead = nn.iRead_;
         iInsert = nn.iInsert_;
       }
@@ -1254,10 +1248,6 @@ int main( int argc, char* argv[] )
       // only use ids that were found by projecting into the current pose
       if (incrementalAssign) {
         for (auto i : idsCur) {
-          if (i >= dpvmf.GetZs().size()) {
-            std::cout << "goikng to crash: " << i << " >= "
-              << dpvmf.GetZs().size() << std::endl;
-          }
           uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
@@ -1369,10 +1359,10 @@ int main( int argc, char* argv[] )
             for (size_t k=0; k<indK.size(); ++k) 
               exploredAll &= indK[k] >= invInd[k].size();
           }
-          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
-              Eigen::ComputeFullU | Eigen::ComputeFullV);
-          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
-          T_wc.rotation() = tdp::SO3f(R_wc);
+//          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
+//              Eigen::ComputeFullU | Eigen::ComputeFullV);
+//          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
+          T_wc.rotation() = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
 
           // first use already associated data
           for (const auto& ass : assoc) {
@@ -1627,6 +1617,32 @@ int main( int argc, char* argv[] )
           pc_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).p_;
         }
         TOCK("update planes");
+      }
+    }
+
+    if (runLoopClosureGeom && dpvmf.GetK()>2) {
+      tdp::DPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
+      for (const auto& ass : assoc) {
+        dpvmfCur.AddObs(n_c.GetCircular(ass.second));
+      }
+      dpvmfCur.iterateToConvergence(100, 1e-6);
+      if (dpvmfCur.GetK() > 2) {
+        std::vector<size_t> idsW(dpvmf.GetK());
+        std::vector<size_t> idsC(dpvmfCur.GetK());
+        std::iota(idsW.begin(), idsW.end(), 0);
+        std::iota(idsC.begin(), idsC.end(), 0);
+        Eigen::Matrix3f N;
+        for (size_t it =0; it < 100; ++it) {
+          std::random_shuffle(idsW.begin(), idsW.end());
+          std::random_shuffle(idsC.begin(), idsC.end());
+          N = Eigen::Matrix3f::Zero();
+          for (size_t i=0; i<3; ++i) {
+            N += dpvmf.GetCenter(idsW[i]) * dpvmfCur.GetCenter(idsC[i]).transpose();
+          }
+          // TODO check order
+          Eigen::Matrix3f R_wc = tdp::ProjectOntoSO3<float>(N);
+
+        }
       }
     }
 
