@@ -17,7 +17,7 @@ void ComputeProjectiveRotation(
     const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, float angleThr_deg) {
 
-  Eigen::Matrix<float,3,3,Eigen::DontAlign> Nda;
+  Eigen::Matrix<float,3,3,Eigen::DontAlign> N;
   size_t lvls = maxIt.size();
   float count = 0.f; 
   for (int lvl=lvls-1; lvl >= 0; --lvl) {
@@ -31,14 +31,13 @@ void ComputeProjectiveRotation(
           pcs_o.GetImage(lvl), 
           T_mo, T_cm, ScaleCamera<float>(cam,pow(0.5,lvl)),
           cos(angleThr_deg*M_PI/180.),
-          Nda,count);
+          N,count);
 #endif
       if (count < 1000) {
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;
       }
       // solve for R using SVD
-      Eigen::Matrix3d N(Nda.cast<double>());
       error = N.trace()/count;
 //      Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
 //          Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -55,7 +54,7 @@ void ComputeProjectiveRotation(
       std::cout << "lvl " << lvl << " it " << it 
         << ": err=" << error << "\tdErr/err=" << fabs(error-errPrev)/error
         << " # inliers: " << count 
-        << " rank(N): " << svd.rank() 
+//        << " rank(N): " << svd.rank() 
         << std::endl;
       //std::cout << dT.matrix() << std::endl;
       //std::cout << T_mo.matrix() << std::endl;
