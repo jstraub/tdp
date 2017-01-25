@@ -49,6 +49,7 @@
 #include <tdp/utils/colorMap.h>
 #include <tdp/camera/photometric.h>
 #include <tdp/clustering/dpvmfmeans_simple.hpp>
+#include <tdp/clustering/managed_dpvmfmeans_simple.hpp>
 #include <tdp/features/brief.h>
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
@@ -950,37 +951,47 @@ int main( int argc, char* argv[] )
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
+    int32_t sizeToRead = 0;
     tdp::Vector5fda values;
     while(42) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
         iRead = pl_w.iRead_;
         iInsert = pl_w.iInsert_;
+        sizeToRead = pl_w.SizeToRead();
       }
-      values.fill(std::numeric_limits<float>::max());
-      tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-      tdp::Vector5ida& ids = nn[iReadNext];
-      while (iRead !=iInsert) {
-        if (iRead != iReadNext) {
-          float dist = (pl.p_-pl_w[iRead].p_).squaredNorm();
-          tdp::AddToSortedIndexList(ids, values, iRead, dist);
+      if (sizeToRead > 0) {
+        values.fill(std::numeric_limits<float>::max());
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Vector5ida& ids = nn[iReadNext];
+        ids = tdp::Vector5ida::Ones()*(-1);
+        for (size_t i=0; i<sizeToRead; ++i) {
+          if (i != iReadNext) {
+            float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
+            tdp::AddToSortedIndexList(ids, values, i, dist);
+          }
         }
-        iRead = (iRead+1)%pl_w.w_;
-      }
-      // for map constraints
-      // TODO: should be updated as pairs are reobserved
-      for (int i=0; i<5; ++i) {
-        mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-        mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-      }
-      // just for visualization
-      for (int i=0; i<5; ++i) mapNN.emplace_back(iReadNext, ids[i]);
-      iReadNext = (iReadNext+1)%pl_w.w_;
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        mapObsDot.iInsert_ = iReadNext;
-        mapObsP2Pl.iInsert_ = iReadNext;
-        nn.iInsert_ = iReadNext;
+        // for map constraints
+        // TODO: should be updated as pairs are reobserved
+        for (int i=0; i<5; ++i) {
+          mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+          mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+        }
+        // just for visualization
+        if (mapNN.size() < 5*iReadNext) {
+          for (int i=0; i<5; ++i) 
+            mapNN.emplace_back(iReadNext, ids[i]);
+        } else {
+          for (int i=0; i<5; ++i) 
+            mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+        }
+        iReadNext = (iReadNext+1)%sizeToRead;
+        {
+          std::lock_guard<std::mutex> lock(nnLock); 
+          mapObsDot.iInsert_ = iReadNext;
+          mapObsP2Pl.iInsert_ = iReadNext;
+          nn.iInsert_ = iReadNext;
+        }
       }
     };
   });
@@ -1621,9 +1632,9 @@ int main( int argc, char* argv[] )
     }
 
     if (runLoopClosureGeom && dpvmf.GetK()>2) {
-      tdp::DPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
+      tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
       for (const auto& ass : assoc) {
-        dpvmfCur.AddObs(n_c.GetCircular(ass.second));
+        dpvmfCur.addObservation(n_c.GetCircular(ass.second));
       }
       dpvmfCur.iterateToConvergence(100, 1e-6);
       if (dpvmfCur.GetK() > 2) {
@@ -1746,9 +1757,12 @@ int main( int argc, char* argv[] )
 //          glDisable(GL_POINT_SPRITE);
         }
         if (showNN) {
+          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
+             << mapNN.size()/5 << std::endl;
           glColor4f(0.3,0.3,0.3,0.3);
           for (auto& ass : mapNN) {
-            tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
+            if (ass.second >= 0)
+              tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
           }
         }
         if (showLoopClose) {
