@@ -153,6 +153,7 @@ void ExtractPlanes(
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
+    ManagedHostCircularBuffer<Vector3fda>& pc0_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<float>& rs
@@ -188,6 +189,7 @@ void ExtractPlanes(
 
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
+        pc0_w.Insert(pl.p_);
         n_w.Insert(pl.n_);
         rgb_w.Insert(pl.rgb_);
         rs.Insert(pl.r_);
@@ -823,6 +825,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
+  pangolin::Var<bool> updateMap("ui.update map",false,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
@@ -840,6 +843,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",0.06,0.01,1.0);
+  pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
@@ -901,6 +905,7 @@ int main( int argc, char* argv[] )
   nn.Fill(tdp::Vector5ida::Ones()*-1);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(1000000);
@@ -943,51 +948,43 @@ int main( int argc, char* argv[] )
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
-    tdp::Plane pl;
     tdp::Vector5fda values;
     while(42) {
-      pl.numObs_ = 0;
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
-        if (pl_w.SizeToRead(iReadNext) > 0) {
-          pl = pl_w.GetCircular(iReadNext);
+//        if (pl_w.SizeToRead(iReadNext) > 0) {
+//          pl = pl_w.GetCircular(iReadNext);
 //          if (frame - pl.lastFrame_ < 10) {
 //            pl.numObs_ = 0; // reset and wait until the point has been observed for a bit
 //          }
-        }
+//        }
         iRead = pl_w.iRead_;
         iInsert = pl_w.iInsert_;
       }
-      if (pl.numObs_ > 0) {
-        values.fill(std::numeric_limits<float>::max());
-        tdp::Vector5ida& ids = nn[iReadNext];
-        while (iRead !=iInsert) {
-          if (iRead != iReadNext) {
-            tdp::AddToSortedIndexList(ids, values, iRead,
-                (pl.p_-pl_w[iRead].p_).squaredNorm());
-//          AddToSortedIndexList(ids, values, iRead, pl.p2plDist(pl_w[iRead].p_));
-//          if (pl.Close(pl_w[iRead], cos(angleThr/180.*M_PI), distThr, p2plThr))
-//            mapNN.emplace_back(iReadNext, iRead);
-          }
-          iRead = (iRead+1)%pl_w.w_;
+      values.fill(std::numeric_limits<float>::max());
+      tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+      tdp::Vector5ida& ids = nn[iReadNext];
+      while (iRead !=iInsert) {
+        if (iRead != iReadNext) {
+          float dist = (pl.p_-pl_w[iRead].p_).squaredNorm();
+          tdp::AddToSortedIndexList(ids, values, iRead, dist);
         }
-//        std::cout << iReadNext << ": vals " << values.transpose() << "; ids " 
-//          << ids.transpose() << std::endl;
-        // for map constraints
-        // TODO: should be updated as pairs are reobserved
-        for (int i=0; i<5; ++i) {
-          mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-          mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-        }
-        // just for visualization
-        for (int i=0; i<5; ++i) mapNN.emplace_back(iReadNext, ids[i]);
-        iReadNext = (iReadNext+1)%pl_w.w_;
-        {
-          std::lock_guard<std::mutex> lock(nnLock); 
-          mapObsDot.iInsert_ = iReadNext;
-          mapObsP2Pl.iInsert_ = iReadNext;
-          nn.iInsert_ = iReadNext;
-        }
+        iRead = (iRead+1)%pl_w.w_;
+      }
+      // for map constraints
+      // TODO: should be updated as pairs are reobserved
+      for (int i=0; i<5; ++i) {
+        mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+        mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+      }
+      // just for visualization
+      for (int i=0; i<5; ++i) mapNN.emplace_back(iReadNext, ids[i]);
+      iReadNext = (iReadNext+1)%pl_w.w_;
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        mapObsDot.iInsert_ = iReadNext;
+        mapObsP2Pl.iInsert_ = iReadNext;
+        nn.iInsert_ = iReadNext;
       }
     };
   });
@@ -999,6 +996,7 @@ int main( int argc, char* argv[] )
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(42) {
+    if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
         // this segfaults for some reason
@@ -1026,6 +1024,7 @@ int main( int argc, char* argv[] )
               dpvmfLock.unlock();
             }
             Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*pl.n_;
+            Jp += -2.*(pc0_w[iReadNext] - pl.p_);
           }
         }
       }
@@ -1044,6 +1043,7 @@ int main( int argc, char* argv[] )
 //      std::cout << "map updated " << iReadNext << " " 
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
+    }
     };
   });
 
@@ -1183,7 +1183,7 @@ int main( int argc, char* argv[] )
 //        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
 //            orientation);
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey, pts,
-            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
+            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
             n_w, rs);
         TOCK("normals");
 
