@@ -121,7 +121,6 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
     }
 }
 
-
 Eigen::Matrix3f getLocalRot(const Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<Matrix3fda>& es){
 
     std::vector<float> evalues;
@@ -642,29 +641,33 @@ Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
 /**************PROJECTIONS*************************
  **************************************************/
 //todo: check if okay with VectorXf. 
-template<typename Derived>
-inline Eigen::MatrixBase<Derived> projectToLocal(const Eigen::MatrixBase<Derived>& T_wl,
-                                                 const Eigen::MatrixBase<Derived>& F_w){
-    /*
-     * T_wl: each column is an eigenvector. n by k 
-     * (each vector lives in n-dim space. There are k evectors.)
-     * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
-     * Returns t vectors in k-dim space. k by t
-    */
-    return (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*F_w);
-}
+// template <typename Derived, typename OtherDerived>
+// inline Eigen::MatrixBase<OtherDerived> projectToLocal(
+//                                        const Eigen::MatrixBase<Derived>& T_wl,
+//                                        const Eigen::MatrixBase<OtherDerived>& F_w)
+// {
+//     /*
+//      * T_wl: each column is an eigenvector. n by k 
+//      * (each vector lives in n-dim space. There are k evectors.)
+//      * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
+//      * Returns t vectors in k-dim space. k by t
+//     */
+//     return (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*F_w);
+// }
 
-template<typename Derived>
-inline Eigen::MatrixBase<Derived> projectToWorld(const Eigen::MatrixBase<Derived>& T_wl,
-                                                 const Eigen::MatrixBase<Derived>& F_l){
-    /*
-     * T_wl: each column is an eigenvector. n by k 
-     * (each vector lives in n-dim space. There are k evectors.)
-     * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
-     * Returns t vectors in k-dim space. k by t
-    */
-    return T_wl*F_l;
-}
+// template <typename Derived, typename OtherDerived>
+// inline Eigen::MatrixBase<OtherDerived> projectToWorld(
+//                                         const Eigen::MatrixBase<Derived>& T_wl,
+//                                         const Eigen::MatrixBase<OtherDerived>& F_l)
+// {
+//     /*
+//      * T_wl: each column is an eigenvector. n by k 
+//      * (each vector lives in n-dim space. There are k evectors.)
+//      * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
+//      * Returns t vectors in k-dim space. k by t
+//     */
+//     return T_wl*F_l;
+// }
 
 
 }

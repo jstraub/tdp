@@ -21,6 +21,7 @@
 #include <tdp/eigen/dense.h>
 #include <Eigen/Eigenvalues>
 #include <Eigen/Sparse>
+#include <Eigen/Core>
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
@@ -48,7 +49,7 @@
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
 /************Declarations***************************************
- ******************************************************************/
+ ***************************************************************/
 void printImage(const tdp::ManagedHostImage<tdp::Vector3fda>& pc,
                 int start_idx,
                 const int length);
@@ -58,11 +59,13 @@ void Test_f_landmark();
 void Test_projections();
 void Test_samePc_exactPairs(std::string& option);
 
-/************end delcarations**************************************/
+/************end delcarations************************************/
 
 
 int main(){
-    Test_printImage();
+    //Test_printImage();
+    std::string option("rbf");
+    Test_samePc_exactPairs(option);
 }
 
 
@@ -73,6 +76,9 @@ void printImage(const tdp::ManagedHostImage<tdp::Vector3fda>& pc,
                 int start_idx,
                 const int length){
     // prints pc[i] for i in [start_idx,start_idx + length -1 ]
+    // pc[i] element's are comman separated
+    // and printed out as transposed. 
+
     int end_idx = start_idx + length -1 ;
     if (start_idx < 0){
         start_idx = 0;
@@ -82,8 +88,9 @@ void printImage(const tdp::ManagedHostImage<tdp::Vector3fda>& pc,
     }
     //assert(start_idx >= 0 && end_idx < pc.Area());
     for (int i=start_idx; i<= end_idx; ++i){
-        std::cout << pc[i] << ", ";
+        std::cout << pc[i].transpose() << ", ";
     }
+    std::cout << std::endl;
 }
 
 void Test_printImage(){
@@ -144,7 +151,8 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
                                L_t(pc_t.Area(), pc_t.Area());
     Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv),//cols are evectors
                     T_wl(L_t.rows(),(int)numEv),
-                    S_desc_w, T_desc_w;
+                    S_desc_w, T_desc_w,
+                    S_desc_l, T_desc_l;
     Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
 
 
@@ -163,8 +171,8 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
 
 
     //--Construct function pairs
-    Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area());
-    Eigen::VectorXf f_l((int)numEv), g_l((int)numEv);
+    Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area()),
+                    f_l((int)numEv), g_l((int)numEv);
     Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
     Eigen::MatrixXf C((int)numEv, (int)numEv);
 
@@ -178,30 +186,34 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
             tdp::f_indicator(pc_s, i, f_w); //todo: check if I can use this same alpha?
             tdp::f_indicator(pc_t, i, g_w);
         }
-        // f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
-        // g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
-        f_l = tdp::projectToLocal(S_wl, f_w);
-        g_l = tdp::projectToLocal(T_wl, g_w);
+        f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+        g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
+        //f_l = tdp::projectToLocal(S_wl, f_w);
+        //g_l = tdp::projectToLocal(T_wl, g_w);
 
         F.row(i) = f_l;
         G.row(i) = g_l;
     }
+
 
     if (numHKS >0){
         //-----Add  heat kernel signatures as constraints
         std::cout << "CALCULATEING HKS ---" <<std::endl;
         S_desc_w = tdp::getHKS(S_wl,S_evals,numHKS);
         T_desc_w = tdp::getHKS(T_wl,T_evals,numHKS);
-        S_desc_l = tdp::projectToLocal(S_wl, S_desc_w); //columne is a feature
-        T_desc_l = tdp::projectToLocal(T_wl, T_desc_w);
+        S_desc_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*S_desc_w);
+        T_desc_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*T_desc_w);
+        //S_desc_l = tdp::projectToLocal(S_wl, S_desc_w); //columne is a feature
+        //T_desc_l = tdp::projectToLocal(T_wl, T_desc_w);
         
         assert(S_desc_l.cols() == numHKS);
-        for (int i=0; i<numHKS; +i){
+        for (int i=0; i<numHKS; ++i){
           F.row(numPW+i) = S_desc_l.col(i);
-          G.row(numPW_i) = T_desc_l.col(i);
+          G.row(numPW+i) = T_desc_l.col(i);
         }
-        std::cout << S_desc << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
-        std::cout << T_desc << std::endl;//heat kernel at timestap i
+        std::cout << "S,T descriptors at time 0--------" << std::endl;
+        std::cout << S_desc_l.col(0) << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
+        std::cout << T_desc_l.col(0) << std::endl;//heat kernel at timestap i
     }
     //----Add operator constratins
     //
@@ -214,19 +226,21 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
 
     // Test
     assert(numPW < pc_s.Area());
-    int numTest = (int)pc_s.Area() - numPW;
+    int numTest = (int)pc_s.Area()-numPW;
     float error = 0;
     for (int i=numPW; i< (int)pc_s.Area(); ++i ){
-        tdp::Vector3fda true_w= pc_s[i];
-        tdp::Vector3fda true_l = tdp::projectToLocal(S_wl, true_w);
-        tdp::Vector3fda guess_w = tdp::projectToWorld(S_wl, C*true_l);
+        tdp::Vector3fda true_w = pc_s[i];
+        tdp::Vector3fda true_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*true_w);
+        tdp::Vector3fda guess_w = S_wl * (C*true_l);
+        // tdp::Vector3fda true_l = tdp::projectToLocal(S_wl, true_w);
+        // tdp::Vector3fda guess_w = tdp::projectToWorld(S_wl, C*true_l);
         error += (true_w - guess_w).squaredNorm();
     }
     error /= numTest;
     std::cout << "Number of test points: " << numTest << std::endl;
     std::cout << "error: " << std::endl;
 
-    //Get correspondences
+    // //Get correspondences
     // Eigen::VectorXi nnIds(1);
     // Eigen::VectorXf dists(1);
     // tdp::ManagedHostImage<tdp::Vector3fda> queries((int)numQ,1);

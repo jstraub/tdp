@@ -174,7 +174,8 @@ void Test_simplePc(){
     Eigen::SparseMatrix<float> L_t(pc_t.Area(), pc_t.Area());
     Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv),//cols are evectors
                     T_wl(L_t.rows(),(int)numEv),
-                    S_desc, T_desc;
+                    S_desc_w_w, T_desc_w_w,
+                    S_desc_w_l, T_desc_w_l;
     Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
 ;
 
@@ -212,25 +213,6 @@ void Test_simplePc(){
         F.row(i) = f_l;
         G.row(i) = g_l;
     }
-    //-----Add  heat kernel signatures as constraints
-    std::cout << "CALCULATEING HKS ---" <<std::endl;
-    S_desc = getHKS(S_wl,S_evals,numHKS);
-    T_desc = getHKS(T_wl,T_evals,numHKS);
-    S_desc_l = toLocal(S_wl, S_HWS); //columne is a feature
-    T_desc_l = toLocal(T_wl, T_HWS);
-    
-    assert(S_desc_l.cols() == numHKS);
-    for (int i=0; i<numHKS; +i){
-      F.row(numPW+i) = S_desc_l.col(i);
-      G.row(numPW_i) = T_desc_l.col(i);
-    }
-    std::cout << S_desc << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
-    std::cout << T_desc << std::endl;//heat kernel at timestap i
-
-        //F.row(i+numPW) = f_l;
-        //G.row(i+numHKS) = g_l;
-    //----Add operator constratins
-    //
 
     // solve least-square
     C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
@@ -306,6 +288,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<bool> showMeans("ui.show means", true, false);
   pangolin::Var<bool> runQuery("ui.run queries", true, false);
   pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
+  pangolin::Var<bool> showDesc(" ui. show descriptor", true, true);
 
   pangolin::Var<int> nSamples("ui. num samples from mesh pc", 3000, 1000, 10000);
 
@@ -343,6 +326,7 @@ int main(int argc, char* argv[]){
   // Visualization of C
   tdp::ManagedHostImage<tdp::Vector3fda> pc_grid((int)numEv*(int)numEv,1);
 
+  std::string input;
   if(argc > 1){
       //if only one path given, p_t will be copied from p_s
       input = std::string(argv[1]);
@@ -397,8 +381,8 @@ int main(int argc, char* argv[]){
                   T_evals;//evalues of Laplacian of T. Increasing order.
   Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
                   T_wl,//(L_t.rows(),(int)numEv),
-                  S_desc, //(L_s rows(), (int)nSteps
-                  T_desc,
+                  S_desc_w, //(L_s rows(), (int)nSteps
+                  T_desc_w,
                   F,//((int)numCst, (int)numEv),
                   G,//((int)numCst, (int)numEv),
                   C;//((int)numEv, (int)numEv);
@@ -449,9 +433,9 @@ int main(int argc, char* argv[]){
             pc_t.ResizeCopyFrom(pc_s);
         } else{
             std::srand(101);
-            GetSphericalPc(pc_s, nSamples);
+            tdp::GetSphericalPc(pc_s, nSamples);
             std::srand(101);
-            GetSphericalPc(pc_t, nSamples);
+            tdp::GetSphericalPc(pc_t, nSamples);
         }
 
         vbo_s.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
@@ -491,8 +475,8 @@ int main(int argc, char* argv[]){
       T_wl.resize(L_t.rows(),(int)numEv);
       S_evals.resize((int)numEv);
       T_evals.resize((int)numEv);
-      S_desc.resize(L_s.rows(), (int)nSteps);
-      T_desc.resize(L_t.rows(), (int)nSteps);
+      S_desc_w.resize(L_s.rows(), (int)nSteps);
+      T_desc_w.resize(L_t.rows(), (int)nSteps);
 
 
       std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
@@ -500,12 +484,12 @@ int main(int argc, char* argv[]){
 
       tdp::Timer t0;
       tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl);
-      S_desc = getHKS(S_wl, S_evals, (int)nSteps);
+      S_desc_w = getHKS(S_wl, S_evals, (int)nSteps);
       evector_s = S_wl.col(1); // first non-trivial evector
       means_s = tdp::getLevelSetMeans(pc_s, evector_s, (int)nBins); //means based on the evector_s's nBins level sets
 
       tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
-      T_desc = getHKS(T_wl, T_evals, (int)nSteps);
+      T_desc_w = getHKS(T_wl, T_evals, (int)nSteps);
       evector_t = T_wl.col(1); // first non-trivial evector
       means_t = tdp::getLevelSetMeans(pc_t, evector_t, (int)nBins);
       t0.toctic("GetEigenVectors & GetMeans");
@@ -673,13 +657,11 @@ int main(int argc, char* argv[]){
 //        f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
 //        g0_l = C*f0_l;
 //        g0_w = T_wl*g0_l;
+    Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area()),
+                    f0_l((int)numEv), g0_l((int)numEv);
     if (queryChanged){
         if(showFTransfer){
             std::cout << "showFTransfer---" << showFTransfer << std::endl;
-            //--pick a point 10
-            Eigen::VectorXf f0_w(pc_s.Area()), g0_w(pc_t.Area());
-            Eigen::VectorXf f0_l((int)numEv), g0_l((int)numEv);
-
             //check transferring using indicator function
             //todo: make 0 as a variable
             //tdp::f_rbf(pc_s, pc_s[0], alpha2, f0_w);
@@ -690,9 +672,9 @@ int main(int argc, char* argv[]){
             g0_w = T_wl*g0_l;
         } else if (showDesc){
             std::cout << "Show HKS descriptor---" << std::endl;
-            f0_w = S_hks.col(0);
+            f0_w = S_desc_w.col(0);
             f0_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f0_w);
-            g0_w = T_hks.col(0);
+            g0_w = T_desc_w.col(0);
         }
 
         // Alternative
