@@ -198,7 +198,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
   pangolin::Var<bool>  normalsViaScatter("ui.normals via scatter",false,true);
   pangolin::Var<int>   W("ui.W", 9, 1, 12);
-  pangolin::Var<float>  votingInlierThr("ui.voting inlier Thr", 0.5, 0., 1.);
+  pangolin::Var<float>  votingInlierThr("ui.voting inlier Thr", 0.29, 0., 1.);
   pangolin::Var<int>   step("ui.step", 20, 1, 40);
   pangolin::Var<float>  scale("ui.scale ", 0.05, 0.001, 0.1);
 
@@ -278,6 +278,7 @@ int main( int argc, char* argv[] )
         NormalsViaClustering(pc, W, step, n);
         cuN.CopyFrom(n);
       } else if (normalsViaVoting) {
+
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
         NormalsViaVoting(pc, W, step, votingInlierThr, dpc, n, curv);
         cuN.CopyFrom(n);

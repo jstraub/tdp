@@ -171,7 +171,7 @@ void ExtractPlanes(
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.5,
+      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.29,
             dpc, n, curv, p)) {
         ExtractClosestBrief(pc, grey, pts, orientation, 
             p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
@@ -218,6 +218,7 @@ bool ProjectiveAssoc(const Plane& pl,
   return false;
 }
 
+
 bool EnsureNormal(
     Image<Vector3fda>& pc,
     Image<Vector4fda>& dpc,
@@ -236,7 +237,7 @@ bool EnsureNormal(
       float curvi;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.5, dpc, ni, curvi, pi)) {
+        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
@@ -860,13 +861,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
-  pangolin::Var<bool> showNormals("ui.show ns",false,true);
+  pangolin::Var<bool> showNormals("ui.show ns",true,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
+  pangolin::Var<bool> showCurv("ui.show curvature",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
-  pangolin::Var<bool> showNN("ui.show NN",false,true);
+  pangolin::Var<bool> showNN("ui.show NN",true,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
-  pangolin::Var<int> step("ui.step",30,0,100);
+  pangolin::Var<int> step("ui.step",10,0,100);
 
   pangolin::Var<bool> showFAST("ui.show FAST",true,true);
   pangolin::Var<int> fastB("ui.FAST b",30,0,100);
@@ -931,7 +933,7 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  float lambDPvMFmeans = cos(65.*M_PI/180.);
+  float lambDPvMFmeans = cos(55.*M_PI/180.);
   tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
   std::vector<std::vector<uint32_t>> invInd;
@@ -1068,6 +1070,9 @@ int main( int argc, char* argv[] )
   {
     if (runLoopClosure.GuiChanged()) {
       showLoopClose = runLoopClosure;
+    }
+    if (runLoopClosureGeom.GuiChanged()) {
+      showLoopClose = runLoopClosureGeom;
     }
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
@@ -1643,7 +1648,8 @@ int main( int argc, char* argv[] )
         std::iota(idsW.begin(), idsW.end(), 0);
         std::iota(idsC.begin(), idsC.end(), 0);
         Eigen::Matrix3f N;
-        for (size_t it =0; it < 100; ++it) {
+        float maxAlign = 0;
+        for (size_t it =0; it < 1000; ++it) {
           std::random_shuffle(idsW.begin(), idsW.end());
           std::random_shuffle(idsC.begin(), idsC.end());
           N = Eigen::Matrix3f::Zero();
@@ -1652,7 +1658,10 @@ int main( int argc, char* argv[] )
           }
           // TODO check order
           Eigen::Matrix3f R_wc = tdp::ProjectOntoSO3<float>(N);
-
+          float align = (R_wc*N).trace();
+          if (align > maxAlign) {
+            T_wcRansac.rotation() = tdp::SO3f(R_wc);
+          }
         }
       }
     }
@@ -1691,16 +1700,20 @@ int main( int argc, char* argv[] )
 //        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
 //            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
 //            iReadCurW*sizeof(tdp::Vector3fda));
-        if ((!showAge && !showObs && !showSurfels) || pl_w.SizeToRead() == 0) {
+        if ((!showAge && !showObs && !showSurfels && !showCurv) 
+            || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
-        } else if (showAge || showObs) {
+        } else if (showAge || showObs || showCurv) {
           age.Reinitialise(pl_w.SizeToRead());
           if (showAge) {
             for (size_t i=0; i<age.Area(); ++i) 
               age[i] = pl_w.GetCircular(i).lastFrame_;
-          } else {
+          } else if (showObs) {
             for (size_t i=0; i<age.Area(); ++i) 
               age[i] = pl_w.GetCircular(i).numObs_;
+          } else {
+            for (size_t i=0; i<age.Area(); ++i) 
+              age[i] = pl_w.GetCircular(i).curvature_;
           }
           valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),  GL_FLOAT,
               1, GL_DYNAMIC_DRAW);

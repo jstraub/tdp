@@ -66,8 +66,8 @@ bool NormalViaVoting(
       return false;
 //    std::cout << "\t" << n.transpose() << std::endl;
     size_t N = 0;
-    for (size_t u=u0-W; u<u0+W; ++u) {
-      for (size_t v=v0-W; v<v0+W; ++v) {
+    for (size_t u=u0-W; u<=u0+W; ++u) {
+      for (size_t v=v0-W; v<=v0+W; ++v) {
         if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
           dpc(u,v).topRows<3>() = pc0 - pc(u,v);
           dpc(u,v)(3) = dpc(u,v).topRows<3>().norm();
@@ -91,39 +91,64 @@ bool NormalViaVoting(
       p.fill(0.);
       orthoL = cos(0.5*M_PI-dAng);
       orthoU = cos(0.5*M_PI+dAng);
-      for (size_t u=u0-W; u<u0+W; ++u) {
-        for (size_t v=v0-W; v<v0+W; ++v) {
+      for (size_t u=u0-W; u<=u0+W; ++u) {
+        for (size_t v=v0-W; v<=v0+W; ++v) {
           if (dpc(u,v)(3) > 0.) {
             float ang = dpc(u,v).topRows<3>().dot(n);
             if (orthoU*dpc(u,v)(3) < ang && ang <= orthoL*dpc(u,v)(3)) {
 //              S += dpc(u,v)*dpc(u,v).transpose();
-              S(0,0) += dpc(u,v)(0)*dpc(u,v)(0);
-              S(0,1) += dpc(u,v)(0)*dpc(u,v)(1);
-              S(0,2) += dpc(u,v)(0)*dpc(u,v)(2);
-              S(1,1) += dpc(u,v)(1)*dpc(u,v)(1);
-              S(1,2) += dpc(u,v)(1)*dpc(u,v)(2);
-              S(2,2) += dpc(u,v)(2)*dpc(u,v)(2);
+              S(0,0) += pc(u,v)(0)*pc(u,v)(0);
+              S(0,1) += pc(u,v)(0)*pc(u,v)(1);
+              S(0,2) += pc(u,v)(0)*pc(u,v)(2);
+              S(1,1) += pc(u,v)(1)*pc(u,v)(1);
+              S(1,2) += pc(u,v)(1)*pc(u,v)(2);
+              S(2,2) += pc(u,v)(2)*pc(u,v)(2);
               p += pc(u,v);
               N++;
             }
           }
         }
       }
-      if (N<4*W*W*inlierThr) 
+      if (N<4*(W+1)*(W+1)*inlierThr) 
         return false;
       S(1,0) = S(0,1);
       S(2,0) = S(0,2);
       S(2,1) = S(1,2);
-      p /= N;
+      eig.computeDirect(S - p*p.transpose()/float(N));
       int id = 0;
-      eig.computeDirect(S);
-      curvature = sqrtf(eig.eigenvalues().minCoeff(&id));
+      curvature = eig.eigenvalues().minCoeff(&id);
       n = eig.eigenvectors().col(id).normalized();
+      p /= N;
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
       Nprev = N;
       N = 0;
     }
+//    tdp::Vector3fda mu = p;
+//    N = 0;
+//    p.fill(0.);
+//    S.fill(0.);
+//    for (size_t u=u0-W; u<=u0+W; ++u) {
+//      for (size_t v=v0-W; v<=v0+W; ++v) {
+//        if (dpc(u,v)(3) > 0.) {
+//          S(0,0) += pc(u,v)(0)*pc(u,v)(0);
+//          S(0,1) += pc(u,v)(0)*pc(u,v)(1);
+//          S(0,2) += pc(u,v)(0)*pc(u,v)(2);
+//          S(1,1) += pc(u,v)(1)*pc(u,v)(1);
+//          S(1,2) += pc(u,v)(1)*pc(u,v)(2);
+//          S(2,2) += pc(u,v)(2)*pc(u,v)(2);
+//          p += pc(u,v);
+//          N++;
+//        }
+//      }
+//    }
+//    S(1,0) = S(0,1);
+//    S(2,0) = S(0,2);
+//    S(2,1) = S(1,2);
+//    eig.computeDirect(S - p*p.transpose()/float(N));
+//    curvature = sqrtf(eig.eigenvalues().minCoeff());
+//    p = mu;
+    p = pc0;
     ni = n * (n(2)<0.?1.:-1.);
     return true;
   }
