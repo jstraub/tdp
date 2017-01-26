@@ -571,7 +571,7 @@ void f_rbf(const Image<Vector3fda>& pc,
            const Vector3fda& p,
            const float alpha,
            Eigen::VectorXf& f){
-
+    f.resize(pc.Area());
     for (int i=0; i<pc.Area(); ++i){
         f(i) = (exp(-(1/alpha)*(pc[i]-p).squaredNorm()));
         //std::cout << "f(i):  " << f(i) << std::endl;
@@ -580,8 +580,9 @@ void f_rbf(const Image<Vector3fda>& pc,
 }
 
 void f_indicator(const Image<Vector3fda>& pc,
-                        const int p_idx,
-                        Eigen::VectorXf& f){
+                 const int p_idx,
+                 Eigen::VectorXf& f){
+    f.resize(pc.Area());
     for (int i=0; i<pc.Area(); ++i){
         if (i == p_idx){
             f(i) = 1.0f;
@@ -589,6 +590,44 @@ void f_indicator(const Image<Vector3fda>& pc,
             f(i)= 0.0f;
         }
     }
+}
+
+void f_landmark(const Image<Vector3fda>& pc,
+                const int p_idx,
+                const float alpha,
+                const std::string& option,
+                Eigen::VectorXf& f_w){
+
+    if (option=="rbf"){
+        f_rbf(pc, pc[p_idx], alpha, f_w);
+    }else{
+        f_indicator(pc, p_idx, f_w);
+    }
+}
+
+//todo: check if okay with VectorXf. 
+template<typename Derived>
+inline Eigen::MatrixBase<Derived> projectToLocal(const Eigen::MatrixBase<Derived>& T_wl,
+                                                 const Eigen::MatrixBase<Derived>& F_w){
+    /*
+     * T_wl: each column is an eigenvector. n by k 
+     * (each vector lives in n-dim space. There are k evectors.)
+     * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
+     * Returns t vectors in k-dim space. k by t
+    */
+    return (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*F_w);
+}
+
+template<typename Derived>
+inline Eigen::MatrixBase<Derived> projectToWorld(const Eigen::MatrixBase<Derived>& T_wl,
+                                                 const Eigen::MatrixBase<Derived>& F_l){
+    /*
+     * T_wl: each column is an eigenvector. n by k 
+     * (each vector lives in n-dim space. There are k evectors.)
+     * F_wl: each column is a vector in n-dim. Say F_wl.cols() is t
+     * Returns t vectors in k-dim space. k by t
+    */
+    return T_wl*F_l;
 }
 
 

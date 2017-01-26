@@ -8,6 +8,7 @@ tags
 *.lbl
 *.aux
 *.log
+*.DS_Store
 writeup.pdf
 log*.txt
 

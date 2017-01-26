@@ -156,10 +156,18 @@ void f_rbf(const Image<Vector3fda>& pc,
            Eigen::VectorXf& f );
 
 void f_indicator(const Image<Vector3fda>& pc,
-                        const int p_idx,
-                        Eigen::VectorXf& f);
-//std::vector<float> f_rbf(const Image<Vector3fda>& pc,
-//           const Vector3fda& p,
-//           const float alpha);
+                 const int p_idx,
+                 Eigen::VectorXf& f);
 
+void f_landmark(const Image<Vector3fda>& pc,
+                const int p_idx,
+                const float alpha,
+                const std::string& option,
+                Eigen::VectorXf& f_w);
+
+inline Eigen::MatrixXf projectToLocal(const Eigen::MatrixXf& T_wl,
+                                      const Eigen::MatrixXf& F_w);
+
+inline Eigen::MatrixXf projectToWorld(const Eigen::MatrixXf& T_wl,
+                                      const Eigen::MatrixXf& F_w);
 }
