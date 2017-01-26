@@ -9,6 +9,8 @@ tags
 *.aux
 *.log
 *.DS_Store
+*.txt.user
+*.autosave
 writeup.pdf
 log*.txt
 

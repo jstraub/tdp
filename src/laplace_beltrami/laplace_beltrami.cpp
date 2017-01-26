@@ -566,7 +566,8 @@ eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
 }
 
 
-
+/*****Correspondences***************************************
+ **********************************************************/
 void f_rbf(const Image<Vector3fda>& pc,
            const Vector3fda& p,
            const float alpha,
@@ -605,6 +606,41 @@ void f_landmark(const Image<Vector3fda>& pc,
     }
 }
 
+Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
+                       const Eigen::VectorXf& LB_evals,
+                       const int nSteps){
+    /*Calculates heat kernel from source to target at time t
+     * LB_evecs: Laplace-Beltrami basis. Each col = Laplacian's evector.
+     * LB_evals: Corresponding eigenvalues. Assumes an increasing order.
+     * nSteps  : number of timesteps.
+     * tmin and tmax are calculated from largest evalue and smallest,
+     * non-trivial evalue
+     */
+    int nPoints = LB_evecs.rows();
+    int nEvecs = LB_evecs.cols();
+    float tmin = 4*log(10)/LB_evals(LB_evals.size()-1);
+    float tmax = 4*log(10)/LB_evals(1); //smallest, non-trivial
+    std::cout << "smallest eval: (zero?) " << LB_evals(0) << std::endl;
+    Eigen::VectorXf ts = Eigen::VectorXf::LinSpaced(nSteps, log(tmin), log(tmax));
+    std::cout << ts.size() << std::endl;
+
+
+    Eigen::MatrixXf hks(nPoints, ts.size());
+    const Eigen::MatrixXf evec_squared = LB_evecs.array().square();
+    for (int i=0; i<ts.size(); ++i){
+      Eigen::VectorXf exp_eval = (-LB_evals.array()*ts[i]).exp();
+      hks.col(i) = evec_squared*exp_eval;
+    }
+    return hks;
+
+    //to continue:
+    //- hks -> project to LB_basis by apply fullPiv on each row
+    //- each result is f_l -> Add it to F matrix
+}
+
+
+/**************PROJECTIONS*************************
+ **************************************************/
 //todo: check if okay with VectorXf. 
 template<typename Derived>
 inline Eigen::MatrixBase<Derived> projectToLocal(const Eigen::MatrixBase<Derived>& T_wl,

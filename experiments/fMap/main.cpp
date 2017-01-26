@@ -361,9 +361,9 @@ int main(int argc, char* argv[]){
 
   } else {
       std::srand(101);
-      GetSphericalPc(pc_s, nSamples);
+      tdp::GetSphericalPc(pc_s, nSamples);
       std::srand(101);
-      GetSphericalPc(pc_t, nSamples);
+      tdp::GetSphericalPc(pc_t, nSamples);
   }
 
     // build kd tree

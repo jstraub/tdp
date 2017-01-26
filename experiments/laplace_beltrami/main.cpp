@@ -51,8 +51,6 @@
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
-
-
 int main( int argc, char* argv[] ){
 
     std::srand(101);

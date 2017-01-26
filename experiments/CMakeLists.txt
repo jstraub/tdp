@@ -50,7 +50,7 @@ if (CUDA_FOUND)
   add_subdirectory(./skinning)
   add_subdirectory(./laplace_beltrami)
   add_subdirectory(./fMap)
-  add_subdirectory(./hayleyTest)
+  add_subdirectory(./fMapTest)
 
 
 endif()

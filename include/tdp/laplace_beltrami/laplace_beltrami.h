@@ -145,6 +145,11 @@ Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
 eigen_vector<Vector3fda> getLevelSetMeans(const Image<Vector3fda>& pc,
                                           const Eigen::VectorXf& evector,
                                           int nBins);
+
+
+
+/******************CORRESPONDENCES****************************************
+ *************************************************************************/
 inline float rbf(const Vector3fda& p1,
                  const Vector3fda& p2,
                  const float alpha);
@@ -165,9 +170,19 @@ void f_landmark(const Image<Vector3fda>& pc,
                 const std::string& option,
                 Eigen::VectorXf& f_w);
 
-inline Eigen::MatrixXf projectToLocal(const Eigen::MatrixXf& T_wl,
-                                      const Eigen::MatrixXf& F_w);
+Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
+                       const Eigen::VectorXf& LB_evals,
+                       const int nSteps);
 
-inline Eigen::MatrixXf projectToWorld(const Eigen::MatrixXf& T_wl,
-                                      const Eigen::MatrixXf& F_w);
+/**************************PROJECTIONS***************************************
+ ****************************************************************************/
+
+template<typename Derived>
+inline Eigen::MatrixBase<Derived> projectToLocal(const Eigen::MatrixBase<Derived>& T_wl,
+                                                 const Eigen::MatrixBase<Derived>& F_w);
+
+template<typename Derived>
+inline Eigen::MatrixBase<Derived> projectToWorld(const Eigen::MatrixBase<Derived>& T_wl,
+                                                 const Eigen::MatrixBase<Derived>& F_w);
+
 }
