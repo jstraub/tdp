@@ -23,6 +23,7 @@ file(GLOB SRCS
   "./gl/*cpp"
   "./laplace_beltrami/*cpp"
   "../3rdparty/fast-C-src/*c"
+  "./nn_cuda/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 
