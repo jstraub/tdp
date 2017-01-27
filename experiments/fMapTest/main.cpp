@@ -2,6 +2,7 @@
 #include <cmath>
 #include <complex>
 #include <vector>
+#include <string>
 #include <cstdlib>
 #include <random>
 
@@ -50,60 +51,100 @@
 
 /************Declarations***************************************
  ***************************************************************/
-void printImage(const tdp::ManagedHostImage<tdp::Vector3fda>& pc,
-                int start_idx,
-                const int length);
-
 void Test_printImage();
+void Test_randomSeed();
+void Test_addGaussianNoise();
 void Test_f_landmark();
 void Test_projections();
-void Test_samePc_exactPairs(std::string& option);
+void Test_samePc_sameSamples(
+        int nSamples, 
+        int nEv,
+        int nTrain,
+        // std::string option = std::string("rbf"), 
+        std::string& option,
+        bool showDecomposition = false);
+void Test_samePc_diffSamples(
+        int nSamples, 
+        // std::string option = std::string("rbf"), 
+        std::string& option,
+        bool showDecomposition = false);
 
 /************end delcarations************************************/
-
-
 int main(){
-    //Test_printImage();
+//    Test_printImage();
     //Test_f_landmark();
-     std::string option("rbf");
-     Test_samePc_exactPairs(option);
+    //Test_randomSeed();
+  //Test_addGaussianNoise();
+
+
+  std::cout << "Test Correspondences---" << std::endl;
+  std::string option("rbf");
+  int nSamples = 1500;
+  int nEv = 30;
+  int nTrain;
+  bool showDecomposition = false;
+  for (int i=0; i< 33; ++i){
+      nTrain = i*nEv;
+      std::cout << "\n================================="<< std::endl;
+      std::cout <<"nPoints: " << nSamples <<", nEv: " << nEv << ", nPW corresp.: "
+                << nTrain << std::endl;
+      Test_samePc_sameSamples(nSamples,nEv, nTrain,option,showDecomposition);
+      std::cout << "=================================\n"<< std::endl;
+
+    }
+
+  //todo: time to incorporate this with the fmap main.cpp so that
+  //    we don't recalcualte repeated things (such as Laplacian)
+  //run the experiement with the pipe to a log file
+
+
+
+  // Test_samePc_diffSamples(option);
 }
 
 
 
-/************Implementations***************************************
+/************Test mplementations***********************************
  ******************************************************************/
-void printImage(const tdp::ManagedHostImage<tdp::Vector3fda>& pc,
-                int start_idx,
-                const int length){
-    // prints pc[i] for i in [start_idx,start_idx + length -1 ]
-    // pc[i] element's are comma separated
-    // and printed out as transposed. 
-    int end_idx = start_idx + length -1 ;
-    if (start_idx < 0){
-        start_idx = 0;
-    }
-    if (end_idx > pc.Area()-1){
-        end_idx = pc.Area()-1;
-    }
-    //assert(start_idx >= 0 && end_idx < pc.Area());
-    for (int i=start_idx; i<= end_idx; ++i){
-        std::cout << pc[i].transpose() << ", ";
-    }
-    std::cout << std::endl;
+void Test_randomSeed(){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc1, pc2, pc3, pc4;
+  tdp::GetSphericalPc(pc1, 10);
+  tdp::GetSphericalPc(pc2, 10);
+  tdp::GetSphericalPc(pc3, 10);
+  pc4.ResizeCopyFrom(pc3);
+
+  std::cout << "PC1---" << std::endl;
+  tdp::printImage(pc1, 0, pc1.Area() -1);
+  std::cout << "PC2---" << std::endl;
+  tdp::printImage(pc2, 0, pc2.Area() -1);
+  std::cout << "PC3---" << std::endl;
+  tdp::printImage(pc3, 0, pc3.Area() -1);
+  std::cout << "PC4---" << std::endl;
+  tdp::printImage(pc4, 0, pc4.Area() -1);
 }
 
 void Test_printImage(){
     tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
-    std::cout << "---Printing image---" << std::endl;
-    printImage(pc,0,pc.Area());
+    std::cout << "---tdp::ing image---" << std::endl;
+    tdp::printImage(pc,0,pc.Area());
 
     pc.Reinitialise(10);
     for (int i =0; i< 10; ++i){
         pc[i] = tdp::Vector3fda(i,i,i);
     }
     std::cout << "---Printing image---" << std::endl;
-    printImage(pc,0,pc.Area()-1);
+    tdp::printImage(pc,0,pc.Area());
+}
+
+void Test_addGaussianNoise(){
+   tdp::ManagedHostImage<tdp::Vector3fda> pc_s, pc_t; 
+   tdp::GetSimplePc(pc_s);
+   tdp::addGaussianNoise(pc_s, 0.1f, pc_t);
+
+   std::cout << "PC_S ----" << std::endl;
+   tdp::printImage(pc_s, 0, pc_s.Area());
+   std::cout << "PC_T ---" << std::endl;
+   tdp::printImage(pc_t, 0, pc_t.Area());
 }
 
 void Test_f_landmark(){
@@ -114,12 +155,12 @@ void Test_f_landmark(){
 
     for (int p_idx = 0; p_idx < pc.Area(); p_idx++){
         opt = "rbf";
-        f_landmark(pc, p_idx, alpha, opt, f_w);
+        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
         std::cout << "opt: " << opt << std::endl;
         std::cout << "fw: " << f_w.transpose() << std::endl;
 
         opt = "ind";
-        f_landmark(pc, p_idx, alpha, opt, f_w);
+        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
         std::cout << "opt: " << opt << std::endl;
         std::cout << "fw: " << f_w.transpose() << std::endl;
         std::cout << "\n\n" << std::endl;
@@ -130,29 +171,45 @@ void Test_projections(){
     // Test for projectToLocal and projectToWorld
 }
 
-void Test_samePc_exactPairs(std::string& option){//todo: std::option
-    // parameters
-    int nSamples = 100;
+// void Test_samePc_withGNoise
+void Test_samePc_sameSamples(int nSamples, int nEv, int nPW, std::string& option, bool showDecomposition){
+  /* nSamples: number of points on the surface
+   * nTrain: number of  correpondence pairs given to approximate functional mapping
+   *  - must be at least numEv, and at most nSamples
+   * option: "rbf" or "ind".  function to construct a function on the surface based on a given point
+   * showDecompotion: true to see (eigenfunctions and) eigenvalues of the Laplacian of both surfaces
+   */
+
+//todo: std::option
     tdp::ManagedHostImage<tdp::Vector3fda> pc_s;
-    // tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
     tdp::ManagedHostImage<tdp::Vector3fda> pc_t;
 
     // Get random points from a sphere
-    std::srand(101);
-    tdp::GetSphericalPc(pc_s, nSamples);
+    tdp::GetSimplePc(pc_s, nSamples);
+    //tdp::GetSphericalPc(pc_s, nSamples);
     pc_t.ResizeCopyFrom(pc_s);
 
-    int numEv = std::min(30, (int)(pc_s.Area()/2));//pc_s.Area()-2; //get ALL eigenvectors of L
+    //tdp::print("PC_S---");
+    //tdp::printImage(pc_s, 0, pc_s.Area());
+    //tdp::print("PC_T---");
+    //tdp::printImage(pc_t, 0, pc_t.Area());
+
+    /****parameters*****/
+    /*******************/
+    //int nEv = std::min(30, (int)(pc_s.Area()/3));//pc_s.Area()-2;
+    //get ALL eigenvectors of L
     int knn = pc_s.Area(); // use all points as neighbors
     float eps = 1e-6;
     float alpha = 0.01;
     float alpha2 = 0.1;
 
-    int numPW = numEv;//number of pointwise correspondences
-    int numHKS = 0; //number of heat kernel signature correspondences
-    int numCst = numPW + numHKS;//pc_s.Area();
+    //int nPW = nTrain;//nEv;//number of pointwise correspondences
+    int nHKS = 0; //number of heat kernel signature correspondences
+    int nCst = nPW + nHKS;//pc_s.Area();
     
-    //int numTest = pc_s.Area() - numPW;
+    //int nTest = pc_s.Area() - nPW;
+    int nShow = std::min(10, nEv);
+    /*******************/
 
     // build kd tree
     tdp::ANN ann_s, ann_t;
@@ -162,37 +219,38 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
     // construct laplacian matrices
     Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),
                                L_t(pc_t.Area(), pc_t.Area());
-    Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv),//cols are evectors
-                    T_wl(L_t.rows(),(int)numEv),
+    Eigen::MatrixXf S_wl(L_s.rows(),(int)nEv),//cols are evectors
+                    T_wl(L_t.rows(),(int)nEv),
                     S_desc_w, T_desc_w,
                     S_desc_l, T_desc_l;
-    Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
+    Eigen::VectorXf S_evals((int)nEv), T_evals((int)nEv);
 
 
     L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
     L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
-    tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl); //todo: check if size initialization is included
-    tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
+    tdp::decomposeLaplacian(L_s, nEv, S_evals, S_wl); //todo: check if size initialization is included
+    tdp::decomposeLaplacian(L_t, nEv, T_evals, T_wl);
 
-    std::cout << "Basis ---" << std::endl;
-    std::cout << "num of evec: " << numEv << std::endl;
-    std::cout << S_wl << std::endl;
-    std::cout << "-----------------" << std::endl;
-    std::cout << T_wl << std::endl;
-    std::cout << "Evals ---" << std::endl;
-    std::cout << S_evals.transpose() << std::endl;
-    std::cout << T_evals.transpose() << std::endl;
-
+    if (showDecomposition){
+        // std::cout << "Basis ---" << std::endl;
+        // std::cout << "n of evec: " << nEv << std::endl;
+        // std::cout << S_wl << std::endl;
+        std::cout << "-----------------" << std::endl;
+        std::cout << T_wl << std::endl;
+        std::cout << "Evals ---" << std::endl;
+        std::cout << "\tS: " << S_evals.transpose() << std::endl;
+        std::cout << "\tT: " << T_evals.transpose() << std::endl;
+    }
 
     //--Construct function pairs
     Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area()),
-                    f_l((int)numEv), g_l((int)numEv);
-    Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
-    Eigen::MatrixXf C((int)numEv, (int)numEv);
+                    f_l((int)nEv), g_l((int)nEv);
+    Eigen::MatrixXf F((int)nCst, (int)nEv), G((int)nCst, (int)nEv);
+    Eigen::MatrixXf C((int)nEv, (int)nEv);
 
     // --construct F(data matrix) and G based on the correspondences
 
-    for (int i=0; i< (int)numPW; ++i){
+    for (int i=0; i< (int)nPW; ++i){
         // if (option == "rbf"){
         //     tdp::f_rbf(pc_s, pc_s[i], alpha2, f_w); //todo: check if I can use this same alpha?
         //     tdp::f_rbf(pc_t, pc_t[i], alpha2, g_w);
@@ -213,20 +271,20 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
     }
 
 
-    if (numHKS >0){
+    if (nHKS >0){
         //-----Add  heat kernel signatures as constraints
         std::cout << "CALCULATEING HKS ---" <<std::endl;
-        S_desc_w = tdp::getHKS(S_wl,S_evals,numHKS);
-        T_desc_w = tdp::getHKS(T_wl,T_evals,numHKS);
+        S_desc_w = tdp::getHKS(S_wl,S_evals,nHKS);
+        T_desc_w = tdp::getHKS(T_wl,T_evals,nHKS);
         S_desc_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*S_desc_w);
         T_desc_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*T_desc_w);
         //S_desc_l = tdp::projectToLocal(S_wl, S_desc_w); //columne is a feature
         //T_desc_l = tdp::projectToLocal(T_wl, T_desc_w);
         
-        assert(S_desc_l.cols() == numHKS);
-        for (int i=0; i<numHKS; ++i){
-          F.row(numPW+i) = S_desc_l.col(i);
-          G.row(numPW+i) = T_desc_l.col(i);
+        assert(S_desc_l.cols() == nHKS);
+        for (int i=0; i<nHKS; ++i){
+          F.row(nPW+i) = S_desc_l.col(i);
+          G.row(nPW+i) = T_desc_l.col(i);
         }
         std::cout << "S,T descriptors at time 0--------" << std::endl;
         std::cout << S_desc_l.col(0) << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
@@ -239,55 +297,60 @@ void Test_samePc_exactPairs(std::string& option){//todo: std::option
     C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
     //std::cout << "F: \n" << F.rows() << F.cols() << std::endl;
     //std::cout << "\nG: \n" << G.rows() << G.cols() << std::endl;
-    std::cout << "\nC---------\n" << C << /*C.rows() << C.cols() <<*/ std::endl;
+
+    std::cout << "-----------\n"
+              << "C(10x10) \n" 
+              << C.block(0,0,nShow,nShow) 
+              << std::endl;
+
+    std::cout << "----------\n"
+              << "Diagnoals\n"
+              << C.diagonal().transpose() 
+              << std::endl;
 
     // Test
-    assert(numPW < pc_s.Area());
-    int numTest = (int)pc_s.Area()-numPW;
+    assert(nPW < pc_s.Area());
+    int nTest = (int)pc_s.Area()-nPW;
     float error = 0;
     Eigen::VectorXf true_w, true_l, guess_w;
-    for (int i=numPW; i< (int)pc_s.Area(); ++i ){
+    for (int i=nPW; i< (int)pc_s.Area(); ++i ){
         tdp::f_landmark(pc_s, i, alpha2, option, true_w);
         true_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*true_w);
         guess_w = S_wl * (C*true_l);
         // tdp::Vector3fda true_l = tdp::projectToLocal(S_wl, true_w);
         // tdp::Vector3fda guess_w = tdp::projectToWorld(S_wl, C*true_l);
-        error += (true_w - guess_w).squaredNorm();
+        error += (true_w - guess_w).squaredNorm(); //todo: 
     }
-    error = std::sqrt(error/numTest);
-    std::cout << "vector length: " << pc_s.Area() << std::endl;
-    std::cout << "Number of test points: " << numTest << std::endl;
-    std::cout << "error: " << error << std::endl;
+    error = std::sqrt(error/nTest); //rms
+    std::cout << "Surface dim: " << pc_s.Area() << std::endl;
+    std::cout << "N test points: " << nTest << std::endl;
+    std::cout << "rms: " << error << std::endl;
 
 }
 
-void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
+void Test_samePc_diffSamples(int nSamples, std::string& option, bool showDecomposition){
+//todo: std::option
     //todo: think about how to get the correspondances - sort?
     //    : change seed, get the two different spheres 
 
-    // parameters
+    tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
+    //tdp::ManagedHostImage<tdp::Vector3fda> pc_s;
+    //    tdp::GetSphericalPc(pc_s, nSamples);
 
-    int nSamples = 100;
-    tdp::ManagedHostImage<tdp::Vector3fda> pc_s;
-    // tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
     tdp::ManagedHostImage<tdp::Vector3fda> pc_t;
+    addGaussianNoise(pc_s, 0.1f, pc_t);
 
-    // Get random points from a sphere
-    std::srand(101);
-    tdp::GetSphericalPc(pc_s, nSamples);
-    pc_t.ResizeCopyFrom(pc_s);
-
-    int numEv = std::min(30, (int)(pc_s.Area()/2));//pc_s.Area()-2; //get ALL eigenvectors of L
+    int nEv = std::min(30, (int)(pc_s.Area()/2));//pc_s.Area()-2; //get ALL eigenvectors of L
     int knn = pc_s.Area(); // use all points as neighbors
     float eps = 1e-6;
-    float alpha = 0.01;
-    float alpha2 = 0.1;
+    float alpha = 0.01; // param for calculating Laplacian of a surface
+    float alpha2 = 0.1; // param for radial basis function construction
 
-    int numPW = numEv;//number of pointwise correspondences
-    int numHKS = 0; //number of heat kernel signature correspondences
-    int numCst = numPW + numHKS;//pc_s.Area();
+    int nPW = nEv;//nber of pointwise correspondences
+    int nHKS = 0; //nber of heat kernel signature correspondences
+    int nCst = nPW + nHKS;//pc_s.Area();
     
-    //int numTest = pc_s.Area() - numPW;
+    //int nTest = pc_s.Area() - nPW;
 
     // build kd tree
     tdp::ANN ann_s, ann_t;
@@ -297,20 +360,20 @@ void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
     // construct laplacian matrices
     Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),
                                L_t(pc_t.Area(), pc_t.Area());
-    Eigen::MatrixXf S_wl(L_s.rows(),(int)numEv),//cols are evectors
-                    T_wl(L_t.rows(),(int)numEv),
+    Eigen::MatrixXf S_wl(L_s.rows(),(int)nEv),//cols are evectors
+                    T_wl(L_t.rows(),(int)nEv),
                     S_desc_w, T_desc_w,
                     S_desc_l, T_desc_l;
-    Eigen::VectorXf S_evals((int)numEv), T_evals((int)numEv);
+    Eigen::VectorXf S_evals((int)nEv), T_evals((int)nEv);
 
 
     L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
     L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
-    tdp::decomposeLaplacian(L_s, numEv, S_evals, S_wl); //todo: check if size initialization is included
-    tdp::decomposeLaplacian(L_t, numEv, T_evals, T_wl);
+    tdp::decomposeLaplacian(L_s, nEv, S_evals, S_wl); //todo: check if size initialization is included
+    tdp::decomposeLaplacian(L_t, nEv, T_evals, T_wl);
 
     std::cout << "Basis ---" << std::endl;
-    std::cout << "num of evec: " << numEv << std::endl;
+    std::cout << "n of evec: " << nEv << std::endl;
     std::cout << S_wl << std::endl;
     std::cout << "-----------------" << std::endl;
     std::cout << T_wl << std::endl;
@@ -321,20 +384,13 @@ void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
 
     //--Construct function pairs
     Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area()),
-                    f_l((int)numEv), g_l((int)numEv);
-    Eigen::MatrixXf F((int)numCst, (int)numEv), G((int)numCst, (int)numEv);
-    Eigen::MatrixXf C((int)numEv, (int)numEv);
+                    f_l((int)nEv), g_l((int)nEv);
+    Eigen::MatrixXf F((int)nCst, (int)nEv), G((int)nCst, (int)nEv);
+    Eigen::MatrixXf C((int)nEv, (int)nEv);
 
     // --construct F(data matrix) and G based on the correspondences
 
-    for (int i=0; i< (int)numPW; ++i){
-        // if (option == "rbf"){
-        //     tdp::f_rbf(pc_s, pc_s[i], alpha2, f_w); //todo: check if I can use this same alpha?
-        //     tdp::f_rbf(pc_t, pc_t[i], alpha2, g_w);
-        // } else {
-        //     tdp::f_indicator(pc_s, i, f_w); //todo: check if I can use this same alpha?
-        //     tdp::f_indicator(pc_t, i, g_w);
-        // }
+    for (int i=0; i< (int)nPW; ++i){
         tdp::f_landmark(pc_s, i, alpha2, option, f_w);
         tdp::f_landmark(pc_t, i, alpha2, option, g_w);
 
@@ -348,20 +404,20 @@ void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
     }
 
 
-    if (numHKS >0){
+    if (nHKS >0){
         //-----Add  heat kernel signatures as constraints
         std::cout << "CALCULATEING HKS ---" <<std::endl;
-        S_desc_w = tdp::getHKS(S_wl,S_evals,numHKS);
-        T_desc_w = tdp::getHKS(T_wl,T_evals,numHKS);
+        S_desc_w = tdp::getHKS(S_wl,S_evals,nHKS);
+        T_desc_w = tdp::getHKS(T_wl,T_evals,nHKS);
         S_desc_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*S_desc_w);
         T_desc_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*T_desc_w);
         //S_desc_l = tdp::projectToLocal(S_wl, S_desc_w); //columne is a feature
         //T_desc_l = tdp::projectToLocal(T_wl, T_desc_w);
         
-        assert(S_desc_l.cols() == numHKS);
-        for (int i=0; i<numHKS; ++i){
-          F.row(numPW+i) = S_desc_l.col(i);
-          G.row(numPW+i) = T_desc_l.col(i);
+        assert(S_desc_l.cols() == nHKS);
+        for (int i=0; i<nHKS; ++i){
+          F.row(nPW+i) = S_desc_l.col(i);
+          G.row(nPW+i) = T_desc_l.col(i);
         }
         std::cout << "S,T descriptors at time 0--------" << std::endl;
         std::cout << S_desc_l.col(0) << std::endl;//heat kernel at timestap i//todo: check at which point for S and T manifolds
@@ -377,11 +433,11 @@ void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
     std::cout << "\nC---------\n" << C << /*C.rows() << C.cols() <<*/ std::endl;
 
     // Test
-    assert(numPW < pc_s.Area());
-    int numTest = (int)pc_s.Area()-numPW;
+    assert(nPW < pc_s.Area());
+    int nTest = (int)pc_s.Area()-nPW;
     float error = 0;
     Eigen::VectorXf true_w, true_l, guess_w;
-    for (int i=numPW; i< (int)pc_s.Area(); ++i ){
+    for (int i=nPW; i< (int)pc_s.Area(); ++i ){
         tdp::f_landmark(pc_s, i, alpha2, option, true_w);
         true_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*true_w);
         guess_w = S_wl * (C*true_l);
@@ -389,9 +445,9 @@ void Test_samePc_diffSamples_exactPairs(std::string& option){//todo: std::option
         // tdp::Vector3fda guess_w = tdp::projectToWorld(S_wl, C*true_l);
         error += (true_w - guess_w).squaredNorm();
     }
-    error = std::sqrt(error/numTest);
+    error = std::sqrt(error/nTest);
     std::cout << "vector length: " << pc_s.Area() << std::endl;
-    std::cout << "Number of test points: " << numTest << std::endl;
+    std::cout << "nber of test points: " << nTest << std::endl;
     std::cout << "error: " << error << std::endl;
 
 }

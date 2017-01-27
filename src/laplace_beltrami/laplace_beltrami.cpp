@@ -36,17 +36,26 @@ Matrix3fda getCovariance(const Image<Vector3fda>& pc, const Eigen::VectorXi& nnI
   return cov;
 }
 
-ManagedHostImage<Vector3fda> GetSimplePc(){
-    ManagedHostImage<Vector3fda> pc(10,1);
+//todo: DEPRECATE!
+ManagedHostImage<Vector3fda> GetSimplePc(int n){
+    ManagedHostImage<Vector3fda> pc(n,1);
     for (size_t i=0; i<pc.Area(); ++i){
-        Vector3fda pt;
-        pt << i+1,0,0;
-        pc[i] = pt;
+        pc[i] = Vector3fda(i+1,0,0);
     }
     return pc;
 }
 
+/******************Get Point Clouds********************************************/
+/**************************************************************************/
+void GetSimplePc(ManagedHostImage<Vector3fda>& pc, int n){
+    pc.Reinitialise(n,1);
+    for (size_t i=0; i<n; ++i){
+        pc[i] = Vector3fda(i+1,0,0);
+    }
+}
 
+
+//todo: DEPRECATE this!
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc){
     //pc.Reinitialise(pc.w_, pc.h_);
     for (size_t i=0; i<pc.w_; ++i) {
@@ -120,6 +129,24 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
         samples[i] = pc[idx];
     }
 }
+
+//todo: change this to template
+void addGaussianNoise(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
+                      float std,
+                      tdp::ManagedHostImage<tdp::Vector3fda>& dst){
+  dst.Reinitialise(src.Area(),1);
+  std::normal_distribution<float> normal(0, std); //zero mean Guassian
+  std::random_device rd; //seed
+  std::mt19937 rng(rd());
+  for (int i = 0; i< src.Area(); ++i){
+      for (int e = 0; e<src[i].size(); ++e){
+          //template's int is e's max
+          dst[i](e) = src[i](e) + normal(rng);
+        }
+    }
+}
+
+/**************************************************************************/
 
 Eigen::Matrix3f getLocalRot(const Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<Matrix3fda>& es){
 
@@ -637,6 +664,31 @@ Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
     //- each result is f_l -> Add it to F matrix
 }
 
+/***************Print contents*********************
+***************************************************/
+inline void print(std::string& s){
+  std::cout << s << std::endl;
+}
+
+void printImage(const ManagedHostImage<Vector3fda>& pc,
+                int start_idx,
+                int length){
+    // prints pc[i] for i in [start_idx,start_idx + length -1 ]
+    // pc[i] element's are comma separated
+    // and printed out as transposed. 
+    int end_idx = start_idx + length -1 ;
+    if (start_idx < 0){
+        start_idx = 0;
+    }
+    if (end_idx > pc.Area()-1){
+        end_idx = pc.Area()-1;
+    }
+    //assert(start_idx >= 0 && end_idx < pc.Area());
+    for (int i=start_idx; i<= end_idx; ++i){
+        std::cout << pc[i].transpose() << ", ";
+    }
+    std::cout << std::endl;
+}
 
 /**************PROJECTIONS*************************
  **************************************************/

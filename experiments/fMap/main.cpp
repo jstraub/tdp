@@ -52,7 +52,8 @@
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
-//Given C mtx, x (index to pc_s, Source Manifold) , find y (index to pc_t) the correspondence in the Target Manifold
+//Given C mtx, x (index to pc_s, Source Manifold) ,
+//find y (index to pc_t) the correspondence in the Target Manifold
 int getCorrespondence(const tdp::Image<tdp::Vector3fda>& pc_s,
                       const tdp::Image<tdp::Vector3fda>& pc_t,
                       const Eigen::MatrixXf& S_wl,

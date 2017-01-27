@@ -28,8 +28,11 @@ Vector3fda getMean(const Image<Vector3fda> &pc, const Eigen::VectorXi& nnIds);
 Matrix3fda getCovariance(const Image<Vector3fda>& pc,
                          const Eigen::VectorXi& nnIds);
 
-ManagedHostImage<Vector3fda> GetSimplePc();
+/*************Get Point Clouds****************************
+**********************************************************/
+ManagedHostImage<Vector3fda> GetSimplePc(int n=10);
 
+void GetSimplePc(ManagedHostImage<Vector3fda>& pc, int n=10);
 
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc);
 
@@ -52,6 +55,11 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
                     ManagedHostImage<Vector3fda>& samples,
                     int nSamples,
                     std::random_device rd/*seed*/);
+
+void addGaussianNoise(const ManagedHostImage<Vector3fda>& src,
+                      float std,
+                      ManagedHostImage<Vector3fda>& dst);
+/**********************************************************/
 
 
 template<typename T>
@@ -174,6 +182,14 @@ void f_landmark(const Image<Vector3fda>& pc,
 Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
                        const Eigen::VectorXf& LB_evals,
                        const int nSteps);
+
+/******************print**********************************
+**********************************************************/
+inline void print(std::string& s);
+
+void printImage(const ManagedHostImage<Vector3fda>& pc,
+                int start_idx,
+                int length);
 
 /**************************PROJECTIONS***************************************
  ****************************************************************************/
