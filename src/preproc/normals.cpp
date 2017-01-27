@@ -87,6 +87,7 @@ bool NormalViaVoting(
     float orthoU = 0.;
     for (float dAng : {45./180.*M_PI,35./180.*M_PI,25./180.*M_PI,15./180.*M_PI}) {
 //    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
+      N = 0;
       S.fill(0.);
       p.fill(0.);
       orthoL = cos(0.5*M_PI-dAng);
@@ -122,8 +123,22 @@ bool NormalViaVoting(
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
       Nprev = N;
-      N = 0;
     }
+
+    ni = n * (n(2)<0.?1.:-1.);
+    float mu = 0;
+    for (size_t u=u0-W; u<=u0+W; ++u) {
+      for (size_t v=v0-W; v<=v0+W; ++v) {
+        if (dpc(u,v)(3) > 0. && u != u0 && v != v0) {
+          float ang = dpc(u,v).topRows<3>().dot(n);
+          if (orthoU*dpc(u,v)(3) < ang && ang <= orthoL*dpc(u,v)(3)) {
+            mu += dpc(u,v)(3); 
+          }
+        }
+      }
+    }
+    mu /= (N-1); // average dist to neighbors -> 
+    curvature = 2.*(ni.dot(pc0 - p))/(mu*mu);
 //    tdp::Vector3fda mu = p;
 //    N = 0;
 //    p.fill(0.);
@@ -149,7 +164,6 @@ bool NormalViaVoting(
 //    curvature = sqrtf(eig.eigenvalues().minCoeff());
 //    p = mu;
     p = pc0;
-    ni = n * (n(2)<0.?1.:-1.);
     return true;
   }
   return false;
