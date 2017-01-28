@@ -2,7 +2,8 @@
  * under the MIT license. See the license file LICENSE.
  */
 #pragma once
-#include <sring>
+#include <string>
+#include <iomanip>
 
 namespace tdp {
   std::string MakeUniqueFilename(const std::string& filename);
