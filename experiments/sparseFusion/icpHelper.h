@@ -324,8 +324,6 @@ void IncrementalOpRot(
     uint32_t frame,
     Image<uint8_t> mask,
     CircularBuffer<tdp::Plane>& pl_w,
-    CircularBuffer<tdp::Vector3fda> pc_c,
-    CircularBuffer<tdp::Vector3fda> n_c,
     std::vector<std::pair<size_t, size_t>>& assoc,
     size_t& numProjected, 
     SO3f& R_wc
@@ -336,7 +334,7 @@ void IncrementalOpRot(
   uint32_t K = invInd.size();
   uint32_t k = 0;
   while (!exploredAll) {
-    k = (k+1)%(K+1);
+    k = (k+1)%K;
     while (indK[k] < invInd[k].size()) {
       size_t i = invInd[k][indK[k]++];
       tdp::Plane& pl = pl_w.GetCircular(i);
@@ -351,9 +349,7 @@ void IncrementalOpRot(
         pl.numObs_ ++;
         numInl ++;
         mask(u,v) ++;
-        assoc.emplace_back(i,pc_c.SizeToRead());
-        pc_c.Insert(pc(u,v));
-        n_c.Insert(n(u,v));
+        assoc.emplace_back(i,u+v*pc.w_);
         break;
       }
     }
@@ -364,14 +360,202 @@ void IncrementalOpRot(
   R_wc = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
 }
 
+
+//template<int D, typename Derived>
+//bool AccumulateICP(
+//    const Image<Vector3fda>& pc, // in camera frame
+//    const Image<Vector4fda>& dpc, // in camera frame
+//    const Image<Vector3fda>& n,  // in camera frame
+//    const Image<float>& grey, 
+//    const Image<float>& curv, 
+//    const CameraBase<float,D,Derived>& cam,
+//    float distThr, 
+//    float p2plThr, 
+//    float dotThr,
+//    float condEntropyThr,
+//    float negLogEvThr,
+//    float HThr,
+//    float lambdaNs,
+//    float lambdaTex,
+//    bool useTexture,
+//    bool useNormals,
+//    uint32_t frame,
+//    const Plane& pl,
+//    Image<uint8_t> mask,
+//    std::vector<std::pair<size_t, size_t>>& assoc,
+//    size_t& numProjected, 
+//    const SE3f& T_wc,
+//    const SE3f& T_cw,
+//    float& H
+//    Eigen::Matrix<float,6,6>&  A,
+//    Eigen::Matrix<float,6,1>&  Ai,
+//    Eigen::Matrix<float,6,1>&  b,
+//    float& err
+//    ) {
+//      if (dotThr < 1) {
+//        if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+//              W, dpc, n, curv, u,v ))
+//          return false;
+//        if (useTexture) {
+//          if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+//                grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+//                A, Ai, b, err))
+//            return false;
+//        } else if (useNormals) {
+//          if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+//                grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+//                A, Ai, b, err)) {
+//            return false;
+//          }
+//        } else {
+//          if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+//                distThr, p2plThr, dotThr, A, Ai, b, err))
+//            return false;
+//        }
+//      } else {
+//        if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
+//          return false;
+//        if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
+//              distThr, p2plThr, A, Ai, b, err))
+//          return false;
+//      }
+//      return true;
+//    }
+
 void IncrementalFullICP(
-      Eigen::Matrix<float,6,6>&  A,
-      Eigen::Matrix<float,6,1>&  b,
-      Eigen::Matrix<float,6,1>& Ai,
+    const Image<Vector3fda>& pc, // in camera frame
+    const Image<Vector4fda>& dpc, // in camera frame
+    const Image<Vector3fda>& n,  // in camera frame
+    const Image<float>& grey, 
+    const Image<float>& curv, 
+    const CameraBase<float,D,Derived>& cam,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    float condEntropyThr,
+    float negLogEvThr,
+    float HThr,
+    float lambdaNs,
+    float lambdaTex,
+    bool useTexture,
+    bool useNormals,
+    uint32_t frame,
+    Image<uint8_t> mask,
+    CircularBuffer<tdp::Plane>& pl_w,
+    std::vector<std::pair<size_t, size_t>>& assoc,
+    size_t& numProjected, 
+    size_t& numInl, 
+    SE3f& T_wc,
+    float& H,
+    Eigen::Matrix<float,6,6>&  A,
+    Eigen::Matrix<float,6,1>&  b,
     ) {
 
+  SE3f T_cw = T_wc.Inverse();
+  Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
+  // first use already associated data
+  for (const auto& ass : assoc) {
+    tdp::Plane& pl = pl_w.GetCircular(ass.first);
+    int32_t u = ass.second%w;
+    int32_t v = ass.second/w;
 
+    if (dotThr < 1) {
+      if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+            W, dpc, n, curv, u,v ))
+        continue;
+      if (useTexture) {
+        if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+              grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+              A, Ai, b, err))
+          continue;
+      } else if (useNormals) {
+        if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+              grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+              A, Ai, b, err)) {
+          continue;
+        }
+      } else {
+        if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+              distThr, p2plThr, dotThr, A, Ai, b, err))
+          continue;
+      }
+    } else {
+      if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
+        continue;
+      if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
+            distThr, p2plThr, A, Ai, b, err))
+        continue;
+    }
 
+    if (tdp::CheckEntropyTermination(A, Hprev, HThr,
+          condEntropyThr, negLogEvThr, H))
+      break;
+    Hprev = H;
+    numObs ++;
+  }
+  numInl = assoc.size();
+  std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+  size_t numInlPrev = numInl;
+
+  bool exploredAll = false;
+  const uint32_t K = invInd.size();
+  uint32_t k = 0;
+  while (numObs < 1000 && !exploredAll) {
+    k = (k+1)%K;
+    while (indK[k] < invInd[k].size()) {
+      size_t i = invInd[k][indK[k]++];
+      tdp::Plane& pl = pl_w.GetCircular(i);
+      numProjected++;
+      int32_t u, v;
+      if (dotThr < 1) {
+        if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+              W, dpc, n, curv, u,v ))
+          continue;
+        if (useTexture) {
+          if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+                A, Ai, b, err))
+            continue;
+        } else if (useNormals) {
+          if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+                A, Ai, b, err)) {
+            continue;
+          }
+        } else {
+          if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+                distThr, p2plThr, dotThr, A, Ai, b, err))
+            continue;
+        }
+      } else {
+        if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
+          continue;
+        if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
+              distThr, p2plThr, A, Ai, b, err))
+          continue;
+      }
+      pl.lastFrame_ = frame;
+      pl.numObs_ ++;
+      numInl ++;
+      mask(u,v) ++;
+      assoc.emplace_back(i,u+v*pc.w_);
+      break;
+    }
+
+    if (numInl > numInlPrev && k == 0) {
+      if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+            negLogEvThr, H))
+        break;
+      Hprev = H;
+      numObs ++;
+      numInlPrev = numInl;
+    }
+
+    exploredAll = true;
+    for (size_t k=0; k<indK.size(); ++k) {
+      exploredAll &= indK[k] >= invInd[k].size();
+    }
+  }
 }
 
 

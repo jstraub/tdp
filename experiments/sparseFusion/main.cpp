@@ -295,10 +295,6 @@ int main( int argc, char* argv[] )
 //  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
 //  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_i;
-  tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
-  tdp::ManagedHostImage<tdp::Vector3fda> n_i;
-
   pangolin::Var<bool> record("ui.record",false,true);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
@@ -388,8 +384,8 @@ int main( int argc, char* argv[] )
   rgb_w.Fill(tdp::Vector3bda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
+//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
+//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
   nn.Fill(tdp::Vector5ida::Ones()*-1);
@@ -802,7 +798,7 @@ int main( int argc, char* argv[] )
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
-        Ai = Eigen::Matrix<float,6,1>::Zero();
+//        Ai = Eigen::Matrix<float,6,1>::Zero();
         float err = 0.;
         float H = 1e10;
         float Hprev = 1e10;
@@ -813,120 +809,13 @@ int main( int argc, char* argv[] )
         if (warmStartICP) {
           IncrementalOpRot(pc, n,  T_wc, cam, distThr, p2plThr, dotThr,
               frame, mask, pl_w, pc_c, n_c, assoc, numProjected, R_wc);
-//          Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
-//          bool exploredAll = false;
-//          uint32_t k = dis(gen);
-//          while (numObs < dpvmf.GetK()*10 && !exploredAll) {
-//            k = (k+1) % (dpvmf.GetK()+1);
-//            while (indK[k] < invInd[k].size()) {
-//              size_t i = invInd[k][indK[k]++];
-//              tdp::Plane& pl = pl_w.GetCircular(i);
-//              numProjected++;
-//              int32_t u, v;
-//              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-//                    W, dpc, n, curv, u,v ))
-//                continue;
-//              if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
-//                    distThr, p2plThr, dotThr, N)) {
-//                pl.lastFrame_ = frame;
-//                pl.numObs_ ++;
-//                numInl ++;
-//                mask(u,v) ++;
-//                assoc.emplace_back(i,pc_c.SizeToRead());
-//                pc_c.Insert(pc(u,v));
-//                n_c.Insert(n(u,v));
-//                break;
-//              }
-//            }
-//            exploredAll = true;
-//            for (size_t k=0; k<indK.size(); ++k) 
-//              exploredAll &= indK[k] >= invInd[k].size();
-//          }
-////          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
-////              Eigen::ComputeFullU | Eigen::ComputeFullV);
-////          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
-//          T_wc.rotation() = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
-
-          // first use already associated data
-          for (const auto& ass : assoc) {
-            tdp::Plane& pl = pl_w.GetCircular(ass.first);
-            if (AccumulateP2Pl(pl, T_wc, T_cw,
-                  pc_c.GetCircular(ass.second), 
-                  n_c.GetCircular(ass.second),
-                  distThr, p2plThr, dotThr, A, Ai, b, err)) {
-              if (tdp::CheckEntropyTermination(A, Hprev, HThr,
-                    condEntropyThr, negLogEvThr, H))
-                break;
-              Hprev = H;
-              numObs ++;
-            }
-          }
-          std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
         }
-//        size_t numInl0 = numInl;
-        numInlPrev = numInl;
-        // associate new data until enough
-        bool exploredAll = false;
-        uint32_t k = dis(gen);
-        while (numObs < 10000 && !exploredAll) {
-          k = (k+1) % (dpvmf.GetK()+1);
-          while (indK[k] < invInd[k].size()) {
-            size_t i = invInd[k][indK[k]++];
-            tdp::Plane& pl = pl_w.GetCircular(i);
-            numProjected++;
-            int32_t u, v;
-            if (angleThr > 0.) {
-              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, curv, u,v ))
-                continue;
-              if (useTexture) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                      A, Ai, b, err))
-                  continue;
-              } else if (useNormals) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
-                      A, Ai, b, err)) {
-                  continue;
-                }
-              } else {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                      distThr, p2plThr, dotThr, A, Ai, b, err))
-                  continue;
-              }
-            } else {
-              if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
-                continue;
-              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
-                    distThr, p2plThr, A, Ai, b, err))
-                continue;
-            }
-            pl.lastFrame_ = frame;
-            pl.numObs_ ++;
-            numInl ++;
-            mask(u,v) ++;
-            assoc.emplace_back(i,pc_c.SizeToRead());
-            pc_c.Insert(pc(u,v));
-            n_c.Insert(n(u,v));
-            break;
-          }
+        
+        IncrementalFullICP( pc, dpc, n,  grey, curv, cam, distThr, p2plThr, dotThr,
+            condEntropyThr, negLogEvThr, HThr, lambdaNs, lambdaTex,
+            useTexture, useNormals, frame, mask, pl_w, assoc, numProjected, numInl, 
+            T_wc, H, A, b);
 
-          if (numInl > numInlPrev && k == 0) {
-            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                  negLogEvThr, H))
-              break;
-            Hprev = H;
-            numObs ++;
-            numInlPrev = numInl;
-          }
-
-          exploredAll = true;
-          for (size_t k=0; k<indK.size(); ++k) {
-            exploredAll &= indK[k] >= invInd[k].size();
-          }
-        }
-//        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
           // solve for x using ldlt
@@ -987,8 +876,10 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
         for (const auto& ass : assoc) {
-          tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
-          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c.GetCircular(ass.second);
+          int32_t u = ass.second%w;
+          int32_t v = ass.second/w;
+          tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
           pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
           n_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).n_;
           pc_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).p_;
@@ -1000,7 +891,7 @@ int main( int argc, char* argv[] )
     if (runLoopClosureGeom && dpvmf.GetK()>2) {
       tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
       for (const auto& ass : assoc) {
-        dpvmfCur.addObservation(n_c.GetCircular(ass.second));
+        dpvmfCur.addObservation(n(ass.second%w,ass.second/w));
       }
       dpvmfCur.iterateToConvergence(100, 1e-6);
       if (dpvmfCur.GetK() > 2) {
@@ -1154,13 +1045,16 @@ int main( int argc, char* argv[] )
       if (showNormals) {
         glColor4f(1,0,0.,0.5);
         pangolin::glSetFrameOfReference(T_wc.matrix());
-        for (size_t i=0; i<n_i.Area(); ++i) {
-          tdp::glDrawLine(pc_i[i], pc_i[i] + scale*n_i[i]);
+
+        for (const auto& ass : assoc) {
+          int32_t u = ass.second%w;
+          int32_t v = ass.second/w;
+          tdp::glDrawLine(pc(u,v), pc(u,v) + scale*n(u,v));
         }
-        for (size_t i=0; i<n_c.SizeToRead(); ++i) {
-          tdp::glDrawLine(pc_c.GetCircular(i), 
-              pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
-        }
+//        for (size_t i=0; i<n_c.SizeToRead(); ++i) {
+//          tdp::glDrawLine(pc_c.GetCircular(i), 
+//              pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
+//        }
         pangolin::glUnsetFrameOfReference();
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
@@ -1202,7 +1096,8 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAxis(0.3f);
       glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
-        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
+//        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
+        tdp::Vector3fda pc_c_in_m = T_wc*pc(ass.second%w,ass.second/w);
         tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
       }
     }
@@ -1219,14 +1114,6 @@ int main( int argc, char* argv[] )
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
       }
-      glColor4f(0,1,0,1.);
-      tdp::SE3f R_wc(T_wc.rotation());
-      pangolin::glSetFrameOfReference(R_wc.matrix());
-      vbo.Reinitialise(pangolin::GlArrayBuffer, n_i.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(n_i.ptr_, n_i.SizeBytes(), 0);
-      pangolin::RenderVbo(vbo);
-      pangolin::glUnsetFrameOfReference();
     }
 
     TOCK("Draw 3D");
