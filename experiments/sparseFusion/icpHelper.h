@@ -37,8 +37,8 @@ bool EnsureNormal(
 
 template<int D, typename Derived>
 bool ProjectiveAssoc(const Plane& pl, 
-    tdp::SE3f& T_cw, 
-    CameraBase<float,D,Derived>& cam,
+    const tdp::SE3f& T_cw, 
+    const CameraBase<float,D,Derived>& cam,
     const Image<Vector3fda>& pc,
     int32_t& u,
     int32_t& v
@@ -57,8 +57,8 @@ bool ProjectiveAssoc(const Plane& pl,
 
 template<int D, typename Derived>
 bool ProjectiveAssocNormalExtract(const Plane& pl, 
-    tdp::SE3f& T_cw, 
-    CameraBase<D,Derived>& cam,
+    const tdp::SE3f& T_cw, 
+    const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& pc,
     uint32_t W,
     Image<Vector4fda>& dpc,
@@ -76,8 +76,8 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
 }
 
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     float distThr, 
     float p2plThr, 
@@ -88,8 +88,8 @@ bool AccumulateP2Pl(const Plane& pl,
     );
 
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float distThr, 
@@ -104,9 +104,9 @@ bool AccumulateP2Pl(const Plane& pl,
 /// uses texture as well
 template<int D, typename Derived>
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
-    CameraBase<D,Derived>& cam,
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
+    const CameraBase<float,D,Derived>& cam,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float grey_ci,
@@ -157,9 +157,9 @@ bool AccumulateP2Pl(const Plane& pl,
 /// uses texture and normal as well
 template<int D, typename Derived>
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
-    CameraBase<D,Derived>& cam,
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
+    const CameraBase<float,D,Derived>& cam,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float grey_ci,
@@ -222,9 +222,9 @@ bool AccumulateP2Pl(const Plane& pl,
 // uses texture and projective term
 template<int D, typename Derived>
 bool AccumulateP2PlProj(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
-    CameraBase<D,Derived>& cam,
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
+    const CameraBase<float,D,Derived>& cam,
     const Image<Vector3fda>& pc_c,
     uint32_t u, uint32_t v,
     const Vector3fda& n_ci,
@@ -310,8 +310,8 @@ bool AccumulateP2PlProj(const Plane& pl,
 }
 
 bool AccumulateRot(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float distThr, 
@@ -327,11 +327,16 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
 
 template<int D, typename Derived>
 void IncrementalOpRot(
-    const Image<Vector3fda>& pc, // in camera frame
-    const Image<Vector3fda>& n,  // in camera frame
+    Image<Vector3fda>& pc, // in camera frame
+    Image<Vector4fda>& dpc, // in camera frame
+    Image<Vector3fda>& n,  // in camera frame
+    Image<float>& curv, 
+    const std::vector<std::vector<uint32_t>>& invInd,
     const SE3f& T_wc,
     const CameraBase<float,D,Derived>& cam,
     const ConfigICP& cfgIcp,
+    uint32_t W,
+    std::vector<size_t>& indK,
     uint32_t frame,
     Image<uint8_t> mask,
     CircularBuffer<tdp::Plane>& pl_w,
@@ -351,14 +356,13 @@ void IncrementalOpRot(
       tdp::Plane& pl = pl_w.GetCircular(i);
       numProjected++;
       int32_t u, v;
-      if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-            W, dpc, n, curv, u,v ))
+      if (!tdp::ProjectiveAssocNormalExtract(
+            pl, T_cw, cam, pc, W, dpc, n, curv, u,v ))
         continue;
       if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
             cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, N)) {
         pl.lastFrame_ = frame;
         pl.numObs_ ++;
-        numInl ++;
         mask(u,v) ++;
         assoc.emplace_back(i,u+v*pc.w_);
         break;
@@ -434,44 +438,50 @@ void IncrementalOpRot(
 //    }
 
 
+template<int D, typename Derived>
 void IncrementalFullICP(
-    const Image<Vector3fda>& pc, // in camera frame
-    const Image<Vector4fda>& dpc, // in camera frame
-    const Image<Vector3fda>& n,  // in camera frame
-    const Image<float>& grey, 
-    const Image<float>& curv, 
+    Image<Vector3fda>& pc, // in camera frame
+    Image<Vector4fda>& dpc, // in camera frame
+    Image<Vector3fda>& n,  // in camera frame
+    const Image<uint8_t>& grey, 
+    Image<float>& curv, 
+    const std::vector<std::vector<uint32_t>>& invInd,
     const CameraBase<float,D,Derived>& cam,
     const ConfigICP& cfgIcp,
+    uint32_t W,
+    std::vector<size_t>& indK,
     uint32_t frame,
     Image<uint8_t> mask,
     CircularBuffer<tdp::Plane>& pl_w,
     std::vector<std::pair<size_t, size_t>>& assoc,
     size_t& numProjected, 
-    size_t& numInl, 
+    uint32_t& numInl, 
     SE3f& T_wc,
     float& H,
     Eigen::Matrix<float,6,6>&  A,
     Eigen::Matrix<float,6,1>&  b,
+    float& err
     ) {
-
+  size_t numObs = 0;
+  float Hprev = H;
   SE3f T_cw = T_wc.Inverse();
   Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
   // first use already associated data
   for (const auto& ass : assoc) {
     tdp::Plane& pl = pl_w.GetCircular(ass.first);
-    int32_t u = ass.second%w;
-    int32_t v = ass.second/w;
+    int32_t u = ass.second%pc.w_;
+    int32_t v = ass.second/pc.w_;
 
     if (cfgIcp.dotThr < 1) {
       if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
             W, dpc, n, curv, u,v ))
         continue;
-      if (useTexture) {
+      if (cfgIcp.useTexture) {
         if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
               grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr,
               cfgIcp.lambdaTex, A, Ai, b, err))
           continue;
-      } else if (useNormals) {
+      } else if (cfgIcp.useNormals) {
         if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
               grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr,
               cfgIcp.lambdaNs, cfgIcp.lambdaTex, A, Ai, b, err)) {
@@ -515,12 +525,12 @@ void IncrementalFullICP(
         if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
               W, dpc, n, curv, u,v ))
           continue;
-        if (useTexture) {
+        if (cfgIcp.useTexture) {
           if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                 grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, cfgIcp.lambdaTex,
                 A, Ai, b, err))
             continue;
-        } else if (useNormals) {
+        } else if (cfgIcp.useNormals) {
           if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                 grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr,
                 cfgIcp.dotThr, cfgIcp.lambdaNs, cfgIcp.lambdaTex, A,

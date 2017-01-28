@@ -802,8 +802,8 @@ int main( int argc, char* argv[] )
       for (size_t it = 0; it < maxIt; ++it) {
         mask.Fill(0);
         assoc.clear();
-        pc_c.MarkRead();
-        n_c.MarkRead();
+//        pc_c.MarkRead();
+//        n_c.MarkRead();
         indK = std::vector<size_t>(dpvmf.GetK()+1,0);
         numProjected = 0;
 
@@ -812,19 +812,19 @@ int main( int argc, char* argv[] )
 //        Ai = Eigen::Matrix<float,6,1>::Zero();
         float err = 0.;
         float H = 1e10;
-        float Hprev = 1e10;
         uint32_t numInl = 0;
         numObs = 0;
 
-        tdp::SE3f T_cw = T_wc.Inverse();
         if (warmStartICP) {
-          IncrementalOpRot(pc, n,  T_wc, cam, cfgIcp,
-              frame, mask, pl_w, pc_c, n_c, assoc, numProjected, R_wc);
+          tdp::SO3f R_wc;
+          IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
+              indK, frame, mask, pl_w, assoc, numProjected, R_wc);
+          T_wc.rotation() = R_wc;
         }
         
-        IncrementalFullICP( pc, dpc, n,  grey, curv, cam, cfgIcp,
-            frame, mask, pl_w, assoc, numProjected, numInl, T_wc, H, A,
-            b);
+        IncrementalFullICP( pc, dpc, n,  grey, curv, invInd, cam,
+            cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
+            numInl, T_wc, H, A, b, err);
 
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -841,7 +841,7 @@ int main( int argc, char* argv[] )
         }
         if (x.topRows<3>().norm()*180./M_PI < icpdRThr
             && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr, 0.f,
+            && tdp::CheckEntropyTermination(A, H, cfgIcp.HThr, 0.f,
               cfgIcp.negLogEvThr, H)) {
           std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;

@@ -3,6 +3,7 @@
  */
 #pragma once
 #include "icpHelper.h"
+#include <tdp/preproc/normals.h>
 
 namespace tdp {
 
@@ -16,15 +17,15 @@ bool EnsureNormal(
     int32_t v
     ) {
   if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
-    if (tdp::IsValidData(pc(u,v))) {
+    if (IsValidData(pc(u,v))) {
 //      uint32_t Wscaled = floor(W*pc(u,v)(2));
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
       tdp::Vector3fda pi;
       float curvi;
-      if (!tdp::IsValidData(ni)) {
+      if (!IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
+        if(NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
@@ -39,8 +40,8 @@ bool EnsureNormal(
 }
 
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     float distThr, 
     float p2plThr, 
@@ -69,8 +70,8 @@ bool AccumulateP2Pl(const Plane& pl,
 }
 
 bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float distThr, 
@@ -103,8 +104,8 @@ bool AccumulateP2Pl(const Plane& pl,
 }
 
 bool AccumulateRot(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float distThr, 
