@@ -319,7 +319,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
-  pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
+  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
   pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.00,0.01,1.);
@@ -641,19 +641,17 @@ int main( int argc, char* argv[] )
       }
       std::cout << "num features added to planes" << std::endl;
 
-      if (incrementalAssign) {
-        // update mask only once to know where to insert new planes
-        TICK("data assoc");
-        projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
-            pl_w.SizeToRead());
-        TOCK("data assoc");
-        TICK("extract assoc");
-        z.Fill(0);
-        idsCur.clear();
-        projAssoc.GetAssoc(z, mask, idsCur);
-        std::random_shuffle(idsCur.begin(), idsCur.end());
-        TOCK("extract assoc");
-      }
+      // update mask only once to know where to insert new planes
+      TICK("data assoc");
+      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
+          pl_w.SizeToRead());
+      TOCK("data assoc");
+      TICK("extract assoc");
+      z.Fill(0);
+      idsCur.clear();
+      projAssoc.GetAssoc(z, mask, idsCur);
+      std::random_shuffle(idsCur.begin(), idsCur.end());
+      TOCK("extract assoc");
 
 //      tdp::RandomMaskCpu(mask, perc, W*dMax);
 //      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
@@ -729,39 +727,22 @@ int main( int argc, char* argv[] )
         } else {
           invInd[k].clear();
         }
-
-//        if (incrementalAssign) {
-//          for (auto i : id_w) {
-//            if (*dpvmf.GetZs()[i] == k) 
-//              invInd[k].push_back(i);
-//            if (invInd[k].size() >= 10000)
-//              break;
-//          }
-//          }
-//        std::cout << "cluster " << k << ": # " << invInd[k].size() 
-//          << " of " << dpvmf.GetNs()[k] << std::endl;
-//        std::sort(invInd[k].begin(), invInd[k].begin(), 
-//            [&](uint32_t a, uint32_t b) {
-//            return pl_w[a].numObs_ > pl_w[b].numObs_;
-//            });
-//        std::cout << pl_w[invInd[k][0]].numObs_ 
-//          << " " << pl_w[invInd[k][1]].numObs_ << std::endl;
       }
-      // only use ids that were found by projecting into the current pose
-      if (incrementalAssign) {
+      if (pruneAssocByRender) {
+        // only use ids that were found by projecting into the current pose
         for (auto i : idsCur) {
           uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
         }
+      } else {      
+        // use all ids in the current map
+        for (auto i : id_w) {
+          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+          if (invInd[k].size() < 10000)
+            invInd[k].push_back(i);
+        }
       }
-//      if (incrementalAssign) {
-//        for (auto i : id_w) {
-//          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
-//          if (invInd[k].size() < 10000)
-//            invInd[k].push_back(i);
-//        }
-//      }
       TOCK("dpvmf");
     }
 
@@ -887,130 +868,26 @@ int main( int argc, char* argv[] )
         // associate new data until enough
         bool exploredAll = false;
         uint32_t k = dis(gen);
-        if (incrementalAssign) {
-          while (numObs < 10000 && !exploredAll) {
-            k = (k+1) % (dpvmf.GetK()+1);
-            while (indK[k] < invInd[k].size()) {
-              size_t i = invInd[k][indK[k]++];
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              numProjected++;
-              int32_t u, v;
-              if (angleThr > 0.) {
-                if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                      W, dpc, n, curv, u,v ))
-                  continue;
-                if (useTexture) {
-                  if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                        grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                        A, Ai, b, err))
-                    continue;
-                } else if (useNormals) {
-                  if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                        grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
-                        A, Ai, b, err)) {
-                    continue;
-                  }
-                } else {
-                  if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                        distThr, p2plThr, dotThr, A, Ai, b, err))
-                    continue;
-                }
-              } else {
-                if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
-                  continue;
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
-                      distThr, p2plThr, A, Ai, b, err))
-                  continue;
-              }
-              pl.lastFrame_ = frame;
-              pl.numObs_ ++;
-              numInl ++;
-              mask(u,v) ++;
-              assoc.emplace_back(i,pc_c.SizeToRead());
-              pc_c.Insert(pc(u,v));
-              n_c.Insert(n(u,v));
-              break;
-            }
-
-            if (numInl > numInlPrev
-                && k == 0) {
-              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                    negLogEvThr, H))
-                break;
-              Hprev = H;
-              numObs ++;
-              numInlPrev = numInl;
-            }
-
-            exploredAll = true;
-            for (size_t k=0; k<indK.size(); ++k) {
-              exploredAll &= indK[k] >= invInd[k].size();
-            }
-          }
-        } else {
-          TICK("data assoc");
-          projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
-              pl_w.SizeToRead());
-          TOCK("data assoc");
-          TICK("extract assoc");
-          z.Fill(0);
-          projAssoc.GetAssoc(z, mask);
-          // reset and reconstruct inverted index
-          std::vector<std::vector<uint32_t>> invUV;
-          for (size_t k=0; k<invInd.size(); ++k) {
-            invInd[k].clear();
-            invUV.push_back(std::vector<uint32_t>());
-          }
-          for (size_t i=0; i<z.Area(); ++i)
-            if (z[i] > 0) {
-              uint32_t k = std::min((uint32_t)*dpvmf.GetZs()[z[i]-1], dpvmf.GetK());
-              invInd[k].push_back(z[i]-1);
-              invUV[k].push_back(i);
-            }
-          TOCK("extract assoc");
-//          for (size_t k=0; k<invInd.size(); ++k) {
-//            std::cout << invInd[k].size() 
-//              << " " << invUV[k].size() << std::endl;
-//          }
-          TICK("accumulate");
-          float tN = 0, numN = 0;
-          float tAcc = 0, numAcc = 0;
-          float tEnt = 0, numEnt = 0;
-          tdp::Timer t0;
-          while (numObs < 10000 && !exploredAll) {
-            k = (k+1) % (dpvmf.GetK()+1);
-            while (indK[k] < invInd[k].size()) {
-              int32_t u = invUV[k][indK[k]] % z.w_;
-              int32_t v = invUV[k][indK[k]] / z.w_;
-              size_t i = invInd[k][indK[k]++];
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              numProjected++;
-              t0.tic();
-              if (!EnsureNormal(pc, dpc, W, n, curv, u, v)) {
-                tN += t0.toc(); numN ++;
+        while (numObs < 10000 && !exploredAll) {
+          k = (k+1) % (dpvmf.GetK()+1);
+          while (indK[k] < invInd[k].size()) {
+            size_t i = invInd[k][indK[k]++];
+            tdp::Plane& pl = pl_w.GetCircular(i);
+            numProjected++;
+            int32_t u, v;
+            if (angleThr > 0.) {
+              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                    W, dpc, n, curv, u,v ))
                 continue;
-              }
-              tN += t0.toc(); numN ++;
-              t0.tic();
               if (useTexture) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                      A, Ai, b, err)) {
-                  tAcc  += t0.toc(); numAcc ++;
+                      A, Ai, b, err))
                   continue;
-                }
               } else if (useNormals) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
                       A, Ai, b, err)) {
-                  tAcc  += t0.toc(); numAcc ++;
-                  continue;
-                }
-              } else if (useProj) {
-                if (!AccumulateP2PlProj(pl, T_wc, T_cw, cam, pc,u,v, n(u,v), 
-                      grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                      A, Ai, b, err)) {
-                  tAcc  += t0.toc(); numAcc ++;
                   continue;
                 }
               } else {
@@ -1018,38 +895,37 @@ int main( int argc, char* argv[] )
                       distThr, p2plThr, dotThr, A, Ai, b, err))
                   continue;
               }
-              tAcc  += t0.toc(); numAcc ++;
-              pl.lastFrame_ = frame;
-              pl.numObs_ ++;
-              numInl ++;
-              assoc.emplace_back(i,pc_c.SizeToRead());
-              pc_c.Insert(pc(u,v));
-              n_c.Insert(n(u,v));
-              break;
+            } else {
+              if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
+                continue;
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
+                    distThr, p2plThr, A, Ai, b, err))
+                continue;
             }
-            if (numInl > numInlPrev) {
-              t0.tic();
-              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                    negLogEvThr, H)) {
-                tEnt  += t0.toc(); numEnt ++;
-                break;
-              }
-              tEnt  += t0.toc(); numEnt ++;
-              Hprev = H;
-              numObs ++;
-            }
-            numInlPrev = numInl;
-            exploredAll = true;
-            for (size_t k=0; k<indK.size(); ++k) {
-              exploredAll &= indK[k] >= invInd[k].size();
-            }
+            pl.lastFrame_ = frame;
+            pl.numObs_ ++;
+            numInl ++;
+            mask(u,v) ++;
+            assoc.emplace_back(i,pc_c.SizeToRead());
+            pc_c.Insert(pc(u,v));
+            n_c.Insert(n(u,v));
+            break;
           }
-          TOCK("accumulate");
-          std::cout 
-            << "\tICP timings: normals " << tN/numN << " " << tN  << " " << numN
-            << " accumulation " << tAcc/numAcc << " " << tAcc << " " << numAcc
-            << " entropy " << tEnt/numEnt << " " << tEnt << " " << numEnt
-            << std::endl;
+
+          if (numInl > numInlPrev
+              && k == 0) {
+            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+                  negLogEvThr, H))
+              break;
+            Hprev = H;
+            numObs ++;
+            numInlPrev = numInl;
+          }
+
+          exploredAll = true;
+          for (size_t k=0; k<indK.size(); ++k) {
+            exploredAll &= indK[k] >= invInd[k].size();
+          }
         }
 //        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
