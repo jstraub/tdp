@@ -7,6 +7,7 @@
 #include <tdp/manifold/SE3.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/preproc/plane.h>
+#include <tdp/camera/camera_base.h>
 
 namespace tdp {
 
