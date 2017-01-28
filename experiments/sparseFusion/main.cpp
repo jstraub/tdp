@@ -793,14 +793,12 @@ int main( int argc, char* argv[] )
       
       std::vector<size_t> indK(dpvmf.GetK()+1,0);
       for (size_t it = 0; it < maxIt; ++it) {
-        if (it % 1 == 0) {
-          mask.Fill(0);
-          assoc.clear();
-          pc_c.MarkRead();
-          n_c.MarkRead();
-          indK = std::vector<size_t>(dpvmf.GetK()+1,0);
-          numProjected = 0;
-        }
+        mask.Fill(0);
+        assoc.clear();
+        pc_c.MarkRead();
+        n_c.MarkRead();
+        indK = std::vector<size_t>(dpvmf.GetK()+1,0);
+        numProjected = 0;
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -813,39 +811,41 @@ int main( int argc, char* argv[] )
 
         tdp::SE3f T_cw = T_wc.Inverse();
         if (warmStartICP) {
-          Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
-          bool exploredAll = false;
-          uint32_t k = dis(gen);
-          while (numObs < dpvmf.GetK()*10 && !exploredAll) {
-            k = (k+1) % (dpvmf.GetK()+1);
-            while (indK[k] < invInd[k].size()) {
-              size_t i = invInd[k][indK[k]++];
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              numProjected++;
-              int32_t u, v;
-              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, curv, u,v ))
-                continue;
-              if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                    distThr, p2plThr, dotThr, N)) {
-                pl.lastFrame_ = frame;
-                pl.numObs_ ++;
-                numInl ++;
-                mask(u,v) ++;
-                assoc.emplace_back(i,pc_c.SizeToRead());
-                pc_c.Insert(pc(u,v));
-                n_c.Insert(n(u,v));
-                break;
-              }
-            }
-            exploredAll = true;
-            for (size_t k=0; k<indK.size(); ++k) 
-              exploredAll &= indK[k] >= invInd[k].size();
-          }
-//          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
-//              Eigen::ComputeFullU | Eigen::ComputeFullV);
-//          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
-          T_wc.rotation() = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
+          IncrementalOpRot(pc, n,  T_wc, cam, distThr, p2plThr, dotThr,
+              frame, mask, pl_w, pc_c, n_c, assoc, numProjected, R_wc);
+//          Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+//          bool exploredAll = false;
+//          uint32_t k = dis(gen);
+//          while (numObs < dpvmf.GetK()*10 && !exploredAll) {
+//            k = (k+1) % (dpvmf.GetK()+1);
+//            while (indK[k] < invInd[k].size()) {
+//              size_t i = invInd[k][indK[k]++];
+//              tdp::Plane& pl = pl_w.GetCircular(i);
+//              numProjected++;
+//              int32_t u, v;
+//              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+//                    W, dpc, n, curv, u,v ))
+//                continue;
+//              if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
+//                    distThr, p2plThr, dotThr, N)) {
+//                pl.lastFrame_ = frame;
+//                pl.numObs_ ++;
+//                numInl ++;
+//                mask(u,v) ++;
+//                assoc.emplace_back(i,pc_c.SizeToRead());
+//                pc_c.Insert(pc(u,v));
+//                n_c.Insert(n(u,v));
+//                break;
+//              }
+//            }
+//            exploredAll = true;
+//            for (size_t k=0; k<indK.size(); ++k) 
+//              exploredAll &= indK[k] >= invInd[k].size();
+//          }
+////          Eigen::JacobiSVD<Eigen::Matrix3d> svd(N.cast<double>(),
+////              Eigen::ComputeFullU | Eigen::ComputeFullV);
+////          Eigen::Matrix3f R_wc = (svd.matrixU()*svd.matrixV().transpose()).cast<float>();
+//          T_wc.rotation() = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
 
           // first use already associated data
           for (const auto& ass : assoc) {
@@ -912,8 +912,7 @@ int main( int argc, char* argv[] )
             break;
           }
 
-          if (numInl > numInlPrev
-              && k == 0) {
+          if (numInl > numInlPrev && k == 0) {
             if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
                   negLogEvThr, H))
               break;

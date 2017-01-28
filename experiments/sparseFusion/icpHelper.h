@@ -312,4 +312,68 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
     float HThr, float condEntropyThr, float negLogEvThr,
     float& H);
 
+template<int D, typename Derived>
+void IncrementalOpRot(
+    const Image<Vector3fda>& pc, // in camera frame
+    const Image<Vector3fda>& n,  // in camera frame
+    const SE3f& T_wc,
+    const CameraBase<float,D,Derived>& cam,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    uint32_t frame,
+    Image<uint8_t> mask,
+    CircularBuffer<tdp::Plane>& pl_w,
+    CircularBuffer<tdp::Vector3fda> pc_c,
+    CircularBuffer<tdp::Vector3fda> n_c,
+    std::vector<std::pair<size_t, size_t>>& assoc,
+    size_t& numProjected, 
+    SO3f& R_wc
+    ) {
+  SE3f T_cw = T_wc.Inverse();
+  Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+  bool exploredAll = false;
+  uint32_t K = invInd.size();
+  uint32_t k = 0;
+  while (!exploredAll) {
+    k = (k+1)%(K+1);
+    while (indK[k] < invInd[k].size()) {
+      size_t i = invInd[k][indK[k]++];
+      tdp::Plane& pl = pl_w.GetCircular(i);
+      numProjected++;
+      int32_t u, v;
+      if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+            W, dpc, n, curv, u,v ))
+        continue;
+      if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
+            distThr, p2plThr, dotThr, N)) {
+        pl.lastFrame_ = frame;
+        pl.numObs_ ++;
+        numInl ++;
+        mask(u,v) ++;
+        assoc.emplace_back(i,pc_c.SizeToRead());
+        pc_c.Insert(pc(u,v));
+        n_c.Insert(n(u,v));
+        break;
+      }
+    }
+    exploredAll = true;
+    for (size_t k=0; k<indK.size(); ++k) 
+      exploredAll &= indK[k] >= invInd[k].size();
+  }
+  R_wc = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
+}
+
+void IncrementalFullICP(
+      Eigen::Matrix<float,6,6>&  A,
+      Eigen::Matrix<float,6,1>&  b,
+      Eigen::Matrix<float,6,1>& Ai,
+    ) {
+
+
+
+}
+
+
+
 }
