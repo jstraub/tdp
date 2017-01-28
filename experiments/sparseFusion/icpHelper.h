@@ -462,7 +462,8 @@ void IncrementalFullICP(
     Eigen::Matrix<float,6,1>&  b,
     float& err
     ) {
-  size_t numObs = 0;
+  A = Eigen::Matrix<float,6,6>::Zero();
+  b = Eigen::Matrix<float,6,1>::Zero();
   float Hprev = H;
   SE3f T_cw = T_wc.Inverse();
   Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
@@ -505,16 +506,16 @@ void IncrementalFullICP(
           cfgIcp.condEntropyThr, cfgIcp.negLogEvThr, H))
       break;
     Hprev = H;
-    numObs ++;
   }
   numInl = assoc.size();
-  std::cout << " reused " << numInl << " of " << assoc.size() << std::endl;
+  if (numInl > 0)
+    std::cout << " reused " << assoc.size() << std::endl;
   size_t numInlPrev = numInl;
 
   bool exploredAll = false;
   const uint32_t K = invInd.size();
   uint32_t k = 0;
-  while (numObs < 1000 && !exploredAll) {
+  while (assoc.size() < 1000 && !exploredAll) {
     k = (k+1)%K;
     while (indK[k] < invInd[k].size()) {
       size_t i = invInd[k][indK[k]++];
@@ -559,11 +560,10 @@ void IncrementalFullICP(
     }
 
     if (numInl > numInlPrev && k == 0) {
-      if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr, cfgIcp.condEntropyThr, 
-            cfgIcp.negLogEvThr, H))
+      if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr,
+            cfgIcp.condEntropyThr, cfgIcp.negLogEvThr, H))
         break;
       Hprev = H;
-      numObs ++;
       numInlPrev = numInl;
     }
 

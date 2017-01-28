@@ -413,7 +413,6 @@ int main( int argc, char* argv[] )
   assoc.reserve(10000);
 
   uint32_t numObs = 0;
-  uint32_t numInlPrev = 0;
 
   float lambDPvMFmeans = cos(55.*M_PI/180.);
   tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
@@ -795,6 +794,7 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
+      uint32_t numInl = 0;
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK());
       
@@ -807,14 +807,6 @@ int main( int argc, char* argv[] )
         indK = std::vector<size_t>(dpvmf.GetK()+1,0);
         numProjected = 0;
 
-        A = Eigen::Matrix<float,6,6>::Zero();
-        b = Eigen::Matrix<float,6,1>::Zero();
-//        Ai = Eigen::Matrix<float,6,1>::Zero();
-        float err = 0.;
-        float H = 1e10;
-        uint32_t numInl = 0;
-        numObs = 0;
-
         if (warmStartICP) {
           tdp::SO3f R_wc;
           IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
@@ -822,9 +814,13 @@ int main( int argc, char* argv[] )
           T_wc.rotation() = R_wc;
         }
         
+        float err = 0.;
+        float H = 1e10;
+        numInl = 0;
         IncrementalFullICP( pc, dpc, n,  grey, curv, invInd, cam,
             cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
             numInl, T_wc, H, A, b, err);
+        numObs = assoc.size();
 
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -853,7 +849,7 @@ int main( int argc, char* argv[] )
           << " of " << invInd[k].size() << std::endl;
       }
       Sigma_mc = A.inverse();
-      logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
+      logObs.Log(log(numObs)/log(10.), log(numInl)/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
       float H = ev.array().log().sum();
@@ -877,7 +873,7 @@ int main( int argc, char* argv[] )
       q0 *= (q0(maxId) > 0? 1.: -1.);
       logEv.Log(q0);
       T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr && numInlPrev > 10;
+      trackingGood = H <= HThr && numInl > 10;
       TOCK("icp");
       if (trackingGood) {
         std::cout << "tracking good" << std::endl;
