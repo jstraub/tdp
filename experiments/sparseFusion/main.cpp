@@ -546,10 +546,22 @@ int main( int argc, char* argv[] )
   featsA.reserve( 4*subsample*w*h);
   featsB.reserve( 4*subsample*w*h);
 
+  tdp::ConfigICP cfgIcp;
   size_t numNonPlanar = 0;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    cfgIcp.distThr = distThr;
+    cfgIcp.p2plThr = p2plThr; 
+    cfgIcp.dotThr = cos(angleThr*M_PI/180.);
+    cfgIcp.condEntropyThr = condEntropyThr;
+    cfgIcp.negLogEvThr = negLogEvThr;
+    cfgIcp.HThr = HThr;
+    cfgIcp.lambdaNs = lambdaNs;
+    cfgIcp.lambdaTex = lambdaTex;
+    cfgIcp.useTexture = useTexture;
+    cfgIcp.useNormals = useNormals;
+
     if (runLoopClosure.GuiChanged()) {
       showLoopClose = runLoopClosure;
     }
@@ -783,7 +795,6 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
-      float dotThr = cos(angleThr*M_PI/180.);
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK());
       
@@ -807,14 +818,13 @@ int main( int argc, char* argv[] )
 
         tdp::SE3f T_cw = T_wc.Inverse();
         if (warmStartICP) {
-          IncrementalOpRot(pc, n,  T_wc, cam, distThr, p2plThr, dotThr,
+          IncrementalOpRot(pc, n,  T_wc, cam, cfgIcp,
               frame, mask, pl_w, pc_c, n_c, assoc, numProjected, R_wc);
         }
         
-        IncrementalFullICP( pc, dpc, n,  grey, curv, cam, distThr, p2plThr, dotThr,
-            condEntropyThr, negLogEvThr, HThr, lambdaNs, lambdaTex,
-            useTexture, useNormals, frame, mask, pl_w, assoc, numProjected, numInl, 
-            T_wc, H, A, b);
+        IncrementalFullICP( pc, dpc, n,  grey, curv, cam, cfgIcp,
+            frame, mask, pl_w, assoc, numProjected, numInl, T_wc, H, A,
+            b);
 
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -831,7 +841,8 @@ int main( int argc, char* argv[] )
         }
         if (x.topRows<3>().norm()*180./M_PI < icpdRThr
             && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f, negLogEvThr, H)) {
+            && tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr, 0.f,
+              cfgIcp.negLogEvThr, H)) {
           std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }

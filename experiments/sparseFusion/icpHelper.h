@@ -12,6 +12,19 @@
 
 namespace tdp {
 
+struct ConfigICP {
+  float distThr; 
+  float p2plThr; 
+  float dotThr;
+  float condEntropyThr;
+  float negLogEvThr;
+  float HThr;
+  float lambdaNs;
+  float lambdaTex;
+  bool useTexture;
+  bool useNormals;
+};
+
 bool EnsureNormal(
     Image<Vector3fda>& pc,
     Image<Vector4fda>& dpc,
@@ -318,9 +331,7 @@ void IncrementalOpRot(
     const Image<Vector3fda>& n,  // in camera frame
     const SE3f& T_wc,
     const CameraBase<float,D,Derived>& cam,
-    float distThr, 
-    float p2plThr, 
-    float dotThr,
+    const ConfigICP& cfgIcp,
     uint32_t frame,
     Image<uint8_t> mask,
     CircularBuffer<tdp::Plane>& pl_w,
@@ -344,7 +355,7 @@ void IncrementalOpRot(
             W, dpc, n, curv, u,v ))
         continue;
       if (AccumulateRot(pl, T_wc, T_cw, pc(u,v), n(u,v),
-            distThr, p2plThr, dotThr, N)) {
+            cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, N)) {
         pl.lastFrame_ = frame;
         pl.numObs_ ++;
         numInl ++;
@@ -422,6 +433,7 @@ void IncrementalOpRot(
 //      return true;
 //    }
 
+
 void IncrementalFullICP(
     const Image<Vector3fda>& pc, // in camera frame
     const Image<Vector4fda>& dpc, // in camera frame
@@ -429,16 +441,7 @@ void IncrementalFullICP(
     const Image<float>& grey, 
     const Image<float>& curv, 
     const CameraBase<float,D,Derived>& cam,
-    float distThr, 
-    float p2plThr, 
-    float dotThr,
-    float condEntropyThr,
-    float negLogEvThr,
-    float HThr,
-    float lambdaNs,
-    float lambdaTex,
-    bool useTexture,
-    bool useNormals,
+    const ConfigICP& cfgIcp,
     uint32_t frame,
     Image<uint8_t> mask,
     CircularBuffer<tdp::Plane>& pl_w,
@@ -459,36 +462,37 @@ void IncrementalFullICP(
     int32_t u = ass.second%w;
     int32_t v = ass.second/w;
 
-    if (dotThr < 1) {
+    if (cfgIcp.dotThr < 1) {
       if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
             W, dpc, n, curv, u,v ))
         continue;
       if (useTexture) {
         if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-              grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
-              A, Ai, b, err))
+              grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr,
+              cfgIcp.lambdaTex, A, Ai, b, err))
           continue;
       } else if (useNormals) {
         if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-              grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
-              A, Ai, b, err)) {
+              grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr,
+              cfgIcp.lambdaNs, cfgIcp.lambdaTex, A, Ai, b, err)) {
           continue;
         }
       } else {
         if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-              distThr, p2plThr, dotThr, A, Ai, b, err))
+              cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, A, Ai, b,
+              err))
           continue;
       }
     } else {
       if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
         continue;
-      if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
-            distThr, p2plThr, A, Ai, b, err))
+      if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), cfgIcp.distThr,
+            cfgIcp.p2plThr, A, Ai, b, err))
         continue;
     }
 
-    if (tdp::CheckEntropyTermination(A, Hprev, HThr,
-          condEntropyThr, negLogEvThr, H))
+    if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr,
+          cfgIcp.condEntropyThr, cfgIcp.negLogEvThr, H))
       break;
     Hprev = H;
     numObs ++;
@@ -507,31 +511,33 @@ void IncrementalFullICP(
       tdp::Plane& pl = pl_w.GetCircular(i);
       numProjected++;
       int32_t u, v;
-      if (dotThr < 1) {
+      if (cfgIcp.dotThr < 1) {
         if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
               W, dpc, n, curv, u,v ))
           continue;
         if (useTexture) {
           if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+                grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, cfgIcp.lambdaTex,
                 A, Ai, b, err))
             continue;
         } else if (useNormals) {
           if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
-                A, Ai, b, err)) {
+                grey(u,v), cfgIcp.distThr, cfgIcp.p2plThr,
+                cfgIcp.dotThr, cfgIcp.lambdaNs, cfgIcp.lambdaTex, A,
+                Ai, b, err)) {
             continue;
           }
         } else {
           if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                distThr, p2plThr, dotThr, A, Ai, b, err))
+                cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, A, Ai,
+                b, err))
             continue;
         }
       } else {
         if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
           continue;
         if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
-              distThr, p2plThr, A, Ai, b, err))
+              cfgIcp.distThr, cfgIcp.p2plThr, A, Ai, b, err))
           continue;
       }
       pl.lastFrame_ = frame;
@@ -543,8 +549,8 @@ void IncrementalFullICP(
     }
 
     if (numInl > numInlPrev && k == 0) {
-      if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-            negLogEvThr, H))
+      if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr, cfgIcp.condEntropyThr, 
+            cfgIcp.negLogEvThr, H))
         break;
       Hprev = H;
       numObs ++;
