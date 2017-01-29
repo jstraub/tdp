@@ -64,6 +64,9 @@ target_link_libraries(cg tdp ${GTEST_BOTH_LIBRARIES} pthread)
     target_link_libraries(testANN tdp ${GTEST_BOTH_LIBRARIES} pthread)
   endif()
 
+  add_executable(testNN_Cuda nn_cuda.cpp)
+  target_link_libraries(testNN_Cuda tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
 #  if (GTSAM_FOUND)
 #    add_executable(testKfSLAM keyframe_slam.cpp)
 #    target_link_libraries(testKfSLAM 
