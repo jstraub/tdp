@@ -325,6 +325,7 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
     float HThr, float condEntropyThr, float negLogEvThr,
     float& H);
 
+
 template<int D, typename Derived>
 void IncrementalOpRot(
     Image<Vector3fda>& pc, // in camera frame
@@ -368,6 +369,11 @@ void IncrementalOpRot(
         break;
       }
     }
+
+    Eigen::JacobiSVD<Eigen::Matrix<T,3,3>> svd(N,
+        Eigen::ComputeFullU|Eigen::ComputeFullV);
+    std::cout << svd.singularValues().transpose() << std::endl;
+
     exploredAll = true;
     for (size_t k=0; k<indK.size(); ++k) 
       exploredAll &= indK[k] >= invInd[k].size();
