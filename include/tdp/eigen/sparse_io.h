@@ -42,11 +42,14 @@ void read_binary(const char*filename, Eigen::SparseMatrix<float>& S){
 	std::ifstream ifs(filename, std::ios::in | std::ios::binary | std::ios::ate);
 
 	if (ifs.is_open()){
+		std::cout <<"\nfilename: " << filename << std::endl;
+
 		const std::streampos FSIZE = ifs.tellg(); //Note we open from the end
 		const int TSIZE = sizeof(Eigen::Triplet<float>);
 		const int N = FSIZE/TSIZE; //num triplets
-		std::vector<Eigen::Triplet<float>> trips(N);
+		std::cout << "nonzeros: " << N << std::endl;
 
+		std::vector<Eigen::Triplet<float>> trips(N);
 		ifs.seekg(0, std::ios::beg); //Move readptr to the start
 		for (int i=0; i<N; ++i){
 			Eigen::Triplet<float> trip;
@@ -55,12 +58,6 @@ void read_binary(const char*filename, Eigen::SparseMatrix<float>& S){
 		}
 		ifs.close();
 		std::cout << "Sparse Matrix is read." << std::endl;
-
-		// std::cout << "checking --- " << std::endl;
-		// for (int i=0; i<trips.size(); ++i){
-		// 	Eigen::Triplet<float> triple = trips[i];
-		// 	std::cout << triple.row() << "," << triple.col() << ", " << triple.value() << std::endl;
-		// }
 
 		S.setFromTriplets(trips.begin(), trips.end());
 
