@@ -940,12 +940,10 @@ int main( int argc, char* argv[] )
       viewPc3D.Activate(s_cam);
 
       glColor4f(0.,1.,0.,1.0);
-//      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
 
       if (showLoopClose) {
         glColor4f(1.,0.,0.,1.0);
-        //      pangolin::glDrawAxis(T_wcRansac.matrix(), 0.05f);
         pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
       }
       glColor4f(1.,1.,0.,0.6);
@@ -954,11 +952,10 @@ int main( int argc, char* argv[] )
       if (showFullPc) {
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
+        // I do ned to upload points because they get updated; I
+        // wouldnt have to with the color
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
-//        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
-//            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
-//            iReadCurW*sizeof(tdp::Vector3fda));
         if ((!showAge && !showObs && !showSurfels && !showCurv) 
             || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
@@ -981,56 +978,14 @@ int main( int argc, char* argv[] )
           pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
           pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
           std::pair<float,float> minMaxAge = age.MinMax();
-//          std::cout << " age " << minMaxAge.first 
-//            << " < . < " << minMaxAge.second << std::endl;
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
         } else if (showSurfels) {
-//          rbo.Upload(&rs.ptr_[iReadCurW], rs.SizeToRead(iReadCurW)*sizeof(float), 
-//              iReadCurW*sizeof(float));
           rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
           std::cout << "render surfels" << std::endl;
-          pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
-          glEnable(GL_PROGRAM_POINT_SIZE);
-//          glEnable(GL_POINT_SPRITE);
-          shader.Bind();
-          pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-          pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-          shader.SetUniform("Tinv",MV);
-          shader.SetUniform("P",P);
-          shader.SetUniform("maxZ",dMax);
-
-          vbo_w.Bind();
-          glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-          cbo_w.Bind();
-          glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0); 
-          nbo_w.Bind();
-          glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0); 
-          rbo.Bind();
-          glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 0, 0); 
-
-          glEnableVertexAttribArray(0);
-          glEnableVertexAttribArray(1);
-          glEnableVertexAttribArray(2);
-          glEnableVertexAttribArray(3);
-
-          glDrawArrays(GL_POINTS, 0, vbo_w.num_elements);
-
-          glDisableVertexAttribArray(3);
-          rbo.Unbind();
-          glDisableVertexAttribArray(2);
-          nbo_w.Unbind();
-          glDisableVertexAttribArray(1);
-          cbo_w.Unbind();
-          glDisableVertexAttribArray(0);
-          vbo_w.Unbind();
-          shader.Unbind();
-          glDisable(GL_PROGRAM_POINT_SIZE);
-//          glDisable(GL_POINT_SPRITE);
+          RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
         }
         if (showNN) {
-          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
-             << mapNN.size()/5 << std::endl;
           glColor4f(0.3,0.3,0.3,0.3);
           for (auto& ass : mapNN) {
             if (ass.second >= 0)
@@ -1042,32 +997,14 @@ int main( int argc, char* argv[] )
             if (assocBA[i] > 0) {
               tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
               tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
-              //std::cout << pA.transpose() << "; "
-              //  << featsB[assocBA[i]].p_c_.transpose() << std::endl;
             }
           }
         }
       }
 
       if (showNormals) {
-        glColor4f(1,0,0.,0.5);
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-
-        for (const auto& ass : assoc) {
-          int32_t u = ass.second%w;
-          int32_t v = ass.second/w;
-          tdp::glDrawLine(pc(u,v), pc(u,v) + scale*n(u,v));
-        }
-//        for (size_t i=0; i<n_c.SizeToRead(); ++i) {
-//          tdp::glDrawLine(pc_c.GetCircular(i), 
-//              pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
-//        }
-        pangolin::glUnsetFrameOfReference();
-        glColor4f(0,1,0,0.5);
-        for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
-          tdp::glDrawLine(pc_w.GetCircular(i), 
-              pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
-        }
+        ShowCurrentNormals(pc, n, assoc, T_wc, scale);
+        ShowCurrentNormals(pc_w, n_w, scale, step);
       }
 
       if (showPlanes) {
