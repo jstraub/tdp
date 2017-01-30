@@ -103,7 +103,7 @@ void NN_Cuda::search(
   // }
 
   // Sort nearest to farthest
-  ParallelSorts<NN_Element>::bitonicSortInDevice(blocks, threads, m_size, d_elements);
+  ParallelSorts<NN_Element>::bitonicSortDevicePreloaded(blocks, threads, m_size, d_elements);
 
   // Copy Back data
   cudaMemcpy(h_elements, d_elements, m_size * sizeof(NN_Element), cudaMemcpyDeviceToHost);

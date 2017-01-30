@@ -7,12 +7,12 @@ namespace tdp {
 template<typename T>
 struct ParallelSorts {
 
-  static void bitonicSortInDevice(
+  static void bitonicSort(
               size_t numElements,
-              T* d_elements
+              T* h_elements
   );
 
-  static void bitonicSortInDevice(
+  static void bitonicSortDevicePreloaded(
               dim3 blocks,
               dim3 threads,
               size_t numElements,

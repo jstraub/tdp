@@ -37,18 +37,26 @@ namespace tdp {
   }
 
   template<typename T>
-  void ParallelSorts<T>::bitonicSortInDevice(
+  void ParallelSorts<T>::bitonicSort(
               size_t numElements,
-              T* d_elements
+              T* h_elements
   ) {
     dim3 blocks, threads;
     ComputeKernelParamsForArray(blocks, threads, numElements, 256);
-    bitonicSortInDevice(blocks, threads, numElements, d_elements);
+
+    T* d_elements;
+    cudaMalloc(&d_elements, numElements * sizeof(T));
+    cudaMemcpy(d_elements, h_elements, numElements * sizeof(T), cudaMemcpyHostToDevice);
+
+    bitonicSortDevicePreloaded(blocks, threads, numElements, d_elements);
+
+    cudaMemcpy(h_elements, d_elements, numElements * sizeof(T), cudaMemcpyDeviceToHost);
+    cudaFree(d_elements);
   }
 
   // Based off of https://gist.github.com/mre/1392067
   template<typename T>
-  void ParallelSorts<T>::bitonicSortInDevice(
+  void ParallelSorts<T>::bitonicSortDevicePreloaded(
               dim3 blocks,
               dim3 threads,
               size_t numElements,
