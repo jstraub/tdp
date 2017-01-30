@@ -165,27 +165,20 @@ void Test_denseIO(){
 }
 
 void Test_sparseIO(){
-    Eigen::SparseMatrix<float> S(3,3);
+    Eigen::SparseMatrix<float> S(3,3), S_COPY(3,3);
     //S(0,0) = 10; S(1,1) = 20; S(2,2) = 30;
     S.insert(0,0) = 10.f;
     S.insert(1,1) = 20.f;
     S.insert(2,2) = 30.f;
-    // std::cout << S.innerSize() << ", " << S.outerSize() << std::endl;
 
-    // std::cout << "Testing getTriplets---" << std::endl;
-    // std::vector<Eigen::Triplet<float>> trips;
-    // tdp::getTriplets(S,trips);
-    // std::cout << "trips size: " << trips.size() << std::endl;
-    // for (int i=0; i<trips.size(); ++i){
-    //     std::cout << trips[i].row() << " "
-    //               << trips[i].col() << " " 
-    //               << trips[i].value() << std::endl;
-    // }
-
-    std::cout << "Testing writng_bin---" << std::endl;
     tdp::write_binary("./cache/sparse.dat", S);
+    std::cout << "Sparse written as bin---" << std::endl;
+    tdp::read_binary("./cache/sparse.dat", S_COPY);
+    std::cout << "Reading sparce---" << std::endl;
+    for (int i=0; i<S_COPY.cols(); ++i){
+        std::cout << S_COPY.col(i) << std::endl;
+    }
 
-    std::cout << "Testing reading_binary---" <<std::endl;
 
 }
 

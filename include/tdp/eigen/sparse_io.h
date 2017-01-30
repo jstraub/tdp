@@ -27,23 +27,47 @@ namespace tdp  {
 void write_binary(const char* filename, const Eigen::SparseMatrix<float>& S){
 	std::ofstream ofs(filename, std::ios::out | std::ios::binary | 
 								std::ios::trunc);
+
 	for (int k=0; k<S.outerSize(); ++k){
 		for(Eigen::SparseMatrix<float>::InnerIterator it(S,k); it; ++it){
-			std::cout << typeid(it.row()).name() << std::endl;
-			std::cout << sizeof(it.row()) << ", " <<  sizeof(it.col()) << ", " <<  sizeof(it.value()) << std::endl;
-			// ofs.write(&trip, sizeof(trip));
-
-			std::cout << "casting ---" << std::endl;
-			int r = (int)it.row();
-			int c = (int)it.col();
-			std::cout << typeid(r).name() << std::endl;
-			std::cout << sizeof(r) << ", " <<  sizeof(c) << ", " <<  sizeof(it.value()) << std::endl;
-
-
+			Eigen::Triplet<float> trip(it.row(), it.col(), it.value());
+			ofs.write((char*) &trip, sizeof(trip));		
 			std::cout << "triplet written" << std::endl;
 		}
 	}
 	ofs.close();
+}
+
+void read_binary(const char*filename, Eigen::SparseMatrix<float>& S){
+	std::ifstream ifs(filename, std::ios::in | std::ios::binary | std::ios::ate);
+
+	if (ifs.is_open()){
+		const std::streampos FSIZE = ifs.tellg(); //Note we open from the end
+		const int TSIZE = sizeof(Eigen::Triplet<float>);
+		const int N = FSIZE/TSIZE; //num triplets
+		std::vector<Eigen::Triplet<float>> trips(N);
+
+		ifs.seekg(0, std::ios::beg); //Move readptr to the start
+		for (int i=0; i<N; ++i){
+			Eigen::Triplet<float> trip;
+			ifs.read((char*) &trip, sizeof(trip));
+			trips[i] = trip;
+		}
+		ifs.close();
+		std::cout << "Sparse Matrix is read." << std::endl;
+
+		// std::cout << "checking --- " << std::endl;
+		// for (int i=0; i<trips.size(); ++i){
+		// 	Eigen::Triplet<float> triple = trips[i];
+		// 	std::cout << triple.row() << "," << triple.col() << ", " << triple.value() << std::endl;
+		// }
+
+		S.setFromTriplets(trips.begin(), trips.end());
+
+	} else{
+		std::cout << "Unable to open file." << std::endl;
+	}
+
 }
 						
 
