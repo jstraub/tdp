@@ -1,5 +1,5 @@
 #include <tdp/nn_cuda/nn_cuda.h>
-#include <tdp/sorts/parallel_sorts.h>
+#include <tdp/sorts/parallelSorts.h>
 #include <tdp/cuda/cuda.h>
 
 namespace tdp {

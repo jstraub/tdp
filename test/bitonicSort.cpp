@@ -1,6 +1,6 @@
 #include <tdp/testing/testing.h>
 #include <tdp/utils/timer.hpp>
-#include <tdp/sorts/parallel_sorts.h>
+#include <tdp/sorts/parallelSorts.h>
 
 #include <stdlib.h>
 #include <algorithm>
@@ -29,11 +29,11 @@ void runIntegerTest(size_t size) {
 }
 
 TEST(bitonicSort, sortPowerOf2) {
-  runIntegerTest(128);
+  runIntegerTest(8);
 }
 
 TEST(bitonicSort, sortNotPowerOf2) {
-  runIntegerTest(255);
+  runIntegerTest(6);
 }
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

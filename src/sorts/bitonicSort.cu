@@ -1,20 +1,7 @@
-#include <tdp/sorts/parallel_sorts.h>
+#include <tdp/sorts/parallelSorts.h>
+#include <tdp/sorts/sortUtils.h>
 
 namespace tdp {
-
-  template<typename T>
-  __device__
-  inline void swapIfGreaterThan(
-              T* elements,
-              size_t index1,
-              size_t index2
-  ) {
-    if (elements[index1] > elements[index2]) {
-      T tmpVal = elements[index1];
-      elements[index1] = elements[index2];
-      elements[index2] = tmpVal;
-    }
-  }
 
   template<typename T>
   __global__
@@ -24,14 +11,14 @@ namespace tdp {
        uint32_t j,
        uint32_t k
   ) {
-    size_t index = threadIdx.x + blockDim.x * blockIdx.x;
-    size_t partner = index ^ j;
+    uint32_t index = threadIdx.x + blockDim.x * blockIdx.x;
+    uint32_t partner = index ^ j;
 
-    if (partner > index) {
+    if (index < numElements && partner < numElements && partner > index) {
       if ((index & k) == 0) {
-        swapIfGreaterThan(elements, index, partner);
+        SortUtils<T>::swapIfGreaterThan(elements, index, partner);
       } else {
-        swapIfGreaterThan(elements, partner, index);
+        SortUtils<T>::swapIfGreaterThan(elements, partner, index);
       }
     }
   }
@@ -64,7 +51,9 @@ namespace tdp {
   ) {
     uint32_t j, k;
 
-    for (k = 2; k <= numElements; k <<= 1) {
+    uint32_t limit = SortUtils<T>::nextPowerOf2(numElements);
+
+    for (k = 2; k <= limit; k <<= 1) {
       for (j = k>>1; j > 0; j >>= 1) {
         bitonicSortStep<<<blocks, threads>>>(numElements, d_elements, j, k);
       }
