@@ -4,8 +4,9 @@
 
 #include <stdlib.h>
 #include <algorithm>
+#include <functional>
 
-void runIntegerTest(size_t size) {
+void runIntegerTest(size_t size, std::function<void(uint32_t, int*)> sortFunction) {
   int* values = new int[size];
   int* copies = new int[size];
 
@@ -15,7 +16,7 @@ void runIntegerTest(size_t size) {
     copies[i] = values[i];
   }
 
-  tdp::ParallelSorts<int>::bitonicSort(size, values);
+  sortFunction(size, values);
   std::sort(copies, copies + size);
 
   bool passed = true;
@@ -29,12 +30,21 @@ void runIntegerTest(size_t size) {
 }
 
 TEST(bitonicSort, sortPowerOf2) {
-  runIntegerTest(8);
+  runIntegerTest(128, tdp::ParallelSorts<int>::bitonicSort);
 }
 
 TEST(bitonicSort, sortNotPowerOf2) {
-  runIntegerTest(6);
+  runIntegerTest(127, tdp::ParallelSorts<int>::bitonicSort);
 }
+
+TEST(oddEvenMergeSort, sortPowerOf2) {
+  runIntegerTest(128, tdp::ParallelSorts<int>::oddEvenMergeSort);
+}
+
+TEST(oddEvenMergeSort, sortNotPowerOf2) {
+  runIntegerTest(127, tdp::ParallelSorts<int>::oddEvenMergeSort);
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

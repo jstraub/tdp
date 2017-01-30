@@ -67,8 +67,8 @@ target_link_libraries(cg tdp ${GTEST_BOTH_LIBRARIES} pthread)
   add_executable(testNN_Cuda nn_cuda.cpp)
   target_link_libraries(testNN_Cuda tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
-  add_executable(testBitonicSort bitonicSort.cpp)
-  target_link_libraries(testBitonicSort tdp ${GTEST_BOTH_LIBRARIES} pthread)
+  add_executable(testParallelSort parallelSort.cpp)
+  target_link_libraries(testParallelSort tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
 #  if (GTSAM_FOUND)
 #    add_executable(testKfSLAM keyframe_slam.cpp)

@@ -8,7 +8,7 @@ template<typename T>
 struct ParallelSorts {
 
   /**
-   * Currently the bitonic sort only works for powers of 2
+   * Bitonic Sorting Comparator Network. Currently only works for power of 2 inputs
    */
   static void bitonicSort(
               size_t numElements,
@@ -22,6 +22,9 @@ struct ParallelSorts {
               T* d_elements
   );
 
+  /**
+   * Odd Even Merge Sort Comparator Network. Works for any input size
+   */
   static void oddEvenMergeSort(
               size_t numElements,
               T* h_elements
@@ -34,6 +37,9 @@ struct ParallelSorts {
               T* d_elements
   );
 
+  /**
+   * Default sorts. Picks from the above sorts to forward the calls to.
+   */
   static void sort(
               size_t numElements,
               T* h_elements
