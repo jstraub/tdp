@@ -90,18 +90,6 @@ void NN_Cuda::search(
   ComputeKernelParamsForArray(blocks, threads, m_size, 256);
   KernelComputeNNDistances<<<blocks,threads>>>(m_size, d_elements, d_points, query);
 
-  // cudaMemcpy(h_distances, d_distances, m_size * sizeof(float), cudaMemcpyDeviceToHost);
-  // cudaMemcpy(h_indexes, d_indexes, m_size * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-
-  // int count = 0;
-  // for (int i = 0; i < m_size; i++) {
-  //   if (h_indexes[i] != i) {
-  //     std::cout << "Bad index at " << i << std::endl;
-  //   } else {
-  //     count++;
-  //   }
-  // }
-
   // Sort nearest to farthest
   ParallelSorts<NN_Element>::sortDevicePreloaded(blocks, threads, m_size, d_elements);
 
@@ -110,8 +98,8 @@ void NN_Cuda::search(
 
   // Place the necessary information into the passed containers
   for (size_t i = 0; i < k; i++) {
-    nnIds(i) = h_elements[i].value();
-    dists(i) = h_elements[i].index();
+    nnIds(i) = h_elements[i].index();
+    dists(i) = h_elements[i].value();
   }
 }
 

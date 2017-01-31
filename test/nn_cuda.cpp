@@ -42,7 +42,7 @@ TEST(speedTest, nn_cuda) {
 */
 
 TEST(correctness, nn_cuda) {
-  size_t N = 100;
+  size_t N = 10;
   tdp::ManagedHostImage<tdp::Vector3fda> pc(N, 1);
   for (size_t i = 0; i < N; i++) {
     pc[i] = 10. * tdp::Vector3fda::Random();
