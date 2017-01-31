@@ -65,6 +65,7 @@
 #include "planeHelpers.h"
 #include "featureHelper.h"
 #include "icpHelper.h"
+#include "visHelper.h"
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -950,6 +951,8 @@ int main( int argc, char* argv[] )
       glDrawPoses(T_wcs,20, 0.03f);
 
       if (showFullPc) {
+        pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+        pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
         // I do ned to upload points because they get updated; I
@@ -971,19 +974,17 @@ int main( int argc, char* argv[] )
             for (size_t i=0; i<age.Area(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
           }
-          valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),  GL_FLOAT,
-              1, GL_DYNAMIC_DRAW);
+          valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),
+              GL_FLOAT, 1, GL_DYNAMIC_DRAW);
           valuebo.Upload(age.ptr_,  age.SizeBytes(), 0);
 
-          pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-          pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
           std::pair<float,float> minMaxAge = age.MinMax();
-          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
-              P, MV);
+          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
+              minMaxAge.second, P, MV);
         } else if (showSurfels) {
           rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
           std::cout << "render surfels" << std::endl;
-          RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
+          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
         }
         if (showNN) {
           glColor4f(0.3,0.3,0.3,0.3);
@@ -1003,8 +1004,8 @@ int main( int argc, char* argv[] )
       }
 
       if (showNormals) {
-        ShowCurrentNormals(pc, n, assoc, T_wc, scale);
-        ShowCurrentNormals(pc_w, n_w, scale, step);
+        tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
+        tdp::ShowGlobalNormals(pc_w, n_w, scale, step);
       }
 
       if (showPlanes) {

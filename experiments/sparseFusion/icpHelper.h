@@ -370,7 +370,7 @@ void IncrementalOpRot(
       }
     }
 
-    Eigen::JacobiSVD<Eigen::Matrix<T,3,3>> svd(N,
+    Eigen::JacobiSVD<Eigen::Matrix<float,3,3>> svd(N,
         Eigen::ComputeFullU|Eigen::ComputeFullV);
     std::cout << svd.singularValues().transpose() << std::endl;
 

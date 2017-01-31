@@ -1,5 +1,6 @@
 #include <vector>
 #include <tdp/data/image.h>
+#include <tdp/data/circular_buffer.h>
 #include <tdp/manifold/SE3.h>
 
 namespace tdp {
@@ -14,6 +15,6 @@ void ShowCurrentNormals(
 void ShowGlobalNormals(
   const CircularBuffer<tdp::Vector3fda>& pc_w,
   const CircularBuffer<tdp::Vector3fda>& n_w,
-  float scale);
+  float scale, int step);
 
 }

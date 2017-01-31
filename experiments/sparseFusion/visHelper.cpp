@@ -1,4 +1,7 @@
 #include "visHelper.h"
+#include <pangolin/gl/gl.h>
+#include <pangolin/gl/gldraw.h>
+#include <tdp/gl/gl_draw.h>
 
 namespace tdp {
 
@@ -11,8 +14,8 @@ void ShowCurrentNormals(
   glColor4f(1,0,0.,0.5);
   pangolin::glSetFrameOfReference(T_wc.matrix());
   for (const auto& ass : assoc) {
-    int32_t u = ass.second%w;
-    int32_t v = ass.second/w;
+    int32_t u = ass.second%pc.w_;
+    int32_t v = ass.second/pc.w_;
     tdp::glDrawLine(pc(u,v), pc(u,v) + scale*n(u,v));
   }
   pangolin::glUnsetFrameOfReference();
@@ -21,7 +24,8 @@ void ShowCurrentNormals(
 void ShowGlobalNormals(
   const CircularBuffer<tdp::Vector3fda>& pc_w,
   const CircularBuffer<tdp::Vector3fda>& n_w,
-  float scale){
+  float scale,
+  int step){
   glColor4f(0,1,0,0.5);
   for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
     tdp::glDrawLine(pc_w.GetCircular(i), 

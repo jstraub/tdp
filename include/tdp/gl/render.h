@@ -4,6 +4,7 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/manifold/SE3.h>
+#include <tdp/camera/camera_base.h>
 
 namespace tdp {
 
@@ -73,5 +74,12 @@ void RenderSurfels(
   const pangolin::OpenGlMatrix& P,
   const pangolin::OpenGlMatrix& MV);
 
+void RenderVboValuebo(
+    const pangolin::GlBuffer& vbo,
+    const pangolin::GlBuffer& valuebo,
+    float minVal, float maxVal,
+    const pangolin::OpenGlMatrix& P,
+    const pangolin::OpenGlMatrix& MV
+    );
 
 }

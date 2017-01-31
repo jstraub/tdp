@@ -36,7 +36,6 @@ endif()
 
 find_package (CUDA QUIET)
 if (CUDA_FOUND)
-
   set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
 
   list(APPEND CUDA_NVCC_FLAGS "-gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35;-O2;-DVERBOSE;-D__CUDACC__;")
