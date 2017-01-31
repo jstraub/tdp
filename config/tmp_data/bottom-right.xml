@@ -1,0 +1,36 @@
+<rig>
+    
+    <camera>
+        <camera_model index="0" name="bottom" serialno="192" type="calibu_fu_fv_u0_v0_k1_k2_k3" version="2016310113">
+            <width> 640 </width>
+            <height> 480 </height>
+            
+            <right> [ 1.57918e-316; 1.5791e-316; 6.13784e+257 ] </right>
+            <down> [ 9.35868e+223; 3.88097e-270; 2.42092e-322 ] </down>
+            <forward> [ 1.57946e-316; 1.57935e-316; 1.14302e+243 ] </forward>
+            
+            <params> [ 607.8355; 607.1657; 311.2021; 233.0842; 0.1408012; -0.2478766; -0.1354085 ] </params>
+        </camera_model>
+        <pose>
+            
+            <T_wc> [ 1, 0, 0, 0; 0, 1, 0, 0; 0, 0, 1, 0 ] </T_wc>
+        </pose>
+    </camera>
+    
+    <camera>
+        <camera_model index="1" name="right" serialno="192" type="calibu_fu_fv_u0_v0_k1_k2_k3" version="2016310113">
+            <width> 640 </width>
+            <height> 480 </height>
+            
+            <right> [ 1.57918e-316; 1.5791e-316; 6.13784e+257 ] </right>
+            <down> [ 9.35868e+223; 3.88097e-270; 2.42092e-322 ] </down>
+            <forward> [ 1.57946e-316; 1.57935e-316; 1.14302e+243 ] </forward>
+            
+            <params> [ 602.9402; 603.4058; 315.0801; 240.4757; 0.1301081; -0.3398103; 0.1587851 ] </params>
+        </camera_model>
+        <pose>
+            
+            <T_wc> [ 0, 0, 1, -.35; 1, 0, 0, 0; 0, 1, 0, .35 ] </T_wc>
+        </pose>
+    </camera>
+</rig>
