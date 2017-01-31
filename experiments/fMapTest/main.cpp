@@ -55,7 +55,6 @@
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
 
-
 /************TODO***********************************************/
 /***************************************************************/
 //1. MOVE THE TESTS TO A SEPARATE TEST FILE
@@ -63,46 +62,36 @@
 
 /************Declarations***************************************
  ***************************************************************/
-void Test_printImage();
-void Test_denseIO();
-void Test_sparseIO();
-
-void Test_randomSeed();
-void Test_addGaussianNoise();
-void Test_f_landmark();
-void Test_projections();
 void Test_samePc_sameSamples(
         int nSamples, 
         int nEv,
         int nTrain,
-        // std::string option = std::string("rbf"), 
         std::string& option,
+        std::string& shapename,
         bool showDecomposition = false);
+
 void Test_samePc_diffSamples(
         int nSamples, 
         // std::string option = std::string("rbf"), 
         std::string& option,
         bool showDecomposition = false);
 
-/************end delcarations************************************/
-int main(){
-//    Test_printImage();
-    // Test_denseIO();
-    // Test_sparseIO();
 
-    //Test_f_landmark();
-    //Test_randomSeed();
-  //Test_addGaussianNoise();
-  
+int main(){
+
 
   std::cout << "Test Correspondences---" << std::endl;
   std::string option("rbf");
+  std::string shapename("linear");
   int nSamples = 100;
   int nEv = 30;
   int nTrain;
   bool showDecomposition = false;
   nTrain = 60;
-  Test_samePc_sameSamples(nSamples,nEv, nTrain,option,showDecomposition);
+  Test_samePc_sameSamples(nSamples,nEv, nTrain,
+                          option,
+                          shapename,
+                          showDecomposition);
   // for (int i=0; i< 33; ++i){
   //     nTrain = i*nEv;
   //     std::cout << "\n================================="<< std::endl;
@@ -123,111 +112,18 @@ int main(){
 }
 
 
-
-/************Test mplementations***********************************
- ******************************************************************/
-void Test_randomSeed(){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc1, pc2, pc3, pc4;
-  tdp::GetSphericalPc(pc1, 10);
-  tdp::GetSphericalPc(pc2, 10);
-  tdp::GetSphericalPc(pc3, 10);
-  pc4.ResizeCopyFrom(pc3);
-
-  std::cout << "PC1---" << std::endl;
-  tdp::printImage(pc1, 0, pc1.Area() -1);
-  std::cout << "PC2---" << std::endl;
-  tdp::printImage(pc2, 0, pc2.Area() -1);
-  std::cout << "PC3---" << std::endl;
-  tdp::printImage(pc3, 0, pc3.Area() -1);
-  std::cout << "PC4---" << std::endl;
-  tdp::printImage(pc4, 0, pc4.Area() -1);
-}
-
-void Test_printImage(){
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
-    std::cout << "---tdp::ing image---" << std::endl;
-    tdp::printImage(pc,0,pc.Area());
-
-    pc.Reinitialise(10);
-    for (int i =0; i< 10; ++i){
-        pc[i] = tdp::Vector3fda(i,i,i);
-    }
-    std::cout << "---Printing image---" << std::endl;
-    tdp::printImage(pc,0,pc.Area());
-}
-
-void Test_denseIO(){
-    Eigen::MatrixXi M,N;
-    const char* fname = std::string("./cache/testio.dat").c_str();
-    M.resize(3,3);
-    M << 1,2,3,
-         4,5,6,
-         7,8,9;
-    tdp::write_binary(fname, M);
-    std::cout << "binary written to " << fname << std::endl;
-
-    tdp::read_binary(fname, N);
-    std::cout << N << std::endl;
-    //assert(M == N);
-}
-
-void Test_sparseIO(){
-    Eigen::SparseMatrix<float> S(10,10), S_COPY(10,10);
-    //S(0,0) = 10; S(1,1) = 20; S(2,2) = 30;
-    for (int i=0; i<10; ++i){
-        S.insert(0,i) = 10*(i+1);
-    }
-
-    tdp::write_binary("./cache/sparse.dat", S);
-    std::cout << "Sparse written as bin---" << std::endl;
-
-    std::cout << "Reading sparse---" << std::endl;
-    tdp::read_binary("./cache/sparse.dat", S_COPY);
-    for (int i=0; i<S_COPY.cols(); ++i){
-        std::cout << S_COPY.col(i) << std::endl;
-    }
-
-
-}
-
-void Test_addGaussianNoise(){
-   tdp::ManagedHostImage<tdp::Vector3fda> pc_s, pc_t; 
-   tdp::GetSimplePc(pc_s);
-   tdp::addGaussianNoise(pc_s, 0.1f, pc_t);
-
-   std::cout << "PC_S ----" << std::endl;
-   tdp::printImage(pc_s, 0, pc_s.Area());
-   std::cout << "PC_T ---" << std::endl;
-   tdp::printImage(pc_t, 0, pc_t.Area());
-}
-
-void Test_f_landmark(){
-    std::string opt;
-    float alpha = 0.1;
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
-    Eigen::VectorXf f_w;
-
-    for (int p_idx = 0; p_idx < pc.Area(); p_idx++){
-        opt = "rbf";
-        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
-        std::cout << "opt: " << opt << std::endl;
-        std::cout << "fw: " << f_w.transpose() << std::endl;
-
-        opt = "ind";
-        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
-        std::cout << "opt: " << opt << std::endl;
-        std::cout << "fw: " << f_w.transpose() << std::endl;
-        std::cout << "\n\n" << std::endl;
-    }
-}
-
-
 // void Test_samePc_withGNoise
-void Test_samePc_sameSamples(int nSamples, int nEv, int nPW, std::string& option, bool showDecomposition){
+void Test_samePc_sameSamples(int nSamples, int nEv, int nPW,
+                             std::string& option,
+                             std::string& shapename,
+                             bool showDecomposition){
   /* nSamples: number of points on the surface
    * nTrain: number of  correpondence pairs given to approximate functional mapping
    *  - must be at least numEv, and at most nSamples
    * option: "rbf" or "ind".  function to construct a function on the surface based on a given point
+   * shapename: "linear" for simplePc, "sphere" for random sampling from unit sphere
+   *          : "bunny",
+   *          : "manekine"
    * showDecompotion: true to see (eigenfunctions and) eigenvalues of the Laplacian of both surfaces
    */
 
@@ -281,32 +177,32 @@ void Test_samePc_sameSamples(int nSamples, int nEv, int nPW, std::string& option
     std::stringstream ss;
     std::string _path_ls, _path_lt, _path_s_wl, _path_t_wl, 
                 _path_s_evals, _path_t_evals;
-    ss << "./cache/linear/ls_" << nSamples << "_" << knn << "_" 
+    ss << "./cache/" << shapename << "/ls_" << nSamples << "_" << knn << "_"
         << alpha << ".dat";
     _path_ls = ss.str(); 
     ss.str(std::string());
 
-    ss << "./cache/linear/lt_" << nSamples << "_" << knn << "_" 
+    ss << "./cache/" << shapename << "/lt_" << nSamples << "_" << knn << "_"
         << alpha << ".dat";
     _path_lt = ss.str(); 
     ss.str(std::string());
 
-    ss << "./cache/linear/s_wl_" << nSamples << "_" << nEv 
+    ss << "./cache/" << shapename << "/s_wl_" << nSamples << "_" << nEv
        << ".dat";
     _path_s_wl = ss.str(); 
     ss.str(std::string());
 
-    ss << "./cache/linear/t_wl_" << nSamples << "_" << nEv
+    ss << "./cache/" << shapename << "/t_wl_" << nSamples << "_" << nEv
        << ".dat";
     _path_t_wl = ss.str(); 
     ss.str(std::string());
 
-    ss << "./cache/linear/s_evals_" << nSamples << "_" << nEv 
+    ss << "./cache/" << shapename << "/s_evals_" << nSamples << "_" << nEv
        << ".dat";
     _path_s_evals = ss.str(); 
     ss.str(std::string());
 
-    ss << "./cache/linear/t_evals_" << nSamples << "_" << nEv 
+    ss << "./cache/" << shapename << "/t_evals_" << nSamples << "_" << nEv
        << ".dat";
     _path_t_evals = ss.str(); 
     ss.str(std::string());
@@ -330,12 +226,11 @@ void Test_samePc_sameSamples(int nSamples, int nEv, int nPW, std::string& option
 
     int res = access(path_ls, R_OK) 
                 + access(path_lt, R_OK);
+
+
     if (res == 0){
         // Read cached file
         std::cout << "Reading Laplacians from cache---" << std::endl;
-//TODO!!!
-//read_binary doesn't work with sparse matrix
-// write read, write for sparce matrix
         
         tdp::read_binary(path_ls, L_s);
         tdp::read_binary(path_lt, L_t);
@@ -355,7 +250,7 @@ void Test_samePc_sameSamples(int nSamples, int nEv, int nPW, std::string& option
                 + access(path_t_evals, R_OK);
 
     if (res == 0){    
-        std::cout << "Reading Bases&evalsfrom cache---" << std::endl;
+        std::cout << "Reading Bases&evals from cache---" << std::endl;
         tdp::read_binary(path_s_wl, S_wl);
         tdp::read_binary(path_t_wl, T_wl);
         tdp::read_binary(path_s_evals, S_evals);

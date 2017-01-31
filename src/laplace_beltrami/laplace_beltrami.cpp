@@ -390,13 +390,7 @@ Eigen::SparseMatrix<float> getLaplacian(Image<Vector3fda>& pc,
                 L.insert(i,nnIds(k)) = -exp(-dists(k)/alpha)/sum;
             }
         }
-        // show the current row
-        // http://eigen.tuxfamily.org/dox/group__TutorialSparse.html
-//        for (Eigen::SparseMatrix<float>::InnerIterator it(L,i); it; ++it){
-//            std::cout << "\n\nrow index: " << it.row() << std::endl;
-//            std::cout << "col index should be i: " <<it.col() <<std::endl;
-//            std::cout << "val:" << it.value() <<std::endl;
-//        }
+
     }
     return L;
 }
