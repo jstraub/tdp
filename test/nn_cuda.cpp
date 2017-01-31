@@ -6,21 +6,26 @@
 
 #include <tdp/nn/ann.h>
 
-/*
-TEST(speedTest, nn_cuda) {
+void resizeAndRandomlyFill(
+     tdp::ManagedHostImage<tdp::Vector3fda>* image,
+     size_t newSize
+) {
+  image->Reinitialise(newSize, 1);
+  for (size_t i = 0; i < newSize; i++) {
+    (*image)[i] = 10. * tdp::Vector3fda::Random();
+  }
+}
+
+TEST(nn_cuda, speedTest) {
   // randomly initialize a point cloud
   size_t N = 1000000;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(N, 1);
-  for (size_t i = 0; i < N; i++) {
-    pc[i] = 10. * tdp::Vector3fda::Random();
-  }
+  tdp::ManagedHostImage<tdp::Vector3fda> pc;
+  resizeAndRandomlyFill(&pc, N);
 
   // Randomly initialize a query cloud
-  size_t M = 1000000;
-  tdp::ManagedHostImage<tdp::Vector3fda> qc(M, 1);
-  for (size_t i = 0; i < M; i++) {
-    qc[i] = 10. * tdp::Vector3fda::Random();
-  }
+  size_t M = 100;
+  tdp::ManagedHostImage<tdp::Vector3fda> qc;
+  resizeAndRandomlyFill(&qc, M);
 
   tdp::Timer timer;
   tdp::NN_Cuda nn;
@@ -37,22 +42,17 @@ TEST(speedTest, nn_cuda) {
     nn.search(qc[i], k, nnIds, dists);
   }
 
-  timer.toctic("1000000 searches");
+  timer.toctic("1000000 points, 100 queries");
 }
-*/
 
-TEST(correctness, nn_cuda) {
+TEST(nn_cuda, correctness) {
   size_t N = 10;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(N, 1);
-  for (size_t i = 0; i < N; i++) {
-    pc[i] = 10. * tdp::Vector3fda::Random();
-  }
+  tdp::ManagedHostImage<tdp::Vector3fda> pc;
+  resizeAndRandomlyFill(&pc, N);
 
   size_t M = 1;
-  tdp::ManagedHostImage<tdp::Vector3fda> qc(M, 1);
-  for (size_t i = 0; i < M; i++) {
-    qc[i] = 10. * tdp::Vector3fda::Random();
-  }
+  tdp::ManagedHostImage<tdp::Vector3fda> qc;
+  resizeAndRandomlyFill(&qc, M);
 
   int k = 10;
   Eigen::VectorXi nnIds(k);
@@ -60,31 +60,31 @@ TEST(correctness, nn_cuda) {
   tdp::NN_Cuda nn;
 
   nn.reinitialise(pc);
-  for (size_t i = 0; i < M; i++) {
-    nn.search(qc[i], k, nnIds, dists);
-    for (size_t j = 0; j < k; j++) {
-      std::cout << nnIds(j) << " " << dists(j) << std::endl;
+  nn.search(qc[0], k, nnIds, dists);
+
+  for (size_t i = 0; i < k; i++) {
+    tdp::Vector3fda diff = pc[nnIds(i)] - qc[0];
+    float dist = diff.dot(diff);
+    float vdiff = dist - dists(i);
+    EXPECT_TRUE(std::abs(vdiff) < 1e-4);
+
+    if (i < k - 1) {
+      EXPECT_TRUE(dists(i) <= dists(i + 1));
     }
   }
 }
 
-/*
-TEST(relativeCorrectness, nn_cuda) {
-  // randomly initialize a point cloud
-  size_t N = 1000000;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(N, 1);
-  for (size_t i = 0; i < N; i++) {
-    pc[i] = 10. * tdp::Vector3fda::Random();
-  }
+// Tests for proper ordering wrt original ANN code
+TEST(nn_cuda, relativeCorrectness) {
+  size_t N = 1000;
+  tdp::ManagedHostImage<tdp::Vector3fda> pc;
+  resizeAndRandomlyFill(&pc, N);
 
-  // Randomly initialize a query cloud
   size_t M = 1000;
-  tdp::ManagedHostImage<tdp::Vector3fda> qc(M, 1);
-  for (size_t i = 0; i < M; i++) {
-    qc[i] = 10. * tdp::Vector3fda::Random();
-  }
+  tdp::ManagedHostImage<tdp::Vector3fda> qc;
+  resizeAndRandomlyFill(&qc, M);
 
-  int k = 1;
+  int k = 10;
   Eigen::VectorXi nnIds(k);
   Eigen::VectorXf dists(k);
   tdp::NN_Cuda nn;
@@ -100,14 +100,11 @@ TEST(relativeCorrectness, nn_cuda) {
     nn.search(qc[i], k, nnIds, dists);
     ann.Search(qc[i], k, 0., nnIds_old, dists_old);
 
-    if (nnIds(0) != nnIds_old(0)) {
-      std::cout << "ERROR on search " << i << std::endl;
-      std::cout << "\t Found " << nnIds(0) << std::endl;
-      std::cout << "\t Expected " << nnIds_old(0) << std::endl;
+    for (size_t j = 0; j < k; j++) {
+      EXPECT_TRUE(nnIds(j) == nnIds_old(j));
     }
   }
 }
-*/
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
