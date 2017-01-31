@@ -70,6 +70,8 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+#define MAP_SIZE 100000
+
 namespace tdp {
 
 void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
@@ -372,33 +374,33 @@ int main( int argc, char* argv[] )
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
-  pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
-  pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
-  pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,1000000,GL_FLOAT,1);
+  pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
+  pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
+  pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-  tdp::ManagedHostCircularBuffer<float> rs(1000000); // radius of surfels
+  tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
   rs.Fill(NAN);
-  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,1000000,GL_UNSIGNED_BYTE,3);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(1000000);
+  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
   rgb_w.Fill(tdp::Vector3bda::Zero());
 
-  tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
-//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
-//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
+//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(MAP_SIZE);
+//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(MAP_SIZE);
   nn.Fill(tdp::Vector5ida::Ones()*-1);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
 
   std::vector<std::pair<size_t, size_t>> mapNN;
-  mapNN.reserve(10000000);
+  mapNN.reserve(MAP_SIZE*5);
 
   int32_t iReadCurW = 0;
   size_t frame = 0;
@@ -420,7 +422,7 @@ int main( int argc, char* argv[] )
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
-  id_w.reserve(1000000);
+  id_w.reserve(MAP_SIZE);
 
 //  std::random_device rd;
   std::mt19937 gen(19023);
