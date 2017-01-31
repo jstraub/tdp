@@ -449,7 +449,7 @@ int main( int argc, char* argv[] )
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         tdp::Vector5ida& ids = nn[iReadNext];
         ids = tdp::Vector5ida::Ones()*(-1);
-        for (int32_t i=0; i<sizeToRead; ++i) {
+        for (size_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
             float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
             tdp::AddToSortedIndexList(ids, values, i, dist);
@@ -483,7 +483,7 @@ int main( int argc, char* argv[] )
   std::thread regularization([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
-//    int32_t iReadNext = 0;
+    int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(42) {
@@ -957,8 +957,10 @@ int main( int argc, char* argv[] )
         // might break things though
         // I do ned to upload points because they get updated; I
         // wouldnt have to with the color
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        std::cout << "uploading pc" << std::endl;
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeToRead(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+        std::cout << "uploading pc done" << std::endl;
         if ((!showAge && !showObs && !showSurfels && !showCurv) 
             || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
@@ -982,6 +984,7 @@ int main( int argc, char* argv[] )
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
               minMaxAge.second, P, MV);
         } else if (showSurfels) {
+          std::cout << "rbo upload " << std::endl;
           rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
           std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
