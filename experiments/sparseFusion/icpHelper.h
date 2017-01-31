@@ -47,7 +47,7 @@ bool ProjectiveAssoc(const Plane& pl,
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);
   v = floor(x(1)+0.5f);
-  if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
+  if (0 <= u && u < (int32_t)pc.w_ && 0 <= v && v < (int32_t)pc.h_) {
     if (tdp::IsValidData(pc(u,v))) {
       return true;
     }
@@ -67,7 +67,6 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     int32_t& u,
     int32_t& v
     ) {
-  const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);

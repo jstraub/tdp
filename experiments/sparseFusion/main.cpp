@@ -344,7 +344,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
-  pangolin::Var<bool> showNormals("ui.show ns",true,true);
+  pangolin::Var<bool> showNormals("ui.show ns",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
@@ -432,8 +432,8 @@ int main( int argc, char* argv[] )
   std::mutex mapLock;
   std::mutex dpvmfLock;
   std::thread mapping([&]() {
-    int32_t iRead = 0;
-    int32_t iInsert = 0;
+//    int32_t iRead = 0;
+//    int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
@@ -449,7 +449,7 @@ int main( int argc, char* argv[] )
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         tdp::Vector5ida& ids = nn[iReadNext];
         ids = tdp::Vector5ida::Ones()*(-1);
-        for (size_t i=0; i<sizeToRead; ++i) {
+        for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
             float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
             tdp::AddToSortedIndexList(ids, values, i, dist);
@@ -481,9 +481,9 @@ int main( int argc, char* argv[] )
   });
 
   std::thread regularization([&]() {
-    int32_t iRead = 0;
+//    int32_t iRead = 0;
     int32_t iInsert = 0;
-    int32_t iReadNext = 0;
+//    int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(42) {
@@ -1004,8 +1004,11 @@ int main( int argc, char* argv[] )
       }
 
       if (showNormals) {
+        std::cout << "render normals local" << std::endl;
         tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
+        std::cout << "render normals global " << n_w.SizeToRead() << std::endl;
         tdp::ShowGlobalNormals(pc_w, n_w, scale, step);
+        std::cout << "render normals done" << std::endl;
       }
 
       if (showPlanes) {

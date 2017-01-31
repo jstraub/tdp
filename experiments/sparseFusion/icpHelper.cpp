@@ -1,7 +1,6 @@
 /* Copyright (c) 2017, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#pragma once
 #include "icpHelper.h"
 #include <tdp/preproc/normals.h>
 
