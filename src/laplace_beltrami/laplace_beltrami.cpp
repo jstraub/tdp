@@ -446,6 +446,7 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
                        Eigen::MatrixXf& basis){
     // Each column contains an evector
     // returns numEv by L.rows() matrix
+    basis.resize(L.rows(), numEv);
 
     assert(0<numEv && numEv<=L.rows());
     // Construct matrix operation object using the wrapper class SparseGenMatProd

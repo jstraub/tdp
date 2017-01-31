@@ -146,7 +146,6 @@ TEST(laplace_beltrami, LaplacianEvectors) {
     getLaplacianBasis(L, numEv, basis);
     std::cout << "basis: \n" << basis << std::endl;
 
-
 }
 
 TEST(laplace_beltrami, getCylinder) {
