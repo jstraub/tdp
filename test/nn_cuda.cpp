@@ -18,7 +18,7 @@ void resizeAndRandomlyFill(
 
 TEST(nn_cuda, speedTest) {
   // randomly initialize a point cloud
-  size_t N = 1000000;
+  size_t N = 10000000;
   tdp::ManagedHostImage<tdp::Vector3fda> pc;
   resizeAndRandomlyFill(&pc, N);
 
@@ -27,22 +27,36 @@ TEST(nn_cuda, speedTest) {
   tdp::ManagedHostImage<tdp::Vector3fda> qc;
   resizeAndRandomlyFill(&qc, M);
 
-  tdp::Timer timer;
-  tdp::NN_Cuda nn;
-  timer.toctic("Start");
-
-  nn.reinitialise(pc);
-  timer.toctic("Reinitializing the NN_Cuda object");
-
   int k = 1;
   Eigen::VectorXi nnIds(k);
   Eigen::VectorXf dists(k);
 
+  tdp::Timer timer;
+  timer.toctic("Start");
+  tdp::NN_Cuda nn;
+  nn.reinitialise(pc);
+  timer.toctic("Reinitialized");
   for (size_t i = 0; i < M; i++) {
     nn.search(qc[i], k, nnIds, dists);
   }
+  timer.toctic("NN: 10,000,000 points, 100 queries");
+  float nn_cudaTime = timer.toc();
 
-  timer.toctic("1000000 points, 100 queries");
+  Eigen::VectorXi nnIds_old(k);
+  Eigen::VectorXf dists_old(k);
+
+  tdp::Timer timer2;
+  timer2.toctic("Start");
+  tdp::ANN ann;
+  ann.ComputeKDtree(pc);
+  timer2.toctic("Reinitialized");
+  for (size_t i = 0; i < M; i++) {
+    nn.search(qc[i], k, nnIds, dists);
+  }
+  timer2.toctic("ANN: 10,000,000 points, 100 queries");
+  float annTime = timer.toc();
+
+  EXPECT_TRUE(nn_cudaTime < annTime);
 }
 
 TEST(nn_cuda, correctness) {
