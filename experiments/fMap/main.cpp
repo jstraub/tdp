@@ -390,7 +390,7 @@ int main(int argc, char* argv[]){
   tdp::eigen_vector<tdp::Vector3fda> means_s((int)nBins, tdp::Vector3fda(0,0,0)),
                                      means_t((int)nBins, tdp::Vector3fda(0,0,0));
 
-//  GetGrid(pc_grid, (int)numEv, (int)numEv);
+//  tdp::GetGrid(pc_grid, (int)numEv, (int)numEv);
 //  std::cout << "pc mtx: "<< std::endl;
 //  for (int r=0; r<(int)numEv; ++r){
 //      std::cout << "r: " << r << std::endl;
@@ -563,7 +563,7 @@ int main(int argc, char* argv[]){
       C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
 
       //Visualization of C
-      GetGrid(pc_grid, (int)numEv, (int)numEv);
+      tdp::GetGrid(pc_grid, (int)numEv, (int)numEv);
       vbo_cmtx.Reinitialise(pangolin::GlArrayBuffer, pc_grid.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
       vbo_cmtx.Upload(pc_grid.ptr_, pc_grid.SizeBytes(), 0);
 

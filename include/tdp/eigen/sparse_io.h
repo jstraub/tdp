@@ -32,7 +32,7 @@ void write_binary(const char* filename, const Eigen::SparseMatrix<float>& S){
 		for(Eigen::SparseMatrix<float>::InnerIterator it(S,k); it; ++it){
 			Eigen::Triplet<float> trip(it.row(), it.col(), it.value());
 			ofs.write((char*) &trip, sizeof(trip));		
-			std::cout << "triplet written" << std::endl;
+                        //std::cout << "triplet written" << std::endl;
 		}
 	}
 	ofs.close();
