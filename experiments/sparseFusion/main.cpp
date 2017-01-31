@@ -432,8 +432,8 @@ int main( int argc, char* argv[] )
   std::mutex mapLock;
   std::mutex dpvmfLock;
   std::thread mapping([&]() {
-//    int32_t iRead = 0;
-//    int32_t iInsert = 0;
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
@@ -481,7 +481,7 @@ int main( int argc, char* argv[] )
   });
 
   std::thread regularization([&]() {
-//    int32_t iRead = 0;
+    int32_t iRead = 0;
     int32_t iInsert = 0;
 //    int32_t iReadNext = 0;
 //    std::random_device rd_;

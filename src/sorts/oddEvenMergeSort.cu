@@ -57,4 +57,8 @@ namespace tdp {
     cudaFree(d_elements);
   }
 
+  template class ParallelSorts<float>;
+  template class ParallelSorts<int>;
+  template class ParallelSorts<NN_Element>;
+
 }
