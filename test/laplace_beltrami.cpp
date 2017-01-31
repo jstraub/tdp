@@ -142,8 +142,8 @@ TEST(laplace_beltrami, LaplacianEvectors) {
 
     //--Test getLaplacianBasis
     std::cout << "numEv: " << numEv << std::endl;
-    Eigen::MatrixXf basis(numEv, pc.Area());
-    getLaplacianBasis(L,numEv, basis);
+    Eigen::MatrixXf basis(pc.Area(), numEv);
+    getLaplacianBasis(L, numEv, basis);
     std::cout << "basis: \n" << basis << std::endl;
 
 
@@ -174,6 +174,71 @@ TEST(laplace_beltrami, RbfKernels){
     //std::cout << f.transpose() << std::endl; //q: why segfault???
 
 }
+
+TEST(laplace_beltrami, randomSeed){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc1, pc2, pc3, pc4;
+  tdp::GetSphericalPc(pc1, 10);
+  tdp::GetSphericalPc(pc2, 10);
+  tdp::GetSphericalPc(pc3, 10);
+  pc4.ResizeCopyFrom(pc3);
+
+  std::cout << "PC1---" << std::endl;
+  tdp::printImage(pc1, 0, pc1.Area() -1);
+  std::cout << "PC2---" << std::endl;
+  tdp::printImage(pc2, 0, pc2.Area() -1);
+  std::cout << "PC3---" << std::endl;
+  tdp::printImage(pc3, 0, pc3.Area() -1);
+  std::cout << "PC4---" << std::endl;
+  tdp::printImage(pc4, 0, pc4.Area() -1);
+}
+
+TEST(laplace_beltrami, f_landmark){
+    std::string opt;
+    float alpha = 0.1;
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
+    Eigen::VectorXf f_w;
+
+    for (int p_idx = 0; p_idx < pc.Area(); p_idx++){
+        opt = "rbf";
+        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
+        std::cout << "opt: " << opt << std::endl;
+        std::cout << "fw: " << f_w.transpose() << std::endl;
+
+        opt = "ind";
+        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
+        std::cout << "opt: " << opt << std::endl;
+        std::cout << "fw: " << f_w.transpose() << std::endl;
+        std::cout << "\n\n" << std::endl;
+    }
+}
+
+
+TEST(laplace_beltrami, printImage){
+    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
+    std::cout << "---tdp::ing image---" << std::endl;
+    tdp::printImage(pc,0,pc.Area());
+
+    pc.Reinitialise(10);
+    for (int i =0; i< 10; ++i){
+        pc[i] = tdp::Vector3fda(i,i,i);
+    }
+    std::cout << "---Printing image---" << std::endl;
+    tdp::printImage(pc,0,pc.Area());
+}
+
+
+TEST(laplace_beltrami, addGaussianNoise){
+   tdp::ManagedHostImage<tdp::Vector3fda> pc_s, pc_t;
+   tdp::GetSimplePc(pc_s);
+   tdp::addGaussianNoise(pc_s, 0.1f, pc_t);
+
+   std::cout << "PC_S ----" << std::endl;
+   tdp::printImage(pc_s, 0, pc_s.Area());
+   std::cout << "PC_T ---" << std::endl;
+   tdp::printImage(pc_t, 0, pc_t.Area());
+}
+
+
 
 
 int main(int argc, char **argv) {

@@ -38,8 +38,11 @@ target_link_libraries(cublas tdp ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(vmfmmf vmfmmf.cpp)
 target_link_libraries(vmfmmf tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
-#add_executable(laplace_beltrami laplace_beltrami.cpp)
-#target_link_libraries(laplace_beltrami tdp ${GTEST_BOTH_LIBRARIES} pthread)
+add_executable(testLaplace_beltrami laplace_beltrami.cpp)
+target_link_libraries(testLaplace_beltrami tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
+add_executable(testEigen_io eigen_io.cpp)
+target_link_libraries(testEigen_io tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
 add_executable(cg cg.cpp)
 target_link_libraries(cg tdp ${GTEST_BOTH_LIBRARIES} pthread)
