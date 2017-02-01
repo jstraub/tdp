@@ -45,6 +45,18 @@ TEST(oddEvenMergeSort, sortNotPowerOf2) {
   runIntegerTest(127, tdp::ParallelSorts<int>::oddEvenMergeSort);
 }
 
+TEST(parallelSort, speedTest) {
+  size_t size = 10000000;
+  int* values = new int[size];
+  for (size_t i = 0; i < size; i++) {
+    values[i] = rand() % 500;
+  }
+
+  tdp::Timer timer;
+  tdp::ParallelSorts<int>::sort(size, values);
+  timer.toctic("Finished Sort");
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

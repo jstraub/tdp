@@ -51,7 +51,7 @@ TEST(nn_cuda, speedTest) {
   ann.ComputeKDtree(pc);
   timer2.toctic("Reinitialized");
   for (size_t i = 0; i < M; i++) {
-    nn.search(qc[i], k, nnIds, dists);
+    ann.Search(qc[i], k, 1e-7, nnIds, dists);
   }
   timer2.toctic("ANN: 10,000,000 points, 100 queries");
   float annTime = timer.toc();

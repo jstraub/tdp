@@ -94,7 +94,7 @@ void NN_Cuda::search(
   ParallelSorts<NN_Element>::sortDevicePreloaded(blocks, threads, m_size, d_elements);
 
   // Copy Back data
-  cudaMemcpy(h_elements, d_elements, m_size * sizeof(NN_Element), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_elements, d_elements, k * sizeof(NN_Element), cudaMemcpyDeviceToHost);
 
   // Place the necessary information into the passed containers
   for (size_t i = 0; i < k; i++) {
