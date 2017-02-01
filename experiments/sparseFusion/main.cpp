@@ -892,11 +892,10 @@ int main( int argc, char* argv[] )
         std::cout << " H " << H << " neg log evs " << 
           ev.array().log().matrix().transpose() << std::endl;
       } else {
-        Sigma_mc = A.inverse();
-        Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
-        H = ev.array().log().sum();
+        Eigen::Matrix<float,6,1> ev = A.eigenvalues().real();
+        H = -ev.array().log().sum();
         std::cout << " H " << H << " neg log evs " << 
-          ev.array().log().matrix().transpose() << std::endl;
+          -ev.array().log().matrix().transpose() << std::endl;
 
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
         Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
@@ -908,7 +907,7 @@ int main( int argc, char* argv[] )
         //      }
 
         logEntropy.Log(H);
-        logEig.Log(ev.array().log().matrix());
+        logEig.Log(-ev.array().log().matrix());
         Eigen::Matrix<float,6,1> q0 = Q.col(0);
         uint32_t maxId = 0;
         q0.array().abs().maxCoeff(&maxId);
