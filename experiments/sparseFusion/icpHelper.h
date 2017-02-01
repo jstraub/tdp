@@ -336,7 +336,7 @@ bool AccumulateRot(const Plane& pl,
     float distThr, 
     float p2plThr, 
     float dotThr,
-    Eigen::Matrix<float,3,3>& N
+    Eigen::Matrix<double,3,3>& N
     );
 
 bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A, float
@@ -355,6 +355,7 @@ void IncrementalOpRot(
     Image<Vector3fda>& n,  // in camera frame
     Image<float>& curv, 
     const std::vector<std::vector<uint32_t>>& invInd,
+    const SE3f& T_wcPrev,
     const SE3f& T_wc,
     const CameraBase<float,D,Derived>& cam,
     const ConfigICP& cfgIcp,
@@ -368,7 +369,7 @@ void IncrementalOpRot(
     SO3f& R_wc
     ) {
   SE3f T_cw = T_wc.Inverse();
-  Eigen::Matrix3f N = Eigen::Matrix3f::Zero();
+  Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
   bool exploredAll = false;
   uint32_t K = invInd.size();
   uint32_t k = 0;
@@ -398,8 +399,9 @@ void IncrementalOpRot(
     for (size_t k=0; k<indK.size(); ++k) 
       exploredAll &= indK[k] >= invInd[k].size();
   }
-  R_wc = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
-  Eigen::JacobiSVD<Eigen::Matrix<float,3,3>> svd(N,
+  N += T_wcPrev.rotation().matrix().cast<double>()*10.;
+  R_wc = tdp::SO3f(tdp::ProjectOntoSO3<double>(N).cast<float>());
+  Eigen::JacobiSVD<Eigen::Matrix<double,3,3>> svd(N,
       Eigen::ComputeFullU|Eigen::ComputeFullV);
   std::cout << svd.singularValues().transpose() << std::endl;
 }

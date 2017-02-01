@@ -143,7 +143,7 @@ bool AccumulateRot(const Plane& pl,
     float distThr, 
     float p2plThr, 
     float dotThr,
-    Eigen::Matrix<float,3,3>& N
+    Eigen::Matrix<double,3,3>& N
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
@@ -154,7 +154,7 @@ bool AccumulateRot(const Plane& pl,
     if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
-        N += n_w * n_ci.transpose();
+        N += n_w.cast<double>() * n_ci.cast<double>().transpose();
         return true;
       }
     }
@@ -183,7 +183,7 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,3,3>& A, float
     float& H) {
 
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,3,3>> eig(A);
-  Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
+  Eigen::Matrix<float,3,1> negLogEv = -eig.eigenvalues().real().array().log();
   H = negLogEv.sum();
   if ((H < HThr || Hprev - H < condEntropyThr) 
       && (negLogEv.array() < negLogEvThr).all()) {

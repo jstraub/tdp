@@ -331,14 +331,14 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
-  pangolin::Var<float> curvThr("ui.curv Thr",0.06,0.01,1.0);
+  pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
-  pangolin::Var<float> icpdRThr("ui.dR Thr",0.01,0.1,0.1);
-  pangolin::Var<float> icpdtThr("ui.dt Thr",0.001,0.01,0.001);
-  pangolin::Var<int> numRotThr("ui.numRot Thr",30, 1, 50);
+  pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
+  pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
+  pangolin::Var<int> numRotThr("ui.numRot Thr",200, 100, 350);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
@@ -431,6 +431,9 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
+  tdp::ThreadedValue<bool> runMappingThread(false);
+  tdp::ThreadedValue<bool> runRegularization(false);
+
   std::mutex pl_wLock;
   std::mutex nnLock;
   std::mutex mapLock;
@@ -441,7 +444,7 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
-    while(42) {
+    while(runMappingThread.Get()) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
         iRead = pl_w.iRead_;
@@ -490,7 +493,7 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
-    while(42) {
+    while(runRegularization.Get()) {
     if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
@@ -801,10 +804,13 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       Eigen::Matrix<float,6,1> x;
+      Eigen::Matrix<float,3,3> At;
+      Eigen::Matrix<float,3,1> xt;
       uint32_t numInl = 0;
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK());
       
+      tdp::SE3f T_wcPrev = T_wc.rotation();
       std::vector<size_t> indK(dpvmf.GetK()+1,0);
       for (size_t it = 0; it < maxIt; ++it) {
         mask.Fill(0);
@@ -817,15 +823,13 @@ int main( int argc, char* argv[] )
         float err = 0.;
         float H = 1e10;
         if (useDecomposedICP) {
-          tdp::SO3f R_wcPrev = T_wc.rotation();
+          tdp::SO3f R_wcBefore = T_wc.rotation();
           tdp::SO3f R_wc;
           // TODO need better termination criterion
-          IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
+          IncrementalOpRot(pc, dpc, n, curv, invInd, T_wcPrev, T_wc, cam, cfgIcp, W,
               indK, frame, mask, pl_w, assoc, numProjected, R_wc);
           T_wc.rotation() = R_wc;
-          Eigen::Matrix<float,3,1> xR = R_wcPrev.Log(R_wc);
-          Eigen::Matrix<float,3,3> At;
-          Eigen::Matrix<float,3,1> xt;
+          Eigen::Matrix<float,3,1> xR = R_wcBefore.Log(R_wc);
           numInl = 0;
           IncrementalICPTranslation( pc, dpc, n,  grey, curv, invInd, cam,
               cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
@@ -849,14 +853,15 @@ int main( int argc, char* argv[] )
           if (warmStartICP) {
             tdp::SO3f R_wc;
             // TODO need better termination criterion
-            IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
-                indK, frame, mask, pl_w, assoc, numProjected, R_wc);
+            IncrementalOpRot(pc, dpc, n, curv, invInd, T_wcPrev, T_wc,
+                cam, cfgIcp, W, indK, frame, mask, pl_w, assoc,
+                numProjected, R_wc);
             T_wc.rotation() = R_wc;
           }
           numInl = 0;
           IncrementalFullICP( pc, dpc, n,  grey, curv, invInd, cam,
               cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
-              numInl, T_wc, H, x, err);
+              numInl, T_wc, H, A, x, err);
 
           if (gui.verbose) {
             std::cout << "\tit " << it << ": err=" << err 
@@ -880,32 +885,40 @@ int main( int argc, char* argv[] )
           << (dpvmf.GetK()+1) << ": " << indK[k] 
           << " of " << invInd[k].size() << std::endl;
       }
-      Sigma_mc = A.inverse();
-      logObs.Log(log(numObs)/log(10.), log(numInl)/log(10.), 
-          log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
-      Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
-      float H = ev.array().log().sum();
-      std::cout << " H " << H << " neg log evs " << 
-        ev.array().log().matrix().transpose() << std::endl;
+      float H;
+      if (useDecomposedICP) {
+        Eigen::Matrix<float,3,1> ev = At.eigenvalues().real();
+        H = -ev.array().log().sum();
+        std::cout << " H " << H << " neg log evs " << 
+          ev.array().log().matrix().transpose() << std::endl;
+      } else {
+        Sigma_mc = A.inverse();
+        Eigen::Matrix<float,6,1> ev = Sigma_mc.eigenvalues().real();
+        H = ev.array().log().sum();
+        std::cout << " H " << H << " neg log evs " << 
+          ev.array().log().matrix().transpose() << std::endl;
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
-      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
-//      for (size_t k=0; k<dpvmf.GetK(); ++k) {
-//        Eigen::Matrix<float,6,1> Ai;
-//        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
-//        std::cout << "k " << k << std::endl;
-//        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
-//      }
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+        Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
+        //      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+        //        Eigen::Matrix<float,6,1> Ai;
+        //        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
+        //        std::cout << "k " << k << std::endl;
+        //        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
+        //      }
 
-      logEntropy.Log(H);
-      logEig.Log(ev.array().log().matrix());
-      Eigen::Matrix<float,6,1> q0 = Q.col(0);
-      uint32_t maxId = 0;
-      q0.array().abs().maxCoeff(&maxId);
-      q0 *= (q0(maxId) > 0? 1.: -1.);
-      logEv.Log(q0);
+        logEntropy.Log(H);
+        logEig.Log(ev.array().log().matrix());
+        Eigen::Matrix<float,6,1> q0 = Q.col(0);
+        uint32_t maxId = 0;
+        q0.array().abs().maxCoeff(&maxId);
+        q0 *= (q0(maxId) > 0? 1.: -1.);
+        logEv.Log(q0);
+      } 
       T_wcs.push_back(T_wc);
       trackingGood = H <= HThr && numInl > 10;
+      logObs.Log(log(numObs)/log(10.), log(numInl)/log(10.), 
+          log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       TOCK("icp");
       if (trackingGood) {
         std::cout << "tracking good" << std::endl;
