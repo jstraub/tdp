@@ -21,6 +21,7 @@ struct ConfigICP {
   float HThr;
   float lambdaNs;
   float lambdaTex;
+  int numRotThr;
   bool useTexture;
   bool useNormals;
 };
@@ -74,6 +75,8 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
   return EnsureNormal(pc, dpc, W, n, curv, u, v);
 }
 
+/// accumulate using p2pl cost function to inferr R,t
+/// dont use dot-threshold on the surface normal dot product
 bool AccumulateP2Pl(const Plane& pl, 
     const tdp::SE3f& T_wc, 
     const tdp::SE3f& T_cw, 
@@ -86,6 +89,7 @@ bool AccumulateP2Pl(const Plane& pl,
     float& err
     );
 
+/// accumulate using p2pl cost function to inferr R,t
 bool AccumulateP2Pl(const Plane& pl, 
     const tdp::SE3f& T_wc, 
     const tdp::SE3f& T_cw, 
@@ -97,6 +101,22 @@ bool AccumulateP2Pl(const Plane& pl,
     Eigen::Matrix<float,6,6>& A,
     Eigen::Matrix<float,6,1>& Ai,
     Eigen::Matrix<float,6,1>& b,
+    float& err
+    );
+
+/// accumulate using p2pl cost function but to only inferr translation
+/// rotation is assumed to be known
+bool AccumulateP2PlTransOnly(const Plane& pl, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    Eigen::Matrix<float,3,3>& A,
+    Eigen::Matrix<float,3,1>& Ai,
+    Eigen::Matrix<float,3,1>& b,
     float& err
     );
 
@@ -319,9 +339,12 @@ bool AccumulateRot(const Plane& pl,
     Eigen::Matrix<float,3,3>& N
     );
 
-bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
-    float Hprev,
-    float HThr, float condEntropyThr, float negLogEvThr,
+bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A, float
+    Hprev, float HThr, float condEntropyThr, float negLogEvThr, 
+    float& H);
+
+bool CheckEntropyTermination(const Eigen::Matrix<float,3,3>& A, float
+    Hprev, float HThr, float condEntropyThr, float negLogEvThr, 
     float& H);
 
 
@@ -349,7 +372,8 @@ void IncrementalOpRot(
   bool exploredAll = false;
   uint32_t K = invInd.size();
   uint32_t k = 0;
-  while (!exploredAll) {
+  uint32_t numObs = 0;
+  while (numObs < cfgIcp.numRotThr && !exploredAll) {
     k = (k+1)%K;
     while (indK[k] < invInd[k].size()) {
       size_t i = invInd[k][indK[k]++];
@@ -365,19 +389,19 @@ void IncrementalOpRot(
         pl.numObs_ ++;
         mask(u,v) ++;
         assoc.emplace_back(i,u+v*pc.w_);
+        numObs ++;
         break;
       }
     }
-
-    Eigen::JacobiSVD<Eigen::Matrix<float,3,3>> svd(N,
-        Eigen::ComputeFullU|Eigen::ComputeFullV);
-    std::cout << svd.singularValues().transpose() << std::endl;
 
     exploredAll = true;
     for (size_t k=0; k<indK.size(); ++k) 
       exploredAll &= indK[k] >= invInd[k].size();
   }
   R_wc = tdp::SO3f(tdp::ProjectOntoSO3<float>(N));
+  Eigen::JacobiSVD<Eigen::Matrix<float,3,3>> svd(N,
+      Eigen::ComputeFullU|Eigen::ComputeFullV);
+  std::cout << svd.singularValues().transpose() << std::endl;
 }
 
 
@@ -443,6 +467,8 @@ void IncrementalOpRot(
 //    }
 
 
+/// incremental ICP for R,t adds observations until termination
+/// criteria are reached
 template<int D, typename Derived>
 void IncrementalFullICP(
     Image<Vector3fda>& pc, // in camera frame
@@ -464,11 +490,11 @@ void IncrementalFullICP(
     SE3f& T_wc,
     float& H,
     Eigen::Matrix<float,6,6>&  A,
-    Eigen::Matrix<float,6,1>&  b,
+    Eigen::Matrix<float,6,1>&  x,
     float& err
     ) {
   A = Eigen::Matrix<float,6,6>::Zero();
-  b = Eigen::Matrix<float,6,1>::Zero();
+  Eigen::Matrix<float,6,1> b = Eigen::Matrix<float,6,1>::Zero();
   float Hprev = H;
   SE3f T_cw = T_wc.Inverse();
   Eigen::Matrix<float,6,1> Ai = Eigen::Matrix<float,6,1>::Zero();
@@ -577,8 +603,111 @@ void IncrementalFullICP(
       exploredAll &= indK[k] >= invInd[k].size();
     }
   }
+  x = Eigen::Matrix<float,6,1>::Zero();
+  if (numInl > 10) {
+    // solve for x using ldlt
+    x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+    T_wc = T_wc * tdp::SE3f::Exp_(x);
+  }
 }
 
 
+/// Incremental ICP to get translation only
+template<int D, typename Derived> 
+void IncrementalICPTranslation(
+    Image<Vector3fda>& pc, // in camera frame
+    Image<Vector4fda>& dpc, // in camera frame
+    Image<Vector3fda>& n,  // in camera frame
+    const Image<uint8_t>& grey, 
+    Image<float>& curv, 
+    const std::vector<std::vector<uint32_t>>& invInd,
+    const CameraBase<float,D,Derived>& cam,
+    const ConfigICP& cfgIcp,
+    uint32_t W,
+    std::vector<size_t>& indK,
+    uint32_t frame,
+    Image<uint8_t> mask,
+    CircularBuffer<tdp::Plane>& pl_w,
+    std::vector<std::pair<size_t, size_t>>& assoc,
+    size_t& numProjected, 
+    uint32_t& numInl, 
+    SE3f& T_wc,
+    float& H,
+    Eigen::Matrix<float,3,3>&  A,
+    Eigen::Matrix<float,3,1>&  x,
+    float& err
+    ) {
+
+  A = Eigen::Matrix<float,3,3>::Zero();
+  Eigen::Matrix<float,3,1> b = Eigen::Matrix<float,3,1>::Zero();
+  float Hprev = H;
+  SE3f T_cw = T_wc.Inverse();
+  Eigen::Matrix<float,3,1> Ai = Eigen::Matrix<float,3,1>::Zero();
+  // first use already associated data
+  for (const auto& ass : assoc) {
+    tdp::Plane& pl = pl_w.GetCircular(ass.first);
+    int32_t u = ass.second%pc.w_;
+    int32_t v = ass.second/pc.w_;
+    if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+          W, dpc, n, curv, u,v ))
+      continue;
+    if (!AccumulateP2PlTransOnly(pl, T_wc, T_cw, pc(u,v), n(u,v),
+          cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, A, Ai, b,
+          err))
+      continue;
+    if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr,
+          cfgIcp.condEntropyThr, cfgIcp.negLogEvThr, H))
+      break;
+    Hprev = H;
+  }
+  numInl = assoc.size();
+  if (numInl > 0)
+    std::cout << " reused " << assoc.size() << std::endl;
+  size_t numInlPrev = numInl;
+
+  bool exploredAll = false;
+  const uint32_t K = invInd.size();
+  uint32_t k = 0;
+  while (assoc.size() < 1000 && !exploredAll) {
+    k = (k+1)%K;
+    while (indK[k] < invInd[k].size()) {
+      size_t i = invInd[k][indK[k]++];
+      tdp::Plane& pl = pl_w.GetCircular(i);
+      numProjected++;
+      int32_t u, v;
+      if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+            W, dpc, n, curv, u,v ))
+        continue;
+      if (!AccumulateP2PlTransOnly(pl, T_wc, T_cw, pc(u,v), n(u,v),
+            cfgIcp.distThr, cfgIcp.p2plThr, cfgIcp.dotThr, A, Ai, b,
+            err))
+        continue;
+      pl.lastFrame_ = frame;
+      pl.numObs_ ++;
+      numInl ++;
+      mask(u,v) ++;
+      assoc.emplace_back(i,u+v*pc.w_);
+      break;
+    }
+
+    if (numInl > numInlPrev && k == 0) {
+      if (tdp::CheckEntropyTermination(A, Hprev, cfgIcp.HThr,
+            cfgIcp.condEntropyThr, cfgIcp.negLogEvThr, H))
+        break;
+      Hprev = H;
+      numInlPrev = numInl;
+    }
+    exploredAll = true;
+    for (size_t k=0; k<indK.size(); ++k) {
+      exploredAll &= indK[k] >= invInd[k].size();
+    }
+  }
+  x = Eigen::Matrix<float,3,1>::Zero();
+  if (numInl > 10) {
+    // solve for x using ldlt
+    x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+    T_wc.translation() += x;
+  }
+}
 
 }

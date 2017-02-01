@@ -102,6 +102,39 @@ bool AccumulateP2Pl(const Plane& pl,
   return false;
 }
 
+bool AccumulateP2PlTransOnly(const Plane& pl, 
+    const tdp::SE3f& T_wc, 
+    const tdp::SE3f& T_cw, 
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    Eigen::Matrix<float,3,3>& A,
+    Eigen::Matrix<float,3,1>& Ai,
+    Eigen::Matrix<float,3,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (n_w_in_c.dot(n_ci) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        Ai = n_w; 
+        A += Ai * Ai.transpose();
+        b += Ai * p2pl;
+        err += p2pl;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool AccumulateRot(const Plane& pl, 
     const tdp::SE3f& T_wc, 
     const tdp::SE3f& T_cw, 
@@ -129,12 +162,27 @@ bool AccumulateRot(const Plane& pl,
   return false;
 }
 
-bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
-    float Hprev,
-    float HThr, float condEntropyThr, float negLogEvThr,
+bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A, float
+    Hprev, float HThr, float condEntropyThr, float negLogEvThr, 
     float& H) {
 
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+  Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
+  H = negLogEv.sum();
+  if ((H < HThr || Hprev - H < condEntropyThr) 
+      && (negLogEv.array() < negLogEvThr).all()) {
+    std::cout <<  " H " << H << " cond H " << (Hprev-H) 
+      << " neg log evs: " << negLogEv.transpose() << std::endl;
+    return true;
+  }
+  return false;
+}
+
+bool CheckEntropyTermination(const Eigen::Matrix<float,3,3>& A, float
+    Hprev, float HThr, float condEntropyThr, float negLogEvThr, 
+    float& H) {
+
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,3,3>> eig(A);
   Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
   H = negLogEv.sum();
   if ((H < HThr || Hprev - H < condEntropyThr) 

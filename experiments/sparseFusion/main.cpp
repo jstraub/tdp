@@ -315,6 +315,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",false,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
+  pangolin::Var<bool> useDecomposedICP("ui.decomposed ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
@@ -337,6 +338,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.01,0.1,0.1);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.001,0.01,0.001);
+  pangolin::Var<int> numRotThr("ui.numRot Thr",30, 1, 50);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
@@ -563,6 +565,7 @@ int main( int argc, char* argv[] )
     cfgIcp.lambdaTex = lambdaTex;
     cfgIcp.useTexture = useTexture;
     cfgIcp.useNormals = useNormals;
+    cfgIcp.numRotThr = numRotThr;
 
     if (runLoopClosure.GuiChanged()) {
       showLoopClose = runLoopClosure;
@@ -797,6 +800,7 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
+      Eigen::Matrix<float,6,1> x;
       uint32_t numInl = 0;
 
       std::uniform_int_distribution<> dis(0, dpvmf.GetK());
@@ -810,41 +814,66 @@ int main( int argc, char* argv[] )
         indK = std::vector<size_t>(dpvmf.GetK()+1,0);
         numProjected = 0;
 
-        if (warmStartICP) {
+        float err = 0.;
+        float H = 1e10;
+        if (useDecomposedICP) {
+          tdp::SO3f R_wcPrev = T_wc.rotation();
           tdp::SO3f R_wc;
+          // TODO need better termination criterion
           IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
               indK, frame, mask, pl_w, assoc, numProjected, R_wc);
           T_wc.rotation() = R_wc;
-        }
-        
-        float err = 0.;
-        float H = 1e10;
-        numInl = 0;
-        IncrementalFullICP( pc, dpc, n,  grey, curv, invInd, cam,
-            cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
-            numInl, T_wc, H, A, b, err);
-        numObs = assoc.size();
+          Eigen::Matrix<float,3,1> xR = R_wcPrev.Log(R_wc);
+          Eigen::Matrix<float,3,3> At;
+          Eigen::Matrix<float,3,1> xt;
+          numInl = 0;
+          IncrementalICPTranslation( pc, dpc, n,  grey, curv, invInd, cam,
+              cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
+              numInl, T_wc, H, At, xt, err);
+          if (gui.verbose) {
+            std::cout << "\tit " << it << ": err=" << err 
+              << "\t# inliers: " << numInl
+              << "\t|x|: " << xR.norm()*180./M_PI 
+              << " " << xt.norm()
+              << std::endl;
+          }
+          // TODO needs to take into account rotation as well
+          if (xR.norm()*180./M_PI < icpdRThr
+              && xt.norm() < icpdtThr
+              && tdp::CheckEntropyTermination(At, H, cfgIcp.HThr, 0.f,
+                cfgIcp.negLogEvThr, H)) {
+            std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
+            break;
+          }
+        } else {
+          if (warmStartICP) {
+            tdp::SO3f R_wc;
+            // TODO need better termination criterion
+            IncrementalOpRot(pc, dpc, n, curv, invInd, T_wc, cam, cfgIcp, W,
+                indK, frame, mask, pl_w, assoc, numProjected, R_wc);
+            T_wc.rotation() = R_wc;
+          }
+          numInl = 0;
+          IncrementalFullICP( pc, dpc, n,  grey, curv, invInd, cam,
+              cfgIcp, W, indK, frame, mask, pl_w, assoc, numProjected,
+              numInl, T_wc, H, x, err);
 
-        Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-        if (numInl > 10) {
-          // solve for x using ldlt
-          x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-          T_wc = T_wc * tdp::SE3f::Exp_(x);
+          if (gui.verbose) {
+            std::cout << "\tit " << it << ": err=" << err 
+              << "\t# inliers: " << numInl
+              << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+              << " " <<  x.bottomRows(3).norm()
+              << std::endl;
+          }
+          if (x.topRows<3>().norm()*180./M_PI < icpdRThr
+              && x.bottomRows<3>().norm() < icpdtThr
+              && tdp::CheckEntropyTermination(A, H, cfgIcp.HThr, 0.f,
+                cfgIcp.negLogEvThr, H)) {
+            std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
+            break;
+          }
         }
-        if (gui.verbose) {
-          std::cout << "\tit " << it << ": err=" << err 
-            << "\t# inliers: " << numInl
-            << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
-            << " " <<  x.bottomRows(3).norm()
-            << std::endl;
-        }
-        if (x.topRows<3>().norm()*180./M_PI < icpdRThr
-            && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, H, cfgIcp.HThr, 0.f,
-              cfgIcp.negLogEvThr, H)) {
-          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
-          break;
-        }
+        numObs = assoc.size();
       }
       for (size_t k=0; k<indK.size(); ++k) {
         std::cout << "used different directions " << k << "/" 
