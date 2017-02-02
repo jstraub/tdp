@@ -369,7 +369,7 @@ void IncrementalOpRot(
     SO3f& R_wc
     ) {
   SE3f T_cw = T_wc.Inverse();
-  Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
+  Eigen::Matrix3d N = T_wcPrev.rotation().matrix().transpose().cast<double>()*10.;
   bool exploredAll = false;
   uint32_t K = invInd.size();
   uint32_t k = 0;
@@ -399,7 +399,6 @@ void IncrementalOpRot(
     for (size_t k=0; k<indK.size(); ++k) 
       exploredAll &= indK[k] >= invInd[k].size();
   }
-  N += T_wcPrev.rotation().matrix().cast<double>()*10.;
   R_wc = tdp::SO3f(tdp::ProjectOntoSO3<double>(N).cast<float>());
   Eigen::JacobiSVD<Eigen::Matrix<double,3,3>> svd(N,
       Eigen::ComputeFullU|Eigen::ComputeFullV);
