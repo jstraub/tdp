@@ -237,8 +237,68 @@ TEST(laplace_beltrami, addGaussianNoise){
    tdp::printImage(pc_t, 0, pc_t.Area());
 }
 
+TEST(laplace_beltrami, clean_near_zero_one){
+  Eigen::MatrixXf M(3,3);
+  M << 1.0f, 1.001f, 0.99991,
+       0.0f, 0.0001f, -0.0001f,
+       0.0f, 1.0f, 1.0f;
+  tdp::clean_near_zero_one(M, 0.002);
+  std::cout << M << std::endl;
+}
 
+TEST(laplace_beltrami, makeCacheNames){
+  int shapeOpt = 0;
+  int nSamples = 10;
+  int knn = 10;
+  float alpha = 0.01;
+  float noiseStd = 0.001;
+  int nEv = 5;
 
+  std::map<std::string, std::string> d = tdp::makeCacheNames(
+    shapeOpt, nSamples, knn, alpha, noiseStd, nEv, "./cache/");
+
+  std::cout << "Checking the dictionary---" << std::endl;
+  for (auto& k : d){
+    std::cout << k.first << ", " << k.second << std::endl;
+  }
+
+  std::cout << "\nTEST2---" << std::endl;
+  std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
+    shapeOpt, nSamples, knn, alpha, noiseStd, nEv, "./somedir/");
+  const char* path_ls = cacheDic.at("ls").c_str();
+  const char* path_lt = cacheDic.at("lt").c_str();
+  const char* path_s_wl = cacheDic.at("s_wl").c_str();
+  const char* path_t_wl = cacheDic.at("t_wl").c_str();
+  const char* path_s_evals = cacheDic.at("s_evals").c_str();
+  const char* path_t_evals = cacheDic.at("t_evals").c_str();
+
+  std::cout << "checking---" << std::endl;
+  std::cout << path_ls << std::endl;
+  std::cout << path_lt << std::endl;
+  std::cout << path_s_wl << std::endl;
+  std::cout << path_t_wl << std::endl;
+  std::cout << path_s_evals << std::endl;
+  std::cout << path_t_evals << std::endl;
+}
+
+TEST(laplace_beltrami, f_height){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10);
+  tdp::GetSimplePc(pc);
+  tdp::printImage(pc,0,pc.Area());
+
+  Eigen::VectorXf f_w(pc.Area());
+  tdp::f_height(pc,f_w);
+  std::cout << f_w.transpose() << std::endl;
+
+  std::cout << "Test with sphere" << std::endl;
+  tdp::GetSphericalPc(pc,10);
+  tdp::printImage(pc, 0, pc.Area());
+
+  tdp::f_height(pc,f_w);
+  std::cout << f_w.transpose() << std::endl;
+
+  std::cout << "finished." << std::endl;
+}
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);

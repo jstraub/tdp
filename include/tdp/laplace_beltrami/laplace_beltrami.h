@@ -90,10 +90,15 @@ Eigen::Matrix3f getLocalRot(const Matrix3fda& cov,
 void getAllLocalBasis(const Image<Vector3fda>& pc, Image<SE3f>& locals,
                       ANN& ann, int knn, float eps);
 
-inline float w(float d, int knn);
+inline float w(float d, int knn){
+    return d==0? 1: 1/(float)knn;
+}
 
-inline Vector6fda poly2Basis(const Vector3fda& p);
-
+inline Vector6fda poly2Basis(const Vector3fda& p){
+    Vector6fda newP;
+    newP << 1, p[0], p[1], p[0]*p[0], p[0]*p[1], p[1]*p[1];
+    return newP;
+}
 void getThetas(const Image<Vector3fda>& pc, const Image<SE3f>& T_wls,
                Image<Vector6fda>& thetas, ANN& ann, int knn, float eps);
 
@@ -169,6 +174,10 @@ void f_rbf(const Image<Vector3fda>& pc,
            const float alpha,
            Eigen::VectorXf& f );
 
+
+void f_height(const Image<Vector3fda>& pc,
+              Eigen::VectorXf& f_w);
+
 void f_indicator(const Image<Vector3fda>& pc,
                  const int p_idx,
                  Eigen::VectorXf& f);
@@ -185,11 +194,42 @@ Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
 
 /******************print**********************************
 **********************************************************/
-inline void print(std::string& s);
-
 void printImage(const ManagedHostImage<Vector3fda>& pc,
                 int start_idx,
                 int length);
+
+/*****************fmap matrix clean up********************
+**********************************************************/
+//Fmap clean up to one or zero if the entry is close enough
+inline void clean_near_zero_one(Eigen::MatrixXf& M,
+                                const float threshold){
+  int nOnes(0), nZeros(0);
+  for (int i=0; i<M.rows(); ++i){
+    for (int j=0; j<M.cols(); ++j){
+      if (1-threshold <M(i,j) && M(i,j) < 1+threshold){
+        M(i,j) = 1.f;
+        nOnes += 1;
+      } else if (-threshold <M(i,j) && M(i,j) < threshold){
+        M(i,j) = 0.0f;
+        nZeros += 1;
+      }
+    }
+  }
+  std::cout << "updated to one, zero: " << nOnes << ", " << nZeros 
+            << std::endl;
+}
+
+/******************cache**********************************
+**********************************************************/
+std::map<std::string, std::string> makeCacheNames(
+        const int shapeOpt, 
+        const int nSamples, 
+        const int knn, 
+        const float alpha,
+        const float noiseStd,
+        const int nEv, 
+        const char* cacheDir="./cache/");
+
 
 /**************************PROJECTIONS***************************************
  ****************************************************************************/

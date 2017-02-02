@@ -20,18 +20,18 @@ void write_binary(const char* filename, const Matrix& M){
 
 template <typename Matrix>
 void read_binary(const char* filename, Matrix& M){
-	std::cout << "\nFname: " << filename << std::endl;
+	// std::cout << "\nFname: " << filename << std::endl;
 	std::ifstream ifs(filename, std::ios::in | std::ios::binary );
 	if(ifs.is_open()){
 		typename Eigen::Index rows = 0, cols = 0;
 		ifs.read((char*) (&rows), sizeof(typename Eigen::Index));
 		ifs.read((char*) (&cols), sizeof(typename Eigen::Index));
-		std::cout << "rows, cols: " << rows << ", " << cols << std::endl; 
+		// std::cout << "rows, cols: " << rows << ", " << cols << std::endl; 
 		M.resize(rows, cols);
 
 		ifs.read((char*) M.data(), rows*cols*sizeof(typename Matrix::Scalar) );
 		ifs.close();
-		std::cout << "Dense mtx read." << std::endl;
+		// std::cout << "Dense mtx read." << std::endl;
 	} else{ 
 		std::cout << "Unable to open file" << std::endl;
 	}

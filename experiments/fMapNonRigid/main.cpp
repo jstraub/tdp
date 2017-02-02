@@ -6,6 +6,8 @@
 #include <sstream>
 #include <cstdlib>
 #include <random>
+#include <algorithm>
+#include <iterator>
 
 #include <pangolin/pangolin.h>
 #include <pangolin/video/video_record_repeat.h>
@@ -57,13 +59,50 @@
 
 /************TODO***********************************************/
 /***************************************************************/
+//1. MOVE THE TESTS TO A SEPARATE TEST FILE
+//2. FOCUS ON arm.ply and bunny ply
+
+/************Declarations***************************************
+ ***************************************************************/
+void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
+           const float factor,
+           tdp::ManagedHostImage<tdp::Vector3fda>& dst);
+void Test_scale();
+
+
+void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
+           const float factor,
+           tdp::ManagedHostImage<tdp::Vector3fda>& dst){
+  dst.Reinitialise(src.Area(),1);
+  for (int i=0; i<src.Area(); ++i){
+      dst[i] = factor * src[i];
+  }
+}
+
+void Test_scale(){
+  tdp::ManagedHostImage<tdp::Vector3fda> src(10,1), dst(10,1);
+  tdp::GetSphericalPc(src,10);
+  std::cout << "src\n" << std::endl;
+  tdp::printImage(src,0,src.Area());
+
+  scale(src, 1.0f, dst);
+  std::cout << "scale: 1.0f" << std::endl;
+  tdp::printImage(dst,0,dst.Area());
+
+  scale(src,2.0f, dst);
+  std::cout << "scale: 2.0f" << std::endl;
+  tdp::printImage(dst,0,dst.Area());
+
+}
+/************TODO***********************************************/
+/***************************************************************/
 //2. FOCUS ON arm.ply and bunny ply
 
 /************Declarations***************************************
  ***************************************************************/
 
 int main(int argc, char* argv[]){
-//  Test_makeCacheNames();
+//  Test_scale();
 //  return 0;
   //Create openGL window - guess sensible dimensions
   int menu_w = 180;
@@ -104,29 +143,35 @@ int main(int argc, char* argv[]){
                           .SetHandler(new pangolin::Handler3D(s_cam));
   pangolin::View& view_g = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(t_cam));
+
   container.AddDisplay(view_s);
   container.AddDisplay(view_t);
   container.AddDisplay(view_cmtx);
   container.AddDisplay(view_f);
   container.AddDisplay(view_g);
-    
+
   // Add variables to pangolin GUI
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
   pangolin::Var<bool> showMeans("ui.show means", true, false);
   pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
   pangolin::Var<bool> showDecomposition("ui. show evals", false, true);
 
-  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 400, 100, 400);
-
+  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 450, 100, 450);
   pangolin::Var<int> shapeOpt("ui. shape option", 2, 0, 3); //2:bunny
+
+  //--second shape point cloud
+  pangolin::Var<float> sFactor("ui. second pc scale", 2.0, 0.5, 3); //pc_t[i] = sFactor*pc_s[i];
+  pangolin::Var<float> noiseStd("ui. noiseStd", 0, 0.00001, 0.0001); //zero mean Gaussian noise added to shape S
+
+
   //-- variables for KNN
   pangolin::Var<int> knn("ui.knn",30,1,100);//(int)nSamples
   pangolin::Var<float> eps("ui.eps", 1e-6 ,1e-7, 1e-5);
   pangolin::Var<float> alpha("ui. alpha", 0.01, 0.001, 0.3); //variance of rbf kernel for laplacian
-  pangolin::Var<float> noiseStd("ui. noiseStd", 0, 0.00001, 0.0001); //zero mean Gaussian noise added to shape S
-  pangolin::Var<float> alpha2("ui. alpha2", 0.0001, 0.0001, 0.01); //variance of rbf kernel for defining function on manifold
+
 
   //--Correspondence Matrix C estimation
+  pangolin::Var<float> alpha2("ui. alpha2", 0.0001, 0.0001, 0.01); //variance of rbf kernel for defining function on manifold
   pangolin::Var<int> nEv("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
   pangolin::Var<int> nPW("ui.num PointWise train",nSamples/*std::min(20*numEv, pc_s.Area())*/,nEv,nSamples);
 //nhks
@@ -146,7 +191,7 @@ int main(int argc, char* argv[]){
 
   // min,max for coloring
   float minVal_t, maxVal_t, minVal_c, maxVal_c, minVal_f, maxVal_f,
-        minVal_g, maxVal_g, minG0Value, maxG0Value;
+        minVal_g, maxVal_g;
 
   // Control switches
   bool annChanged = false;
@@ -169,7 +214,6 @@ int main(int argc, char* argv[]){
   // std::map<std::string, std::string> cacheDic;
   tdp::ANN ann_s, ann_t;
 
-
   Eigen::SparseMatrix<float> L_s(pc_s.Area(), pc_s.Area()),//Laplacian of manifold S
                              L_t(pc_t.Area(), pc_t.Area());//Laplacian of manifold T
   Eigen::VectorXf evector_s,//(L_s.rows());
@@ -184,6 +228,8 @@ int main(int argc, char* argv[]){
                   F,//((int)numCst, (int)numEv),
                   G,//((int)numCst, (int)numEv),
                   C;//((int)nEv, (int)nEv);
+
+  std::vector<int> pIndices; //For functional correpsondence pairs
   /*********************************************************************/
 
   // Stream and display video
@@ -193,10 +239,11 @@ int main(int argc, char* argv[]){
     glColor3f(1.0f, 1.0f, 1.0f);
 
     // Get samples
-    if ( pangolin::Pushed(showFMap) || 
+    if ( pangolin::Pushed(showFMap) ||
          nSamples.GuiChanged()      ||
          shapeOpt.GuiChanged()      ||
-         noiseStd.GuiChanged())     {
+         noiseStd.GuiChanged()      ||
+         sFactor.GuiChanged()       ){
       std::cout << "Running fMap from top..." << std::endl;
 
       if (argc<3){
@@ -231,10 +278,22 @@ int main(int argc, char* argv[]){
         }
 
         //pc_t.ResizeCopyFrom(pc_s);
-        addGaussianNoise(pc_s, (float)noiseStd, pc_t);
+        scale(pc_s,sFactor, pc_t);
+        addGaussianNoise(pc_t, (float)noiseStd, pc_t);
 
         std::cout << "PC_S: " << pc_s.Area() << std::endl;
         std::cout << "PC_T: " << pc_t.Area() << std::endl;
+
+        //Get indices to be used (later) for correspondence between functions
+        std::random_device rd;
+        std::mt19937 g(rd());
+
+        for (int i = 0; i<(int)nSamples; ++i){
+          pIndices.push_back(i);
+        }
+
+        //shuffle correpsondence indices
+        std::shuffle(pIndices.begin(), pIndices.end(), g);
 
         vbo_s.Reinitialise(pangolin::GlArrayBuffer, pc_s.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
         vbo_s.Upload(pc_s.ptr_, pc_s.SizeBytes(), 0);
@@ -256,11 +315,12 @@ int main(int argc, char* argv[]){
         //******************CACHE NAMING*************************//
         //*******************************************************//
         std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
-                                  (int)shapeOpt, (int)nSamples, (int)knn, 
-                                  (float)alpha, (float)noiseStd, (int)nEv);
+                                  (int)shapeOpt, (int)nSamples, (int)knn,
+                                  (float)alpha, (float)noiseStd, (int)nEv,
+                                  "./cache/scale/");
         const char* path_ls = cacheDic.at("ls").c_str();
         const char* path_lt = cacheDic.at("lt").c_str();
-        
+
 
         //***************Get Laplacians***************************//
         tdp::Timer t0;
@@ -269,7 +329,7 @@ int main(int argc, char* argv[]){
         if (res == 0){
             // Read cached file
             std::cout << "Reading Laplacians from cache---" << std::endl;
-            
+
             tdp::read_binary(path_ls, L_s);
             tdp::read_binary(path_lt, L_t);
         } else{
@@ -278,7 +338,7 @@ int main(int argc, char* argv[]){
 
             tdp::write_binary(path_ls, L_s);
             tdp::write_binary(path_lt, L_t);
-        
+
             std::cout << "Cached Laplacians---" << std::endl;
         }
 
@@ -289,10 +349,9 @@ int main(int argc, char* argv[]){
 
     if (pangolin::Pushed(showFMap) || laplacianChanged ||
                 nEv.GuiChanged()){
-      //
-      nPW = (int)nEv; // + (int)nHKS;
+      //nPW = (int)nEv; // + (int)nHKS;
       std::cout << "before: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
-      S_wl.resize(L_s.rows(),(int)nEv); //TODO: THIS IS THE PROBLEM!!!!
+      S_wl.resize(L_s.rows(),(int)nEv);
       std::cout << "after: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
 
       T_wl.resize(L_t.rows(),(int)nEv);
@@ -307,8 +366,9 @@ int main(int argc, char* argv[]){
 
       //******************CACHE NAMING*************************//
       std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
-                                  (int)shapeOpt, (int)nSamples, (int)knn, 
-                                  (float)alpha, (float)noiseStd,(int)nEv);
+                                  (int)shapeOpt, (int)nSamples, (int)knn,
+                                  (float)alpha, (float)noiseStd,(int)nEv,
+                                  "./cache/scale/");
       const char* path_s_wl = cacheDic.at("s_wl").c_str();
       const char* path_t_wl = cacheDic.at("t_wl").c_str();
       const char* path_s_evals = cacheDic.at("s_evals").c_str();
@@ -318,10 +378,10 @@ int main(int argc, char* argv[]){
       std::cout << "t_wl resized: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
       tdp::Timer t0;
-      int res = access(path_s_wl, R_OK) + access(path_t_wl, R_OK) + 
+      int res = access(path_s_wl, R_OK) + access(path_t_wl, R_OK) +
                 access(path_s_evals, R_OK) + access(path_t_evals, R_OK);
 
-      if (res == 0){    
+      if (res == 0){
           std::cout << "Reading Bases&evals from cache---" << std::endl;
           tdp::read_binary(path_s_wl, S_wl);
           tdp::read_binary(path_t_wl, T_wl);
@@ -378,12 +438,17 @@ int main(int argc, char* argv[]){
       std::cout << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       std::cout << T_wl.rows() << ", " << T_wl.cols() << std::endl;
 
-      
+
       // --construct F(data matrix) and G based on the correspondences
       for (int i=0; i< (int)nPW; ++i){
           Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area()), f_l, g_l;
-          tdp::f_landmark(pc_s, i, alpha2, option, f_w);
-          tdp::f_landmark(pc_t, i, alpha2, option, g_w);
+//          tdp::f_landmark(pc_s, i, alpha2, option, f_w); //points in order in pc
+//          tdp::f_landmark(pc_t, i, alpha2, option, g_w);
+          std::cout << "i: " << i << ", " << std::endl;
+          std::cout << "pindex: " << pIndices[i] << std::endl;
+
+          tdp::f_landmark(pc_s, pIndices[i], alpha2, option, f_w); //points in order in pc
+          tdp::f_landmark(pc_t, pIndices[i], alpha2, option, g_w);
 
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
           g_l = (T_wl.transpose()*T_wl).fullPivLu().solve(T_wl.transpose()*g_w);
@@ -400,13 +465,13 @@ int main(int argc, char* argv[]){
       C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
 
       std::cout << "-----------\n"
-                << "C(10x10) \n" 
-                << C.block(0,0,10,10) 
+                << "C(10x10) \n"
+                << C.block(0,0,10,10)
                 << std::endl;
 
       std::cout << "----------\n"
                 << "Diagnoals\n"
-                << C.diagonal().transpose() 
+                << C.diagonal().transpose()
                 << std::endl;
 
       //Visualization of C
@@ -432,12 +497,6 @@ int main(int argc, char* argv[]){
       cChanged = true;
       std::cout << "C matrix is (re)calculated\n" << std::endl;
     }
-
-    if (cChanged || showFTransfer ){//transferZ.pushed
-
-
-    }
-
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -532,64 +591,6 @@ int main(int argc, char* argv[]){
         vbo_cmtx.Unbind();
     }
 
-    if (view_f.IsShown()) {
-      view_f.Activate(s_cam);
-      pangolin::glDrawAxis(0.1);
-
-      glPointSize(2.);
-      glColor3f(1.0f, 1.0f, 0.0f);
-      // renders the vbo with colors from valuebo
-      auto& shader = tdp::Shaders::Instance()->valueShader_;
-      shader.Bind();
-      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
-      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
-      shader.SetUniform("minValue", minVal_f);
-      shader.SetUniform("maxValue", maxVal_f);
-      valuebo_f.Bind();
-      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-      vbo_f.Bind();
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-      glEnableVertexAttribArray(0);
-      glEnableVertexAttribArray(1);
-      glPointSize(4.);
-      glDrawArrays(GL_POINTS, 0, vbo_f.num_elements);
-      shader.Unbind();
-      glDisableVertexAttribArray(1);
-      valuebo_f.Unbind();
-      glDisableVertexAttribArray(0);
-      vbo_f.Unbind();
-    }
-
-    if (view_g.IsShown()){
-        view_g.Activate(t_cam);
-        pangolin::glDrawAxis(0.1);
-
-        glPointSize(2.);
-        glColor3f(1.0f, 1.0f, 0.0f);
-        // renders the vbo with colors from valuebo
-        auto& shader = tdp::Shaders::Instance()->valueShader_;
-        shader.Bind();
-        shader.SetUniform("P",  t_cam.GetProjectionMatrix());
-        shader.SetUniform("MV", t_cam.GetModelViewMatrix());
-        shader.SetUniform("minValue", minVal_g);
-        shader.SetUniform("maxValue", maxVal_g);
-        valuebo_g.Bind();
-        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-        vbo_g.Bind();
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glPointSize(4.);
-        glDrawArrays(GL_POINTS, 0, vbo_g.num_elements);
-        shader.Unbind();
-        glDisableVertexAttribArray(1);
-        valuebo_g.Unbind();
-        glDisableVertexAttribArray(0);
-        vbo_g.Unbind();
-    }
-
     glDisable(GL_DEPTH_TEST);
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
@@ -606,9 +607,4 @@ int main(int argc, char* argv[]){
   std::cout << "AY YO!" << std::endl;
   return 0;
 }
-
-
-
-
-
 

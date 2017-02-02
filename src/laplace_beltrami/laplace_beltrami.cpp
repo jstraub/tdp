@@ -190,20 +190,6 @@ void getAllLocalBasis(const Image<Vector3fda>& pc, Image<SE3f>& T_wl,
     }
 }
 
-inline float w(float d, int knn){
-    return d==0? 1: 1/(float)knn;
-}
-
-inline Vector6fda poly2Basis(const Vector3fda& p){
-    Vector6fda newP;
-    newP << 1, p[0], p[1], p[0]*p[0], p[0]*p[1], p[1]*p[1];
-    return newP;
-}
-
-inline Eigen::Vector4f homogeneous(const Vector3fda& p){
-    return Vector4fda(p(0),p(1),p(2),1);
-}
-
 void getThetas(const Image<Vector3fda>& pc_w,
                const Image<SE3f>& T_wls, Image<Vector6fda>& thetas,
                ANN& ann, int knn, float eps){
@@ -504,11 +490,6 @@ void decomposeLaplacian(const Eigen::SparseMatrix<float>& L,
     }
 }
 
-inline Eigen::VectorXf getLaplacianEvector(const eigen_vector<Eigen::VectorXf>& evectors,
-                                           int idEv){
-    return evectors[idEv];
-}
-
 Eigen::VectorXf getLaplacianEvector(const Image<Vector3fda>& pc,
                                     const Eigen::SparseMatrix<float>& L,
                                     int idEv){
@@ -614,6 +595,14 @@ void f_indicator(const Image<Vector3fda>& pc,
     }
 }
 
+void f_height(const Image<Vector3fda>& pc,
+              Eigen::VectorXf& f_w){
+  f_w.resize(pc.Area());
+  for (int i=0; i<pc.Area(); ++i){
+    f_w(i) = pc[i](2);
+  }
+}
+
 void f_landmark(const Image<Vector3fda>& pc,
                 const int p_idx,
                 const float alpha,
@@ -661,10 +650,6 @@ Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
 
 /***************Print contents*********************
 ***************************************************/
-inline void print(std::string& s){
-  std::cout << s << std::endl;
-}
-
 void printImage(const ManagedHostImage<Vector3fda>& pc,
                 int start_idx,
                 int length){
@@ -684,6 +669,54 @@ void printImage(const ManagedHostImage<Vector3fda>& pc,
     }
     std::cout << std::endl;
 }
+
+/**************CACHE INTERMEDIATE FOR FMAP*************************
+ **************************************************/
+std::map<std::string, std::string> makeCacheNames(
+        const int shapeOpt, 
+        const int nSamples, 
+        const int knn, 
+        const float alpha,
+        const float noiseStd,
+        const int nEv, 
+        const char* cacheDir){
+
+  std::map<std::string, std::string> d;
+  std::stringstream ss;
+
+  ss << cacheDir << shapeOpt << "/ls_" << nSamples << "_" << knn << "_"
+      << alpha << ".dat";
+  d["ls"] = ss.str();
+  ss.str(std::string());
+
+  ss << cacheDir << shapeOpt << "/lt_" << nSamples << "_" << knn << "_"
+      << alpha << "_" << noiseStd << ".dat";
+  d["lt"] = ss.str();
+  ss.str(std::string());
+
+  ss << cacheDir << shapeOpt << "/s_wl_" << nSamples << "_" << knn << "_"
+     << alpha << "_" << nEv << ".dat";
+  d["s_wl"] = ss.str();
+  ss.str(std::string());
+
+  ss << cacheDir << shapeOpt << "/t_wl_" << nSamples << "_" << knn << "_"
+     << alpha << "_" << noiseStd << "_" << nEv << ".dat";
+  d["t_wl"] = ss.str();
+  ss.str(std::string());
+
+  ss << cacheDir << shapeOpt << "/s_evals_" << nSamples << "_" << knn << "_"
+     << alpha << "_" << nEv << ".dat";
+  d["s_evals"] = ss.str();
+  ss.str(std::string());
+
+  ss << cacheDir << shapeOpt << "/t_evals_" << nSamples << "_" << knn << "_"
+     << alpha << "_" << noiseStd << "_" << nEv << ".dat";
+  d["t_evals"] = ss.str();
+  ss.str(std::string());
+
+  return d;
+}
+
 
 /**************PROJECTIONS*************************
  **************************************************/

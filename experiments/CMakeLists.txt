@@ -51,6 +51,8 @@ if (CUDA_FOUND)
   add_subdirectory(./laplace_beltrami)
   add_subdirectory(./fMap)
   add_subdirectory(./fMapTest)
+  add_subdirectory(./fMapTestNoPangolin)
+  add_subdirectory(./fMapNonRigid)
 
 
 endif()
