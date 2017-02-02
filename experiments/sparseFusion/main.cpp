@@ -957,9 +957,8 @@ int main( int argc, char* argv[] )
           std::random_shuffle(idsC.begin(), idsC.end());
           N = Eigen::Matrix3f::Zero();
           for (size_t i=0; i<3; ++i) {
-            N += dpvmf.GetCenter(idsW[i]) * dpvmfCur.GetCenter(idsC[i]).transpose();
+            N += dpvmf.GetCenter(idsW[i]).transpose() * dpvmfCur.GetCenter(idsC[i]);
           }
-          // TODO check order
           Eigen::Matrix3f R_wc = tdp::ProjectOntoSO3<float>(N);
           float align = (R_wc*N).trace();
           if (align > maxAlign) {

@@ -63,15 +63,15 @@ __global__ void KernelICPStepRotation(
         // association is good -> accumulate
         // TODO: test: association uses T_mo but computation of N does
         // not  since we can get R in closed form from this.
-        sum[tid](0) += n_mi(0)*n_oi(0);
-        sum[tid](1) += n_mi(0)*n_oi(1);
-        sum[tid](2) += n_mi(0)*n_oi(2);
-        sum[tid](3) += n_mi(1)*n_oi(0);
-        sum[tid](4) += n_mi(1)*n_oi(1);
-        sum[tid](5) += n_mi(1)*n_oi(2);
-        sum[tid](6) += n_mi(2)*n_oi(0);
-        sum[tid](7) += n_mi(2)*n_oi(1);
-        sum[tid](8) += n_mi(2)*n_oi(2);
+        sum[tid](0) += n_oi(0)*n_mi(0);
+        sum[tid](1) += n_oi(0)*n_mi(1);
+        sum[tid](2) += n_oi(0)*n_mi(2);
+        sum[tid](3) += n_oi(1)*n_mi(0);
+        sum[tid](4) += n_oi(1)*n_mi(1);
+        sum[tid](5) += n_oi(1)*n_mi(2);
+        sum[tid](6) += n_oi(2)*n_mi(0);
+        sum[tid](7) += n_oi(2)*n_mi(1);
+        sum[tid](8) += n_oi(2)*n_mi(2);
         sum[tid](9) += 1.; // to get number of data points
       }
     }

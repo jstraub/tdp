@@ -118,8 +118,8 @@ Eigen::Matrix<T,3,3> ProjectOntoSO3(const Eigen::Matrix<T,3,3>& N) {
   Eigen::JacobiSVD<Eigen::Matrix<T,3,3>> svd(N,
 //    Eigen::FullPivHouseholderQRPreconditioner> svd(N,
       Eigen::ComputeFullU|Eigen::ComputeFullV);
-  T sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-  return svd.matrixU()*Eigen::Matrix<T,3,1>(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
+  T sign = (svd.matrixV()*svd.matrixU().transpose()).determinant();
+  return svd.matrixV()*Eigen::Matrix<T,3,1>(1.,1.,sign).asDiagonal()*svd.matrixU().transpose();
 }
 
 

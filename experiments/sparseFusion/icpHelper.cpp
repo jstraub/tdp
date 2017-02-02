@@ -154,7 +154,7 @@ bool AccumulateRot(const Plane& pl,
     if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
       if (fabs(p2pl) < p2plThr) {
-        N += n_w.cast<double>() * n_ci.cast<double>().transpose();
+        N += n_ci.cast<double>() * n_w.cast<double>().transpose();
         return true;
       }
     }

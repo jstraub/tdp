@@ -261,25 +261,25 @@ int main( int argc, char* argv[] )
         for (size_t k=0; k<vmfs.size(); ++k) {
           //TODO: push this into the writeup!
           N += vmfs[k].GetTau()
-            *xSums.block<3,1>(0,k).cast<double>()
-            *vmfs[k].GetMu().cast<double>().transpose();
+            *vmfs[k].GetMu().cast<double>()
+            *xSums.block<3,1>(0,k).cast<double>().transpose();
         }
 //        Eigen::JacobiSVD<Eigen::Matrix3d> svd(N,
 //            Eigen::ComputeFullU|Eigen::ComputeFullV);
 //        double sign = (svd.matrixU()*svd.matrixV().transpose()).determinant();
-//        Eigen::Matrix3Xd dR = svd.matrixU()
+//        Eigen::Matrix3Xd dR_cvMF = svd.matrixU()
 //          *Eigen::Vector3d(1.,1.,sign).asDiagonal()*svd.matrixV().transpose();
-        Eigen::Matrix3d dR = tdp::ProjectOntoSO3<double>(N);
-//        std::cout << dR << std::endl;
-        std::cout << " fit: " << (N*dR).trace()  <<  " " 
-          << (N*dR).trace()/xSums.bottomRows<1>().sum()
+        Eigen::Matrix3d dR_cvMF = tdp::ProjectOntoSO3<double>(N);
+//        std::cout << dR_cvMF << std::endl;
+        std::cout << " fit: " << (dR_cvMF*N).trace()  <<  " " 
+          << (dR_cvMF*N).trace()/xSums.bottomRows<1>().sum()
           << " singular values " << svd.singularValues().transpose()
           << std::endl;
-//        R_cvMF = tdp::SO3fda(dR.cast<float>()) * R_cvMF;
-        R_cvMF = tdp::SO3fda(dR.cast<float>());
-//        R_cvMF = R_cvMF * tdp::SO3fda(dR);
+//        R_cvMF = tdp::SO3fda(dR_cvMF.cast<float>()) * R_cvMF;
+        R_cvMF = tdp::SO3fda(dR_cvMF.cast<float>());
+//        R_cvMF = R_cvMF * tdp::SO3fda(dR_cvMF);
 //
-        f = (N*dR).trace()/xSums.bottomRows<1>().sum();
+        f = (dR_cvMF*N).trace()/xSums.bottomRows<1>().sum();
         
         Eigen::Matrix4f M = Eigen::Matrix4f::Zero();
         for (size_t k=0; k<vmfs.size(); ++k) {
