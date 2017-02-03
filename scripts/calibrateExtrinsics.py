@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 PATH_TO_TDP = os.path.expanduser("~/tdp/")
 PATH_TO_CALIB_EXE = PATH_TO_TDP + "build/experiments/calib/calib"
+PATH_TO_SIMPLE_GUI= PATH_TO_TDP + "build/experiments/simpleGui/simpleGui"
 CONFIG_DIR = PATH_TO_TDP + "config/"
 TMP_DIR = CONFIG_DIR + "tmp_data/"
 INITIAL_DATA_DIR = CONFIG_DIR + "initial_camera_poses/"
@@ -76,7 +77,7 @@ def transform_xml_pose_to_lists(pose):
     takes a pose in xml format and outputs a tuple (rotation, translation)
     """
     poseList = literal_eval(pose.text.replace(";", ",").replace(" ", ""))
-    R = [poseList[0:3], poseList[4:7], poseList[8:11]]
+    R = poseList[0:3] + poseList[4:7] + poseList[8:11]
     T = [poseList[3], poseList[7], poseList[11]]
     return (R, T)
 
@@ -101,8 +102,12 @@ def create_json_file_from_poses(topPose, bottomPose, rightPose, baseJson):
     data[7]["camera"]["T_rc"]["R_3x3"] = topPose[0]
     data[7]["camera"]["T_rc"]["t_xyz"] = topPose[1]
 
-    with open(CONFIG_DIR + "output.json", "w") as outputJson:
-        json.dump(data, outputJson, indent=4, separators=(',', ': '))
+    with open(CONFIG_DIR + "output.json", "r+") as outputJson:
+        json.dump(data, outputJson, indent=4, separators=(', ', ': '))
+        # Add comma between } and ]
+        outputJson.seek(-2, os.SEEK_END)
+        outputJson.truncate()
+        outputJson.write(",\n]")
     return None
 
 
@@ -117,6 +122,40 @@ def calibrate_all(leftId, topId, bottomId, rightId):
     return None
 
 
+def take_images(leftId, topId, bottomId, rightId):
+    """
+    Calls SimpleGui thrice to take the images of left-top, left-bottom,
+    and bottom-right in that order.
+    GreyScales them and puts them in appropriate folder
+    """
+    print ("Take images of left-top")
+    shellCommand = PATH_TO_SIMPLE_GUI + " realsense:[register=true]//"
+    call(shellCommand, shell=True)
+    call("rm -r " + TMP_DIR + "left-top", shell=True)
+    call("mkdir " + TMP_DIR + "left-top", shell=True)
+    call("mv capture_stream* " + TMP_DIR + "left-top/", shell=True)
+    call("cd " + TMP_DIR + "left-top && " + \
+         "python " + PATH_TO_TDP + "scripts/convertRgbToGrey.py", shell=True)
+
+    print ("Take images of left-bottom")
+    call(shellCommand, shell=True)
+    call("rm -r " + TMP_DIR + "left-bottom", shell=True)
+    call("mkdir " + TMP_DIR + "left-bottom", shell=True)
+    call("mv capture_stream* " + TMP_DIR + "left-bottom/", shell=True)
+    call("cd " + TMP_DIR + "left-bottom && " + \
+         "python " + PATH_TO_TDP + "scripts/convertRgbToGrey.py", shell=True)
+
+    print ("Take images of bottom-right")
+    call(shellCommand, shell=True)
+    call("rm -r " + TMP_DIR + "bottom-right", shell=True)
+    call("mkdir " + TMP_DIR + "bottom-right", shell=True)
+    call("mv capture_stream* " + TMP_DIR + "bottom-right", shell=True)
+    call("cd " + TMP_DIR + "bottom-right && " + \
+         "python " + PATH_TO_TDP + "scripts/convertRgbToGrey.py", shell=True)
+    return None
+
+
 if __name__ == "__main__":
+    take_images(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
     calibrate_all(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
 
