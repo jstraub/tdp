@@ -51,6 +51,25 @@ inline T logSumExp(const Eigen::Matrix<T,Eigen::Dynamic,1>& logX) {
   return log((logX.array()-logMax).exp().sum()) + logMax;
 }
 
+template <typename T, uint32_t D>
+inline T MLEstimateTau(const Eigen::Matrix<T,3,1>& xSum, const
+    Eigen::Matrix<T,3,1>& mu, T count) {
+  // Need double precision to achive convergence; single is not enough.
+  double tau = 1.0;
+  double prevTau = 0.;
+  double eps = 1e-8;
+  double R = xSum.norm()/count;
+  while (fabs(tau - prevTau) > eps) {
+//    std::cout << "tau " << tau << " R " << R << std::endl;
+    double inv_tanh_tau = 1./tanh(tau);
+    double inv_tau = 1./tau;
+    double f = -inv_tau + inv_tanh_tau - R;
+    double df = inv_tau*inv_tau - inv_tanh_tau*inv_tanh_tau + 1.;
+    prevTau = tau;
+    tau -= f/df;
+  }
+  return tau;
+};
 
 template<typename T, int D>
 class vMF 
@@ -83,14 +102,16 @@ public:
     Eigen::Matrix<T,D,1> x;
     T pdf_g = -LOG_4PI;
     // bound via maximum over vMF at mu
-    T M = tau_; 
+    // TODO: dont know why I need to multiply by 2 here to get the
+    // correct samples (as seen in concentration estimates)
+    T M = 2.*tau_; 
     while(42) {
       // sample from zero mean Gaussian 
       for (uint32_t d=0; d<D; d++) x[d] = gauss_(rnd);
       x.normalize();
       // rejection sampling (in log domain)
       T u = log(unif_(rnd));
-      T pdf_f = tau_*x.dot(mu_); //this->logPdf(x);
+      T pdf_f = 2.*tau_*x.dot(mu_); //this->logPdf(x);
 //      std::cout << pdf_f << " " << pdf_g << " " << M << " " << tau_ << std::endl;
       if(u < pdf_f-(M+pdf_g)) break;
     };
