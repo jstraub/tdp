@@ -26,6 +26,7 @@ int main() {
     Eigen::Vector3f xSum = Eigen::Vector3f::Zero();
     for (size_t i=0; i<1000; ++i) {
       xSum += vmfA.sample(rnd);
+//      std::cout << vmfA.sample(rnd).transpose() << std::endl;
     }
     std::cout << MLEstimateTau<float,3>(xSum, vmfA.mu_, 1000.f) << " vs " << 
       vmfA.tau_ << std::endl;
@@ -95,9 +96,7 @@ int main() {
 //    }
     for (size_t k=0; k<K; ++k) {
       if (counts[k] > 0) {
-        tdp::Timer t1;
         vmfs[k] = base.posterior(xSum[k],counts[k]).sample(rnd);
-        t1.toctic("posterior sampling");
       }
     }
     t0.toctic("parameters");

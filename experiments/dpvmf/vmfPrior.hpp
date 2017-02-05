@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 
 #include "vmf.hpp"
+#include "timer.hpp"
 
 template<typename T>
 class vMFprior {
@@ -37,7 +38,7 @@ class vMFprior {
       mu = vmf.sample(rnd);
 //      std::cout << "mu " << mu.transpose() << std::endl;
       const T dot = mu.dot(m0_); 
-      tau = sampleConcentration(dot, rnd, 10);
+      tau = sampleConcentration(dot, rnd, 10, tau);
 //      std::cout <<"@" << it << "tau " << tau << " mu " << mu.transpose() << std::endl;
     }
     return vMF<T,3>(mu, tau);
@@ -82,11 +83,12 @@ class vMFprior {
   };
 
 
-  T sampleConcentration(const T dot, std::mt19937& rnd, size_t maxIt)
+  T sampleConcentration(const T dot, std::mt19937& rnd, size_t maxIt, T tau0 = 0.3)
   {
+//    std::cout << "start sampling concentration ---" << std::endl;
     // slice sampler for concentration paramter tau
     const T w = 0.1;  // width for expansions of search region
-    T tau = 0.3;      // arbitrary starting point
+    T tau = tau0;      // arbitrary starting point
     for(size_t t=0; t<maxIt; ++t)
     {
       const T yMax = propToConcentrationLogPdf(tau,dot);
@@ -105,10 +107,10 @@ class vMFprior {
       while(42) {
         T tauNew = unif_(rnd)*(tauMax-tauMin)+tauMin;
 
-//        if (tau > 30)
-//        std::cout << tauMin << " " << tauMax << " " << tauNew << " " << tau 
+//        std::cout << "@"<< t << ": " << tauMin << " " << tauMax << " " << tauNew << " " << tau 
 //          << ": " << propToConcentrationLogPdf(tauNew,dot)
-//          << ": " << propToConcentrationLogPdf(tauMin,dot)
+//          << " >=? " << y
+//          << ",  " << propToConcentrationLogPdf(tauMin,dot)
 //          << " "  << propToConcentrationLogPdf(tauMax,dot) << std::endl;
 
         if(propToConcentrationLogPdf(tauNew,dot) >= y)

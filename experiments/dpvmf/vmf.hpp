@@ -98,6 +98,7 @@ public:
 
   /// Use uniform distribution on the sphere as a proposal distribution
   Eigen::Matrix<T,D,1> sample(std::mt19937& rnd) {
+//    std::cout << "stating n sampling ------------ " << std::endl;
     // implemented using rejection sampling and proposals from a gaussian
     Eigen::Matrix<T,D,1> x;
     T pdf_g = -LOG_4PI;
@@ -118,6 +119,7 @@ public:
     return x;
   }
 
+
   Eigen::Matrix<T,D,1> mu_;
   T tau_;
 private:
@@ -134,3 +136,30 @@ float vMF<float,3>::logPdf(const Eigen::Matrix<float,3,1>& x) const {
     return 0.5*LOG_PI - 0.5*LOG_2 + tau_*mu_.dot(x) + logxOverSinhX(tau_);
   }
 }
+
+template<>
+Eigen::Matrix<float,3,1> vMF<float,3>::sample(std::mt19937& rnd) {
+  //    std::cout << "stating n sampling ------------ " << std::endl;
+  // https://www.mitsuba-renderer.org/~wenzel/files/vmf.pdf
+  // sample around (0,0,1)
+  Eigen::Vector2f v(gauss_(rnd), gauss_(rnd));
+  v.normalize();
+  const float u = unif_(rnd);
+  const float w = 1. + log(u+(1.-u)*exp(-2.*tau_))/tau_;
+  const float a = sqrtf(1.-w*w);
+  Eigen::Vector3f x(a*v(0), a*v(1), w);
+
+  // rotate to mu
+  Eigen::Vector3f axis = Eigen::Vector3f(0,0,1).cross(mu_);
+  float angle = acos(mu_[2]);
+
+  if (fabs(angle) <1e-9) 
+    return x;
+
+  Eigen::Quaternion<float> q(cos(angle*0.5), 
+      sin(angle*0.5)*axis(0)/axis.norm(),
+      sin(angle*0.5)*axis(1)/axis.norm(),
+      sin(angle*0.5)*axis(2)/axis.norm());
+  return q._transformVector(x);
+}
+
