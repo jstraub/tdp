@@ -70,10 +70,12 @@ int main() {
         xSum.push_back(Eigen::Vector3f::Zero());
         K++;
       }
-      counts[zPrev] --;
-      counts[z[i]] ++;
-      xSum[zPrev] -= x[i];
-      xSum[z[i]] += x[i];
+      if (zPrev != z[i]) {
+        counts[zPrev] --;
+        counts[z[i]] ++;
+        xSum[zPrev] -= x[i];
+        xSum[z[i]] += x[i];
+      }
     }
 //    std::cout << "sample parameters" << std::endl;
     // sample parameters | labels
