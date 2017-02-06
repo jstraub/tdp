@@ -15,8 +15,8 @@ int main() {
   std::mt19937 rnd(1);
 
   vMF<float,3> vmfA(Eigen::Vector3f(0,0,1), 100);
-  vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 100);
-  vMF<float,3> vmfC(Eigen::Vector3f(1,0,0), 100);
+  vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 10);
+  vMF<float,3> vmfC(Eigen::Vector3f(1,0,0), 10);
   vMF<float,3> vmfD(Eigen::Vector3f(-1,0,0),100);
 
   size_t N=30;
