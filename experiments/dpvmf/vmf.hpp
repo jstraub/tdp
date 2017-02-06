@@ -81,6 +81,9 @@ public:
   vMF(const Eigen::Matrix<T,D,1>& mu, T tau)
     : mu_(mu), tau_(tau), unif_(0.,1.), gauss_(0.,1.)
   {}
+  vMF(const Eigen::Matrix<T,D,1>& tauMu)
+    : mu_(tauMu.normalized()), tau_(tauMu.norm()), unif_(0.,1.), gauss_(0.,1.)
+  {}
   vMF(const vMF<T,D>& vmf)
     : mu_(vmf.mu_), tau_(vmf.tau_), unif_(0.,1.), gauss_(0.,1.)
   {}

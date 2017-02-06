@@ -19,22 +19,27 @@ int main() {
   vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 100);
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Normal<float,3> gaussO(SigmaO);
+  float tauO = 100.;
 
   size_t N=100;
-  std::vector<std::vector<Eigen::Vector3f>> n; // normal observations
+  std::vector<std::vector<Eigen::Vector3f>> n; // normals
+  std::vector<std::vector<Eigen::Vector3f>> xn; // normal observations
   std::vector<std::vector<Eigen::Vector3f>> x; // loc observations
   std::vector<std::vector<Eigen::Vector3f>> p; // plane location
   for (size_t i=0; i<N; ++i) {
     n.push_back(std::vector<Eigen::Vector3f>());
+    xn.push_back(std::vector<Eigen::Vector3f>());
     x.push_back(std::vector<Eigen::Vector3f>());
     p.push_back(std::vector<Eigen::Vector3f>());
     for (size_t j=0; j<N; ++j) {
       if (i<N/2) {
         n[i].push_back(vmfA.sample(rnd));
+        xn[i].push_back(vmfA.sample(rnd));
         x[i].push_back(Eigen::Vector3f(1.,(i-N*0.25)/float(0.25*N),(j-N*0.5)/float(0.5*N)));
       }
       if (i>=N/2) {
         n[i].push_back(vmfB.sample(rnd));
+        xn[i].push_back(vmfB.sample(rnd));
         x[i].push_back(Eigen::Vector3f((N*0.75-i)/float(0.25*N),1.,(j-N*0.5)/float(0.5*N)));
       }
       p[i].push_back(x[i][j]);
@@ -132,7 +137,25 @@ int main() {
     std::cout << "\ttaus: " ;
     for (size_t k=0; k<K; ++k) if (counts[k] > 0) std::cout << vmfs[k].tau_ << " ";
     std::cout << std::endl;
+    for (size_t k=0; k<K; ++k) 
+      if (counts[k] > 0) {
+        std::cout << vmfs[k].mu_.transpose() << std::endl;
+      }
 
+    // sample ns
+    for (size_t k=0; k<K; ++k) 
+      xSum[k] = Eigen::Vector3f::Zero();
+    for (size_t i=0; i<n.size(); ++i) {
+      for (size_t j=0; j<n[i].size(); ++j) {
+        Eigen::Vector3f mu = xn[i][j]*tauO + vmfs[z[i][j]].mu_*vmfs[z[i][j]].tau_;
+        n[i][j] = vMF<float,3>(mu).sample(rnd);
+        xSum[z[i][j]] += n[i][j];
+      }
+    }
+    std::cout << n[N/4][N/2].transpose() << "\t" << n[(3*N)/4][N/2].transpose() << std::endl;
+    std::cout << xn[N/4][N/2].transpose() << "\t" << xn[(3*N)/4][N/2].transpose() << std::endl;
+
+    // sample locations
     for (size_t i=0; i<x.size(); ++i) {
       for (size_t j=0; j<x[i].size(); ++j) {
         Eigen::Matrix3f SigmaPl;
