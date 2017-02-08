@@ -62,6 +62,11 @@
 #include <tdp/ransac/ransac.h>
 #include <tdp/utils/file.h>
 
+#include <tdp/sampling/sample.hpp>
+#include <tdp/sampling/vmf.hpp>
+#include <tdp/sampling/vmfPrior.hpp>
+#include <tdp/sampling/normal.hpp>
+
 #include "planeHelpers.h"
 #include "featureHelper.h"
 #include "icpHelper.h"
@@ -314,6 +319,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",false,true);
+  pangolin::Var<bool> sampleMap("ui.sample map",true,true);
+  pangolin::Var<bool> useMRF("ui.use MRF ",true,true);
   pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
   pangolin::Var<bool> useDecomposedICP("ui.decomposed ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
@@ -352,6 +359,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
+  pangolin::Var<bool> showSamples("ui.show Samples",true,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",true,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
@@ -398,8 +406,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
 
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(MAP_SIZE*5);
@@ -431,20 +437,21 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
-  tdp::ThreadedValue<bool> runMappingThread(false);
+  tdp::ThreadedValue<bool> runTopologyThread(true);
   tdp::ThreadedValue<bool> runRegularization(false);
+  tdp::ThreadedValue<bool> runSampling(true);
 
   std::mutex pl_wLock;
   std::mutex nnLock;
   std::mutex mapLock;
   std::mutex dpvmfLock;
-  std::thread mapping([&]() {
+  std::thread topology([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
-    while(runMappingThread.Get()) {
+    while(runTopologyThread.Get()) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
         iRead = pl_w.iRead_;
@@ -487,6 +494,8 @@ int main( int argc, char* argv[] )
     };
   });
 
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
   std::thread regularization([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
@@ -539,6 +548,150 @@ int main( int argc, char* argv[] )
 //      std::cout << "map updated " << iReadNext << " " 
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
+    }
+    };
+  });
+
+  std::mutex vmfsLock;
+  std::mt19937 rnd(910481);
+  float logAlpha = log(10.);
+  float lambdaMRF = 0.1;
+  float tauO = 30.;
+  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
+  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
+  std::vector<vMF<float,3>> vmfs;
+  vmfs.push_back(base.sample(rnd));
+
+  tdp::ManagedHostCircularBuffer<uint32_t> zS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
+  nS.Fill(tdp::Vector3fda::Zero());
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
+  pS.Fill(tdp::Vector3fda::Zero());
+  zS.Fill(999); //std::numeric_limits<uint32_t>::max());
+  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(1000);
+  vmfSS.Fill(tdp::Vector4fda::Zero());
+
+  std::thread sampling([&]() {
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
+    int32_t iReadNext = 0;
+//    std::random_device rd_;
+    std::mt19937 rnd(0);
+    while(runSampling.Get()) {
+    if (sampleMap) {
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        iRead = nn.iRead_;
+        iInsert = nn.iInsert_;
+      }
+      pS.iInsert_ = nn.iInsert_;
+      nS.iInsert_ = nn.iInsert_;
+      // sample normals using dpvmf and observations from planes
+      size_t K = vmfs.size();
+      vmfSS.Fill(tdp::Vector4fda::Zero());
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector3fda& ni = nS.GetCircular(iReadNext);
+        uint32_t& zi = zS.GetCircular(iReadNext);
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        Eigen::Vector3f mu = pl.n_*tauO;
+        if (zi < K) {
+          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+        }
+        ni = vMF<float,3>(mu).sample(rnd);
+        vmfSS[zi].topRows<3>() += ni;
+        vmfSS[zi](3) ++;
+      }
+      // sample dpvmf labels
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+
+        Eigen::VectorXf logPdfs(K+1);
+        Eigen::VectorXf pdfs(K+1);
+
+        tdp::Vector3fda& ni = nS.GetCircular(iReadNext);
+        uint32_t& zi = zS.GetCircular(iReadNext);
+        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+
+        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < K) {
+            neighNs[zS[ids[i]]] += 1.f;
+          }
+        }
+        for (size_t k=0; k<K; ++k) {
+          if (useMRF) 
+            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
+          else 
+            logPdfs[k] = 0.;
+          if (zi == k) {
+            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
+          } else {
+            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
+          }
+        }
+        logPdfs[K] = logAlpha + base.logMarginal(ni);
+        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
+        pdfs = logPdfs.array().exp();
+        size_t zPrev = zi;
+        zi = sampleDisc(pdfs, rnd);
+        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+        if (zi == K) {
+          vmfsLock.lock();
+          vmfs.push_back(base.posterior(ni,1).sample(rnd));
+          vmfsLock.unlock();
+          K++;
+        }
+        if (zPrev != zi) {
+          vmfSS[zPrev].topRows<3>() -= ni;
+          vmfSS[zPrev](3) --;
+          vmfSS[zi].topRows<3>() += ni;
+          vmfSS[zi](3) ++;
+        }
+      }
+      // sample dpvmf parameters
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<K; ++k) {
+          if (vmfSS[k](3) > 0) {
+            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+          }
+        }
+      }
+      std::cout << "counts " << K << ": ";
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfSS[k](3) << " ";
+      std::cout << "\ttaus: " ;
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfs[k].tau_ << " ";
+      std::cout << std::endl;
+      // sample points
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector3fda& pi = pS.GetCircular(iReadNext);
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+
+        Eigen::Matrix3f SigmaPl;
+        Eigen::Matrix3f Info =  InfoO;
+//        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+        Eigen::Vector3f xi = InfoO*pl.p_;
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < K) {
+            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+            Info += SigmaPl;
+            xi += SigmaPl*pS[ids[i]];
+          }
+        }
+        Eigen::Matrix3f Sigma = Info.inverse();
+        Eigen::Vector3f mu = Sigma*xi;
+//        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+      }
+
     }
     };
   });
@@ -992,6 +1145,17 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
+      std::cout << "uploading pc" << std::endl;
+      if (showSamples) {
+        vbo_w.Upload(pS.ptr_, pS.SizeToRead(), 0);
+        nbo_w.Upload(nS.ptr_, nS.SizeToRead(), 0);
+      } else {
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeToRead(), 0);
+        nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+      }
+      cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+      std::cout << "uploading pc done" << std::endl;
+
       if (showFullPc) {
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
@@ -999,10 +1163,6 @@ int main( int argc, char* argv[] )
         // might break things though
         // I do ned to upload points because they get updated; I
         // wouldnt have to with the color
-        std::cout << "uploading pc" << std::endl;
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeToRead(), 0);
-        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
-        std::cout << "uploading pc done" << std::endl;
         if ((!showAge && !showObs && !showSurfels && !showCurv) 
             || pl_w.SizeToRead() == 0) {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
@@ -1101,11 +1261,18 @@ int main( int argc, char* argv[] )
       normalsCam.GetModelViewMatrix() = Tview;
       viewNormals.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
-      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       pangolin::RenderVbo(nbo_w);
       glColor4f(1,0,0,1.);
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
+      }
+      glColor4f(0,1,0,1.);
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<vmfs.size(); ++k) {
+          if (vmfSS[k](3) > 0)
+            tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+        }
       }
     }
 
