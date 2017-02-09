@@ -50,13 +50,10 @@
 #include <tdp/camera/photometric.h>
 #include <tdp/clustering/dpvmfmeans_simple.hpp>
 #include <tdp/clustering/managed_dpvmfmeans_simple.hpp>
-#include <tdp/features/brief.h>
-#include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
 #include <tdp/preproc/convert.h>
 #include <tdp/preproc/plane.h>
-#include <tdp/features/lsh.h>
 #include <tdp/utils/timer.hpp>
 #include <tdp/camera/projective_labels.h>
 #include <tdp/ransac/ransac.h>
@@ -68,7 +65,6 @@
 #include <tdp/sampling/normal.hpp>
 
 #include "planeHelpers.h"
-#include "featureHelper.h"
 #include "icpHelper.h"
 #include "visHelper.h"
 
@@ -310,10 +306,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<float> subsample("ui.subsample %",0.001,0.0001,.001);
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
-  pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
-  pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
@@ -335,7 +329,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
-//  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
@@ -365,11 +358,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",10,0,100);
 
-  pangolin::Var<bool> showFAST("ui.show FAST",true,true);
-  pangolin::Var<int> fastB("ui.FAST b",30,0,100);
-  pangolin::Var<float> harrisThr("ui.harris thr",0.1,0.001,2.0);
-  pangolin::Var<float> kappaHarris("ui.kappa harris",0.08,0.04,0.15);
-  pangolin::Var<int> briefMatchThr("ui.BRIEF match",65,0,100);
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
   pangolin::Var<float> ransacInlierThr("ui.inlier thr",6,1,20);
@@ -387,36 +375,25 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
+  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
-  pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
-  rs.Fill(NAN);
-  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
   tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
-  rgb_w.Fill(tdp::Vector3bda::Zero());
-
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
-//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(MAP_SIZE);
-//  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(MAP_SIZE);
-  nn.Fill(tdp::Vector5ida::Ones()*-1);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
+  pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  rs.Fill(NAN);
+  rgb_w.Fill(tdp::Vector3bda::Zero());
+  nn.Fill(tdp::Vector5ida::Ones()*-1);
 
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(MAP_SIZE*5);
 
   int32_t iReadCurW = 0;
   size_t frame = 0;
-
-  tdp::ManagedLshForest<14> lsh(11);
-  tdp::ManagedHostImage<tdp::Brief> descs;
-  tdp::ManagedHostImage<tdp::Vector2ida> pts;
-  tdp::ManagedHostImage<float> orientation;
 
   tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
 
@@ -438,7 +415,6 @@ int main( int argc, char* argv[] )
   mask.Fill(0);
 
   tdp::ThreadedValue<bool> runTopologyThread(true);
-  tdp::ThreadedValue<bool> runRegularization(false);
   tdp::ThreadedValue<bool> runSampling(true);
 
   std::mutex pl_wLock;
@@ -494,63 +470,6 @@ int main( int argc, char* argv[] )
     };
   });
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
-  std::thread regularization([&]() {
-    int32_t iRead = 0;
-    int32_t iInsert = 0;
-    int32_t iReadNext = 0;
-//    std::random_device rd_;
-    std::mt19937 gen_(0);
-    while(runRegularization.Get()) {
-    if (updateMap) {
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        iRead = nn.iRead_;
-        iInsert = nn.iInsert_;
-      }
-      // compute gradient
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector3fda& Jn = Jn_w[iReadNext];
-        tdp::Vector3fda& Jp = Jp_w[iReadNext];
-        Jn = tdp::Vector3fda::Zero();
-        Jp = tdp::Vector3fda::Zero();
-        for (int i=0; i<5; ++i) {
-          if (ids[i] > -1) {
-            const tdp::Plane& plO = pl_w[ids[i]];
-            Jn += 2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext][i])*plO.n_;
-            Jn += 2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*(plO.p_-pl.p_);
-            if (pl.curvature_ < curvThr) {
-              dpvmfLock.lock();
-              Jn += -lambdaReg*dpvmf.GetCenter(pl.z_);
-              dpvmfLock.unlock();
-            }
-            Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*pl.n_;
-            Jp += -2.*(pc0_w[iReadNext] - pl.p_);
-          }
-        }
-      }
-      // apply gradient
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector3fda& Jn = Jn_w[iReadNext];
-        tdp::Vector3fda& Jp = Jp_w[iReadNext];
-        std::lock_guard<std::mutex> mapGuard(mapLock);
-        pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
-        pl.p_ -= alphaGrad * Jp;
-        pc_w[iReadNext] = pl.p_;
-        n_w[iReadNext] = pl.n_;
-      }
-//      std::cout << "map updated " << iReadNext << " " 
-//        << (alphaGrad * Jn.transpose()) << "; "
-//        << (alphaGrad * Jp.transpose()) << std::endl;
-    }
-    };
-  });
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
@@ -565,9 +484,9 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<uint32_t> zS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
-  nS.Fill(tdp::Vector3fda::Zero());
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
-  pS.Fill(tdp::Vector3fda::Zero());
+  nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   zS.Fill(999); //std::numeric_limits<uint32_t>::max());
   tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(1000);
   vmfSS.Fill(tdp::Vector4fda::Zero());
@@ -699,12 +618,6 @@ int main( int argc, char* argv[] )
 
   std::vector<uint32_t> idsCur;
   idsCur.reserve(w*h);
-  std::vector<int32_t> assocBA;
-  std::vector<tdp::Brief> featsB;
-  std::vector<tdp::Brief> featsA;
-  assocBA.reserve(4*subsample*w*h);
-  featsA.reserve( 4*subsample*w*h);
-  featsB.reserve( 4*subsample*w*h);
 
   tdp::ConfigICP cfgIcp;
   size_t numNonPlanar = 0;
@@ -723,67 +636,11 @@ int main( int argc, char* argv[] )
     cfgIcp.useNormals = useNormals;
     cfgIcp.numRotThr = numRotThr;
 
-    if (runLoopClosure.GuiChanged()) {
-      showLoopClose = runLoopClosure;
-    }
     if (runLoopClosureGeom.GuiChanged()) {
       showLoopClose = runLoopClosureGeom;
     }
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
-    }
-    if (runLoopClosure) {
-      // TODO: I did not set orientation propperly when I tried BRIEF
-      // simply on sampled plane locations!!! Try that again.
-      TICK("match briefs");
-      assocBA.clear(); featsA.clear(); featsB.clear();
-      tdp::Brief* featB;
-      tdp::Brief featA;
-      int dist;
-      std::cout << "have " << pts.Area() << " key points" << std::endl;
-      for (size_t i=0; i<pts.Area(); ++i) {
-        featA.p_c_ = pc(pts[i](0),pts[i](1));
-        if (!tdp::IsValidData(featA.p_c_)) 
-          continue;
-        featA.pt_ = pts[i];
-        featA.orientation_ = orientation[i];
-        if (tdp::ExtractBrief(grey, featA)
-            && lsh.SearchBest(featA,dist,featB) 
-            && dist < briefMatchThr) {
-//          std::cout << i << " " << assocBA.size() << ": " << dist 
-//            << " " << featA.p_c_.transpose()
-//            << " " << featB->p_c_.transpose()
-//            << std::endl;
-          assocBA.push_back(assocBA.size());
-          featsB.push_back(*featB);
-          featsA.push_back(featA);
-//          std::cout << " " << featsA.back().p_c_.transpose()
-//            << " " << featsB.back().p_c_.transpose()
-//            << std::endl;
-        }
-      }
-      TOCK("match briefs");
-      if (assocBA.size() >= ransacInlierThr) {
-        TICK("RANSAC");
-        tdp::P3PBrief p3p;
-        tdp::Ransac<tdp::Brief> ransac(&p3p);
-        size_t numInliers = 0;
-        tdp::SE3f T_ab = ransac.Compute(featsA, featsB, assocBA, ransacMaxIt,
-            ransacThr, numInliers);
-        TOCK("RANSAC");
-
-        std::cout << "matches: " << assocBA.size() 
-          << " " << assocBA.size()/(float)pl_w.SizeToRead(iReadCurW)
-          << "%;  after RANSAC "
-          << numInliers << " " << numInliers/(float)assocBA.size()
-          << std::endl;
-        std::cout << T_wc.Log(T_ab.Inverse()).transpose() << std::endl;
-        if (numInliers > ransacInlierThr) {
-          T_wcRansac = T_ab.Inverse();
-        } else {
-          T_wcRansac.translation() << 999,999,999;
-        }
-      }
     }
 
     if (!gui.paused() && !gui.finished()
@@ -791,24 +648,6 @@ int main( int argc, char* argv[] )
         && (runMapping || frame == 1) 
         && (trackingGood || frame < 10)) { // add new observations
       TICK("mask");
-
-      // update plane features
-      tdp::Brief feat;
-      size_t numAdded = 0;
-      for (size_t i=0; i<z.Area(); ++i) {
-        if (z[i] > 0 && tdp::IsValidData(pc[i])
-            && pl_w.GetCircular(z[i]-1).feat_.desc_.sum() > 0)  {
-          if (ExtractClosestBrief(pc, grey, pts, orientation, 
-                T_wc.Inverse()*pl_w.GetCircular(z[i]-1).p_,
-                T_wc.rotation().Inverse()*pl_w.GetCircular(z[i]-1).n_,
-                T_wc, cam, W, 
-              i%mask.w_, i/mask.w_, feat)) {
-            pl_w.GetCircular(z[i]-1).feat_ = feat;
-            numAdded++;
-          }
-        }
-      }
-      std::cout << "num features added to planes" << std::endl;
 
       // update mask only once to know where to insert new planes
       TICK("data assoc");
@@ -822,22 +661,10 @@ int main( int argc, char* argv[] )
       std::random_shuffle(idsCur.begin(), idsCur.end());
       TOCK("extract assoc");
 
-//      tdp::RandomMaskCpu(mask, perc, W*dMax);
-//      tdp::UniformResampleMask(mask, W, subsample, gen, 4, 4);
-      if (useFAST) {
-        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, 18, pts,
-            orientation);
-        mask.Fill(0);
-        for (size_t i=0; i<pts.Area(); ++i) {
-          mask(pts[i](0), pts[i](1)) = 1;
-        }
-//        tdp::ExtractBrief(grey, pts, orientations, gui.frame, descs);
-      } else {
 //        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
 //        tdp::UniformResampleMask(pc, cam, mask, W, subsample, gen, 16, 16);
-        tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
-            subsample, gen, 32, 32, w, h);
-      }
+      tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
+          subsample, gen, 32, 32, w, h);
       TOCK("mask");
       {
         iReadCurW = pl_w.iInsert_;
@@ -845,8 +672,8 @@ int main( int argc, char* argv[] )
         TICK("normals");
 //        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
 //            orientation);
-        ExtractPlanes(pc, rgb, grey, greyFl, gradGrey, pts,
-            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
+        ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
+            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
             n_w, rs);
         TOCK("normals");
 
@@ -870,7 +697,6 @@ int main( int argc, char* argv[] )
           if (kMax >= 0) {
             pl.dir_ = dpvmf.GetCenter(kMax);
           }
-          lsh.Insert(pl.feat_);
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -938,13 +764,6 @@ int main( int argc, char* argv[] )
     grey.CopyFrom(cuGrey);
     greyFl.CopyFrom(cuGreyFlSmooth);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
-
-    if (runLoopClosure) {
-      TICK("FAST");
-      tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
-          orientation);
-      TOCK("FAST");
-    }
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1199,12 +1018,6 @@ int main( int argc, char* argv[] )
           }
         }
         if (showLoopClose) {
-          for (size_t i=0; i<assocBA.size(); ++i) {
-            if (assocBA[i] > 0) {
-              tdp::Vector3fda pA = T_wc*featsA[i].p_c_;
-              tdp::glDrawLine(featsB[assocBA[i]].p_c_, pA);
-            }
-          }
         }
       }
 
@@ -1294,12 +1107,6 @@ int main( int argc, char* argv[] )
             pangolin::glDrawCircle(u,v,1);
           }
         }
-      if (showFAST) {
-        glColor3f(0,1,0);
-        for (size_t i=0; i<pts.Area(); ++i) {
-          pangolin::glDrawCircle(pts[i](0), pts[i](1), 1);
-        }
-      }
     }
 
     if (containerTracking.IsShown()) {
