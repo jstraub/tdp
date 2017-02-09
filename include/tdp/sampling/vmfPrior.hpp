@@ -32,12 +32,12 @@ class vMFprior {
     T tau = 1.;
     vMF<T,3> vmf(m0_, tau*b_);
 //    std::cout << "sampling from base" << std::endl;
-    for (size_t it=0; it<30; ++it) {
+    for (size_t it=0; it<10; ++it) {
       vmf.tau_ = tau*b_;
       mu = vmf.sample(rnd);
 //      std::cout << "mu " << mu.transpose() << std::endl;
       const T dot = mu.dot(m0_); 
-      tau = sampleConcentration(dot, rnd, 10, tau);
+      tau = sampleConcentration(dot, rnd, 3, tau);
 //      std::cout <<"@" << it << "tau " << tau << " mu " << mu.transpose() << std::endl;
     }
     return vMF<T,3>(mu, tau);
@@ -85,12 +85,96 @@ class vMFprior {
       return logxOverSinhX(tau) + b_*tau*dot + log(xOverTanPiHalfX(b_));
     } else {
       // this is only for 3D case
-      return a_*(0.5*LOG_PI-0.5*LOG_2 + logxOverSinhX(tau)) + tau*b_*dot; 
+//      return a_*(0.5*LOG_PI-0.5*LOG_2 + logxOverSinhX(tau)) + tau*b_*dot; 
+      //return a_*logxOverSinhX(tau) + tau*b_*dot; 
+      if (tau < 1e-16) {
+        return -a_*LOG_2; 
+      } else {
+        return a_*(log(tau) - log(1.-exp(-2.*tau))) + tau*(b_*dot-a_); 
+      }
     }
   };
 
+  T propToConcentrationLogPdfDeriv(const T tau, const T dot) const
+  {
+    // this is only for 3D case
+    if (tau < 1e-16) {
+      return b_*dot; 
+    } else {
+      return a_/tau - (2.*a_*exp(-2.*tau)/(1.-exp(-2.*tau))) + b_*dot -a_;
+    }
+  };
+  T propToConcentrationLogPdfDerivDeriv(const T tau, const T dot) const
+  {
+    // this is only for 3D case
+    if (tau < 1e-16) {
+      return -a_/3.; 
+    } else {
+      return -a_/(tau*tau) + (4.*a_*exp(2.*tau)/(1.-2.*exp(2.*tau)+exp(4.*tau)));
+    }
+  };
 
+  T maximum(const T dot) {
+    if (dot*b_ <= 0)
+      return 0.;
+    T tau = 1.;
+    for (size_t it=0; it<100; ++it) {
+      T f = propToConcentrationLogPdfDeriv(tau, dot);
+      T df = propToConcentrationLogPdfDerivDeriv(tau, dot);
+      tau -= f/df;
+      if (fabs(f/df) < 1e-6)
+        break;
+    }
+    return tau;
+  };
+
+  T intersect(const T c, const T dot, const T tau0) {
+    T tau = tau0;
+    for (size_t it=0; it<100; ++it) {
+      T f = propToConcentrationLogPdf(tau, dot) - c;
+      T df = propToConcentrationLogPdfDeriv(tau, dot);
+      tau = std::max(0.f, tau-f/df);
+//      std::cout << "   __ " <<it << ": " << f << " " << df 
+//        << "\t f/df " << fabs(f/df) 
+//        << "\t step to " << tau-f/df << ": "<< tau << std::endl;
+      if (fabs(f/df) < 1e-6 || tau == 0.)
+        break;
+    }
+    return tau;
+  };
+
+  /// slice sampler for concentration paramter tau
   T sampleConcentration(const T dot, std::mt19937& rnd, size_t maxIt, T tau0 = 0.3)
+  {
+    T tauMax = maximum(dot);
+    T tau = tau0;
+//    std::cout << " ----- max " << tauMax << " " << tau0 
+//      << " dot " << dot << std::endl;
+    T tauL = 0.;
+    T tauR = tauMax;
+    for(size_t t=0; t<maxIt; ++t)
+    {
+      const T f = propToConcentrationLogPdf(tau,dot);
+      const T u = log(unif_(rnd)) + f; 
+      
+      if (tauMax > 0.) {
+        tauL = intersect(u, dot, tauMax*0.001);
+        tauR = intersect(u, dot, tauMax*1000.);
+      } else {
+        tauL = 0.;
+        tauR = intersect(u, dot, 0.5);
+      }
+      tau = unif_(rnd)*(tauR-tauL)+tauL;
+//      std::cout << tauL << " - " << tauMax << " - " << tauR 
+//        << " tau= " << tau
+//        << " : u " << u << " f(tau) " << f 
+//        << " f(tau^star) " << propToConcentrationLogPdf(tauMax,dot)
+//        << std::endl;
+    }
+    return tau;
+  };
+
+  T sampleConcentrationStepping(const T dot, std::mt19937& rnd, size_t maxIt, T tau0 = 0.3)
   {
 //    std::cout << "start sampling concentration ---" << std::endl;
     // slice sampler for concentration paramter tau
