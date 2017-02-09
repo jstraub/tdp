@@ -159,7 +159,7 @@ class vMFprior {
       
       if (tauMax > 0.) {
         tauL = intersect(u, dot, tauMax*0.001);
-        tauR = intersect(u, dot, tauMax*1000.);
+        tauR = intersect(u, dot, tauMax*1.5);
       } else {
         tauL = 0.;
         tauR = intersect(u, dot, 0.5);
