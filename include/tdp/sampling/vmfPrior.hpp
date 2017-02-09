@@ -174,6 +174,7 @@ class vMFprior {
     return tau;
   };
 
+  /// Old backstepping slice sampler implementation
   T sampleConcentrationStepping(const T dot, std::mt19937& rnd, size_t maxIt, T tau0 = 0.3)
   {
 //    std::cout << "start sampling concentration ---" << std::endl;
