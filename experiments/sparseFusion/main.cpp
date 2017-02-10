@@ -445,12 +445,6 @@ int main( int argc, char* argv[] )
             tdp::AddToSortedIndexList(ids, values, i, dist);
           }
         }
-        // for map constraints
-        // TODO: should be updated as pairs are reobserved
-        for (int i=0; i<5; ++i) {
-          mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-          mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-        }
         // just for visualization
         if (mapNN.size() < 5*iReadNext) {
           for (int i=0; i<5; ++i) 
@@ -462,8 +456,6 @@ int main( int argc, char* argv[] )
         iReadNext = (iReadNext+1)%sizeToRead;
         {
           std::lock_guard<std::mutex> lock(nnLock); 
-          mapObsDot.iInsert_ = iReadNext;
-          mapObsP2Pl.iInsert_ = iReadNext;
           nn.iInsert_ = iReadNext;
         }
       }
@@ -673,7 +665,7 @@ int main( int argc, char* argv[] )
 //        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
 //            orientation);
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-            orientation, mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
+            mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, rgb_w,
             n_w, rs);
         TOCK("normals");
 

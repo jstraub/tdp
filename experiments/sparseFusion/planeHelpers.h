@@ -19,7 +19,7 @@ void ExtractPlanes(
     const Image<float>& greyFl,
     const Image<Vector2fda>& gradGrey,
 //    const Image<Vector2ida>& pts,
-    const Image<float>& orientation,
+//    const Image<float>& orientation,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
     const CameraBase<float,D,Derived>& cam,
