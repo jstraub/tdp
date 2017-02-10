@@ -591,7 +591,7 @@ int main( int argc, char* argv[] )
 //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
         Eigen::Vector3f xi = InfoO*pl.p_;
         for (int i=0; i<5; ++i) {
-          if (ids[i] > -1  && zS[ids[i]] < K) {
+          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
             SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
             Info += SigmaPl;
             xi += SigmaPl*pS[ids[i]];
@@ -958,10 +958,10 @@ int main( int argc, char* argv[] )
 
       std::cout << "uploading pc" << std::endl;
       if (showSamples) {
-        vbo_w.Upload(pS.ptr_, pS.SizeToRead(), 0);
-        nbo_w.Upload(nS.ptr_, nS.SizeToRead(), 0);
+        vbo_w.Upload(pS.ptr_, pS.SizeBytes(), 0);
+        nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
       } else {
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeToRead(), 0);
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
         nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       }
       cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
@@ -974,10 +974,7 @@ int main( int argc, char* argv[] )
         // might break things though
         // I do ned to upload points because they get updated; I
         // wouldnt have to with the color
-        if ((!showAge && !showObs && !showSurfels && !showCurv) 
-            || pl_w.SizeToRead() == 0) {
-          pangolin::RenderVboCbo(vbo_w, cbo_w, true);
-        } else if (showAge || showObs || showCurv) {
+        if (showAge || showObs || showCurv) {
           age.Reinitialise(pl_w.SizeToRead());
           if (showAge) {
             for (size_t i=0; i<age.Area(); ++i) 
@@ -1001,6 +998,8 @@ int main( int argc, char* argv[] )
           rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
           std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
+        } else {
+          pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
         if (showNN) {
           glColor4f(0.3,0.3,0.3,0.3);
@@ -1011,6 +1010,9 @@ int main( int argc, char* argv[] )
         }
         if (showLoopClose) {
         }
+      }
+      if (showSamples) {
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
       }
 
       if (showNormals) {
