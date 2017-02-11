@@ -39,7 +39,7 @@ int main() {
   vMF<float,3> vmfO(Eigen::Vector3f(-1,0,0),0);
 
   std::vector<Eigen::Vector3f> x;
-  for (size_t i=0; i<1000; ++i) {
+  for (size_t i=0; i<100; ++i) {
     x.push_back(vmfA.sample(rnd));
     x.push_back(vmfB.sample(rnd));
     x.push_back(vmfC.sample(rnd));
@@ -54,9 +54,10 @@ int main() {
   std::vector<uint32_t> z(x.size(),0);
   std::vector<vMF<float,3>> vmfs;
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
-  float logAlpha = log(100.);
+  float logAlpha = log(10.);
 
-  vmfs.push_back(base.sample(rnd));
+  vmfs.push_back(vMF<float,3>(Eigen::Vector3f(0,0,1),0.));
+//  vmfs.push_back(base.sample(rnd));
   for (size_t it=0; it<10000; ++it) {
     // sample labels | parameters
     tdp::Timer t0;
@@ -64,17 +65,30 @@ int main() {
     for (size_t i=0; i<x.size(); ++i) {
       Eigen::VectorXf logPdfs(K+1);
       Eigen::VectorXf pdfs(K+1);
+      float countIn = 0.;
       for (size_t k=0; k<K; ++k) {
-        if (z[i] == k) {
-          // TODO what if last in cluster
-          logPdfs[k] = log(counts[k]-1)+vmfs[k].logPdf(x[i]);
+        if (k==0) {
+          logPdfs[k] = log(counts[k]+1000) + vmfs[k].logPdf(x[i]);
         } else {
-          logPdfs[k] = log(counts[k])+vmfs[k].logPdf(x[i]);
+          if (z[i] == k) {
+            // TODO what if last in cluster
+            logPdfs[k] = log(counts[k]-1)+vmfs[k].logPdf(x[i]);
+          } else {
+            logPdfs[k] = log(counts[k])+vmfs[k].logPdf(x[i]);
+          }
+          countIn += counts[k];
         }
       }
       logPdfs[K] = logAlpha + base.logMarginal(x[i]);
+      Eigen::VectorXf logPdfsDP = logPdfs.bottomRows(K);
+      logPdfsDP = logPdfsDP.array() - logSumExp<float>(logPdfsDP);
+      logPdfs.bottomRows(K) = logPdfsDP;
+      logPdfs.bottomRows(K).array() += log(countIn);
       logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
       pdfs = logPdfs.array().exp();
+//      if (i%5 == 0)
+//        std::cout << logPdfs[0] << " " << logPdfs[K] << " " 
+//          << pdfs[0] << " " << pdfs[K] << std::endl;
       size_t zPrev = z[i];
       z[i] = sampleDisc(pdfs, rnd);
 //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
@@ -97,7 +111,7 @@ int main() {
 //    for (size_t i=0; i<x.size(); ++i) {
 //      xSum[z[i]] += x[i]; // TODO: can fold in above as well
 //    }
-    for (size_t k=0; k<K; ++k) {
+    for (size_t k=1; k<K; ++k) {
       if (counts[k] > 0) {
         vmfs[k] = base.posterior(xSum[k],counts[k]).sample(rnd);
       }
@@ -107,6 +121,8 @@ int main() {
     for (size_t k=0; k<K; ++k) if (counts[k] > 0) std::cout << counts[k] << " ";
     std::cout << "\ttaus: " ;
     for (size_t k=0; k<K; ++k) if (counts[k] > 0) std::cout << vmfs[k].tau_ << " ";
+    std::cout << "\tlabels: " ;
+    for (size_t k=0; k<K; ++k) if (counts[k] > 0 && k < 100) std::cout << k << " ";
     std::cout << std::endl;
   }
   return 0;

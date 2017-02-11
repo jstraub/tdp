@@ -465,9 +465,9 @@ int main( int argc, char* argv[] )
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
-  float logAlpha = log(10.);
+  float logAlpha = log(100.);
   float lambdaMRF = 0.1;
-  float tauO = 30.;
+  float tauO = 1.;
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
@@ -506,7 +506,7 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda& ni = nS.GetCircular(iReadNext);
         uint32_t& zi = zS.GetCircular(iReadNext);
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        Eigen::Vector3f mu = pl.n_*tauO;
+        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
         if (zi < K) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
         }
@@ -589,7 +589,7 @@ int main( int argc, char* argv[] )
         Eigen::Matrix3f SigmaPl;
         Eigen::Matrix3f Info =  InfoO;
 //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-        Eigen::Vector3f xi = InfoO*pl.p_;
+        Eigen::Vector3f xi = InfoO*pl.p_*pl.w_;
         for (int i=0; i<5; ++i) {
           if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
             SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
