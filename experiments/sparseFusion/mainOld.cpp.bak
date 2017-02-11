@@ -432,42 +432,42 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
-//    while(runTopologyThread.Get()) {
-//      {
-//        std::lock_guard<std::mutex> lock(pl_wLock); 
-//        iRead = pl_w.iRead_;
-//        iInsert = pl_w.iInsert_;
-//        sizeToRead = pl_w.SizeToRead();
-//      }
-//      if (sizeToRead > 0) {
-//        values.fill(std::numeric_limits<float>::max());
-//        tdp::Plane& pl = pl_w[iReadNext];
-//        tdp::Vector5ida& ids = nn[iReadNext];
-//        ids = tdp::Vector5ida::Ones()*(-1);
-//        for (size_t i=0; i<sizeToRead; ++i) {
-//          if (i != iReadNext) {
-//            float dist = (pl.p_-pl_w[i].p_).squaredNorm();
-//            tdp::AddToSortedIndexList(ids, values, i, dist);
-//          }
-//        }
-//        // just for visualization
-//        {
-//          std::lock_guard<std::mutex> lock(nnVisLock);
-//          if (mapNN.size() < 5*iReadNext) {
-//            for (int i=0; i<5; ++i) 
-//              mapNN.emplace_back(iReadNext, ids[i]);
-//          } else {
-//            for (int i=0; i<5; ++i) 
-//              mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
-//          }
-//        }
-//        iReadNext = (iReadNext+1)%sizeToRead;
-//        {
-//          std::lock_guard<std::mutex> lock(nnLock); 
-//          nn.iInsert_ = iReadNext;
-//        }
-//      }
-//    };
+    while(runTopologyThread.Get()) {
+      {
+        std::lock_guard<std::mutex> lock(pl_wLock); 
+        iRead = pl_w.iRead_;
+        iInsert = pl_w.iInsert_;
+        sizeToRead = pl_w.SizeToRead();
+      }
+      if (sizeToRead > 0) {
+        values.fill(std::numeric_limits<float>::max());
+        tdp::Plane& pl = pl_w[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
+        ids = tdp::Vector5ida::Ones()*(-1);
+        for (size_t i=0; i<sizeToRead; ++i) {
+          if (i != iReadNext) {
+            float dist = (pl.p_-pl_w[i].p_).squaredNorm();
+            tdp::AddToSortedIndexList(ids, values, i, dist);
+          }
+        }
+        // just for visualization
+        {
+          std::lock_guard<std::mutex> lock(nnVisLock);
+          if (mapNN.size() < 5*iReadNext) {
+            for (int i=0; i<5; ++i) 
+              mapNN.emplace_back(iReadNext, ids[i]);
+          } else {
+            for (int i=0; i<5; ++i) 
+              mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+          }
+        }
+        iReadNext = (iReadNext+1)%sizeToRead;
+        {
+          std::lock_guard<std::mutex> lock(nnLock); 
+          nn.iInsert_ = iReadNext;
+        }
+      }
+    };
   });
 
 

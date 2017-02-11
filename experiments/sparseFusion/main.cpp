@@ -879,6 +879,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
   nn.Fill(tdp::Vector5ida::Ones()*-1);
+  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsNum(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
@@ -933,6 +934,7 @@ int main( int argc, char* argv[] )
         values.fill(std::numeric_limits<float>::max());
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         tdp::Vector5ida& ids = nn[iReadNext];
+        tdp::Vector5ida idsPrev = ids;
         ids = tdp::Vector5ida::Ones()*(-1);
         for (size_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
@@ -943,8 +945,14 @@ int main( int argc, char* argv[] )
         // for map constraints
         // TODO: should be updated as pairs are reobserved
         for (int i=0; i<5; ++i) {
-          mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-          mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+//            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+//            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+//            mapObsNum[iReadNext][i] = 1;
+          if (ids(i) != idsPrev(i)) {
+            mapObsDot[iReadNext][i] = 0.;
+            mapObsP2Pl[iReadNext][i] = 0.;
+            mapObsNum[iReadNext][i] = 0.;
+          }
         }
         // just for visualization
         if (mapNN.size() < 5*iReadNext) {
@@ -988,16 +996,16 @@ int main( int argc, char* argv[] )
         Jn = tdp::Vector3fda::Zero();
         Jp = tdp::Vector3fda::Zero();
         for (int i=0; i<5; ++i) {
-          if (ids[i] > -1) {
+          if (ids[i] > -1 && mapObsNum[iReadNext](i) > 0.) {
             const tdp::Plane& plO = pl_w[ids[i]];
-            Jn += 2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext][i])*plO.n_;
-            Jn += 2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*(plO.p_-pl.p_);
-            if (pl.curvature_ < curvThr) {
-              dpvmfLock.lock();
-              Jn += -lambdaReg*dpvmf.GetCenter(pl.z_);
-              dpvmfLock.unlock();
-            }
-            Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i])*pl.n_;
+            Jn +=  2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext][i]/mapObsNum[iReadNext][i])*plO.n_;
+            Jn +=  2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i]/mapObsNum[iReadNext][i])*(plO.p_-pl.p_);
+//            if (pl.curvature_ < curvThr) {
+            dpvmfLock.lock();
+            Jn += -lambdaReg*dpvmf.GetCenter(pl.z_);
+            dpvmfLock.unlock();
+//            }
+            Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i]/mapObsNum[iReadNext][i])*pl.n_;
             Jp += -2.*(pc0_w[iReadNext] - pl.p_);
           }
         }
@@ -1282,15 +1290,36 @@ int main( int argc, char* argv[] )
       if (updatePlanes && trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
+        size_t numNN = 0;
         for (const auto& ass : assoc) {
           int32_t u = ass.second%pc.w_;
           int32_t v = ass.second/pc.w_;
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
-          pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
-          n_w[ass.first] =  pl_w[ass.first].n_;
-          pc_w[ass.first] = pl_w[ass.first].p_;
+          if (!updateMap) {
+            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
+            n_w[ass.first] =  pl_w[ass.first].n_;
+            pc_w[ass.first] = pl_w[ass.first].p_;
+          }
+          for (size_t i=0; i<5; ++ i) {
+            for (const auto& assB : assoc) {
+              if (assB.first == nn[ass.first](i)){
+                int32_t uB = assB.second%pc.w_;
+                int32_t vB = assB.second/pc.w_;
+                mapObsNum[ass.first](i) ++;
+                mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
+                mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
+                std::cout << "found NN " << i << " of " << ass.first 
+                  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
+                  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
+                  << " " << mapObsNum[ass.first](i) << std::endl;
+                numNN++;
+                break;
+              }
+            }
+          }
         }
+        std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
       }
     }
