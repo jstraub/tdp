@@ -87,7 +87,7 @@ void DPvMFmeansSimple<T,D,Options>::addObservation(Eigen::Matrix<T,D,1,Options>*
   xs_.push_back(x); 
   T sim_closest = 0;
   zs_.push_back(z);
-  if (*z == 0xFFFF) return;
+//  if (*z == 0xFFFF) return;
   *z = indOfClosestCluster(*x, sim_closest);
   if (*z == K_) {
     mus_.push_back(*x);
@@ -126,7 +126,7 @@ void DPvMFmeansSimple<T,D,Options>::updateLabels()
   for(uint32_t i=0; i<xs_.size(); ++i) {
     T sim_closest = 0;
     uint16_t zPrev = *zs_[i];
-    if (zPrev == 0xFFFF) continue;
+//    if (zPrev == 0xFFFF) continue;
     uint16_t z = indOfClosestCluster(*xs_[i], sim_closest);
     if (z==zPrev && Ns_[z] == 1) {
       z = indOfClosestCluster(*xs_[i], sim_closest, &z);
@@ -189,7 +189,8 @@ void DPvMFmeansSimple<T,D,Options>::removeEmptyClusters() {
 //      std::cout<<"cluster k "<<k<<" empty"<<std::endl;
 //#pragma omp parallel for 
       for(uint32_t i=0; i<xs_.size(); ++i)
-        if(static_cast<int32_t>(*zs_[i]) >= k && *zs_[i] != 0xFFFF) *zs_[i] -= 1;
+//        if(static_cast<int32_t>(*zs_[i]) >= k && *zs_[i] != 0xFFFF) *zs_[i] -= 1;
+        if(static_cast<int32_t>(*zs_[i]) >= k) *zs_[i] -= 1;
       kNew --;
     }
   uint32_t j=0;
@@ -215,7 +216,7 @@ T DPvMFmeansSimple<T,D,Options>::cost() {
   T f = lambda_*K_; 
 //  std::cout << "f="<<f<< std::endl;
   for(uint32_t i=0; i<xs_.size(); ++i)  {
-    if (*zs_[i] == 0xFFFF) continue;
+//    if (*zs_[i] == 0xFFFF) continue;
     f += mus_[*zs_[i]].dot(*xs_[i]);
 //    std::cout << zs_[i] << ", " << xs_[i].transpose() << ", " 
 //      << mus_[zs_[i]].transpose();

@@ -71,7 +71,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
-#define MAP_SIZE 100000
+#define MAP_SIZE 1000000
 
 namespace tdp {
 
@@ -211,15 +211,15 @@ int main( int argc, char* argv[] )
 
   pangolin::View& viewNormals = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
-//  gui.container().AddDisplay(viewNormals);
-  viewPc3D.SetLayout(pangolin::LayoutOverlay);
-  viewPc3D.AddDisplay(viewNormals);
-  viewNormals.SetBounds(0.,0.4,0.6,1.);
+  gui.container().AddDisplay(viewNormals);
+//  viewPc3D.SetLayout(pangolin::LayoutOverlay);
+//  viewPc3D.AddDisplay(viewNormals);
+//  viewNormals.SetBounds(0.,0.4,0.6,1.);
 
   tdp::QuickView viewCurrent(wc, hc);
-//  gui.container().AddDisplay(viewCurrent);
-  viewPc3D.AddDisplay(viewCurrent);
-  viewCurrent.SetBounds(0.,0.3,0.,0.3);
+  gui.container().AddDisplay(viewCurrent);
+//  viewPc3D.AddDisplay(viewCurrent);
+//  viewCurrent.SetBounds(0.,0.3,0.,0.3);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -229,7 +229,10 @@ int main( int argc, char* argv[] )
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
 
-  containerTracking.Show(true);
+  containerTracking.Show(false);
+  viewAssoc.Show(false);
+  viewCurrent.Show(false);
+  viewNormals.Show(false);
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
@@ -256,6 +259,8 @@ int main( int argc, char* argv[] )
   pangolin::Plotter plotEv(&logEv, -100.f,1.f, -1.f,1.f, .1f, 0.1f);
   plotters.AddDisplay(plotEv);
   gui.container().AddDisplay(plotters);
+
+  plotters.Show(false);
 
   tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
@@ -319,8 +324,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useDecomposedICP("ui.decomposed ICP",false,true);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
-  pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
-  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
+  pangolin::Var<bool> useProj("ui.use proj in ICP",false,true);
+  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
   pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.00,0.01,1.);
@@ -347,13 +352,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
-  pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
-  pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
+  pangolin::Var<bool> showSurfels("ui.show surfels",false,true);
   pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",10,0,100);
@@ -428,42 +432,42 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::Vector5fda values;
-    while(runTopologyThread.Get()) {
-      {
-        std::lock_guard<std::mutex> lock(pl_wLock); 
-        iRead = pl_w.iRead_;
-        iInsert = pl_w.iInsert_;
-        sizeToRead = pl_w.SizeToRead();
-      }
-      if (sizeToRead > 0) {
-        values.fill(std::numeric_limits<float>::max());
-        tdp::Plane& pl = pl_w[iReadNext];
-        tdp::Vector5ida& ids = nn[iReadNext];
-        ids = tdp::Vector5ida::Ones()*(-1);
-        for (size_t i=0; i<sizeToRead; ++i) {
-          if (i != iReadNext) {
-            float dist = (pl.p_-pl_w[i].p_).squaredNorm();
-            tdp::AddToSortedIndexList(ids, values, i, dist);
-          }
-        }
-        // just for visualization
-        {
-          std::lock_guard<std::mutex> lock(nnVisLock);
-          if (mapNN.size() < 5*iReadNext) {
-            for (int i=0; i<5; ++i) 
-              mapNN.emplace_back(iReadNext, ids[i]);
-          } else {
-            for (int i=0; i<5; ++i) 
-              mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
-          }
-        }
-        iReadNext = (iReadNext+1)%sizeToRead;
-        {
-          std::lock_guard<std::mutex> lock(nnLock); 
-          nn.iInsert_ = iReadNext;
-        }
-      }
-    };
+//    while(runTopologyThread.Get()) {
+//      {
+//        std::lock_guard<std::mutex> lock(pl_wLock); 
+//        iRead = pl_w.iRead_;
+//        iInsert = pl_w.iInsert_;
+//        sizeToRead = pl_w.SizeToRead();
+//      }
+//      if (sizeToRead > 0) {
+//        values.fill(std::numeric_limits<float>::max());
+//        tdp::Plane& pl = pl_w[iReadNext];
+//        tdp::Vector5ida& ids = nn[iReadNext];
+//        ids = tdp::Vector5ida::Ones()*(-1);
+//        for (size_t i=0; i<sizeToRead; ++i) {
+//          if (i != iReadNext) {
+//            float dist = (pl.p_-pl_w[i].p_).squaredNorm();
+//            tdp::AddToSortedIndexList(ids, values, i, dist);
+//          }
+//        }
+//        // just for visualization
+//        {
+//          std::lock_guard<std::mutex> lock(nnVisLock);
+//          if (mapNN.size() < 5*iReadNext) {
+//            for (int i=0; i<5; ++i) 
+//              mapNN.emplace_back(iReadNext, ids[i]);
+//          } else {
+//            for (int i=0; i<5; ++i) 
+//              mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+//          }
+//        }
+//        iReadNext = (iReadNext+1)%sizeToRead;
+//        {
+//          std::lock_guard<std::mutex> lock(nnLock); 
+//          nn.iInsert_ = iReadNext;
+//        }
+//      }
+//    };
   });
 
 
@@ -493,122 +497,122 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 rnd(0);
-    while(runSampling.Get()) {
-    if (sampleMap) {
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        iRead = nn.iRead_;
-        iInsert = nn.iInsert_;
-      }
-      pS.iInsert_ = nn.iInsert_;
-      nS.iInsert_ = nn.iInsert_;
-      // sample normals using dpvmf and observations from planes
-      size_t K = vmfs.size();
-      vmfSS.Fill(tdp::Vector4fda::Zero());
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector3fda& ni = nS[iReadNext];
-        uint32_t& zi = zS[iReadNext];
-        tdp::Plane& pl = pl_w[iReadNext];
-        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-        if (zi < K) {
-          mu += vmfs[zi].mu_*vmfs[zi].tau_;
-        }
-        ni = vMF<float,3>(mu).sample(rnd);
-        vmfSS[zi].topRows<3>() += ni;
-        vmfSS[zi](3) ++;
-      }
-      // sample dpvmf labels
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-
-        Eigen::VectorXf logPdfs(K+1);
-        Eigen::VectorXf pdfs(K+1);
-
-        tdp::Vector3fda& ni = nS[iReadNext];
-        uint32_t& zi = zS[iReadNext];
-        tdp::Vector5ida& ids = nn[iReadNext];
-
-        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
-        for (int i=0; i<5; ++i) {
-          if (ids[i] > -1  && zS[ids[i]] < K) {
-            neighNs[zS[ids[i]]] += 1.f;
-          }
-        }
-        for (size_t k=0; k<K; ++k) {
-          if (useMRF) 
-            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
-          else 
-            logPdfs[k] = 0.;
-          if (zi == k) {
-            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
-          } else {
-            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
-          }
-        }
-        logPdfs[K] = logAlpha + base.logMarginal(ni);
-        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
-        pdfs = logPdfs.array().exp();
-        size_t zPrev = zi;
-        zi = sampleDisc(pdfs, rnd);
-        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
-        if (zi == K) {
-          vmfsLock.lock();
-          vmfs.push_back(base.posterior(ni,1).sample(rnd));
-          vmfsLock.unlock();
-          K++;
-        }
-        if (zPrev != zi) {
-          vmfSS[zPrev].topRows<3>() -= ni;
-          vmfSS[zPrev](3) --;
-          vmfSS[zi].topRows<3>() += ni;
-          vmfSS[zi](3) ++;
-        }
-      }
-      // sample dpvmf parameters
-      {
-        std::lock_guard<std::mutex> lock(vmfsLock);
-        for (size_t k=0; k<K; ++k) {
-          if (vmfSS[k](3) > 0) {
-            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
-          }
-        }
-      }
-      std::cout << "counts " << K << ": ";
-      for (size_t k=0; k<K; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfSS[k](3) << " ";
-      std::cout << "\ttaus: " ;
-      for (size_t k=0; k<K; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfs[k].tau_ << " ";
-      std::cout << std::endl;
-      // sample points
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector3fda& pi = pS[iReadNext];
-        tdp::Plane& pl = pl_w[iReadNext];
-        tdp::Vector5ida& ids = nn[iReadNext];
-
-        Eigen::Matrix3f SigmaPl;
-        Eigen::Matrix3f Info =  InfoO*pl.N_;
-//        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
-        for (int i=0; i<5; ++i) {
-          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
-            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
-            Info += SigmaPl;
-            xi += SigmaPl*pS[ids[i]];
-          }
-        }
-        Eigen::Matrix3f Sigma = Info.inverse();
-        Eigen::Vector3f mu = Info.ldlt().solve(xi);
-//        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-        pi = Normal<float,3>(mu, Sigma).sample(rnd);
-      }
-
-    }
-    };
+//    while(runSampling.Get()) {
+//    if (sampleMap) {
+//      {
+//        std::lock_guard<std::mutex> lock(nnLock); 
+//        iRead = nn.iRead_;
+//        iInsert = nn.iInsert_;
+//      }
+//      pS.iInsert_ = nn.iInsert_;
+//      nS.iInsert_ = nn.iInsert_;
+//      // sample normals using dpvmf and observations from planes
+//      size_t K = vmfs.size();
+//      vmfSS.Fill(tdp::Vector4fda::Zero());
+//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+//        iReadNext=(iReadNext+1)%nn.w_) {
+//        tdp::Vector3fda& ni = nS[iReadNext];
+//        uint32_t& zi = zS[iReadNext];
+//        tdp::Plane& pl = pl_w[iReadNext];
+//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+//        if (zi < K) {
+//          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+//        }
+//        ni = vMF<float,3>(mu).sample(rnd);
+//        vmfSS[zi].topRows<3>() += ni;
+//        vmfSS[zi](3) ++;
+//      }
+//      // sample dpvmf labels
+//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+//        iReadNext=(iReadNext+1)%nn.w_) {
+//
+//        Eigen::VectorXf logPdfs(K+1);
+//        Eigen::VectorXf pdfs(K+1);
+//
+//        tdp::Vector3fda& ni = nS[iReadNext];
+//        uint32_t& zi = zS[iReadNext];
+//        tdp::Vector5ida& ids = nn[iReadNext];
+//
+//        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
+//        for (int i=0; i<5; ++i) {
+//          if (ids[i] > -1  && zS[ids[i]] < K) {
+//            neighNs[zS[ids[i]]] += 1.f;
+//          }
+//        }
+//        for (size_t k=0; k<K; ++k) {
+//          if (useMRF) 
+//            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
+//          else 
+//            logPdfs[k] = 0.;
+//          if (zi == k) {
+//            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
+//          } else {
+//            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
+//          }
+//        }
+//        logPdfs[K] = logAlpha + base.logMarginal(ni);
+//        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
+//        pdfs = logPdfs.array().exp();
+//        size_t zPrev = zi;
+//        zi = sampleDisc(pdfs, rnd);
+//        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+//        if (zi == K) {
+//          vmfsLock.lock();
+//          vmfs.push_back(base.posterior(ni,1).sample(rnd));
+//          vmfsLock.unlock();
+//          K++;
+//        }
+//        if (zPrev != zi) {
+//          vmfSS[zPrev].topRows<3>() -= ni;
+//          vmfSS[zPrev](3) --;
+//          vmfSS[zi].topRows<3>() += ni;
+//          vmfSS[zi](3) ++;
+//        }
+//      }
+//      // sample dpvmf parameters
+//      {
+//        std::lock_guard<std::mutex> lock(vmfsLock);
+//        for (size_t k=0; k<K; ++k) {
+//          if (vmfSS[k](3) > 0) {
+//            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+//          }
+//        }
+//      }
+//      std::cout << "counts " << K << ": ";
+//      for (size_t k=0; k<K; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfSS[k](3) << " ";
+//      std::cout << "\ttaus: " ;
+//      for (size_t k=0; k<K; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfs[k].tau_ << " ";
+//      std::cout << std::endl;
+//      // sample points
+//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+//        iReadNext=(iReadNext+1)%nn.w_) {
+//        tdp::Vector3fda& pi = pS[iReadNext];
+//        tdp::Plane& pl = pl_w[iReadNext];
+//        tdp::Vector5ida& ids = nn[iReadNext];
+//
+//        Eigen::Matrix3f SigmaPl;
+//        Eigen::Matrix3f Info =  InfoO*pl.N_;
+////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+//        for (int i=0; i<5; ++i) {
+//          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
+//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+//            Info += SigmaPl;
+//            xi += SigmaPl*pS[ids[i]];
+//          }
+//        }
+//        Eigen::Matrix3f Sigma = Info.inverse();
+//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
+////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+//      }
+//
+//    }
+//    };
   });
 
 
@@ -650,12 +654,12 @@ int main( int argc, char* argv[] )
       projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
           pl_w.SizeToRead());
       TOCK("data assoc");
-      TICK("extract assoc");
-      z.Fill(0);
-      idsCur.clear();
-      projAssoc.GetAssoc(z, mask, idsCur);
-      std::random_shuffle(idsCur.begin(), idsCur.end());
-      TOCK("extract assoc");
+//      TICK("extract assoc");
+//      z.Fill(0);
+//      idsCur.clear();
+//      projAssoc.GetAssoc(z, mask, idsCur);
+//      std::random_shuffle(idsCur.begin(), idsCur.end());
+//      TOCK("extract assoc");
 
 //        tdp::UniformResampleEmptyPartsOfMask(mask, W, subsample, gen, 16, 16);
 //        tdp::UniformResampleMask(pc, cam, mask, W, subsample, gen, 16, 16);
@@ -676,23 +680,7 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
-//          if (pl.curvature_ > curvThr) {
-//            pl.z_ = 0xFFFF; // mark high curvature cluster as outlier
-//            numNonPlanar ++;
-//          }
           dpvmf.addObservation(&pl.n_, &pl.z_);
-          int32_t kMax = -1;
-          uint32_t nMax = 0;
-          for (size_t k=0; k<dpvmf.GetK(); ++k) {
-            if (k==pl.z_) continue;
-            if (nMax < dpvmf.GetNs()[k]) {
-              nMax = dpvmf.GetNs()[k];
-              kMax = k;
-            }
-          }
-          if (kMax >= 0) {
-            pl.dir_ = dpvmf.GetCenter(kMax);
-          }
         }
       }
       vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -711,7 +699,7 @@ int main( int argc, char* argv[] )
       dpvmfLock.lock();
       dpvmf.iterateToConvergence(100, 1e-6);
       dpvmfLock.unlock();
-      for (size_t k=0; k<dpvmf.GetK()+1; ++k) {
+      for (size_t k=0; k<dpvmf.GetK(); ++k) {
         if (k >= invInd.size()) {
           invInd.push_back(std::vector<uint32_t>());
           invInd.back().reserve(10000);
@@ -722,14 +710,16 @@ int main( int argc, char* argv[] )
       if (pruneAssocByRender) {
         // only use ids that were found by projecting into the current pose
         for (auto i : idsCur) {
-          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+//          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+          uint32_t k = *dpvmf.GetZs()[i];
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
         }
       } else {      
         // use all ids in the current map
         for (auto i : id_w) {
-          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+//          uint32_t k = std::min((uint32_t)(*dpvmf.GetZs()[i]), dpvmf.GetK());
+          uint32_t k = *dpvmf.GetZs()[i];
           if (invInd[k].size() < 10000)
             invInd[k].push_back(i);
         }
@@ -752,14 +742,14 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
     cuRgb.CopyFrom(rgb);
-    if (gui.verbose) std::cout << "compute grey" << std::endl;
-    tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
-    cuGreyFlSmooth.CopyFrom(cuGreyFl);
-//    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
-    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
-    grey.CopyFrom(cuGrey);
-    greyFl.CopyFrom(cuGreyFlSmooth);
-    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
+//    if (gui.verbose) std::cout << "compute grey" << std::endl;
+//    tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
+//    cuGreyFlSmooth.CopyFrom(cuGreyFl);
+////    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+//    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
+//    grey.CopyFrom(cuGrey);
+//    greyFl.CopyFrom(cuGreyFlSmooth);
+//    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -776,16 +766,14 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,3,1> xt;
       uint32_t numInl = 0;
 
-      std::uniform_int_distribution<> dis(0, dpvmf.GetK());
-      
       tdp::SE3f T_wcPrev = T_wc.rotation();
-      std::vector<size_t> indK(dpvmf.GetK()+1,0);
+      std::vector<size_t> indK(dpvmf.GetK(),0);
       for (size_t it = 0; it < maxIt; ++it) {
         mask.Fill(0);
         assoc.clear();
 //        pc_c.MarkRead();
 //        n_c.MarkRead();
-        indK = std::vector<size_t>(dpvmf.GetK()+1,0);
+        indK = std::vector<size_t>(dpvmf.GetK(),0);
         numProjected = 0;
 
         float err = 0.;
@@ -794,8 +782,9 @@ int main( int argc, char* argv[] )
           tdp::SO3f R_wcBefore = T_wc.rotation();
           tdp::SO3f R_wc;
           // TODO need better termination criterion
-          IncrementalOpRot(pc, dpc, n, curv, invInd, T_wcPrev, T_wc, cam, cfgIcp, W,
-              indK, frame, mask, pl_w, assoc, numProjected, R_wc);
+          IncrementalOpRot(pc, dpc, n, curv, invInd, T_wcPrev, T_wc,
+              cam, cfgIcp, W, indK, frame, mask, pl_w, assoc,
+              numProjected, R_wc);
           T_wc.rotation() = R_wc;
           Eigen::Matrix<float,3,1> xR = R_wcBefore.Log(R_wc);
           numInl = 0;
@@ -850,7 +839,7 @@ int main( int argc, char* argv[] )
       }
       for (size_t k=0; k<indK.size(); ++k) {
         std::cout << "used different directions " << k << "/" 
-          << (dpvmf.GetK()+1) << ": " << indK[k] 
+          << (dpvmf.GetK()) << ": " << indK[k] 
           << " of " << invInd[k].size() << std::endl;
       }
       float H;
@@ -895,8 +884,8 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
         for (const auto& ass : assoc) {
-          int32_t u = ass.second%w;
-          int32_t v = ass.second/w;
+          int32_t u = ass.second%pc.w_;
+          int32_t v = ass.second/pc.w_;
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
           pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
@@ -907,34 +896,34 @@ int main( int argc, char* argv[] )
       }
     }
 
-    if (runLoopClosureGeom && dpvmf.GetK()>2) {
-      tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
-      for (const auto& ass : assoc) {
-        dpvmfCur.addObservation(n(ass.second%w,ass.second/w));
-      }
-      dpvmfCur.iterateToConvergence(100, 1e-6);
-      if (dpvmfCur.GetK() > 2) {
-        std::vector<size_t> idsW(dpvmf.GetK());
-        std::vector<size_t> idsC(dpvmfCur.GetK());
-        std::iota(idsW.begin(), idsW.end(), 0);
-        std::iota(idsC.begin(), idsC.end(), 0);
-        Eigen::Matrix3f N;
-        float maxAlign = 0;
-        for (size_t it =0; it < 1000; ++it) {
-          std::random_shuffle(idsW.begin(), idsW.end());
-          std::random_shuffle(idsC.begin(), idsC.end());
-          N = Eigen::Matrix3f::Zero();
-          for (size_t i=0; i<3; ++i) {
-            N +=  dpvmfCur.GetCenter(idsC[i]) * dpvmf.GetCenter(idsW[i]).transpose();
-          }
-          Eigen::Matrix3f R_wc = tdp::ProjectOntoSO3<float>(N);
-          float align = (R_wc*N).trace();
-          if (align > maxAlign) {
-            T_wcRansac.rotation() = tdp::SO3f(R_wc);
-          }
-        }
-      }
-    }
+//    if (runLoopClosureGeom && dpvmf.GetK()>2) {
+//      tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
+//      for (const auto& ass : assoc) {
+//        dpvmfCur.addObservation(n(ass.second%pc.w_,ass.second/pc.w_));
+//      }
+//      dpvmfCur.iterateToConvergence(100, 1e-6);
+//      if (dpvmfCur.GetK() > 2) {
+//        std::vector<size_t> idsW(dpvmf.GetK());
+//        std::vector<size_t> idsC(dpvmfCur.GetK());
+//        std::iota(idsW.begin(), idsW.end(), 0);
+//        std::iota(idsC.begin(), idsC.end(), 0);
+//        Eigen::Matrix3f N;
+//        float maxAlign = 0;
+//        for (size_t it =0; it < 1000; ++it) {
+//          std::random_shuffle(idsW.begin(), idsW.end());
+//          std::random_shuffle(idsC.begin(), idsC.end());
+//          N = Eigen::Matrix3f::Zero();
+//          for (size_t i=0; i<3; ++i) {
+//            N +=  dpvmfCur.GetCenter(idsC[i]) * dpvmf.GetCenter(idsW[i]).transpose();
+//          }
+//          Eigen::Matrix3f R_wc = tdp::ProjectOntoSO3<float>(N);
+//          float align = (R_wc*N).trace();
+//          if (align > maxAlign) {
+//            T_wcRansac.rotation() = tdp::SO3f(R_wc);
+//          }
+//        }
+//      }
+//    }
 
     frame ++;
 
@@ -960,70 +949,70 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
-      std::cout << "uploading pc "  << pS.SizeBytes() 
-        << " "   << nS.SizeBytes() 
-        << " "   << pc_w.SizeBytes() 
-        << " "   << n_w.SizeBytes() 
+      std::cout << "uploading pc "  
+        << pS.Description() << std::endl
+        << " "   << nS.Description()  << std::endl
+        << " "   << pc_w.Description()  << std::endl
+        << " "   << n_w.Description() 
         << std::endl;
       if (showSamples) {
         vbo_w.Upload(pS.ptr_, pS.SizeBytes(), 0);
         nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
       } else {
+        vbo_w.Reinitialise(pangolin::GlArrayBuffer, pc_w.w_, GL_FLOAT, 3,  GL_DYNAMIC_DRAW);
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+        nbo_w.Reinitialise(pangolin::GlArrayBuffer, n_w.w_, GL_FLOAT, 3,  GL_DYNAMIC_DRAW);
         nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       }
+      cbo_w.Reinitialise(pangolin::GlArrayBuffer, rgb_w.w_, GL_UNSIGNED_BYTE, 3,  GL_DYNAMIC_DRAW);
       cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
       std::cout << "uploading pc done" << std::endl;
 
-      if (showFullPc) {
-        pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-        pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        // TODO I should not need to upload all of pc_w everytime;
-        // might break things though
-        // I do ned to upload points because they get updated; I
-        // wouldnt have to with the color
-        if (showAge || showObs || showCurv) {
-          age.Reinitialise(pl_w.SizeToRead());
-          if (showAge) {
-            for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w[i].lastFrame_;
-          } else if (showObs) {
-            for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w[i].numObs_;
-          } else {
-            for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w[i].curvature_;
-          }
-          valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),
-              GL_FLOAT, 1, GL_DYNAMIC_DRAW);
-          valuebo.Upload(age.ptr_,  age.SizeBytes(), 0);
-
-          std::pair<float,float> minMaxAge = age.MinMax();
-          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
-              minMaxAge.second, P, MV);
-        } else if (showSurfels) {
-          std::cout << "rbo upload " << rs.SizeBytes() << std::endl;
-          rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
-          std::cout << "render surfels" << std::endl;
-          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
-          std::cout << "rendered surfels" << std::endl;
+      pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
+      pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+      // TODO I should not need to upload all of pc_w everytime;
+      // might break things though
+      // I do ned to upload points because they get updated; I
+      // wouldnt have to with the color
+      if (showAge || showObs || showCurv) {
+        age.Reinitialise(pl_w.SizeToRead());
+        if (showAge) {
+          for (size_t i=0; i<age.Area(); ++i) 
+            age[i] = pl_w[i].lastFrame_;
+        } else if (showObs) {
+          for (size_t i=0; i<age.Area(); ++i) 
+            age[i] = pl_w[i].numObs_;
         } else {
-          pangolin::RenderVboCbo(vbo_w, cbo_w, true);
+          for (size_t i=0; i<age.Area(); ++i) 
+            age[i] = pl_w[i].curvature_;
         }
-        if (showNN) {
-          std::cout << "render NN" << std::endl;
-          glColor4f(0.3,0.3,0.3,0.3);
-          {
-            std::lock_guard<std::mutex> lock(nnVisLock);
-            for (auto& ass : mapNN) {
-              if (ass.second >= 0)
-                tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
-            }
+        valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),
+            GL_FLOAT, 1, GL_DYNAMIC_DRAW);
+        valuebo.Upload(age.ptr_,  age.SizeBytes(), 0);
+
+        std::pair<float,float> minMaxAge = age.MinMax();
+        tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
+            minMaxAge.second, P, MV);
+      } else if (showSurfels) {
+        std::cout << "rbo upload " << rs.SizeBytes() << std::endl;
+        rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
+        std::cout << "render surfels" << std::endl;
+        tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
+        std::cout << "rendered surfels" << std::endl;
+      } else {
+        pangolin::RenderVboCbo(vbo_w, cbo_w, true);
+      }
+      if (showNN) {
+        std::cout << "render NN" << std::endl;
+        glColor4f(0.3,0.3,0.3,0.3);
+        {
+          std::lock_guard<std::mutex> lock(nnVisLock);
+          for (auto& ass : mapNN) {
+            if (ass.second >= 0)
+              tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
           }
-          std::cout << "rendered NN" << std::endl;
         }
-        if (showLoopClose) {
-        }
+        std::cout << "rendered NN" << std::endl;
       }
       if (showSamples) {
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1037,12 +1026,12 @@ int main( int argc, char* argv[] )
         std::cout << "render normals done" << std::endl;
       }
 
-      if (showPlanes) {
-        for (size_t i=iReadCurW; i != pl_w.iInsert_; i=(i+1)%pl_w.w_) {
-          tdp::SE3f T = pl_w[i].LocalCosy();
-          pangolin::glDrawAxis(T.matrix(),0.05f);
-        }
-      }
+//      if (showPlanes) {
+//        for (size_t i=iReadCurW; i != pl_w.iInsert_; i=(i+1)%pl_w.w_) {
+//          tdp::SE3f T = pl_w[i].LocalCosy();
+//          pangolin::glDrawAxis(T.matrix(),0.05f);
+//        }
+//      }
 
       // render current camera second in the propper frame of
       // reference
@@ -1058,96 +1047,88 @@ int main( int argc, char* argv[] )
       }
     }
 
-    if (viewAssoc.IsShown()) {
-      viewAssoc.Activate(s_cam);
-      pangolin::glSetFrameOfReference(T_wc.matrix());
-      pangolin::glDrawAxis(0.1f);
-      if (showPcCurrent) {
-        pangolin::RenderVboCbo(vbo, cbo, true);
-      }
-      pangolin::glUnsetFrameOfReference();
-
-      pangolin::glDrawAxis(0.3f);
-      glColor4f(1,0,0,1.);
-      for (const auto& ass : assoc) {
-//        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
-        tdp::Vector3fda pc_c_in_m = T_wc*pc(ass.second%w,ass.second/w);
-        tdp::glDrawLine(pl_w[ass.first].p_, pc_c_in_m);
-      }
-    }
-
-    if (viewNormals.IsShown()) {
-      Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
-      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -2.2;
-      normalsCam.GetModelViewMatrix() = Tview;
-      viewNormals.Activate(normalsCam);
-      glColor4f(0,0,1,0.5);
-      pangolin::RenderVbo(nbo_w);
-      glColor4f(1,0,0,1.);
-      for (size_t k=0; k<dpvmf.GetK(); ++k) {
-        tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
-      }
-      glColor4f(0,1,0,1.);
-      {
-        std::lock_guard<std::mutex> lock(vmfsLock);
-        for (size_t k=0; k<vmfs.size(); ++k) {
-          if (vmfSS[k](3) > 0)
-            tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
-        }
-      }
-    }
+//    if (viewAssoc.IsShown()) {
+//      viewAssoc.Activate(s_cam);
+//      pangolin::glSetFrameOfReference(T_wc.matrix());
+//      pangolin::glDrawAxis(0.1f);
+//      if (showPcCurrent) {
+//        pangolin::RenderVboCbo(vbo, cbo, true);
+//      }
+//      pangolin::glUnsetFrameOfReference();
+//
+//      pangolin::glDrawAxis(0.3f);
+//      glColor4f(1,0,0,1.);
+//      for (const auto& ass : assoc) {
+////        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
+//        tdp::Vector3fda pc_c_in_m = T_wc*pc(ass.second%pc.w_,ass.second/pc.w_);
+//        tdp::glDrawLine(pl_w[ass.first].p_, pc_c_in_m);
+//      }
+//    }
+//
+//    if (viewNormals.IsShown()) {
+//      Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
+//      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -2.2;
+//      normalsCam.GetModelViewMatrix() = Tview;
+//      viewNormals.Activate(normalsCam);
+//      glColor4f(0,0,1,0.5);
+//      pangolin::RenderVbo(nbo_w);
+//      glColor4f(1,0,0,1.);
+//      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+//        tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
+//      }
+//      glColor4f(0,1,0,1.);
+//      {
+//        std::lock_guard<std::mutex> lock(vmfsLock);
+//        for (size_t k=0; k<vmfs.size(); ++k) {
+//          if (vmfSS[k](3) > 0)
+//            tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+//        }
+//      }
+//    }
 
     TOCK("Draw 3D");
     if (gui.verbose) std::cout << "draw 2D" << std::endl;
     TICK("Draw 2D");
-    glLineWidth(1.5f);
-    glDisable(GL_DEPTH_TEST);
-    if (viewCurrent.IsShown()) {
-//      if (showFAST && !useFAST) {
-//        tdp::DetectOFast(grey, fastB, kappaHarris, harrisThr, W, pts,
-//            orientation);
+//    glLineWidth(1.5f);
+//    glDisable(GL_DEPTH_TEST);
+//    if (viewCurrent.IsShown()) {
+//      viewCurrent.SetImage(rgb);
+//      glColor3f(1,0,0);
+//      for (size_t u=0; u<rgb.w_; ++u)
+//        for (size_t v=0; v<rgb.h_; ++v) {
+//          if (mask(u,v)) {
+//            pangolin::glDrawCircle(u,v,1);
+//          }
+//        }
+//    }
+//
+//    if (containerTracking.IsShown()) {
+//      if (viewMask.IsShown()) {
+//        viewMask.SetImage(mask);
 //      }
-      viewCurrent.SetImage(rgb);
-      glColor3f(1,0,0);
-      for (size_t u=0; u<rgb.w_; ++u)
-        for (size_t v=0; v<rgb.h_; ++v) {
-          if (mask(u,v)) {
-            pangolin::glDrawCircle(u,v,1);
-          }
-        }
-    }
-
-    if (containerTracking.IsShown()) {
-      if (viewMask.IsShown()) {
-        viewMask.SetImage(mask);
-      }
-      if (viewGrey.IsShown()) {
-        viewGrey.SetImage(grey);
-      }
-    }
-    if (!gui.finished()) {
-      std::cout << "scroll plots" << std::endl;
-      plotdH.ScrollView(1,0);
-      plotH.ScrollView(1,0);
-      plotObs.ScrollView(1,0);
-      plotEig.ScrollView(1,0);
-      plotEv.ScrollView(1,0);
-    }
-
-    TOCK("Draw 2D");
-    if (record) {
-      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
-      name = std::string(name.begin(), name.end()-4);
-      gui.container().SaveOnRender(name);
-    }
+//      if (viewGrey.IsShown()) {
+//        viewGrey.SetImage(grey);
+//      }
+//    }
+//    if (!gui.finished() && plotters.IsShown()) {
+//      std::cout << "scroll plots" << std::endl;
+//      plotdH.ScrollView(1,0);
+//      plotH.ScrollView(1,0);
+//      plotObs.ScrollView(1,0);
+//      plotEig.ScrollView(1,0);
+//      plotEv.ScrollView(1,0);
+//    }
+//
+//    TOCK("Draw 2D");
+//    if (record) {
+//      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
+//      name = std::string(name.begin(), name.end()-4);
+//      gui.container().SaveOnRender(name);
+//    }
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
-    if(video.IsRecording()) {
-      pangolin::glRecordGraphic(pangolin::DisplayBase().v.w-14.0f,
-          pangolin::DisplayBase().v.h-14.0f, 7.0f);
-    }
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
