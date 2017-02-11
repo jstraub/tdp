@@ -69,7 +69,7 @@
 
 //#include "planeHelpers.h"
 //#include "icpHelper.h"
-//#include "visHelper.h"
+#include "visHelper.h"
 
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
@@ -790,10 +790,6 @@ int main( int argc, char* argv[] )
 //  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
 //  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_i;
-  tdp::ManagedHostImage<tdp::Vector3bda> rgb_i;
-  tdp::ManagedHostImage<tdp::Vector3fda> n_i;
-
   pangolin::Var<bool> record("ui.record",false,true);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
@@ -880,8 +876,6 @@ int main( int argc, char* argv[] )
   rgb_w.Fill(tdp::Vector3bda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_c(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_c(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
   nn.Fill(tdp::Vector5ida::Ones()*-1);
@@ -1165,8 +1159,8 @@ int main( int argc, char* argv[] )
       for (size_t it = 0; it < maxIt; ++it) {
           mask.Fill(0);
           assoc.clear();
-          pc_c.MarkRead();
-          n_c.MarkRead();
+//          pc_c.MarkRead();
+//          n_c.MarkRead();
           indK = std::vector<size_t>(dpvmf.GetK(),0);
           numProjected = 0;
 
@@ -1223,9 +1217,7 @@ int main( int argc, char* argv[] )
             pl.numObs_ ++;
             numInl ++;
             mask(u,v) ++;
-            assoc.emplace_back(i,pc_c.SizeToRead());
-            pc_c.Insert(pc(u,v));
-            n_c.Insert(n(u,v));
+            assoc.emplace_back(i,u+v*pc.w_);
             break;
           }
 
@@ -1305,11 +1297,13 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
         for (const auto& ass : assoc) {
-          tdp::Vector3fda pc_c_in_w = T_wc*pc_c.GetCircular(ass.second);
-          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n_c.GetCircular(ass.second);
-          pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
-          n_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).n_;
-          pc_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).p_;
+          int32_t u = ass.second%pc.w_;
+          int32_t v = ass.second/pc.w_;
+          tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+          tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
+          pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
+          n_w[ass.first] =  pl_w[ass.first].n_;
+          pc_w[ass.first] = pl_w[ass.first].p_;
         }
         TOCK("update planes");
       }
@@ -1318,7 +1312,7 @@ int main( int argc, char* argv[] )
     if (runLoopClosureGeom && dpvmf.GetK()>2) {
       tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
       for (const auto& ass : assoc) {
-        dpvmfCur.addObservation(n_c.GetCircular(ass.second));
+        dpvmfCur.addObservation(n(ass.second%pc.w_,ass.second/pc.w_));
       }
       dpvmfCur.iterateToConvergence(100, 1e-6);
       if (dpvmfCur.GetK() > 2) {
@@ -1470,21 +1464,17 @@ int main( int argc, char* argv[] )
       }
 
       if (showNormals) {
-        glColor4f(1,0,0.,0.5);
-        pangolin::glSetFrameOfReference(T_wc.matrix());
-        for (size_t i=0; i<n_i.Area(); ++i) {
-          tdp::glDrawLine(pc_i[i], pc_i[i] + scale*n_i[i]);
-        }
-        for (size_t i=0; i<n_c.SizeToRead(); ++i) {
-          tdp::glDrawLine(pc_c.GetCircular(i), 
-              pc_c.GetCircular(i) + scale*n_c.GetCircular(i));
-        }
+        std::cout << "render normals local" << std::endl;
+        tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
+        std::cout << "render normals global " << n_w.SizeToRead() << std::endl;
+//        tdp::ShowGlobalNormals(pc_w, n_w, scale, step);
         pangolin::glUnsetFrameOfReference();
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
         }
+        std::cout << "render normals done" << std::endl;
       }
 
       // render current camera second in the propper frame of
@@ -1513,8 +1503,8 @@ int main( int argc, char* argv[] )
       pangolin::glDrawAxis(0.3f);
       glColor4f(1,0,0,1.);
       for (const auto& ass : assoc) {
-        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
-        tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
+        tdp::Vector3fda pc_c_in_m = T_wc*pc(ass.second%pc.w_,ass.second/pc.w_);
+        tdp::glDrawLine(pl_w[ass.first].p_, pc_c_in_m);
       }
     }
 
@@ -1530,14 +1520,6 @@ int main( int argc, char* argv[] )
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
       }
-      glColor4f(0,1,0,1.);
-      tdp::SE3f R_wc(T_wc.rotation());
-      pangolin::glSetFrameOfReference(R_wc.matrix());
-      vbo.Reinitialise(pangolin::GlArrayBuffer, n_i.Area(), GL_FLOAT,
-          3, GL_DYNAMIC_DRAW);
-      vbo.Upload(n_i.ptr_, n_i.SizeBytes(), 0);
-      pangolin::RenderVbo(vbo);
-      pangolin::glUnsetFrameOfReference();
     }
 
     TOCK("Draw 3D");
