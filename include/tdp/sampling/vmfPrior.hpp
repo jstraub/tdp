@@ -43,6 +43,12 @@ class vMFprior {
     return vMF<T,3>(mu, tau);
   }
 
+  vMF<T,3> MAP() {
+    Eigen::Matrix<T,3,1> xSum=b_*m0_;
+    float tau = MLEstimateTau<float,3>(xSum, m0_, a_);
+    return vMF<T,3>(m0_, tau);
+  }
+
   vMFprior<T> posterior(const Eigen::Matrix<T,3,1>& xSum, const T count) const {
     T aN = a_+count;
     Eigen::Matrix<T,3,1> muN = xSum + b_*m0_;

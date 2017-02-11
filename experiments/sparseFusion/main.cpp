@@ -352,9 +352,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
-  pangolin::Var<bool> showSamples("ui.show Samples",true,true);
+  pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
-  pangolin::Var<bool> showNN("ui.show NN",true,true);
+  pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",10,0,100);
 
@@ -414,11 +414,12 @@ int main( int argc, char* argv[] )
 
   mask.Fill(0);
 
-  tdp::ThreadedValue<bool> runTopologyThread(true);
-  tdp::ThreadedValue<bool> runSampling(true);
+  tdp::ThreadedValue<bool> runTopologyThread(false);
+  tdp::ThreadedValue<bool> runSampling(false);
 
   std::mutex pl_wLock;
   std::mutex nnLock;
+  std::mutex nnVisLock;
   std::mutex mapLock;
   std::mutex dpvmfLock;
   std::thread topology([&]() {
@@ -436,22 +437,25 @@ int main( int argc, char* argv[] )
       }
       if (sizeToRead > 0) {
         values.fill(std::numeric_limits<float>::max());
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Plane& pl = pl_w[iReadNext];
         tdp::Vector5ida& ids = nn[iReadNext];
         ids = tdp::Vector5ida::Ones()*(-1);
         for (size_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
-            float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
+            float dist = (pl.p_-pl_w[i].p_).squaredNorm();
             tdp::AddToSortedIndexList(ids, values, i, dist);
           }
         }
         // just for visualization
-        if (mapNN.size() < 5*iReadNext) {
-          for (int i=0; i<5; ++i) 
-            mapNN.emplace_back(iReadNext, ids[i]);
-        } else {
-          for (int i=0; i<5; ++i) 
-            mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+        {
+          std::lock_guard<std::mutex> lock(nnVisLock);
+          if (mapNN.size() < 5*iReadNext) {
+            for (int i=0; i<5; ++i) 
+              mapNN.emplace_back(iReadNext, ids[i]);
+          } else {
+            for (int i=0; i<5; ++i) 
+              mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+          }
         }
         iReadNext = (iReadNext+1)%sizeToRead;
         {
@@ -465,9 +469,9 @@ int main( int argc, char* argv[] )
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
-  float logAlpha = log(100.);
+  float logAlpha = log(1000.);
   float lambdaMRF = 0.1;
-  float tauO = 1.;
+  float tauO = 100.;
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
@@ -503,9 +507,9 @@ int main( int argc, char* argv[] )
       vmfSS.Fill(tdp::Vector4fda::Zero());
       for (int32_t iReadNext = 0; iReadNext!=iInsert;
         iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector3fda& ni = nS.GetCircular(iReadNext);
-        uint32_t& zi = zS.GetCircular(iReadNext);
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Plane& pl = pl_w[iReadNext];
         Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
         if (zi < K) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
@@ -521,9 +525,9 @@ int main( int argc, char* argv[] )
         Eigen::VectorXf logPdfs(K+1);
         Eigen::VectorXf pdfs(K+1);
 
-        tdp::Vector3fda& ni = nS.GetCircular(iReadNext);
-        uint32_t& zi = zS.GetCircular(iReadNext);
-        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
 
         Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
         for (int i=0; i<5; ++i) {
@@ -582,14 +586,14 @@ int main( int argc, char* argv[] )
       // sample points
       for (int32_t iReadNext = 0; iReadNext!=iInsert;
         iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector3fda& pi = pS.GetCircular(iReadNext);
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
+        tdp::Vector3fda& pi = pS[iReadNext];
+        tdp::Plane& pl = pl_w[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
 
         Eigen::Matrix3f SigmaPl;
-        Eigen::Matrix3f Info =  InfoO;
+        Eigen::Matrix3f Info =  InfoO*pl.N_;
 //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-        Eigen::Vector3f xi = InfoO*pl.p_*pl.w_;
+        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
         for (int i=0; i<5; ++i) {
           if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
             SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
@@ -598,7 +602,7 @@ int main( int argc, char* argv[] )
           }
         }
         Eigen::Matrix3f Sigma = Info.inverse();
-        Eigen::Vector3f mu = Sigma*xi;
+        Eigen::Vector3f mu = Info.ldlt().solve(xi);
 //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
         pi = Normal<float,3>(mu, Sigma).sample(rnd);
       }
@@ -672,10 +676,10 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           tdp::Plane& pl = pl_w[i];
-          if (pl.curvature_ > curvThr) {
-            pl.z_ = 0xFFFF; // mark high curvature cluster as outlier
-            numNonPlanar ++;
-          }
+//          if (pl.curvature_ > curvThr) {
+//            pl.z_ = 0xFFFF; // mark high curvature cluster as outlier
+//            numNonPlanar ++;
+//          }
           dpvmf.addObservation(&pl.n_, &pl.z_);
           int32_t kMax = -1;
           uint32_t nMax = 0;
@@ -691,10 +695,10 @@ int main( int argc, char* argv[] )
           }
         }
       }
-//      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-      vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
-          pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
-          iReadCurW*sizeof(tdp::Vector3fda));
+      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+//      vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
+//          pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
+//          iReadCurW*sizeof(tdp::Vector3fda));
 
       id_w.resize(pl_w.SizeToRead());
       std::iota(id_w.begin(), id_w.end(), 0);
@@ -895,9 +899,9 @@ int main( int argc, char* argv[] )
           int32_t v = ass.second/w;
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
-          pl_w.GetCircular(ass.first).AddObs(pc_c_in_w, n_c_in_w);
-          n_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).n_;
-          pc_w.GetCircular(ass.first) = pl_w.GetCircular(ass.first).p_;
+          pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
+          n_w[ass.first] =  pl_w[ass.first].n_;
+          pc_w[ass.first] = pl_w[ass.first].p_;
         }
         TOCK("update planes");
       }
@@ -956,7 +960,11 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
-      std::cout << "uploading pc" << std::endl;
+      std::cout << "uploading pc "  << pS.SizeBytes() 
+        << " "   << nS.SizeBytes() 
+        << " "   << pc_w.SizeBytes() 
+        << " "   << n_w.SizeBytes() 
+        << std::endl;
       if (showSamples) {
         vbo_w.Upload(pS.ptr_, pS.SizeBytes(), 0);
         nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
@@ -978,13 +986,13 @@ int main( int argc, char* argv[] )
           age.Reinitialise(pl_w.SizeToRead());
           if (showAge) {
             for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w.GetCircular(i).lastFrame_;
+              age[i] = pl_w[i].lastFrame_;
           } else if (showObs) {
             for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w.GetCircular(i).numObs_;
+              age[i] = pl_w[i].numObs_;
           } else {
             for (size_t i=0; i<age.Area(); ++i) 
-              age[i] = pl_w.GetCircular(i).curvature_;
+              age[i] = pl_w[i].curvature_;
           }
           valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),
               GL_FLOAT, 1, GL_DYNAMIC_DRAW);
@@ -994,19 +1002,25 @@ int main( int argc, char* argv[] )
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
               minMaxAge.second, P, MV);
         } else if (showSurfels) {
-          std::cout << "rbo upload " << std::endl;
+          std::cout << "rbo upload " << rs.SizeBytes() << std::endl;
           rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
           std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
+          std::cout << "rendered surfels" << std::endl;
         } else {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
         if (showNN) {
+          std::cout << "render NN" << std::endl;
           glColor4f(0.3,0.3,0.3,0.3);
-          for (auto& ass : mapNN) {
-            if (ass.second >= 0)
-              tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
+          {
+            std::lock_guard<std::mutex> lock(nnVisLock);
+            for (auto& ass : mapNN) {
+              if (ass.second >= 0)
+                tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
+            }
           }
+          std::cout << "rendered NN" << std::endl;
         }
         if (showLoopClose) {
         }
@@ -1025,7 +1039,7 @@ int main( int argc, char* argv[] )
 
       if (showPlanes) {
         for (size_t i=iReadCurW; i != pl_w.iInsert_; i=(i+1)%pl_w.w_) {
-          tdp::SE3f T = pl_w.GetCircular(i).LocalCosy();
+          tdp::SE3f T = pl_w[i].LocalCosy();
           pangolin::glDrawAxis(T.matrix(),0.05f);
         }
       }
@@ -1058,7 +1072,7 @@ int main( int argc, char* argv[] )
       for (const auto& ass : assoc) {
 //        tdp::Vector3fda pc_c_in_m = T_wc*pc_c.GetCircular(ass.second);
         tdp::Vector3fda pc_c_in_m = T_wc*pc(ass.second%w,ass.second/w);
-        tdp::glDrawLine(pl_w.GetCircular(ass.first).p_, pc_c_in_m);
+        tdp::glDrawLine(pl_w[ass.first].p_, pc_c_in_m);
       }
     }
 

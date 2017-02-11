@@ -30,6 +30,7 @@ struct Plane {
   uint32_t numObs_;
 
   float w_; // weight
+  float N_; // number of Obs
   float r_; // radius
 
   void AddObs(const Vector3fda& p, const Vector3fda& n);

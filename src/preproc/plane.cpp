@@ -8,7 +8,9 @@ void Plane::AddObs(const Vector3fda& p, const Vector3fda& n) {
   float dw = wNew-w_; 
   n_ = (n_*w_ + n).normalized();
   p_ += n.dot(p-p_)/wNew * n;
+//  p_ = (p_*N_ + p)/(N_+1);
   w_ = std::min(100.f, wNew);
+  N_ = std::min(100.f, N_+1);
 }
 
 void Plane::AddObs(const Vector3fda& p, const Vector3fda& n, 
