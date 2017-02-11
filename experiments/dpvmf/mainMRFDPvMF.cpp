@@ -18,6 +18,7 @@ int main() {
   vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 10);
   vMF<float,3> vmfC(Eigen::Vector3f(1,0,0), 10);
   vMF<float,3> vmfD(Eigen::Vector3f(-1,0,0),100);
+  vMF<float,3> vmfO(Eigen::Vector3f(1,0,0),0);
 
   size_t N=30;
   std::vector<std::vector<Eigen::Vector3f>> x;
@@ -32,6 +33,8 @@ int main() {
         x[i].push_back(vmfC.sample(rnd));
       if (i<N/2 && j>=N/2) 
         x[i].push_back(vmfD.sample(rnd));
+      if (N/3 < i && i< 2*N/3 && N/3 < j && j < 2*N/3)
+        x[i].back() = vmfO.sample(rnd);
     }
   }
   std::cout << "have " << x.size() << " input data" << std::endl;
@@ -47,7 +50,7 @@ int main() {
   std::vector<vMF<float,3>> vmfs;
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
   float logAlpha = log(10.);
-  float lambda = 0.1;
+  float lambda = 1.;
 
   vmfs.push_back(base.sample(rnd));
   for (size_t it=0; it<10000; ++it) {
