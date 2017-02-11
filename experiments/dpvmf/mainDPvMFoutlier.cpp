@@ -54,7 +54,7 @@ int main() {
   std::vector<uint32_t> z(x.size(),0);
   std::vector<vMF<float,3>> vmfs;
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
-  float logAlpha = log(10.);
+  float logAlpha = log(1000.);
 
   vmfs.push_back(vMF<float,3>(Eigen::Vector3f(0,0,1),0.));
 //  vmfs.push_back(base.sample(rnd));

@@ -39,7 +39,7 @@ int main() {
   vMF<float,3> vmfO(Eigen::Vector3f(-1,0,0),0);
 
   std::vector<Eigen::Vector3f> x;
-  for (size_t i=0; i<1000; ++i) {
+  for (size_t i=0; i<100; ++i) {
     x.push_back(vmfA.sample(rnd));
     x.push_back(vmfB.sample(rnd));
     x.push_back(vmfC.sample(rnd));
@@ -54,7 +54,7 @@ int main() {
   std::vector<uint32_t> z(x.size(),0);
   std::vector<vMF<float,3>> vmfs;
   vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
-  float logAlpha = log(100.);
+  float logAlpha = log(10.);
 
   vmfs.push_back(base.sample(rnd));
   for (size_t it=0; it<10000; ++it) {
@@ -77,7 +77,9 @@ int main() {
       pdfs = logPdfs.array().exp();
       size_t zPrev = z[i];
       z[i] = sampleDisc(pdfs, rnd);
-//      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+//      if (i%5 == 0) {
+//        std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+//      }
       if (z[i] == K) {
         vmfs.push_back(base.posterior(x[i],1).sample(rnd));
         counts.push_back(0);
