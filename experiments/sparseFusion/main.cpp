@@ -965,9 +965,9 @@ int main( int argc, char* argv[] )
         iReadNext = (iReadNext+1)%sizeToRead;
         {
           std::lock_guard<std::mutex> lock(nnLock); 
-          mapObsDot.iInsert_ = iReadNext;
-          mapObsP2Pl.iInsert_ = iReadNext;
-          nn.iInsert_ = iReadNext;
+//          mapObsDot.iInsert_ = std::max(iReadNext;
+//          mapObsP2Pl.iInsert_ = std::max(iReadNext;
+          nn.iInsert_ = std::max(iReadNext, nn.iInsert_);
         }
       }
     };
@@ -987,6 +987,7 @@ int main( int argc, char* argv[] )
         iInsert = nn.iInsert_;
       }
       // compute gradient
+      size_t numGrads = 0;
       for (int32_t iReadNext = 0; iReadNext!=iInsert;
         iReadNext=(iReadNext+1)%nn.w_) {
         tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
@@ -1007,9 +1008,11 @@ int main( int argc, char* argv[] )
 //            }
             Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i]/mapObsNum[iReadNext][i])*pl.n_;
             Jp += -2.*(pc0_w[iReadNext] - pl.p_);
+            numGrads++;
           }
         }
       }
+      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
       for (int32_t iReadNext = 0; iReadNext!=iInsert;
         iReadNext=(iReadNext+1)%nn.w_) {
