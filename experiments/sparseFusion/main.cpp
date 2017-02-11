@@ -741,7 +741,7 @@ int main( int argc, char* argv[] )
     pc.CopyFrom(pcs_c.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
-    cuRgb.CopyFrom(rgb);
+//    cuRgb.CopyFrom(rgb);
 //    if (gui.verbose) std::cout << "compute grey" << std::endl;
 //    tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
 //    cuGreyFlSmooth.CopyFrom(cuGreyFl);
