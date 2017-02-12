@@ -842,17 +842,26 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",false,true);
-  pangolin::Var<bool> warmStartICP("ui.warmstart ICP",false,true);
+
+  pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
+  pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
+  pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",false,true);
+  pangolin::Var<bool> doRegAbsN("ui.reg abs n",false,true);
+  pangolin::Var<bool> doRegRelPlZ("ui.reg rel Pl",false,true);
+  pangolin::Var<bool> doRegRelNZ("ui.reg rel N",false,true);
+  pangolin::Var<bool> doRegRelPlObs("ui.reg rel PlObs",false,true);
+  pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
+  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
+  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
+
+  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
+  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
   pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
-  pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
-  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
-  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",.00,0.01,1.);
-  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
-  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
+
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
@@ -921,6 +930,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
   mapObsNum.Fill(tdp::Vector5fda::Zero());
 
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> numSum_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
@@ -1029,48 +1041,68 @@ int main( int argc, char* argv[] )
       }
       // compute gradient
       size_t numGrads = 0;
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector5ida& ids = nn.GetCircular(iReadNext);
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector3fda& Jn = Jn_w[iReadNext];
-        tdp::Vector3fda& Jp = Jp_w[iReadNext];
-        if (lambdaRegDir > 0) {
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        tdp::Vector5ida& ids = nn.GetCircular(i);
+        tdp::Plane& pl = pl_w.GetCircular(i);
+        tdp::Vector3fda& Jn = Jn_w[i];
+        tdp::Vector3fda& Jp = Jp_w[i];
+        Jn = tdp::Vector3fda::Zero();
+        Jp = tdp::Vector3fda::Zero();
+        if (doRegvMF && lambdaRegDir > 0) {
           dpvmfLock.lock();
           Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
           dpvmfLock.unlock();
-        } else {
-          Jn = tdp::Vector3fda::Zero();
         }
-        Jp = -2.*(pc0_w[iReadNext] - pl.p_);
-        for (int i=0; i<5; ++i) {
-          if (ids[i] > -1 && mapObsNum[iReadNext](i) > 0.) {
-            const tdp::Plane& plO = pl_w[ids[i]];
-            Jn +=  mapObsNum[iReadNext](i)*2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext](i)/mapObsNum[iReadNext](i))*plO.n_;
-            Jn +=  mapObsNum[iReadNext](i)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext](i)/mapObsNum[iReadNext](i))*(plO.p_-pl.p_);
-            if (pl.z_ == plO.z_) {
-              Jn +=  2.*lambdaRegPl*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
-              Jp += -2.*lambdaRegPl*(pl.p2plDist(plO.p_))*pl.n_;
+        if (doRegPc0) {
+          Jp += -2.*(pc0_w[i] - pl.p_);
+        }
+        if (doRegAbsPc) {
+          Jp += 2*(numSum_w[i]*pl.p_ - pcSum_w[i]);
+        }
+        if (doRegAbsN) {
+          Jn += 2*(numSum_w[i]*pl.p_ - nSum_w[i]);
+        }
+        for (int j=0; j<5; ++j) {
+          if (ids[j] > -1){
+            const tdp::Plane& plO = pl_w[ids[j]];
+            if (doRegRelPlZ) {
+              if (pl.z_ == plO.z_) {
+                Jn +=  2.*lambdaRegPl*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
+                Jp += -2.*lambdaRegPl*(pl.p2plDist(plO.p_))*pl.n_;
+              }
             }
-            Jp += -mapObsNum[iReadNext](i)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext](i)/mapObsNum[iReadNext](i))*pl.n_;
-            numGrads++;
+            if (doRegRelNZ) {
+              if (pl.z_ == plO.z_) {
+                Jn +=  2.*lambdaRegPl*(pl.n_ - plO.n_);
+              }
+            }
+            if (mapObsNum[i](j) > 0.) {
+              if (doRegRelNObs) {
+                Jn += mapObsNum[i](j)*2.*(pl.n_.dot(plO.n_)-mapObsDot[i](j)/mapObsNum[i](j))*plO.n_;
+              }
+              if (doRegRelPlObs) {
+                Jn += mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*(plO.p_-pl.p_);
+                Jp += -mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*pl.n_;
+              }
+              numGrads++;
+            }
           }
         }
       }
       std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector3fda& Jn = Jn_w[iReadNext];
-        tdp::Vector3fda& Jp = Jp_w[iReadNext];
+      for (int32_t i = 0; i!=iInsert;
+        i=(i+1)%nn.w_) {
+        tdp::Plane& pl = pl_w.GetCircular(i);
+        tdp::Vector3fda& Jn = Jn_w[i];
+        tdp::Vector3fda& Jp = Jp_w[i];
         std::lock_guard<std::mutex> mapGuard(mapLock);
         pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
         pl.p_ -= alphaGrad * Jp;
-        pc_w[iReadNext] = pl.p_;
-        n_w[iReadNext] = pl.n_;
+        pc_w[i] = pl.p_;
+        n_w[i] = pl.n_;
       }
-//      std::cout << "map updated " << iReadNext << " " 
+//      std::cout << "map updated " << i << " " 
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
     }
@@ -1348,7 +1380,11 @@ int main( int argc, char* argv[] )
             pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
             n_w[ass.first] =  pl_w[ass.first].n_;
             pc_w[ass.first] = pl_w[ass.first].p_;
-          }
+          } 
+          float w = numSum_w[ass.first];
+          pcSum_w[ass.first] += pc_c_in_w;
+          nSum_w[ass.first] += n_c_in_w;
+          numSum_w[ass.first] ++;
           for (size_t i=0; i<5; ++ i) {
             for (const auto& assB : assoc) {
               if (assB.first == nn[ass.first](i)){
