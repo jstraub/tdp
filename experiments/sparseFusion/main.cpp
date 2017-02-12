@@ -74,7 +74,11 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+#define kNN 5
+
 namespace tdp {
+
+typedef Eigen::Matrix<float,kNN,1> VectorkNNf;
 
 bool ExtractClosestBrief(
     const Image<Vector3fda>& pc, 
@@ -561,50 +565,82 @@ bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
   return false;
 }
 
-
-void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
+template<int D>
+void AddToSortedIndexList(Eigen::Matrix<int32_t,D,1,Eigen::DontAlign>& ids, 
+    Eigen::Matrix<float,D,1,Eigen::DontAlign>&
     values, int32_t id, float value) {
-  for(int i=4; i>=0; --i) {
+  for(int i=D-1; i>=0; --i) {
     if (value > values[i]) {
-      if (i == 3) { 
-        values[4] = value; 
-        ids[4] = id;
-      } else if (i == 2) {
-        values[4] = values[3];
-        values[3] = value; 
-        ids[4] = ids[3];
-        ids[3] = id; 
-      } else if (i == 1) {
-        values[4] = values[3];
-        values[3] = values[2];
-        values[2] = value; 
-        ids[4] = ids[3];
-        ids[3] = ids[2];
-        ids[2] = id; 
-      } else if (i == 0) {
-        values[4] = values[3];
-        values[3] = values[2];
-        values[2] = values[1];
-        values[1] = value; 
-        ids[4] = ids[3];
-        ids[3] = ids[2];
-        ids[2] = ids[1];
-        ids[1] = id; 
+//      if (i == D-2) { 
+//        values[D-1] = value; 
+//        ids[D-1] = id;
+//      } else if (i < D-2) {
+      if (i < D-1) {
+        for (size_t j=D-1; j>i+1; --j) {
+          values(j) = values(j-1);
+          ids(j) = ids(j-1);
+        }
+        values(i+1) = value;
+        ids(i+1) = id;
+//      }
       }
       return;
     }
   }
-  values[4] = values[3];
-  values[3] = values[2];
-  values[2] = values[1];
-  values[1] = values[0];
-  values[0] = value; 
-  ids[4] = ids[3];
-  ids[3] = ids[2];
-  ids[2] = ids[1];
-  ids[1] = ids[0];
-  ids[0] = id; 
+//  std::cout << value << " " << values.transpose() << std::endl;
+  for (size_t j=D-1; j>0; --j) {
+    values(j) = values(j-1);
+    ids(j) = ids(j-1);
+  }
+  values(0) = value;
+  ids(0) = id;
+//        values.bottomRows(D-1) = values.middleRows(i+1,D-1);
+//        ids.bottomRows(D-i-2) = ids.middleRows(i+1,D-i-2);
 }
+
+//void AddToSortedIndexList(tdp::Vector5ida& ids, tdp::Vector5fda&
+//    values, int32_t id, float value) {
+//  for(int i=4; i>=0; --i) {
+//    if (value > values[i]) {
+//      if (i == 3) { 
+//        values[4] = value; 
+//        ids[4] = id;
+//      } else if (i == 2) {
+//        values[4] = values[3];
+//        values[3] = value; 
+//        ids[4] = ids[3];
+//        ids[3] = id; 
+//      } else if (i == 1) {
+//        values[4] = values[3];
+//        values[3] = values[2];
+//        values[2] = value; 
+//        ids[4] = ids[3];
+//        ids[3] = ids[2];
+//        ids[2] = id; 
+//      } else if (i == 0) {
+//        values[4] = values[3];
+//        values[3] = values[2];
+//        values[2] = values[1];
+//        values[1] = value; 
+//        ids[4] = ids[3];
+//        ids[3] = ids[2];
+//        ids[2] = ids[1];
+//        ids[1] = id; 
+//      }
+//      return;
+//    }
+//  }
+//  values[4] = values[3];
+//  values[3] = values[2];
+//  values[2] = values[1];
+//  values[1] = values[0];
+//  values[0] = value; 
+//  ids[4] = ids[3];
+//  ids[3] = ids[2];
+//  ids[2] = ids[1];
+//  ids[1] = ids[0];
+//  ids[0] = id; 
+//}
 
 }    
 
@@ -813,8 +849,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> incrementalAssign("ui.inc assign ICP",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
-  pangolin::Var<float> lambdaReg("ui.lamb Map Reg",.00,0.01,1.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.01,0.0,1.);
+  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",.00,0.01,1.);
+  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -882,6 +919,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsNum(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
+  mapObsNum.Fill(tdp::Vector5fda::Zero());
+
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
@@ -939,7 +978,8 @@ int main( int argc, char* argv[] )
         for (size_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
             float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
-            tdp::AddToSortedIndexList(ids, values, i, dist);
+            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
+//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
         // for map constraints
@@ -952,6 +992,7 @@ int main( int argc, char* argv[] )
             mapObsDot[iReadNext][i] = 0.;
             mapObsP2Pl[iReadNext][i] = 0.;
             mapObsNum[iReadNext][i] = 0.;
+//            std::cout << "resetting " << iReadNext << " " << i << std::endl;
           }
         }
         // just for visualization
@@ -994,20 +1035,24 @@ int main( int argc, char* argv[] )
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         tdp::Vector3fda& Jn = Jn_w[iReadNext];
         tdp::Vector3fda& Jp = Jp_w[iReadNext];
-        Jn = tdp::Vector3fda::Zero();
-        Jp = tdp::Vector3fda::Zero();
+        if (lambdaRegDir > 0) {
+          dpvmfLock.lock();
+          Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
+          dpvmfLock.unlock();
+        } else {
+          Jn = tdp::Vector3fda::Zero();
+        }
+        Jp = -2.*(pc0_w[iReadNext] - pl.p_);
         for (int i=0; i<5; ++i) {
           if (ids[i] > -1 && mapObsNum[iReadNext](i) > 0.) {
             const tdp::Plane& plO = pl_w[ids[i]];
-            Jn +=  2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext][i]/mapObsNum[iReadNext][i])*plO.n_;
-            Jn +=  2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i]/mapObsNum[iReadNext][i])*(plO.p_-pl.p_);
-//            if (pl.curvature_ < curvThr) {
-            dpvmfLock.lock();
-            Jn += -lambdaReg*dpvmf.GetCenter(pl.z_);
-            dpvmfLock.unlock();
-//            }
-            Jp += -2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext][i]/mapObsNum[iReadNext][i])*pl.n_;
-            Jp += -2.*(pc0_w[iReadNext] - pl.p_);
+            Jn +=  mapObsNum[iReadNext](i)*2.*(pl.n_.dot(plO.n_)-mapObsDot[iReadNext](i)/mapObsNum[iReadNext](i))*plO.n_;
+            Jn +=  mapObsNum[iReadNext](i)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext](i)/mapObsNum[iReadNext](i))*(plO.p_-pl.p_);
+            if (pl.z_ == plO.z_) {
+              Jn +=  2.*lambdaRegPl*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
+              Jp += -2.*lambdaRegPl*(pl.p2plDist(plO.p_))*pl.n_;
+            }
+            Jp += -mapObsNum[iReadNext](i)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[iReadNext](i)/mapObsNum[iReadNext](i))*pl.n_;
             numGrads++;
           }
         }
@@ -1309,13 +1354,17 @@ int main( int argc, char* argv[] )
               if (assB.first == nn[ass.first](i)){
                 int32_t uB = assB.second%pc.w_;
                 int32_t vB = assB.second/pc.w_;
-                mapObsNum[ass.first](i) ++;
-                mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
-                mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
-                std::cout << "found NN " << i << " of " << ass.first 
-                  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
-                  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
-                  << " " << mapObsNum[ass.first](i) << std::endl;
+//                mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
+//                mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
+//                mapObsNum[ass.first](i) ++;
+                float w = mapObsNum[ass.first](i);
+                mapObsP2Pl[ass.first](i) = (w*mapObsP2Pl[ass.first](i) + n(u,v).dot(pc(uB,vB)-pc(u,v)))/(w+1.);
+                mapObsDot[ass.first](i) = (mapObsDot[ass.first](i)*w + n(u,v).dot(n(uB,vB)))/(w+1.);
+                mapObsNum[ass.first](i) = std::min(100.f,w+1.f) ;
+//                std::cout << "found NN " << i << " of " << ass.first 
+//                  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
+//                  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
+//                  << " " << mapObsNum[ass.first](i) << std::endl;
                 numNN++;
                 break;
               }
