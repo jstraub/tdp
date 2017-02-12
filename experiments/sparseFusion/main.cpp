@@ -841,7 +841,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
-  pangolin::Var<bool> updateMap("ui.update map",false,true);
+  pangolin::Var<bool> updateMap("ui.update map",true,true);
 
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
   pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
@@ -932,7 +932,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> numSum_w(1000000);
+  tdp::ManagedHostCircularBuffer<float> numSum_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
@@ -1060,7 +1060,7 @@ int main( int argc, char* argv[] )
           Jp += 2*(numSum_w[i]*pl.p_ - pcSum_w[i]);
         }
         if (doRegAbsN) {
-          Jn += 2*(numSum_w[i]*pl.p_ - nSum_w[i]);
+          Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
         }
         for (int j=0; j<5; ++j) {
           if (ids[j] > -1){
@@ -1371,9 +1371,19 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
         size_t numNN = 0;
+//        tdp::SE3f T_cw = T_wc.Inverse();
         for (const auto& ass : assoc) {
+
           int32_t u = ass.second%pc.w_;
           int32_t v = ass.second/pc.w_;
+//          int32_t uRe = ass.second%pc.w_;
+//          int32_t vRe = ass.second/pc.w_;
+//          tdp::Plane& pl = pl_w[ass.first];
+//          if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+//                W, dpc, n, curv, uRe,vRe ))
+//            continue;
+//          std::cout << u << " " << v << " redone: " << u << " " << v << std::endl;
+
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
           if (!updateMap) {
