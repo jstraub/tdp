@@ -15,11 +15,11 @@ int main() {
 
   std::mt19937 rnd(1);
 
-  vMF<float,3> vmfA(Eigen::Vector3f(1,0,0), 100);
-  vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 100);
+  vMF<float,3> vmfA(Eigen::Vector3f(1,0,0), 500);
+  vMF<float,3> vmfB(Eigen::Vector3f(cos(5*M_PI/180.),sin(5*M_PI/180.),0), 500);
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Normal<float,3> gaussO(SigmaO);
-  float tauO = 100.;
+  float tauO = 500.;
 
   size_t N=100;
   std::vector<std::vector<Eigen::Vector3f>> n; // normals
@@ -59,9 +59,9 @@ int main() {
     }
   std::vector<float> counts(1, n.size()*n.size());
   std::vector<vMF<float,3>> vmfs;
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.0);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), .1, 0.0);
   float logAlpha = log(10.);
-  float lambda = 0.1;
+  float lambda = .10;
 
   vmfs.push_back(base.sample(rnd));
   for (size_t it=0; it<10000; ++it) {
@@ -73,15 +73,15 @@ int main() {
         Eigen::VectorXf pdfs(K+1);
 
         Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
-        if (i+1<N) neighNs[z[i+1][j]] += 1.f;
-        if (i>=1)  neighNs[z[i-1][j]] += 1.f;
-        if (j+1<N) neighNs[z[i][j+1]] += 1.f;
-        if (j>=1)  neighNs[z[i][j-1]] += 1.f;
+//        if (i+1<N) neighNs[z[i+1][j]] += 1.f;
+//        if (i>=1)  neighNs[z[i-1][j]] += 1.f;
+//        if (j+1<N) neighNs[z[i][j+1]] += 1.f;
+//        if (j>=1)  neighNs[z[i][j-1]] += 1.f;
 
-//        if (i+1<N) neighNs[z[i+1][j]] += n[i+1][j].dot(n[i][j]);
-//        if (i>=1)  neighNs[z[i-1][j]] += n[i-1][j].dot(n[i][j]);
-//        if (j+1<N) neighNs[z[i][j+1]] += n[i][j+1].dot(n[i][j]);
-//        if (j>=1)  neighNs[z[i][j-1]] += n[i][j-1].dot(n[i][j]);
+        if (i+1<N) neighNs[z[i+1][j]] += n[i+1][j].dot(n[i][j]);
+        if (i>=1)  neighNs[z[i-1][j]] += n[i-1][j].dot(n[i][j]);
+        if (j+1<N) neighNs[z[i][j+1]] += n[i][j+1].dot(n[i][j]);
+        if (j>=1)  neighNs[z[i][j-1]] += n[i][j-1].dot(n[i][j]);
 
 //        if (i+1<N) neighNs[z[i+1][j]] += vmfs[z[i+1][j]].mu_.dot(n[i][j]);
 //        if (i>=1)  neighNs[z[i-1][j]] += vmfs[z[i-1][j]].mu_.dot(n[i][j]);
