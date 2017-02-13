@@ -1668,7 +1668,7 @@ int main( int argc, char* argv[] )
           std::pair<float,float> minMaxAge = age.MinMax();
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
-        } else if (showLabels) {
+        } else if (showLabels && frame > 1) {
           labels.Reinitialise(pl_w.SizeToRead());
           for (size_t i=0; i<labels.Area(); ++i) 
             labels[i] = pl_w.GetCircular(i).z_;
