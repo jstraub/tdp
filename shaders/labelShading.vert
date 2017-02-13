@@ -2,28 +2,22 @@
 layout (location = 0) in vec3 pos;
 layout (location = 1) in float value;
 
+uniform sampler2D labels;
 uniform mat4 P;
 uniform mat4 MV;
 
 uniform float minValue;
 uniform float maxValue;
 
-varying vec4 color;
-
-vec3 ColorMapHot(float cVal) {
-  return vec3(
-      cVal<0.20 ? 1.*cVal*5 : 1.,
-      cVal<0.40 ? 0 : cVal < 0.80 ? (cVal-.4)*2.5 : 1.,
-      cVal<0.80 ? 0 : (cVal-0.8)*5 );
-}
+out vec2 uv;
 
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
   if (value==value) {
-    float c = (value-minValue)/(maxValue-minValue);
-    color = vec4(ColorMapHot(c),1.);
+    float c = 10000.*(value-minValue)/(maxValue-minValue);
+    uv = vec2(c%100,c/100);
   } else {
-    color = vec4(0.,0.,0.,0.);
+    uv = vec2(0.,0.);
   }
 }
 

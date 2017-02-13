@@ -22,7 +22,7 @@ Shaders::Shaders() {
   labelShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("labelShading.vert"));
   labelShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
-      shaderRoot+std::string("setColor.frag"));
+      shaderRoot+std::string("labelShading.frag"));
   labelShader_.Link();
 
   // shader to render a point cloud with a value attached to each

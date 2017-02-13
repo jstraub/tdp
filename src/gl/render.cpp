@@ -23,14 +23,18 @@ void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
   const pangolin::OpenGlRenderState& cam,
-  float maxVal
+  float maxVal,
+  float minVal = 0
     ) {
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
   shader.Bind();
+  glEnable(GL_TEXTURE_2D);
+  tdp::Labels::Instance()->Bind();
   shader.SetUniform("P",cam.GetProjectionMatrix());
   shader.SetUniform("MV",cam.GetModelViewMatrix());
-  shader.SetUniform("minValue", 0);
+  shader.SetUniform("minValue", minVal);
   shader.SetUniform("maxValue", maxVal);
+  shader.SetUniform("labels",0);
   labelbo.Bind();
   glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
   vbo.Bind();
@@ -39,6 +43,8 @@ void RenderLabeledVbo(
   glEnableVertexAttribArray(1);                                               
   //pangolin::RenderVbo(nboA);
   glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+  tdp::Labels::Instance()->Unbind();
+  glDisable(GL_TEXTURE_2D);
   shader.Unbind();
   glDisableVertexAttribArray(1);
   labelbo.Unbind();
