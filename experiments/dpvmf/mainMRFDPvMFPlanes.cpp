@@ -59,7 +59,7 @@ int main() {
     }
   std::vector<float> counts(1, n.size()*n.size());
   std::vector<vMF<float,3>> vmfs;
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.0);
   float logAlpha = log(10.);
   float lambda = 0.1;
 
@@ -137,10 +137,10 @@ int main() {
     std::cout << "\ttaus: " ;
     for (size_t k=0; k<K; ++k) if (counts[k] > 0) std::cout << vmfs[k].tau_ << " ";
     std::cout << std::endl;
-    for (size_t k=0; k<K; ++k) 
-      if (counts[k] > 0) {
-        std::cout << vmfs[k].mu_.transpose() << std::endl;
-      }
+//    for (size_t k=0; k<K; ++k) 
+//      if (counts[k] > 0) {
+//        std::cout << vmfs[k].mu_.transpose() << std::endl;
+//      }
 
     // sample ns
     for (size_t k=0; k<K; ++k) 
@@ -152,8 +152,8 @@ int main() {
         xSum[z[i][j]] += n[i][j];
       }
     }
-    std::cout << n[N/4][N/2].transpose() << "\t" << n[(3*N)/4][N/2].transpose() << std::endl;
-    std::cout << xn[N/4][N/2].transpose() << "\t" << xn[(3*N)/4][N/2].transpose() << std::endl;
+//    std::cout << n[N/4][N/2].transpose() << "\t" << n[(3*N)/4][N/2].transpose() << std::endl;
+//    std::cout << xn[N/4][N/2].transpose() << "\t" << xn[(3*N)/4][N/2].transpose() << std::endl;
 
     // sample locations
     for (size_t i=0; i<x.size(); ++i) {
@@ -187,8 +187,8 @@ int main() {
         p[i][j] = Normal<float,3>(mu, Sigma).sample(rnd);
       }
     }
-    std::cout << p[N/4][N/2].transpose() << "\t" << p[(3*N)/4][N/2].transpose() << std::endl;
-    std::cout << x[N/4][N/2].transpose() << "\t" << x[(3*N)/4][N/2].transpose() << std::endl;
+//    std::cout << p[N/4][N/2].transpose() << "\t" << p[(3*N)/4][N/2].transpose() << std::endl;
+//    std::cout << x[N/4][N/2].transpose() << "\t" << x[(3*N)/4][N/2].transpose() << std::endl;
   }
   return 0;
 }
