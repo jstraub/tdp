@@ -21,7 +21,7 @@ int main() {
 //    std::cout << sampleDisc(pdf,rnd) << " ";
 //  }
 //  std::cout << std::endl;
-  vMF<float,3> vmfA(Eigen::Vector3f(0,0,1), 100);
+  vMF<float,3> vmfA(Eigen::Vector3f(0,0,1), 1000);
   {
     Eigen::Vector3f xSum = Eigen::Vector3f::Zero();
     for (size_t i=0; i<1000; ++i) {
@@ -32,15 +32,14 @@ int main() {
       vmfA.tau_ << std::endl;
   }
 
-  vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 100);
+  vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 1000);
   vMF<float,3> vmfC(Eigen::Vector3f(1,0,0), 1000);
 //  vMF<float,3> vmfD(Eigen::Vector3f(-1,0,0),100);
-  vMF<float,3> vmfD(Eigen::Vector3f(cos(15.*M_PI/180.),sin(15.*M_PI/180.),0),1000);
-
+  vMF<float,3> vmfD(Eigen::Vector3f(cos(5.*M_PI/180.),sin(5.*M_PI/180.),0),1000);
   vMF<float,3> vmfO(Eigen::Vector3f(-1,0,0),0);
 
   std::vector<Eigen::Vector3f> x;
-  for (size_t i=0; i<100; ++i) {
+  for (size_t i=0; i<1000; ++i) {
     x.push_back(vmfA.sample(rnd));
     x.push_back(vmfB.sample(rnd));
     x.push_back(vmfC.sample(rnd));
@@ -54,7 +53,7 @@ int main() {
   std::vector<float> counts(1, x.size());
   std::vector<uint32_t> z(x.size(),0);
   std::vector<vMF<float,3>> vmfs;
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), 0.1, 0.);
   float logAlpha = log(10.);
 
   vmfs.push_back(base.sample(rnd));

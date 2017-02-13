@@ -136,7 +136,8 @@ float vMF<float,3>::logPdf(const Eigen::Matrix<float,3,1>& x) const {
   if (tau_ < 1e-9) {
     return -LOG_4PI;
   } else {
-    return 0.5*LOG_PI - 0.5*LOG_2 + tau_*mu_.dot(x) + logxOverSinhX(tau_);
+    return -LOG_2PI + log(tau_) + tau_*(mu_.dot(x)-1.) - log(1.-exp(-2.*tau_));
+//    return 0.5*LOG_PI - 0.5*LOG_2 + tau_*mu_.dot(x) + logxOverSinhX(tau_);
   }
 }
 

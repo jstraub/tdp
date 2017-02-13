@@ -18,11 +18,10 @@ class vMFprior {
 
   T logMarginal(const Eigen::Matrix<T,3,1>& x) const {
     const T bTilde = (x + b_*m0_).norm();
-    // TODO make sure M_PI*0.5 is really what it is and not 2/M_PI
-    const T bOverTan = b_ < 1e-9 ? M_PI*0.5 : b_/tan(M_PI*0.5*b_);  
+    const T bOverTan = b_ < 1e-9 ? 2./M_PI : b_/tan(M_PI*0.5*b_);  
     const T sinc = bTilde < 1e-9 ? 1. : sin(bTilde*M_PI)/(bTilde*M_PI);
     const T sinus = sin(bTilde*0.5*M_PI);
-    return log(bOverTan*0.125*(1.-sinc)/(sinus*sinus));
+    return log(bOverTan*0.125) + log(1.-sinc) - 2*log(sinus);
   }
 
   vMF<T,3> sample(std::mt19937& rnd) {
@@ -70,34 +69,12 @@ class vMFprior {
   T a_;
  private:
 
-
-  T concentrationLogPdf(const T tau, const T dot) const
-  {
-    if (a_ == 1.) {
-      // for a_ == 1 we have closed form pdf that is propperly
-      // normalized
-      return logxOverSinhX(tau) + b_*tau*dot + log(xOverTanPiHalfX(b_))
-        - LOG_2 - 2.*LOG_PI;
-    } else {
-      return -1;
-    }
-  };
-
   T propToConcentrationLogPdf(const T tau, const T dot) const
   {
-    if (a_ == 1.) {
-      // for a_ == 1 we have closed form pdf that is propperly
-      // normalized
-      return logxOverSinhX(tau) + b_*tau*dot + log(xOverTanPiHalfX(b_));
+    if (tau < 1e-16) {
+      return 0.; 
     } else {
-      // this is only for 3D case
-//      return a_*(0.5*LOG_PI-0.5*LOG_2 + logxOverSinhX(tau)) + tau*b_*dot; 
-      //return a_*logxOverSinhX(tau) + tau*b_*dot; 
-      if (tau < 1e-16) {
-        return -a_*LOG_2; 
-      } else {
-        return a_*(log(tau) - log(1.-exp(-2.*tau))) + tau*(b_*dot-a_); 
-      }
+      return a_*(log(tau) + LOG_2 - log(1.-exp(-2.*tau))) + tau*(b_*dot-a_); 
     }
   };
 
@@ -116,7 +93,8 @@ class vMFprior {
     if (tau < 1e-16) {
       return -a_/3.; 
     } else {
-      return -a_/(tau*tau) + (4.*a_*exp(2.*tau)/(1.-2.*exp(2.*tau)+exp(4.*tau)));
+//      return -a_/(tau*tau) + (4.*a_*exp(2.*tau)/(1.-2.*exp(2.*tau)+exp(4.*tau)));
+      return -a_/(tau*tau) + (4.*a_*exp(-2.*tau)/(1.-2.*exp(-2.*tau)+exp(-4.*tau)));
     }
   };
 
