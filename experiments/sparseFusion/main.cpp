@@ -79,7 +79,8 @@ typedef tdp::CameraPoly3f CameraT;
 
 namespace tdp {
 
-typedef Eigen::Matrix<float,kNN,1> VectorkNNf;
+typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
+typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 
 bool ExtractClosestBrief(
     const Image<Vector3fda>& pc, 
@@ -927,12 +928,12 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5ida> nn(1000000);
-  nn.Fill(tdp::Vector5ida::Ones()*-1);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsNum(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsDot(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector5fda> mapObsP2Pl(1000000);
-  mapObsNum.Fill(tdp::Vector5fda::Zero());
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(1000000);
+  nn.Fill(tdp::VectorkNNida::Ones()*-1);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(1000000);
+  mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(1000000);
@@ -979,7 +980,7 @@ int main( int argc, char* argv[] )
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
-    tdp::Vector5fda values;
+    tdp::VectorkNNfda values;
     while(42) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
@@ -990,9 +991,9 @@ int main( int argc, char* argv[] )
       if (sizeToRead > 0) {
         values.fill(std::numeric_limits<float>::max());
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::Vector5ida& ids = nn[iReadNext];
-        tdp::Vector5ida idsPrev = ids;
-        ids = tdp::Vector5ida::Ones()*(-1);
+        tdp::VectorkNNida& ids = nn[iReadNext];
+        tdp::VectorkNNida idsPrev = ids;
+        ids = tdp::VectorkNNida::Ones()*(-1);
         for (size_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
             float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
@@ -1002,7 +1003,7 @@ int main( int argc, char* argv[] )
         }
         // for map constraints
         // TODO: should be updated as pairs are reobserved
-        for (int i=0; i<5; ++i) {
+        for (int i=0; i<kNN; ++i) {
 //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
 //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
 //            mapObsNum[iReadNext][i] = 1;
@@ -1014,12 +1015,12 @@ int main( int argc, char* argv[] )
           }
         }
         // just for visualization
-        if (mapNN.size() < 5*iReadNext) {
-          for (int i=0; i<5; ++i) 
+        if (mapNN.size() < kNN*iReadNext) {
+          for (int i=0; i<kNN; ++i) 
             mapNN.emplace_back(iReadNext, ids[i]);
         } else {
-          for (int i=0; i<5; ++i) 
-            mapNN[iReadNext*5+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+          for (int i=0; i<kNN; ++i) 
+            mapNN[iReadNext*kNN+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
         }
         iReadNext = (iReadNext+1)%sizeToRead;
         {
@@ -1048,7 +1049,7 @@ int main( int argc, char* argv[] )
       // compute gradient
       size_t numGrads = 0;
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        tdp::Vector5ida& ids = nn.GetCircular(i);
+        tdp::VectorkNNida& ids = nn.GetCircular(i);
         tdp::Plane& pl = pl_w.GetCircular(i);
         tdp::Vector3fda& Jn = Jn_w[i];
         tdp::Vector3fda& Jp = Jp_w[i];
@@ -1068,7 +1069,7 @@ int main( int argc, char* argv[] )
         if (doRegAbsN) {
           Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
         }
-        for (int j=0; j<5; ++j) {
+        for (int j=0; j<kNN; ++j) {
           if (ids[j] > -1){
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
@@ -1401,7 +1402,7 @@ int main( int argc, char* argv[] )
           pcSum_w[ass.first] += pc_c_in_w;
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
-          for (size_t i=0; i<5; ++ i) {
+          for (size_t i=0; i<kNN; ++ i) {
             for (const auto& assB : assoc) {
               if (assB.first == nn[ass.first](i)){
                 int32_t uB = assB.second%pc.w_;
@@ -1536,7 +1537,7 @@ int main( int argc, char* argv[] )
         }
         if (showNN) {
 //          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
-//             << mapNN.size()/5 << std::endl;
+//             << mapNN.size()/kNN << std::endl;
           glColor4f(0.3,0.3,0.3,0.3);
           for (auto& ass : mapNN) {
             if (ass.second >= 0)
