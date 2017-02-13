@@ -1110,7 +1110,8 @@ int main( int argc, char* argv[] )
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
 
-  tdp::ManagedHostCircularBuffer<uint32_t> zS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<uint16_t> zCountS(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1137,12 +1138,12 @@ int main( int argc, char* argv[] )
       // sample normals using dpvmf and observations from planes
       size_t K = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-        tdp::Vector3fda& ni = nS[iReadNext];
-        uint32_t& zi = zS[iReadNext];
-        tdp::Plane& pl = pl_w[iReadNext];
-        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        tdp::Vector3fda& ni = nS[i];
+        uint16_t& zi = zS[i];
+//        tdp::Plane& pl = pl_w[i];
+//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+        Eigen::Vector3f mu = numSum_w[i]*nSum_w[i]*tauO;
         if (zi < K) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
         }
@@ -1151,15 +1152,13 @@ int main( int argc, char* argv[] )
         vmfSS[zi](3) ++;
       }
       // sample dpvmf labels
-      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-        iReadNext=(iReadNext+1)%nn.w_) {
-
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         Eigen::VectorXf logPdfs(K+1);
         Eigen::VectorXf pdfs(K+1);
 
-        tdp::Vector3fda& ni = nS[iReadNext];
-        uint32_t& zi = zS[iReadNext];
-        tdp::Vector5ida& ids = nn[iReadNext];
+        tdp::Vector3fda& ni = nS[i];
+        uint16_t& zi = zS[i];
+        tdp::Vector5ida& ids = nn[i];
 
         Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
         for (int i=0; i<5; ++i) {
@@ -1181,7 +1180,7 @@ int main( int argc, char* argv[] )
         logPdfs[K] = logAlpha + base.logMarginal(ni);
         logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
         pdfs = logPdfs.array().exp();
-        size_t zPrev = zi;
+        uint16_t zPrev = zi;
         zi = sampleDisc(pdfs, rnd);
         //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
         if (zi == K) {
@@ -1195,6 +1194,9 @@ int main( int argc, char* argv[] )
           vmfSS[zPrev](3) --;
           vmfSS[zi].topRows<3>() += ni;
           vmfSS[zi](3) ++;
+          zCountS[i] = 1;
+        } else {
+          zCountS[i] ++;
         }
       }
       // sample dpvmf parameters
@@ -1216,11 +1218,11 @@ int main( int argc, char* argv[] )
           std::cout << vmfs[k].tau_ << " ";
       std::cout << std::endl;
 //      // sample points
-//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-//        iReadNext=(iReadNext+1)%nn.w_) {
-//        tdp::Vector3fda& pi = pS[iReadNext];
-//        tdp::Plane& pl = pl_w[iReadNext];
-//        tdp::Vector5ida& ids = nn[iReadNext];
+//      for (int32_t i = 0; i!=iInsert;
+//        i=(i+1)%nn.w_) {
+//        tdp::Vector3fda& pi = pS[i];
+//        tdp::Plane& pl = pl_w[i];
+//        tdp::Vector5ida& ids = nn[i];
 //
 //        Eigen::Matrix3f SigmaPl;
 //        Eigen::Matrix3f Info =  InfoO*pl.N_;
