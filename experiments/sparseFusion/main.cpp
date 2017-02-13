@@ -707,10 +707,7 @@ int main( int argc, char* argv[] )
   } else {
     return 2;
   }
-  CameraT cam(Eigen::Vector4f(517.3, 516.5, 318.6, 255.3));
-  if (rig.rgbStream2cam_.size() > 0) {
-      cam = rig.cams_[rig.rgbStream2cam_[0]];
-  }
+  CameraT cam = rig.cams_[rig.rgbStream2cam_[0]];
 
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
@@ -864,7 +861,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
-  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
+  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
@@ -876,7 +873,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.01,0,0.3);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
