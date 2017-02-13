@@ -1847,7 +1847,8 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   
-    out << pangolin::Time_s(pangolin::TimeNow()) << " "
+    out << pangolin::Time_us(pangolin::TimeNow())/1000000 << "."
+      << pangolin::Time_us(pangolin::TimeNow())%1000000 << " "
       << T_wc.translation()(0) << " "  // tx
       << T_wc.translation()(1) << " "  // ty
       << T_wc.translation()(2) << " "  // tz
