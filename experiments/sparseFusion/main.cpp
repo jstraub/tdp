@@ -76,6 +76,7 @@ typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
 #define kNN 5
+#define MAP_SIZE 1000000
 
 namespace tdp {
 
@@ -894,6 +895,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
   pangolin::Var<bool> showLabels("ui.show labels",false,true);
+  pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",true,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
@@ -913,63 +915,44 @@ int main( int argc, char* argv[] )
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
 
-  pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
-  pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
-  pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,1000000,GL_FLOAT,1);
-  pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,1000000,GL_UNSIGNED_SHORT,1);
+  pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
+  pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
+  pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
+  pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-  tdp::ManagedHostCircularBuffer<float> rs(1000000); // radius of surfels
+  tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
   rs.Fill(NAN);
-  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,1000000,GL_UNSIGNED_BYTE,3);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(1000000);
+  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
   rgb_w.Fill(tdp::Vector3bda::Zero());
 
-  tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
   mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(1000000);
-  tdp::ManagedHostCircularBuffer<float> numSum_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(1000000);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
 
   tdp::ManagedHostImage<uint16_t> labels;
 
   std::vector<std::pair<size_t, size_t>> mapNN;
-  mapNN.reserve(10000000);
+  mapNN.reserve(MAP_SIZE*kNN);
 
   int32_t iReadCurW = 0;
   size_t frame = 0;
 
-  tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
-
-  std::vector<std::pair<size_t, size_t>> assoc;
-  assoc.reserve(10000);
-
-  uint32_t numObs = 0;
-  uint32_t numInlPrev = 0;
-
-  float lambDPvMFmeans = cos(55.*M_PI/180.);
-  tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
-
-  std::vector<std::vector<uint32_t>> invInd;
-  std::vector<size_t> id_w;
-  id_w.reserve(1000000);
-
-//  std::random_device rd;
-  std::mt19937 gen(19023);
-
-  mask.Fill(0);
 
   std::mutex pl_wLock;
   std::mutex nnLock;
@@ -1116,7 +1099,168 @@ int main( int argc, char* argv[] )
     };
   });
 
+  std::mutex vmfsLock;
+  std::mt19937 rnd(910481);
+  float logAlpha = log(1000.);
+  float lambdaMRF = 0.1;
+  float tauO = 100.;
+  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
+  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
+  std::vector<vMF<float,3>> vmfs;
+  vmfs.push_back(base.sample(rnd));
 
+  tdp::ManagedHostCircularBuffer<uint32_t> zS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
+  nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  zS.Fill(999); //std::numeric_limits<uint32_t>::max());
+  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(1000);
+  vmfSS.Fill(tdp::Vector4fda::Zero());
+
+  std::thread sampling([&]() {
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
+    int32_t iReadNext = 0;
+//    std::random_device rd_;
+    std::mt19937 rnd(0);
+    while(runSampling.Get()) {
+    if (sampleMap) {
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        iRead = nn.iRead_;
+        iInsert = nn.iInsert_;
+      }
+      pS.iInsert_ = nn.iInsert_;
+      nS.iInsert_ = nn.iInsert_;
+      // sample normals using dpvmf and observations from planes
+      size_t K = vmfs.size();
+      vmfSS.Fill(tdp::Vector4fda::Zero());
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Plane& pl = pl_w[iReadNext];
+        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+        if (zi < K) {
+          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+        }
+        ni = vMF<float,3>(mu).sample(rnd);
+        vmfSS[zi].topRows<3>() += ni;
+        vmfSS[zi](3) ++;
+      }
+      // sample dpvmf labels
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+
+        Eigen::VectorXf logPdfs(K+1);
+        Eigen::VectorXf pdfs(K+1);
+
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
+
+        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < K) {
+            neighNs[zS[ids[i]]] += 1.f;
+          }
+        }
+        for (size_t k=0; k<K; ++k) {
+          if (useMRF) 
+            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
+          else 
+            logPdfs[k] = 0.;
+          if (zi == k) {
+            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
+          } else {
+            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
+          }
+        }
+        logPdfs[K] = logAlpha + base.logMarginal(ni);
+        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
+        pdfs = logPdfs.array().exp();
+        size_t zPrev = zi;
+        zi = sampleDisc(pdfs, rnd);
+        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+        if (zi == K) {
+          vmfsLock.lock();
+          vmfs.push_back(base.posterior(ni,1).sample(rnd));
+          vmfsLock.unlock();
+          K++;
+        }
+        if (zPrev != zi) {
+          vmfSS[zPrev].topRows<3>() -= ni;
+          vmfSS[zPrev](3) --;
+          vmfSS[zi].topRows<3>() += ni;
+          vmfSS[zi](3) ++;
+        }
+      }
+      // sample dpvmf parameters
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<K; ++k) {
+          if (vmfSS[k](3) > 0) {
+            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+          }
+        }
+      }
+      std::cout << "counts " << K << ": ";
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfSS[k](3) << " ";
+      std::cout << "\ttaus: " ;
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfs[k].tau_ << " ";
+      std::cout << std::endl;
+//      // sample points
+//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+//        iReadNext=(iReadNext+1)%nn.w_) {
+//        tdp::Vector3fda& pi = pS[iReadNext];
+//        tdp::Plane& pl = pl_w[iReadNext];
+//        tdp::Vector5ida& ids = nn[iReadNext];
+//
+//        Eigen::Matrix3f SigmaPl;
+//        Eigen::Matrix3f Info =  InfoO*pl.N_;
+////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+//        for (int i=0; i<5; ++i) {
+//          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
+//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+//            Info += SigmaPl;
+//            xi += SigmaPl*pS[ids[i]];
+//          }
+//        }
+//        Eigen::Matrix3f Sigma = Info.inverse();
+//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
+////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+//      }
+    }
+    };
+  });
+
+  tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
+
+  std::vector<std::pair<size_t, size_t>> assoc;
+  assoc.reserve(10000);
+
+  uint32_t numObs = 0;
+  uint32_t numInlPrev = 0;
+
+  float lambDPvMFmeans = cos(55.*M_PI/180.);
+  tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
+
+  std::vector<std::vector<uint32_t>> invInd;
+  std::vector<size_t> id_w;
+  id_w.reserve(MAP_SIZE);
+
+//  std::random_device rd;
+  std::mt19937 gen(19023);
+
+  mask.Fill(0);
   std::vector<uint32_t> idsCur;
   idsCur.reserve(w*h);
 
@@ -1485,6 +1629,12 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
+      if (showSamples) {
+        nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
+      } else {
+        nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+      }
+
       if (showFullPc) {
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
@@ -1596,11 +1746,19 @@ int main( int argc, char* argv[] )
       normalsCam.GetModelViewMatrix() = Tview;
       viewNormals.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
-      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+//      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       pangolin::RenderVbo(nbo_w);
       glColor4f(1,0,0,1.);
       for (size_t k=0; k<dpvmf.GetK(); ++k) {
         tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
+      }
+      glColor4f(0,1,0,1.);
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<vmfs.size(); ++k) {
+          if (vmfSS[k](3) > 0)
+            tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+        }
       }
     }
 

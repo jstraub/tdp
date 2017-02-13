@@ -497,122 +497,122 @@ int main( int argc, char* argv[] )
     int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 rnd(0);
-//    while(runSampling.Get()) {
-//    if (sampleMap) {
-//      {
-//        std::lock_guard<std::mutex> lock(nnLock); 
-//        iRead = nn.iRead_;
-//        iInsert = nn.iInsert_;
-//      }
-//      pS.iInsert_ = nn.iInsert_;
-//      nS.iInsert_ = nn.iInsert_;
-//      // sample normals using dpvmf and observations from planes
-//      size_t K = vmfs.size();
-//      vmfSS.Fill(tdp::Vector4fda::Zero());
-//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-//        iReadNext=(iReadNext+1)%nn.w_) {
-//        tdp::Vector3fda& ni = nS[iReadNext];
-//        uint32_t& zi = zS[iReadNext];
-//        tdp::Plane& pl = pl_w[iReadNext];
-//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-//        if (zi < K) {
-//          mu += vmfs[zi].mu_*vmfs[zi].tau_;
-//        }
-//        ni = vMF<float,3>(mu).sample(rnd);
-//        vmfSS[zi].topRows<3>() += ni;
-//        vmfSS[zi](3) ++;
-//      }
-//      // sample dpvmf labels
-//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-//        iReadNext=(iReadNext+1)%nn.w_) {
-//
-//        Eigen::VectorXf logPdfs(K+1);
-//        Eigen::VectorXf pdfs(K+1);
-//
-//        tdp::Vector3fda& ni = nS[iReadNext];
-//        uint32_t& zi = zS[iReadNext];
-//        tdp::Vector5ida& ids = nn[iReadNext];
-//
-//        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
-//        for (int i=0; i<5; ++i) {
-//          if (ids[i] > -1  && zS[ids[i]] < K) {
-//            neighNs[zS[ids[i]]] += 1.f;
-//          }
-//        }
-//        for (size_t k=0; k<K; ++k) {
-//          if (useMRF) 
-//            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
-//          else 
-//            logPdfs[k] = 0.;
-//          if (zi == k) {
-//            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
-//          } else {
-//            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
-//          }
-//        }
-//        logPdfs[K] = logAlpha + base.logMarginal(ni);
-//        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
-//        pdfs = logPdfs.array().exp();
-//        size_t zPrev = zi;
-//        zi = sampleDisc(pdfs, rnd);
-//        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
-//        if (zi == K) {
-//          vmfsLock.lock();
-//          vmfs.push_back(base.posterior(ni,1).sample(rnd));
-//          vmfsLock.unlock();
-//          K++;
-//        }
-//        if (zPrev != zi) {
-//          vmfSS[zPrev].topRows<3>() -= ni;
-//          vmfSS[zPrev](3) --;
-//          vmfSS[zi].topRows<3>() += ni;
-//          vmfSS[zi](3) ++;
-//        }
-//      }
-//      // sample dpvmf parameters
-//      {
-//        std::lock_guard<std::mutex> lock(vmfsLock);
-//        for (size_t k=0; k<K; ++k) {
-//          if (vmfSS[k](3) > 0) {
-//            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
-//          }
-//        }
-//      }
-//      std::cout << "counts " << K << ": ";
-//      for (size_t k=0; k<K; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfSS[k](3) << " ";
-//      std::cout << "\ttaus: " ;
-//      for (size_t k=0; k<K; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfs[k].tau_ << " ";
-//      std::cout << std::endl;
-//      // sample points
-//      for (int32_t iReadNext = 0; iReadNext!=iInsert;
-//        iReadNext=(iReadNext+1)%nn.w_) {
-//        tdp::Vector3fda& pi = pS[iReadNext];
-//        tdp::Plane& pl = pl_w[iReadNext];
-//        tdp::Vector5ida& ids = nn[iReadNext];
-//
-//        Eigen::Matrix3f SigmaPl;
-//        Eigen::Matrix3f Info =  InfoO*pl.N_;
-////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
-//        for (int i=0; i<5; ++i) {
-//          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
-//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
-//            Info += SigmaPl;
-//            xi += SigmaPl*pS[ids[i]];
-//          }
-//        }
-//        Eigen::Matrix3f Sigma = Info.inverse();
-//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
-////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
-//      }
-//
-//    }
-//    };
+    while(runSampling.Get()) {
+    if (sampleMap) {
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        iRead = nn.iRead_;
+        iInsert = nn.iInsert_;
+      }
+      pS.iInsert_ = nn.iInsert_;
+      nS.iInsert_ = nn.iInsert_;
+      // sample normals using dpvmf and observations from planes
+      size_t K = vmfs.size();
+      vmfSS.Fill(tdp::Vector4fda::Zero());
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Plane& pl = pl_w[iReadNext];
+        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+        if (zi < K) {
+          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+        }
+        ni = vMF<float,3>(mu).sample(rnd);
+        vmfSS[zi].topRows<3>() += ni;
+        vmfSS[zi](3) ++;
+      }
+      // sample dpvmf labels
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+
+        Eigen::VectorXf logPdfs(K+1);
+        Eigen::VectorXf pdfs(K+1);
+
+        tdp::Vector3fda& ni = nS[iReadNext];
+        uint32_t& zi = zS[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
+
+        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < K) {
+            neighNs[zS[ids[i]]] += 1.f;
+          }
+        }
+        for (size_t k=0; k<K; ++k) {
+          if (useMRF) 
+            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
+          else 
+            logPdfs[k] = 0.;
+          if (zi == k) {
+            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
+          } else {
+            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
+          }
+        }
+        logPdfs[K] = logAlpha + base.logMarginal(ni);
+        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
+        pdfs = logPdfs.array().exp();
+        size_t zPrev = zi;
+        zi = sampleDisc(pdfs, rnd);
+        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
+        if (zi == K) {
+          vmfsLock.lock();
+          vmfs.push_back(base.posterior(ni,1).sample(rnd));
+          vmfsLock.unlock();
+          K++;
+        }
+        if (zPrev != zi) {
+          vmfSS[zPrev].topRows<3>() -= ni;
+          vmfSS[zPrev](3) --;
+          vmfSS[zi].topRows<3>() += ni;
+          vmfSS[zi](3) ++;
+        }
+      }
+      // sample dpvmf parameters
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<K; ++k) {
+          if (vmfSS[k](3) > 0) {
+            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+          }
+        }
+      }
+      std::cout << "counts " << K << ": ";
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfSS[k](3) << " ";
+      std::cout << "\ttaus: " ;
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfs[k].tau_ << " ";
+      std::cout << std::endl;
+      // sample points
+      for (int32_t iReadNext = 0; iReadNext!=iInsert;
+        iReadNext=(iReadNext+1)%nn.w_) {
+        tdp::Vector3fda& pi = pS[iReadNext];
+        tdp::Plane& pl = pl_w[iReadNext];
+        tdp::Vector5ida& ids = nn[iReadNext];
+
+        Eigen::Matrix3f SigmaPl;
+        Eigen::Matrix3f Info =  InfoO*pl.N_;
+//        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+        for (int i=0; i<5; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
+            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+            Info += SigmaPl;
+            xi += SigmaPl*pS[ids[i]];
+          }
+        }
+        Eigen::Matrix3f Sigma = Info.inverse();
+        Eigen::Vector3f mu = Info.ldlt().solve(xi);
+//        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+      }
+
+    }
+    };
   });
 
 
