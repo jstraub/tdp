@@ -14,8 +14,10 @@ out vec2 uv;
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
   if (value==value) {
-    float c = 10000.*(value-minValue)/(maxValue-minValue);
-    uv = vec2(c%100,c/100);
+//    float c = 10000.*(value-minValue)/(maxValue-minValue);
+//    uv = vec2((c%100)*0.01,(c/100)*0.01);
+    float c = value-minValue;
+    uv = vec2(mod(value,100.),value/100.);
   } else {
     uv = vec2(0.,0.);
   }

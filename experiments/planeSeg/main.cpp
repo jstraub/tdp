@@ -228,7 +228,7 @@ int main( int argc, char* argv[] )
 
       if (showLabels) {
         lbo.Upload(z.ptr_, z.SizeBytes(), 0);
-        tdp::RenderLabeledVbo(vbo, lbo, s_cam, dpvmf.GetK()+1);
+        tdp::RenderLabeledVbo(vbo, lbo, s_cam, 0, dpvmf.GetK()+1);
       } else {
         cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
         pangolin::RenderVboCbo(vbo, cbo);

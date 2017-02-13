@@ -857,6 +857,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
   pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
+  pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
@@ -953,18 +954,21 @@ int main( int argc, char* argv[] )
   int32_t iReadCurW = 0;
   size_t frame = 0;
 
+  tdp::ThreadedValue<bool> runSampling(false);
+  tdp::ThreadedValue<bool> runTopologyThread(true);
+  tdp::ThreadedValue<bool> runMappingThread(true);
 
   std::mutex pl_wLock;
   std::mutex nnLock;
   std::mutex mapLock;
   std::mutex dpvmfLock;
-  std::thread mapping([&]() {
+  std::thread topology([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::VectorkNNfda values;
-    while(42) {
+    while(runTopologyThread.Get()) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
         iRead = pl_w.iRead_;
@@ -1016,13 +1020,16 @@ int main( int argc, char* argv[] )
     };
   });
 
-  std::thread regularization([&]() {
+  float lambDPvMFmeans = cos(55.*M_PI/180.);
+  tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
+
+  std::thread mapping([&]() {
     int32_t iRead = 0;
     int32_t iInsert = 0;
     int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
-    while(42) {
+    while(runMappingThread.Get()) {
     if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
@@ -1047,7 +1054,7 @@ int main( int argc, char* argv[] )
           Jp += -2.*(pc0_w[i] - pl.p_);
         }
         if (doRegAbsPc) {
-          Jp += 2*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
+          Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
         }
         if (doRegAbsN) {
           Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
@@ -1079,7 +1086,7 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
+//      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
       for (int32_t i = 0; i!=iInsert;
         i=(i+1)%nn.w_) {
@@ -1101,12 +1108,11 @@ int main( int argc, char* argv[] )
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
-  float logAlpha = log(1000.);
-  float lambdaMRF = 0.1;
-  float tauO = 100.;
+  float logAlpha = log(10.);
+  float tauO = 1.;
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), .1, 0.);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
 
@@ -1127,7 +1133,6 @@ int main( int argc, char* argv[] )
 //    std::random_device rd_;
     std::mt19937 rnd(0);
     while(runSampling.Get()) {
-    if (sampleMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
         iRead = nn.iRead_;
@@ -1167,10 +1172,7 @@ int main( int argc, char* argv[] )
           }
         }
         for (size_t k=0; k<K; ++k) {
-          if (useMRF) 
-            logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
-          else 
-            logPdfs[k] = 0.;
+          logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
           if (zi == k) {
             logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
           } else {
@@ -1208,15 +1210,15 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      std::cout << "counts " << K << ": ";
-      for (size_t k=0; k<K; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfSS[k](3) << " ";
-      std::cout << "\ttaus: " ;
-      for (size_t k=0; k<K; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfs[k].tau_ << " ";
-      std::cout << std::endl;
+//      std::cout << "counts " << K << ": ";
+//      for (size_t k=0; k<K; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfSS[k](3) << " ";
+//      std::cout << "\ttaus: " ;
+//      for (size_t k=0; k<K; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfs[k].tau_ << " ";
+//      std::cout << std::endl;
 //      // sample points
 //      for (int32_t i = 0; i!=iInsert;
 //        i=(i+1)%nn.w_) {
@@ -1240,7 +1242,6 @@ int main( int argc, char* argv[] )
 ////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
 //        pi = Normal<float,3>(mu, Sigma).sample(rnd);
 //      }
-    }
     };
   });
 
@@ -1252,8 +1253,6 @@ int main( int argc, char* argv[] )
   uint32_t numObs = 0;
   uint32_t numInlPrev = 0;
 
-  float lambDPvMFmeans = cos(55.*M_PI/180.);
-  tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -1671,13 +1670,13 @@ int main( int argc, char* argv[] )
               P, MV);
         } else if (showLabels) {
           labels.Reinitialise(pl_w.SizeToRead());
-          for (size_t i=0; i<age.Area(); ++i) 
+          for (size_t i=0; i<labels.Area(); ++i) 
             labels[i] = pl_w.GetCircular(i).z_;
           lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
               1, GL_DYNAMIC_DRAW);
           lbo.Upload(labels.ptr_,  labels.SizeBytes(), 0);
           std::pair<float,float> minMaxAge = labels.MinMax();
-          std::cout << "render labels" << std::endl;
+          std::cout << "render labels " << minMaxAge.first << " " << minMaxAge.second << std::endl;
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, minMaxAge.first,
               minMaxAge.second);
           std::cout << "render labels done" << std::endl;

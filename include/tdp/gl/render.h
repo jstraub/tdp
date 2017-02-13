@@ -2,6 +2,7 @@
 
 #include <pangolin/gl/gl.hpp>
 #include <tdp/gl/shaders.h>
+#include <tdp/gl/labels.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera_base.h>
@@ -54,7 +55,8 @@ void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
   const pangolin::OpenGlRenderState& cam,
-  float maxVal);
+  float minVal,
+  float maxVal); 
 
 void RenderVboIbo(
   pangolin::GlBuffer& vbo,

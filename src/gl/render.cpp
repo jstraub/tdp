@@ -23,8 +23,8 @@ void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
   const pangolin::OpenGlRenderState& cam,
-  float maxVal,
-  float minVal = 0
+  float minVal,
+  float maxVal
     ) {
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
   shader.Bind();
