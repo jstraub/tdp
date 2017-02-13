@@ -1266,6 +1266,9 @@ int main( int argc, char* argv[] )
   std::vector<uint32_t> idsCur;
   idsCur.reserve(w*h);
 
+  std::ofstream out("trajectory_tumFormat.csv");
+  out << "# " << input_uri << std::endl;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -1814,7 +1817,17 @@ int main( int argc, char* argv[] )
     pangolin::DisplayBase().ActivatePixelOrthographic();
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
+  
+    out << pangolin::Time_s(pangolin::TimeNow()) << " "
+      << T_wc.translation()(0) << " "  // tx
+      << T_wc.translation()(1) << " "  // ty
+      << T_wc.translation()(2) << " "  // tz
+      << T_wc.rotation().vector()(0) << " "  // qx
+      << T_wc.rotation().vector()(1) << " "  // qy
+      << T_wc.rotation().vector()(2) << " "  // qz
+      << T_wc.rotation().vector()(3) << std::endl;  // qw
   }
+  out.close();
 
 //  imuInterp.Stop();
 //  if (imu) imu->Stop();
