@@ -855,7 +855,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNZ("ui.reg rel N",false,true);
   pangolin::Var<bool> doRegRelPlObs("ui.reg rel PlObs",false,true);
   pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
-  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
+  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.001,0.01,1.);
   pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
   pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
@@ -1021,6 +1021,156 @@ int main( int argc, char* argv[] )
     };
   });
 
+
+  uint32_t K = 0;
+  std::mutex zsLock;
+  std::mutex vmfsLock;
+  std::mt19937 rnd(910481);
+  float logAlpha = log(.1);
+  float tauO = 100.;
+//  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
+//  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
+  std::vector<vMF<float,3>> vmfs;
+  vmfs.push_back(base.sample(rnd));
+
+  tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<uint16_t> zCountS(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
+  nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
+  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(10000);
+  vmfSS.Fill(tdp::Vector4fda::Zero());
+
+  std::thread sampling([&]() {
+    int32_t iRead = 0;
+    int32_t iInsert = 0;
+    int32_t iReadNext = 0;
+//    std::random_device rd_;
+    std::mt19937 rnd(0);
+    while(runSampling.Get()) {
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        iRead = nn.iRead_;
+        iInsert = nn.iInsert_;
+      }
+      pS.iInsert_ = nn.iInsert_;
+      nS.iInsert_ = nn.iInsert_;
+      // sample normals using dpvmf and observations from planes
+      size_t Ksample = vmfs.size();
+      vmfSS.Fill(tdp::Vector4fda::Zero());
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        tdp::Vector3fda& ni = nS[i];
+        uint16_t& zi = zS[i];
+        tdp::Plane& pl = pl_w[i];
+        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+//        Eigen::Vector3f mu = nSum_w[i]*tauO;
+        if (zi < Ksample) {
+          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+        }
+        ni = vMF<float,3>(mu).sample(rnd);
+        vmfSS[zi].topRows<3>() += ni;
+        vmfSS[zi](3) ++;
+      }
+      // sample dpvmf labels
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        Eigen::VectorXf logPdfs(Ksample+1);
+        Eigen::VectorXf pdfs(Ksample+1);
+
+        tdp::Vector3fda& ni = nS[i];
+        uint16_t& zi = zS[i];
+        tdp::Vector5ida& ids = nn[i];
+
+        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(Ksample);
+        for (int i=0; i<kNN; ++i) {
+          if (ids[i] > -1  && zS[ids[i]] < Ksample) {
+            neighNs[zS[ids[i]]] += 1.f;
+          }
+        }
+        for (size_t k=0; k<Ksample; ++k) {
+          logPdfs[k] = lambdaMRF*(neighNs[k]-kNN);
+          if (zi == k) {
+            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
+          } else {
+            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
+          }
+        }
+        logPdfs[Ksample] = logAlpha + base.logMarginal(ni);
+        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
+        pdfs = logPdfs.array().exp();
+        uint16_t zPrev = zi;
+        zi = sampleDisc(pdfs, rnd);
+        //      std::cout << z[i] << " " << Ksample << ": " << pdfs.transpose() << std::endl;
+        if (zi == Ksample) {
+          vmfsLock.lock();
+          vmfs.push_back(base.posterior(ni,1).sample(rnd));
+          vmfsLock.unlock();
+          Ksample++;
+        }
+        if (zPrev != zi) {
+          vmfSS[zPrev].topRows<3>() -= ni;
+          vmfSS[zPrev](3) --;
+          vmfSS[zi].topRows<3>() += ni;
+          vmfSS[zi](3) ++;
+          zCountS[i] = 1;
+        } else {
+          zCountS[i] ++;
+        }
+      }
+      // sample dpvmf parameters
+      {
+        std::lock_guard<std::mutex> lock(vmfsLock);
+        for (size_t k=0; k<Ksample; ++k) {
+          if (vmfSS[k](3) > 0) {
+            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+          }
+        }
+      }
+      {
+        std::lock_guard<std::mutex> lockZs(zsLock);
+        for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+          pl_w[i].z_ = zS[i];
+        }
+        K = Ksample;
+      }
+
+      std::cout << "counts " << Ksample << ": ";
+      for (size_t k=0; k<Ksample; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfSS[k](3) << " ";
+//      std::cout << "\ttaus: " ;
+//      for (size_t k=0; k<Ksample; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfs[k].tau_ << " ";
+      std::cout << std::endl;
+//      // sample points
+//      for (int32_t i = 0; i!=iInsert;
+//        i=(i+1)%nn.w_) {
+//        tdp::Vector3fda& pi = pS[i];
+//        tdp::Plane& pl = pl_w[i];
+//        tdp::Vector5ida& ids = nn[i];
+//
+//        Eigen::Matrix3f SigmaPl;
+//        Eigen::Matrix3f Info =  InfoO*pl.N_;
+////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+//        for (int i=0; i<5; ++i) {
+//          if (ids[i] > -1  && zS[ids[i]] < Ksample && tdp::IsValidData(pS[ids[i]])) {
+//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+//            Info += SigmaPl;
+//            xi += SigmaPl*pS[ids[i]];
+//          }
+//        }
+//        Eigen::Matrix3f Sigma = Info.inverse();
+//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
+////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+//      }
+    };
+  });
+
   float lambDPvMFmeans = cos(55.*M_PI/180.);
   tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
@@ -1047,9 +1197,15 @@ int main( int argc, char* argv[] )
         Jn = tdp::Vector3fda::Zero();
         Jp = tdp::Vector3fda::Zero();
         if (doRegvMF && lambdaRegDir > 0) {
-          dpvmfLock.lock();
-          Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
-          dpvmfLock.unlock();
+          if (runSampling.Get()) {
+            vmfsLock.lock();
+            Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
+            vmfsLock.unlock();
+          } else {
+            dpvmfLock.lock();
+            Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
+            dpvmfLock.unlock();
+          }
         }
         if (doRegPc0) {
           Jp += -2.*(pc0_w[i] - pl.p_);
@@ -1104,145 +1260,6 @@ int main( int argc, char* argv[] )
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
     }
-    };
-  });
-
-  std::mutex vmfsLock;
-  std::mt19937 rnd(910481);
-  float logAlpha = log(.1);
-  float tauO = 100.;
-//  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
-//  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
-  std::vector<vMF<float,3>> vmfs;
-  vmfs.push_back(base.sample(rnd));
-
-  tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<uint16_t> zCountS(MAP_SIZE); // count how often the same cluster ID
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
-  nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-  pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-  zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
-  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(10000);
-  vmfSS.Fill(tdp::Vector4fda::Zero());
-
-  std::thread sampling([&]() {
-    int32_t iRead = 0;
-    int32_t iInsert = 0;
-    int32_t iReadNext = 0;
-//    std::random_device rd_;
-    std::mt19937 rnd(0);
-    while(runSampling.Get()) {
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        iRead = nn.iRead_;
-        iInsert = nn.iInsert_;
-      }
-      pS.iInsert_ = nn.iInsert_;
-      nS.iInsert_ = nn.iInsert_;
-      // sample normals using dpvmf and observations from planes
-      size_t K = vmfs.size();
-      vmfSS.Fill(tdp::Vector4fda::Zero());
-      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        tdp::Vector3fda& ni = nS[i];
-        uint16_t& zi = zS[i];
-        tdp::Plane& pl = pl_w[i];
-        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-//        Eigen::Vector3f mu = nSum_w[i]*tauO;
-        if (zi < K) {
-          mu += vmfs[zi].mu_*vmfs[zi].tau_;
-        }
-        ni = vMF<float,3>(mu).sample(rnd);
-        vmfSS[zi].topRows<3>() += ni;
-        vmfSS[zi](3) ++;
-      }
-      // sample dpvmf labels
-      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        Eigen::VectorXf logPdfs(K+1);
-        Eigen::VectorXf pdfs(K+1);
-
-        tdp::Vector3fda& ni = nS[i];
-        uint16_t& zi = zS[i];
-        tdp::Vector5ida& ids = nn[i];
-
-        Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
-        for (int i=0; i<kNN; ++i) {
-          if (ids[i] > -1  && zS[ids[i]] < K) {
-            neighNs[zS[ids[i]]] += 1.f;
-          }
-        }
-        for (size_t k=0; k<K; ++k) {
-          logPdfs[k] = lambdaMRF*(neighNs[k]-kNN);
-          if (zi == k) {
-            logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
-          } else {
-            logPdfs[k] += log(vmfSS[k](3))+vmfs[k].logPdf(ni);
-          }
-        }
-        logPdfs[K] = logAlpha + base.logMarginal(ni);
-        logPdfs = logPdfs.array() - logSumExp<float>(logPdfs);
-        pdfs = logPdfs.array().exp();
-        uint16_t zPrev = zi;
-        zi = sampleDisc(pdfs, rnd);
-        //      std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
-        if (zi == K) {
-          vmfsLock.lock();
-          vmfs.push_back(base.posterior(ni,1).sample(rnd));
-          vmfsLock.unlock();
-          K++;
-        }
-        if (zPrev != zi) {
-          vmfSS[zPrev].topRows<3>() -= ni;
-          vmfSS[zPrev](3) --;
-          vmfSS[zi].topRows<3>() += ni;
-          vmfSS[zi](3) ++;
-          zCountS[i] = 1;
-        } else {
-          zCountS[i] ++;
-        }
-      }
-      // sample dpvmf parameters
-      {
-        std::lock_guard<std::mutex> lock(vmfsLock);
-        for (size_t k=0; k<K; ++k) {
-          if (vmfSS[k](3) > 0) {
-            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
-          }
-        }
-      }
-      std::cout << "counts " << K << ": ";
-      for (size_t k=0; k<K; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfSS[k](3) << " ";
-//      std::cout << "\ttaus: " ;
-//      for (size_t k=0; k<K; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfs[k].tau_ << " ";
-      std::cout << std::endl;
-//      // sample points
-//      for (int32_t i = 0; i!=iInsert;
-//        i=(i+1)%nn.w_) {
-//        tdp::Vector3fda& pi = pS[i];
-//        tdp::Plane& pl = pl_w[i];
-//        tdp::Vector5ida& ids = nn[i];
-//
-//        Eigen::Matrix3f SigmaPl;
-//        Eigen::Matrix3f Info =  InfoO*pl.N_;
-////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
-//        for (int i=0; i<5; ++i) {
-//          if (ids[i] > -1  && zS[ids[i]] < K && tdp::IsValidData(pS[ids[i]])) {
-//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
-//            Info += SigmaPl;
-//            xi += SigmaPl*pS[ids[i]];
-//          }
-//        }
-//        Eigen::Matrix3f Sigma = Info.inverse();
-//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
-////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
-//      }
     };
   });
 
@@ -1328,34 +1345,41 @@ int main( int argc, char* argv[] )
       std::cout << " # map points: " << pl_w.SizeToRead() 
         << " " << dpvmf.GetZs().size() << std::endl;
       TICK("dpvmf");
-      dpvmfLock.lock();
-      dpvmf.iterateToConvergence(100, 1e-6);
-      dpvmfLock.unlock();
-      for (size_t k=0; k<dpvmf.GetK(); ++k) {
-        if (k >= invInd.size()) {
-          invInd.push_back(std::vector<uint32_t>());
-          invInd.back().reserve(10000);
-        } else {
-          invInd[k].clear();
-        }
+      if (!runSampling.Get()) {
+        dpvmfLock.lock();
+        dpvmf.iterateToConvergence(100, 1e-6);
+        dpvmfLock.unlock();
+        K = dpvmf.GetK();
       }
-      if (pruneAssocByRender) {
-        // only use ids that were found by projecting into the current pose
-        for (auto i : idsCur) {
-          uint32_t k = *dpvmf.GetZs()[i];
-          if (invInd[k].size() < 10000)
-            invInd[k].push_back(i);
+      {
+        std::lock_guard<std::mutex> lockZs(zsLock);
+        for (size_t k=0; k<K; ++k) {
+          if (k >= invInd.size()) {
+            invInd.push_back(std::vector<uint32_t>());
+            invInd.back().reserve(10000);
+          } else {
+            invInd[k].clear();
+          }
         }
-      } else {      
-        id_w.resize(pl_w.SizeToRead());
-        std::iota(id_w.begin(), id_w.end(), 0);
-        std::random_shuffle(id_w.begin(), id_w.end());
-        // use all ids in the current map
-        for (auto i : id_w) {
-          uint32_t k = *dpvmf.GetZs()[i];
-          if (invInd[k].size() < 10000)
-            invInd[k].push_back(i);
+        if (pruneAssocByRender) {
+          // only use ids that were found by projecting into the current pose
+          for (auto i : idsCur) {
+            uint32_t k = pl_w[i].z_;
+            if (invInd[k].size() < 10000)
+              invInd[k].push_back(i);
+          }
+        } else {      
+          id_w.resize(pl_w.SizeToRead());
+          std::iota(id_w.begin(), id_w.end(), 0);
+          std::random_shuffle(id_w.begin(), id_w.end());
+          // use all ids in the current map
+          for (auto i : id_w) {
+            uint32_t k = pl_w[i].z_;
+            if (invInd[k].size() < 10000)
+              invInd[k].push_back(i);
+          }
         }
+        uint32_t Kcur = K;
       }
       TOCK("dpvmf");
     }
@@ -1386,13 +1410,13 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-      std::vector<size_t> indK(dpvmf.GetK(),0);
+      std::vector<size_t> indK(invInd.size(),0);
       for (size_t it = 0; it < maxIt; ++it) {
           mask.Fill(0);
           assoc.clear();
 //          pc_c.MarkRead();
 //          n_c.MarkRead();
-          indK = std::vector<size_t>(dpvmf.GetK(),0);
+          indK = std::vector<size_t>(invInd.size(),0);
           numProjected = 0;
 
         A = Eigen::Matrix<float,6,6>::Zero();
@@ -1411,7 +1435,7 @@ int main( int argc, char* argv[] )
         bool exploredAll = false;
         uint32_t k = 0;
         while (numObs < 10000 && !exploredAll) {
-          k = (k+1) % (dpvmf.GetK());
+          k = (k+1) % invInd.size();
           while (indK[k] < invInd[k].size()) {
             size_t i = invInd[k][indK[k]++];
             tdp::Plane& pl = pl_w.GetCircular(i);
@@ -1490,7 +1514,7 @@ int main( int argc, char* argv[] )
       }
       for (size_t k=0; k<indK.size(); ++k) {
         std::cout << "used different directions " << k << "/" 
-          << (dpvmf.GetK()) << ": " << indK[k] 
+          << invInd.size() << ": " << indK[k] 
           << " of " << invInd[k].size() << std::endl;
       }
       logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
@@ -1502,7 +1526,7 @@ int main( int argc, char* argv[] )
       std::cout << " H " << H << " neg log evs " << 
         -ev.array().log().matrix().transpose() << std::endl;
 
-//      for (size_t k=0; k<dpvmf.GetK(); ++k) {
+//      for (size_t k=0; k<K; ++k) {
 //        Eigen::Matrix<float,6,1> Ai;
 //        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
 //        std::cout << "k " << k << std::endl;
@@ -1578,14 +1602,14 @@ int main( int argc, char* argv[] )
       }
     }
 
-    if (runLoopClosureGeom && dpvmf.GetK()>2) {
+    if (runLoopClosureGeom && K>2) {
       tdp::ManagedDPvMFmeansSimple3fda dpvmfCur(lambDPvMFmeans);
       for (const auto& ass : assoc) {
         dpvmfCur.addObservation(n(ass.second%pc.w_,ass.second/pc.w_));
       }
       dpvmfCur.iterateToConvergence(100, 1e-6);
       if (dpvmfCur.GetK() > 2) {
-        std::vector<size_t> idsW(dpvmf.GetK());
+        std::vector<size_t> idsW(K);
         std::vector<size_t> idsC(dpvmfCur.GetK());
         std::iota(idsW.begin(), idsW.end(), 0);
         std::iota(idsC.begin(), idsC.end(), 0);
