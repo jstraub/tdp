@@ -18,7 +18,7 @@ int main() {
   vMF<float,3> vmfB(Eigen::Vector3f(0,1,0), 100);
   vMF<float,3> vmfC(Eigen::Vector3f(1,0,0), 100);
   vMF<float,3> vmfD(Eigen::Vector3f(-1,0,0),100);
-  vMF<float,3> vmfO(Eigen::Vector3f(1,0,0),0);
+  vMF<float,3> vmfO(Eigen::Vector3f(1,0,0),10);
 
   size_t N=30;
   std::vector<std::vector<Eigen::Vector3f>> x;
@@ -48,7 +48,7 @@ int main() {
     }
   std::vector<float> counts(1, x.size()*x.size());
   std::vector<vMF<float,3>> vmfs;
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), .1, 0.0);
   float logAlpha = log(10.);
   float lambda = .1;
 
