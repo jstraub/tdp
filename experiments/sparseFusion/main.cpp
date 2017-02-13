@@ -1106,7 +1106,7 @@ int main( int argc, char* argv[] )
   float tauO = 100.;
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
-  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.5);
+  vMFprior<float> base(Eigen::Vector3f(0,0,1), 1., 0.);
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
 
