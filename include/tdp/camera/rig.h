@@ -297,6 +297,13 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
   } else if(devProps.contains("realsense"))  {
     devType = "realsense"; 
   } else {
+    std::cout << "cannot match based on serial number because no openni or realsense streams; have " 
+      << streams.size() << " streams" << std::endl;
+    for (size_t camId=0; camId<streams.size(); ++camId) {
+      rgbStream2cam_.push_back(2*camId); // rgb
+      dStream2cam_.push_back(2*camId+1); // ir/depth
+      rgbdStream2cam_.push_back(camId); // rgbd
+    }
     return false;
   }
   pangolin::json::value jsDevices = devProps[devType]["devices"];
@@ -308,6 +315,8 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
         jsDevices[i]["ONI_DEVICE_PROPERTY_SERIAL_NUMBER"].get<std::string>();
     } else if (jsDevices[i].contains("serial_number")) {
       serial = jsDevices[i]["serial_number"].get<std::string>();
+    } else {
+      serial = "0000";
     }
     std::cout << "Device " << i << " serial #: " << serial << std::endl;
     int32_t camId = -1;

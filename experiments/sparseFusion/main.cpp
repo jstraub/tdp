@@ -75,7 +75,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
-#define kNN 5
+#define kNN 12
 #define MAP_SIZE 1000000
 
 namespace tdp {
@@ -701,13 +701,16 @@ int main( int argc, char* argv[] )
 
   tdp::Rig<CameraT> rig;
   if (calibPath.size() > 0) {
-    rig.FromFile(calibPath,false);
+    rig.FromFile(calibPath,true);
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
     rig.CorrespondOpenniStreams2Cams(streams);
   } else {
     return 2;
   }
-  CameraT cam = rig.cams_[rig.rgbStream2cam_[0]];
+  CameraT cam(Eigen::Vector4f(517.3, 516.5, 318.6, 255.3));
+  if (rig.rgbStream2cam_.size() > 0) {
+      cam = rig.cams_[rig.rgbStream2cam_[0]];
+  }
 
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
@@ -848,17 +851,18 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updateMap("ui.update map",true,true);
 
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
-  pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
+  pangolin::Var<bool> doRegPc0("ui.reg pc0",true,true);
   pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",false,true);
-  pangolin::Var<bool> doRegAbsN("ui.reg abs n",false,true);
-  pangolin::Var<bool> doRegRelPlZ("ui.reg rel Pl",false,true);
-  pangolin::Var<bool> doRegRelNZ("ui.reg rel N",false,true);
+  pangolin::Var<bool> doRegAbsN("ui.reg abs n",true,true);
+  pangolin::Var<bool> doRegRelPlZ("ui.reg rel Pl",true,true);
+  pangolin::Var<bool> doRegRelNZ("ui.reg rel N",true,true);
   pangolin::Var<bool> doRegRelPlObs("ui.reg rel PlObs",false,true);
   pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
-  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.001,0.01,1.);
+  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
+  pangolin::Var<float> lambdaRegPc0("ui.lamb Reg Pc0",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.001,0.0,1.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",false,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
@@ -1064,9 +1068,11 @@ int main( int argc, char* argv[] )
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         tdp::Vector3fda& ni = nS[i];
         uint16_t& zi = zS[i];
-        tdp::Plane& pl = pl_w[i];
-        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-//        Eigen::Vector3f mu = nSum_w[i]*tauO;
+//        tdp::Plane& pl = pl_w[i];
+//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+//        std::cout << pl.w_ * pl.n_.transpose() << " " 
+//          << nSum_w[i].transpose() << std::endl;
+        Eigen::Vector3f mu = nSum_w[i]*tauO;
         if (zi < Ksample) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
         }
@@ -1081,7 +1087,7 @@ int main( int argc, char* argv[] )
 
         tdp::Vector3fda& ni = nS[i];
         uint16_t& zi = zS[i];
-        tdp::Vector5ida& ids = nn[i];
+        tdp::VectorkNNida& ids = nn[i];
 
         Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(Ksample);
         for (int i=0; i<kNN; ++i) {
@@ -1136,15 +1142,15 @@ int main( int argc, char* argv[] )
         K = Ksample;
       }
 
-      std::cout << "counts " << Ksample << ": ";
-      for (size_t k=0; k<Ksample; ++k) 
-        if (vmfSS[k](3) > 0) 
-          std::cout << vmfSS[k](3) << " ";
+//      std::cout << "counts " << Ksample << ": ";
+//      for (size_t k=0; k<Ksample; ++k) 
+//        if (vmfSS[k](3) > 0) 
+//          std::cout << vmfSS[k](3) << " ";
 //      std::cout << "\ttaus: " ;
 //      for (size_t k=0; k<Ksample; ++k) 
 //        if (vmfSS[k](3) > 0) 
 //          std::cout << vmfs[k].tau_ << " ";
-      std::cout << std::endl;
+//      std::cout << std::endl;
 //      // sample points
 //      for (int32_t i = 0; i!=iInsert;
 //        i=(i+1)%nn.w_) {
@@ -1199,16 +1205,23 @@ int main( int argc, char* argv[] )
         if (doRegvMF && lambdaRegDir > 0) {
           if (runSampling.Get()) {
             vmfsLock.lock();
-            Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
+            if (vmfs[pl.z_].tau_ > 0) {
+              Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
+            }
             vmfsLock.unlock();
           } else {
             dpvmfLock.lock();
             Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
             dpvmfLock.unlock();
           }
+          if (!tdp::IsValidData(Jn)) {
+            std::cout << Jn.transpose() << " " << pl.z_ <<
+              vmfs[pl.z_].mu_.transpose() << ", " << vmfs[pl.z_].tau_ << std::endl;
+            Jn = tdp::Vector3fda::Zero();
+          }
         }
         if (doRegPc0) {
-          Jp += -2.*(pc0_w[i] - pl.p_);
+          Jp += -2.*lambdaRegPc0*(pc0_w[i] - pl.p_);
         }
         if (doRegAbsPc) {
           Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
@@ -1252,6 +1265,7 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda& Jp = Jp_w[i];
         std::lock_guard<std::mutex> mapGuard(mapLock);
         pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
+//        std::cout << Jn.transpose() << " " << pl.n_.transpose() << std::endl;
         pl.p_ -= alphaGrad * Jp;
         pc_w[i] = pl.p_;
         n_w[i] = pl.n_;
@@ -1331,6 +1345,9 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           dpvmf.addObservation(&pl_w[i].n_, &pl_w[i].z_);
+          pcSum_w[i] = pl_w[i].p_;
+          nSum_w[i] = pl_w[i].n_;
+          numSum_w[i] ++;
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1513,9 +1530,10 @@ int main( int argc, char* argv[] )
         }
       }
       for (size_t k=0; k<indK.size(); ++k) {
-        std::cout << "used different directions " << k << "/" 
-          << invInd.size() << ": " << indK[k] 
-          << " of " << invInd[k].size() << std::endl;
+        if (invInd[k].size() > 0 )
+          std::cout << "used different directions " << k << "/" 
+            << invInd.size() << ": " << indK[k] 
+            << " of " << invInd[k].size() << std::endl;
       }
       logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
