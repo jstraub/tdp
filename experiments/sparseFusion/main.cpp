@@ -54,6 +54,7 @@
 #include <tdp/features/fast.h>
 #include <tdp/preproc/blur.h>
 #include <tdp/gl/render.h>
+#include <tdp/gl/labels.h>
 #include <tdp/preproc/convert.h>
 #include <tdp/preproc/plane.h>
 #include <tdp/features/lsh.h>
@@ -815,6 +816,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<float> age;
 
+
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
 
@@ -890,6 +892,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
+  pangolin::Var<bool> showLabels("ui.show labels",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",true,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
@@ -912,6 +915,7 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,1000000,GL_FLOAT,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,1000000,GL_FLOAT,1);
+  pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,1000000,GL_UNSIGNED_SHORT,1);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(1000000);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -937,6 +941,8 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(1000000);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(1000000);
+
+  tdp::ManagedHostImage<uint16_t> labels;
 
   std::vector<std::pair<size_t, size_t>> mapNN;
   mapNN.reserve(10000000);
@@ -1507,6 +1513,18 @@ int main( int argc, char* argv[] )
           std::pair<float,float> minMaxAge = age.MinMax();
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
+        } else if (showLabels) {
+          labels.Reinitialise(pl_w.SizeToRead());
+          for (size_t i=0; i<age.Area(); ++i) 
+            labels[i] = pl_w.GetCircular(i).z_;
+          lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
+              1, GL_DYNAMIC_DRAW);
+          lbo.Upload(labels.ptr_,  labels.SizeBytes(), 0);
+          std::pair<float,float> minMaxAge = labels.MinMax();
+          std::cout << "render labels" << std::endl;
+          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, minMaxAge.first,
+              minMaxAge.second);
+          std::cout << "render labels done" << std::endl;
         } else if (showSurfels) {
 //          std::cout << "rbo upload " << rs.SizeBytes() << std::endl;
 //          rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
