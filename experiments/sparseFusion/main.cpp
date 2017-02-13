@@ -1064,7 +1064,7 @@ int main( int argc, char* argv[] )
           Jp += -2.*(pc0_w[i] - pl.p_);
         }
         if (doRegAbsPc) {
-          Jp += 2*(numSum_w[i]*pl.p_ - pcSum_w[i]);
+          Jp += 2*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
         }
         if (doRegAbsN) {
           Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
