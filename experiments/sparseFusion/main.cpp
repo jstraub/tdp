@@ -895,7 +895,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
-  pangolin::Var<bool> showLabels("ui.show labels",false,true);
+  pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",true,true);
@@ -1108,8 +1108,8 @@ int main( int argc, char* argv[] )
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
-  float logAlpha = log(10.);
-  float tauO = 1.;
+  float logAlpha = log(1.);
+  float tauO = 10.;
   Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
