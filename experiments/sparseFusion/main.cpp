@@ -895,6 +895,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
+  pangolin::Var<bool> showDPvMFlabels("ui.show DPvMF labels",true,true);
   pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
@@ -954,7 +955,7 @@ int main( int argc, char* argv[] )
   int32_t iReadCurW = 0;
   size_t frame = 0;
 
-  tdp::ThreadedValue<bool> runSampling(false);
+  tdp::ThreadedValue<bool> runSampling(true);
   tdp::ThreadedValue<bool> runTopologyThread(true);
   tdp::ThreadedValue<bool> runMappingThread(true);
 
@@ -1108,10 +1109,10 @@ int main( int argc, char* argv[] )
 
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
-  float logAlpha = log(1.);
-  float tauO = 10.;
-  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
-  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
+  float logAlpha = log(.1);
+  float tauO = 100.;
+//  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
+//  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
@@ -1122,8 +1123,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-  zS.Fill(999); //std::numeric_limits<uint32_t>::max());
-  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(1000);
+  zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
+  tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(10000);
   vmfSS.Fill(tdp::Vector4fda::Zero());
 
   std::thread sampling([&]() {
@@ -1146,9 +1147,9 @@ int main( int argc, char* argv[] )
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         tdp::Vector3fda& ni = nS[i];
         uint16_t& zi = zS[i];
-//        tdp::Plane& pl = pl_w[i];
-//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-        Eigen::Vector3f mu = numSum_w[i]*nSum_w[i]*tauO;
+        tdp::Plane& pl = pl_w[i];
+        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
+//        Eigen::Vector3f mu = nSum_w[i]*tauO;
         if (zi < K) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
         }
@@ -1166,13 +1167,13 @@ int main( int argc, char* argv[] )
         tdp::Vector5ida& ids = nn[i];
 
         Eigen::VectorXf neighNs = Eigen::VectorXf::Zero(K);
-        for (int i=0; i<5; ++i) {
+        for (int i=0; i<kNN; ++i) {
           if (ids[i] > -1  && zS[ids[i]] < K) {
             neighNs[zS[ids[i]]] += 1.f;
           }
         }
         for (size_t k=0; k<K; ++k) {
-          logPdfs[k] = lambdaMRF*(neighNs[k]-5.);
+          logPdfs[k] = lambdaMRF*(neighNs[k]-kNN);
           if (zi == k) {
             logPdfs[k] += log(vmfSS[k](3)-1)+vmfs[k].logPdf(ni);
           } else {
@@ -1210,15 +1211,15 @@ int main( int argc, char* argv[] )
           }
         }
       }
-//      std::cout << "counts " << K << ": ";
-//      for (size_t k=0; k<K; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfSS[k](3) << " ";
+      std::cout << "counts " << K << ": ";
+      for (size_t k=0; k<K; ++k) 
+        if (vmfSS[k](3) > 0) 
+          std::cout << vmfSS[k](3) << " ";
 //      std::cout << "\ttaus: " ;
 //      for (size_t k=0; k<K; ++k) 
 //        if (vmfSS[k](3) > 0) 
 //          std::cout << vmfs[k].tau_ << " ";
-//      std::cout << std::endl;
+      std::cout << std::endl;
 //      // sample points
 //      for (int32_t i = 0; i!=iInsert;
 //        i=(i+1)%nn.w_) {
@@ -1670,8 +1671,13 @@ int main( int argc, char* argv[] )
               P, MV);
         } else if (showLabels && frame > 1) {
           labels.Reinitialise(pl_w.SizeToRead());
-          for (size_t i=0; i<labels.Area(); ++i) 
-            labels[i] = pl_w.GetCircular(i).z_;
+          if (showDPvMFlabels) {
+            for (size_t i=0; i<labels.Area(); ++i) 
+              labels[i] = zS[i] == 9999? 0 : zS[i];
+          } else {
+            for (size_t i=0; i<labels.Area(); ++i) 
+              labels[i] = pl_w.GetCircular(i).z_;
+          }
           lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
               1, GL_DYNAMIC_DRAW);
           lbo.Upload(labels.ptr_,  labels.SizeBytes(), 0);

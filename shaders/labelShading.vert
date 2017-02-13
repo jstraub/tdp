@@ -17,7 +17,7 @@ void main() {
 //    float c = 10000.*(value-minValue)/(maxValue-minValue);
 //    uv = vec2((c%100)*0.01,(c/100)*0.01);
     float c = value-minValue;
-    uv = vec2(mod(value,100.),value/100.);
+    uv = vec2(mod(value,100.)/100.+0.005,value/10000.+0.005);
   } else {
     uv = vec2(0.,0.);
   }

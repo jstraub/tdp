@@ -8,6 +8,13 @@ def GetEmptyFig():
   fig.add_axes(ax)
   return fig
 
+#I = np.resize(np.arange(9),(100,100))
+#fig = GetEmptyFig()
+#plt.imshow(I,
+#    interpolation="nearest", cmap=plt.get_cmap("Set1"))
+#plt.savefig("../shaders/labels/rnd.png",figure=fig)
+#plt.show()
+
 I = np.random.rand(101,101)
 for i in range(1,101):
   for j in range(1,101):
