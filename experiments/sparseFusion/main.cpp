@@ -863,10 +863,9 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.0001,0.0,0.1);
   pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
-  pangolin::Var<bool> useProj("ui.use proj in ICP",true,true);
 
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -1412,6 +1411,17 @@ int main( int argc, char* argv[] )
     pc.CopyFrom(pcs_c.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
+    cuRgb.CopyFrom(rgb);
+    if (gui.verbose) std::cout << "compute grey" << std::endl;
+    tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
+    tdp::Gradient(cuGreyFl, cuGreyDu, cuGreyDv, cuGradGrey);
+//    cuGreyFlSmooth.CopyFrom(cuGreyFl);
+////    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+//    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
+    greyFl.CopyFrom(cuGreyFl);
+//    greyFl.CopyFrom(cuGreyFlSmooth);
+//    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
+    gradGrey.CopyFrom(cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1461,12 +1471,12 @@ int main( int argc, char* argv[] )
                 continue;
               if (useTexture) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      grey(u,v), distThr, p2plThr, dotThr, lambdaTex,
+                      greyFl(u,v), distThr, p2plThr, dotThr, lambdaTex,
                       A, Ai, b, err))
                   continue;
               } else if (useNormals) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      grey(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
+                      greyFl(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
                       A, Ai, b, err)) {
                   continue;
                 }

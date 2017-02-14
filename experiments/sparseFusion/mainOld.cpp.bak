@@ -749,6 +749,7 @@ int main( int argc, char* argv[] )
 //    grey.CopyFrom(cuGrey);
 //    greyFl.CopyFrom(cuGreyFlSmooth);
 //    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
+//    gradGrey.CopyFrom(cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
