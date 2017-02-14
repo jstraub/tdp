@@ -121,7 +121,7 @@ void UniformResampleEmptyPartsOfMask(
 //      const float area1 = I/cam.params_(0)*J/cam.params_(1);
 //      const float areaEst = avgD*avgD*area1;
 //      float prob = subsample*areaEst/area1;
-      float prob = subsample*avgD*avgD;
+      float prob = subsample*avgD*avgD/float(I*J);
       if (count == 0) {
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
@@ -171,15 +171,16 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
 //      float prob = subsample*areaEst/area1;
       float prob = subsample*avgD*avgD;
       if (count == 0) {
-        float sum = 0.;
+        float sumGradNorm = 0.;
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            sum += greyGradNorm(u,v);
+            sumGradNorm += greyGradNorm(u,v);
           }
         }
+        prob /= sumGradNorm;
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (coin(gen) < prob*greyGradNorm(u,v)/sum) {
+            if (coin(gen) < prob*greyGradNorm(u,v)) {
               mask(u,v) = 1;
             }
           }
