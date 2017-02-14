@@ -673,6 +673,31 @@ int main( int argc, char* argv[] )
       input_uri = input_uri + std::string("video.pango");
     } 
   }
+  std::vector<std::string> streamTimeStamps;
+  if (!uri.scheme.compare("files")) {
+    std::cout << uri.scheme << std::endl;
+    std::cout << uri.url << std::endl;
+    std::string tumDepthFiles = pangolin::PathParent(uri.url,2)+std::string("/depth.txt");
+    std::cout << tumDepthFiles << std::endl;
+    if (pangolin::FileExists(tumDepthFiles)) {
+      std::cout << "found depth files; reading timestamps" << std::endl;
+      std::ifstream in(tumDepthFiles);
+      while(!in.eof()) {
+        std::string time, path;
+        if (in.peek() == '#') {
+          std::getline(in,path);
+          std::cout << "comment " << path << std::endl;
+          continue;
+        }
+        in >> time;
+        in >> path;
+        streamTimeStamps.push_back(time);
+//        std::cout << time << std::endl;
+      }
+      std::cout << "loaded " << streamTimeStamps.size() 
+        << " timestamps" << std::endl;
+    }
+  }
 
   std::cout << input_uri << std::endl;
   std::cout << imu_input_uri << std::endl;
@@ -1872,9 +1897,13 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   
-    out << pangolin::Time_us(pangolin::TimeNow())/1000000 << "."
-      << pangolin::Time_us(pangolin::TimeNow())%1000000 << " "
-      << T_wc.translation()(0) << " "  // tx
+    if (streamTimeStamps.size() > frame-1) {
+       out << streamTimeStamps[frame-1] << " ";
+    } else {
+      out << pangolin::Time_us(pangolin::TimeNow())/1000000 << "."
+        << pangolin::Time_us(pangolin::TimeNow())%1000000 << " ";
+    }
+    out << T_wc.translation()(0) << " "  // tx
       << T_wc.translation()(1) << " "  // ty
       << T_wc.translation()(2) << " "  // tz
       << T_wc.rotation().vector()(0) << " "  // qx
