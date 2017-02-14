@@ -772,6 +772,9 @@ int main( int argc, char* argv[] )
   viewPc3D.AddDisplay(viewCurrent);
   viewCurrent.SetBounds(0.,0.3,0.,0.3);
 
+  tdp::QuickView viewGreyGradNorm(wc, hc);
+  viewPc3D.AddDisplay(viewGreyGradNorm);
+  viewGreyGradNorm.SetBounds(0.,0.3,0.3,0.6);
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
@@ -831,6 +834,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<float> cuGreyFlSmooth(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreyGradNorm(wc,hc);
+  tdp::ManagedDeviceImage<float> cuGreyGradTheta(wc,hc);
+  tdp::ManagedHostImage<float> greyGradNorm(wc,hc);
   tdp::ManagedDeviceImage<tdp::Vector2fda> cuGradGrey(wc,hc);
   tdp::ManagedHostImage<tdp::Vector2fda> gradGrey(wc,hc);
 
@@ -1352,8 +1358,10 @@ int main( int argc, char* argv[] )
       std::random_shuffle(idsCur.begin(), idsCur.end());
       TOCK("extract assoc");
 
-      tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
-          subsample, gen, 32, 32, w, h);
+      tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
+          greyGradNorm, W, subsample, gen, 32, 32, w, h);
+//      tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
+//          subsample, gen, 32, 32, w, h);
       TOCK("mask");
       {
         iReadCurW = pl_w.iInsert_;
@@ -1440,6 +1448,9 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
     tdp::Gradient(cuGreyFl, cuGreyDu, cuGreyDv, cuGradGrey);
+    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv,
+      cuGreyGradTheta, cuGreyGradNorm);
+    greyGradNorm.CopyFrom(cuGreyGradNorm);
 //    cuGreyFlSmooth.CopyFrom(cuGreyFl);
 ////    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
 //    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
@@ -1851,6 +1862,9 @@ int main( int argc, char* argv[] )
     TICK("Draw 2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
+    if (viewGreyGradNorm.IsShown()) {
+      viewGreyGradNorm.SetImage(greyGradNorm);
+    }
     if (viewCurrent.IsShown()) {
       viewCurrent.SetImage(rgb);
       glColor3f(1,0,0);
