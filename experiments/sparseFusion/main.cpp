@@ -867,6 +867,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
 
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
+  pangolin::Var<float> pUniform("ui.p uniform ",0.3,0.1,1.);
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
@@ -980,7 +981,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<uint16_t> labels;
 
-  std::vector<std::pair<size_t, size_t>> mapNN;
+  std::vector<std::pair<int32_t, int32_t>> mapNN;
   mapNN.reserve(MAP_SIZE*kNN);
 
   int32_t iReadCurW = 0;
@@ -1032,14 +1033,17 @@ int main( int argc, char* argv[] )
             mapObsNum[iReadNext][i] = 0.;
 //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
           }
+          if (values(i) > 0.01) {
+            ids(i) = -1;
+          }
         }
         // just for visualization
         if (mapNN.size() < kNN*iReadNext) {
           for (int i=0; i<kNN; ++i) 
-            mapNN.emplace_back(iReadNext, ids[i]);
+            mapNN.emplace_back(iReadNext, ids(i));
         } else {
           for (int i=0; i<kNN; ++i) 
-            mapNN[iReadNext*kNN+i] = std::pair<size_t,size_t>(iReadNext, ids[i]);
+            mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
         }
         iReadNext = (iReadNext+1)%sizeToRead;
         {
@@ -1256,6 +1260,8 @@ int main( int argc, char* argv[] )
         if (doRegAbsN) {
           Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
         }
+        if ((ids.array() == -1).any()) 
+          continue;
         for (int j=0; j<kNN; ++j) {
           if (ids[j] > -1){
             const tdp::Plane& plO = pl_w[ids[j]];
@@ -1359,7 +1365,7 @@ int main( int argc, char* argv[] )
       TOCK("extract assoc");
 
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
-          greyGradNorm, W, subsample, gen, 32, 32, w, h);
+          greyGradNorm, W, subsample, gen, 32, 32, w, h, pUniform);
 //      tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
 //          subsample, gen, 32, 32, w, h);
       TOCK("mask");

@@ -149,7 +149,8 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
     const Image<float>& greyGradNorm, 
     uint32_t W,
     float subsample, std::mt19937& gen,
-    size_t I, size_t J, size_t w, size_t h
+    size_t I, size_t J, size_t w, size_t h,
+    float pUniform
     ) {
   std::uniform_real_distribution<> coin(0, 1);
   for (size_t i=0; i<I; ++i) {
@@ -177,10 +178,11 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
             sumGradNorm += greyGradNorm(u,v);
           }
         }
-        prob /= sumGradNorm;
+        float unif = 1./float(I*J);
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (coin(gen) < prob*greyGradNorm(u,v)) {
+            if (coin(gen) < prob*(pUniform*unif
+                  +(1.-pUniform)*greyGradNorm(u,v)/sumGradNorm)) {
               mask(u,v) = 1;
             }
           }
