@@ -864,10 +864,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> record("ui.record",false,true);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
+  pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
 
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
-  pangolin::Var<float> pUniform("ui.p uniform ",0.3,0.1,1.);
+  pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
   pangolin::Var<bool> useFAST("ui.use FAST",false,true);
 
@@ -964,6 +964,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
