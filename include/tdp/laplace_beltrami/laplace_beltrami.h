@@ -69,13 +69,20 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
 void addGaussianNoise(const ManagedHostImage<Vector3fda>& src,
                       float std,
                       ManagedHostImage<Vector3fda>& dst);
-/*********Coordinate System************************************************/
+/*********Coordinate System****************************************************/
 void toCartisean(const ManagedHostImage<Vector3fda>& pc_spherical,
                  ManagedHostImage<Vector3fda>& pc_cartisean);
 
+/*********DEFORMATION*********************************************************/
+void scale(const ManagedHostImage<Vector3fda>& src,
+           const float factor,
+           ManagedHostImage<Vector3fda>& dst);
 
+void Deform(const ManagedHostImage<Vector3fda>& src,
+            ManagedHostImage<Vector3fda>& dst,
+            float max_phi);
 
-/**********************************************************/
+/*****************************************************************************/
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){
 

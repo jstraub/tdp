@@ -63,79 +63,18 @@
 
 /************Declarations***************************************
  ***************************************************************/
-void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
-           const float factor,
-           tdp::ManagedHostImage<tdp::Vector3fda>& dst);
-void Test_scale();
 
-void Deform(tdp::ManagedHostImage<tdp::Vector3fda>& src,
-            float max_phi);
-
-void Test_deform();
-
-void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
-           const float factor,
-           tdp::ManagedHostImage<tdp::Vector3fda>& dst){
-  dst.Reinitialise(src.Area(),1);
-  for (int i=0; i<src.Area(); ++i){
-      dst[i] = factor * src[i];
-  }
-}
-
-void Test_scale(){
-  tdp::ManagedHostImage<tdp::Vector3fda> src(10,1), dst(10,1);
-  tdp::GetSphericalPc(src,10);
-  std::cout << "src\n" << std::endl;
-  tdp::printImage(src,0,src.Area());
-
-  scale(src, 1.0f, dst);
-  std::cout << "scale: 1.0f" << std::endl;
-  tdp::printImage(dst,0,dst.Area());
-
-  scale(src,2.0f, dst);
-  std::cout << "scale: 2.0f" << std::endl;
-  tdp::printImage(dst,0,dst.Area());
-}
-
-
-void Deform(tdp::ManagedHostImage<tdp::Vector3fda>& src,
-            float max_phi){
-  //Assumes src contain points on the unit sphere in spherical coordinate
-  //system: (p, theta, phi) where 0<=theta<=2pi and 0<=phi<=pi
-
-  for (int i=0; i< src.Area(); ++i){
-    if (src[i][2] <= max_phi){
-      //scale p in proportion to 1/phi
-      src[i][0] = src[i][0]*(1+1/src[i][2]); //todo: add parameter for 1/phi
-    }
-  }
-}
-
-void Test_deform(){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10),pc_cart(10);
-  tdp::GetPointsOnSphere(pc, 100, 1);
-  tdp::toCartisean(pc,pc_cart);
-
-  std::cout << "Check if points are on unit sphere: \n";
-  tdp::printImage(pc,0,pc.Area());
-  std::cout << std::endl;
-
-  float max_phi = M_PI_2;
-  Deform(pc, max_phi);
-  std::cout << "Deformed---\n";
-  tdp::printImage(pc, 0, pc.Area());
-}
 
 /************TODO***********************************************/
 /***************************************************************/
-//2. FOCUS ON arm.ply and bunny ply
+//1. shape deformation
+//2. try function transfer + get error on deformed sphere
 
-/************Declarations***************************************
- ***************************************************************/
+
+
 
 int main(int argc, char* argv[]){
- Test_deform();
- return 0;
+
   //Create openGL window - guess sensible dimensions
   int menu_w = 180;
   pangolin::CreateWindowAndBind("GuiBase", 1200+menu_w, 800);
@@ -193,6 +132,7 @@ int main(int argc, char* argv[]){
 
   //--second shape point cloud
   pangolin::Var<float> sFactor("ui. second pc scale", 2.0, 0.5, 3); //pc_t[i] = sFactor*pc_s[i];
+  pangolin::Var<float> max_phi("ui. max phi", 0, 1e-6, M_PI); // spherical deformation using phi angle
   pangolin::Var<float> noiseStd("ui. noiseStd", 0, 0.00001, 0.0001); //zero mean Gaussian noise added to shape S
 
 
@@ -274,7 +214,8 @@ int main(int argc, char* argv[]){
          nSamples.GuiChanged()      ||
          shapeOpt.GuiChanged()      ||
          noiseStd.GuiChanged()      ||
-         sFactor.GuiChanged()       ){
+         sFactor.GuiChanged()       ||
+         max_phi.GuiChanged()){
       std::cout << "Running fMap from top..." << std::endl;
 
       if (argc<3){
@@ -308,9 +249,10 @@ int main(int argc, char* argv[]){
             std::cout << "Shape: manekine---" << std::endl;
         }
 
-        //pc_t.ResizeCopyFrom(pc_s);
-        scale(pc_s,sFactor, pc_t);
-        addGaussianNoise(pc_t, (float)noiseStd, pc_t);
+        //pc_t.ResizeCopyFrom(pc_s); //copy
+        //tdp::scale(pc_s,sFactor, pc_t); //scale
+        tdp::Deform(pc_s, pc_t, (float)max_phi);
+        //tdp::addGaussianNoise(pc_t, (float)noiseStd, pc_t);
 
         std::cout << "PC_S: " << pc_s.Area() << std::endl;
         std::cout << "PC_T: " << pc_t.Area() << std::endl;

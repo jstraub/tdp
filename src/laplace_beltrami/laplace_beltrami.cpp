@@ -197,6 +197,41 @@ void toCartisean(const ManagedHostImage<Vector3fda>& pc_spherical,
   }
 }
 
+/**************************DEFORMATION****************************************/
+void scale(const ManagedHostImage<Vector3fda>& src,
+           const float factor,
+           ManagedHostImage<Vector3fda>& dst){
+  dst.Reinitialise(src.Area(),1);
+  for (int i=0; i<src.Area(); ++i){
+      dst[i] = factor * src[i];
+  }
+}
+
+void Deform(const ManagedHostImage<Vector3fda>& src,
+            ManagedHostImage<Vector3fda>& dst,
+            float max_phi){
+  //Assumes src contain points on the unit sphere in spherical coordinate
+  //system: (p, theta, phi) where 0<=theta<=2pi and 0<=phi<=pi
+  // max_phi cannot be zero
+  // Returns deformed point cloud in spherical coordinates
+  dst.Reinitialise(src.Area(),1);
+  float k = 1/max_phi;
+  for (int i=0; i< src.Area(); ++i){
+    if (0 <= src[i][2] && src[i][2]<= max_phi){
+      //scale p in proportion to 1/phi
+//      std::cout << "changed!" << std::endl;
+      dst[i] = Vector3fda(src[i][0]*(1+k*(max_phi - src[i][2])),//src[i][0]*(1+1/src[i][2]),
+                               src[i][1],
+                               src[i][2]); //todo: add parameter for 1/phi
+    } else{
+//      std::cout << "same" << std::endl;
+      dst[i] = Vector3fda(src[i]);
+    }
+//    std::cout << "dst[i]: " << dst[i].transpose() << std::endl;
+  }
+}
+
+
 /**************************************************************************/
 
 Eigen::Matrix3f getLocalRot(const Matrix3fda& cov, const Eigen::SelfAdjointEigenSolver<Matrix3fda>& es){

@@ -53,59 +53,7 @@
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 /************Declarations***************************************
  ***************************************************************/
-void Deform(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
-            tdp::ManagedHostImage<tdp::Vector3fda>& dst,
-            float max_phi);
 
-void Test_deform();
-
-void Deform(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
-            tdp::ManagedHostImage<tdp::Vector3fda>& dst,
-            float max_phi){
-  //Assumes src contain points on the unit sphere in spherical coordinate
-  //system: (p, theta, phi) where 0<=theta<=2pi and 0<=phi<=pi
-  // max_phi cannot be zero
-  // Returns deformed point cloud in spherical coordinates
-  dst.Reinitialise(src.Area(),1);
-  float k = 1/max_phi;
-  for (int i=0; i< src.Area(); ++i){
-    if (0 <= src[i][2] && src[i][2]<= max_phi){
-      //scale p in proportion to 1/phi
-//      std::cout << "changed!" << std::endl;
-      dst[i] = tdp::Vector3fda(src[i][0]*(1+k*(max_phi - src[i][2])),//src[i][0]*(1+1/src[i][2]),
-                               src[i][1],
-                               src[i][2]); //todo: add parameter for 1/phi
-    } else{
-//      std::cout << "same" << std::endl;
-      dst[i] = tdp::Vector3fda(src[i]);
-    }
-//    std::cout << "dst[i]: " << dst[i].transpose() << std::endl;
-  }
-}
-
-void Test_deform(){
-  int n(5);
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(n,1),pc_cart(n,1),pc_d(n,1);
-  tdp::GetPointsOnSphere(pc, n, 1);
-  tdp::toCartisean(pc,pc_cart);
-
-  std::cout << "Check if points are on unit sphere: \n";
-  tdp::printImage(pc,0,pc.Area());
-  std::cout << std::endl;
-  // std::cout << "check norm: \n ";
-  // tdp::printImage(pc_cart, 0, pc_cart.Area());
-  // for(int i=0; i<pc_cart.Area(); ++i){
-  //   std::cout << pc_cart[i].norm() << ", ";
-  // }
-
-  //Deformation
-  float max_phi = M_PI_2;
-  Deform(pc, pc_d, max_phi);
-  std::cout << "Deformed---\n";
-  std::cout << pc_d.Area() << std::endl;
-
-  tdp::printImage(pc_d, 0, pc_d.Area());
-}
 /***************************************************************/
 
 /***************************************************************/
@@ -174,7 +122,7 @@ int main( int argc, char* argv[] )
       tdp::GetPointsOnSphere(pc_s, (int)nSamples);
       tdp::toCartisean(pc_s, pc_s_cart);
 
-      Deform(pc_s, pc_t,(float)max_phi);
+      tdp::Deform(pc_s, pc_t,(float)max_phi);
       tdp::toCartisean(pc_t, pc_t_cart);
 
       vbo_s.Reinitialise(pangolin::GlArrayBuffer, pc_s_cart.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);

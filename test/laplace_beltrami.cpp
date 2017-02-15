@@ -351,7 +351,44 @@ TEST(laplace_beltrami, GetPointsOnSphere){
   std::cout << std::endl;
 
 }
+TEST(laplace_beltrami, scale){
+  ManagedHostImage<Vector3fda> src(10,1), dst(10,1);
+  GetSphericalPc(src,10);
+  std::cout << "src\n" << std::endl;
+  printImage(src,0,src.Area());
 
+  scale(src, 1.0f, dst);
+  std::cout << "scale: 1.0f" << std::endl;
+  printImage(dst,0,dst.Area());
+
+  scale(src,2.0f, dst);
+  std::cout << "scale: 2.0f" << std::endl;
+  printImage(dst,0,dst.Area());
+}
+
+TEST(laplace_beltrami, deform){
+  int n(5);
+  ManagedHostImage<tdp::Vector3fda> pc(n,1),pc_cart(n,1),pc_d(n,1);
+  GetPointsOnSphere(pc, n, 1);
+  toCartisean(pc,pc_cart);
+
+  std::cout << "Check if points are on unit sphere: \n";
+  printImage(pc,0,pc.Area());
+  std::cout << std::endl;
+  // std::cout << "check norm: \n ";
+  // tdp::printImage(pc_cart, 0, pc_cart.Area());
+  // for(int i=0; i<pc_cart.Area(); ++i){
+  //   std::cout << pc_cart[i].norm() << ", ";
+  // }
+
+  //Deformation
+  float max_phi = M_PI_2;
+  Deform(pc, pc_d, max_phi);
+  std::cout << "Deformed---\n";
+  std::cout << pc_d.Area() << std::endl;
+
+  printImage(pc_d, 0, pc_d.Area());
+}
 
 
 int main(int argc, char **argv) {
