@@ -54,13 +54,22 @@ void GetSimplePc(ManagedHostImage<Vector3fda>& pc, int n){
     }
 }
 
+void GetPointsOnSphere(ManagedHostImage<Vector3fda>& pc,
+                      int nPoints,
+                      float r){
+  pc.Reinitialise(nPoints,1);
 
-//todo: DEPRECATE this!
-void GetSphericalPc(ManagedHostImage<Vector3fda>& pc){
-    //pc.Reinitialise(pc.w_, pc.h_);
-    for (size_t i=0; i<pc.w_; ++i) {
-       pc[i] = S3f::Random().vector();
-    }
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<float> U(0,M_PI);
+
+  for (int i=0; i<nPoints; ++i){
+    pc[i] = Vector3fda(r,2*U(gen),U(gen));
+  }
+
+  // p[0] = r; //unit sphere
+  // p[1] = 2*U(gen); //theta
+  // p[2] = U(gen); //phi
 }
 
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc,
@@ -91,6 +100,34 @@ void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc,
         float z  = static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX);
         pc[i] = Vector3fda(pt_2d.vector()(0), pt_2d.vector()(1), z);
     }
+}
+
+
+void GetPc(const ManagedHostImage<Vector3fda>& pc,
+           const std::pair<int, std::string>& shapeOpt,
+           int nSamples){
+  std::cout << shapeOpt.first << ", " << shapeOpt.second << std::endl;
+//  switch (shapeOpt.first){
+//    case 0:{
+//      GetSimplePc(pc, nSamples);
+//      std::cout << "Shape: linear---" << std::endl;
+//      break;
+//    }
+//    case 1:{
+//      GetSphericalPc(pc, nSamples);
+//      std::cout << "Shape: sphere---" << std::endl;
+//      break;
+//    }
+//    case 2:{
+//      std::cout << "Shape: bunny---" << std::endl;
+//    }
+//    case 3:{
+//      ManagedHostImage<Vector3fda> pc_all;
+//      LoadPointCloudFromMesh(shapeOpt.second, pc_all);
+//      GetSamples(pc_all, pc, nSamples);
+//      std::cout << "Shape: manekine---" << std::endl;
+//    }
+//  }
 }
 
 void GetGrid(ManagedHostImage<Vector3fda>& pc, int w, int h, float step){
@@ -131,9 +168,9 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
 }
 
 //todo: change this to template
-void addGaussianNoise(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
+void addGaussianNoise(const ManagedHostImage<Vector3fda>& src,
                       float std,
-                      tdp::ManagedHostImage<tdp::Vector3fda>& dst){
+                      ManagedHostImage<Vector3fda>& dst){
   dst.Reinitialise(src.Area(),1);
   std::normal_distribution<float> normal(0, std); //zero mean Guassian
   std::random_device rd; //seed
@@ -144,6 +181,20 @@ void addGaussianNoise(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
           dst[i](e) = src[i](e) + normal(rng);
         }
     }
+}
+
+/*********Coordinate System************************************************/
+void toCartisean(const ManagedHostImage<Vector3fda>& pc_spherical,
+                ManagedHostImage<Vector3fda>& pc_cartisean){
+  pc_cartisean.Reinitialise(pc_spherical.Area(),1);
+  for (int i=0; i<pc_spherical.Area(); ++i){
+    Vector3fda p = pc_spherical[i];
+    float x = p[0]*sin(p[2])*cos(p[1]);
+    float y = p[0]*sin(p[2])*sin(p[1]);
+    float z = p[0]*cos(p[2]);
+
+    pc_cartisean[i] = Vector3fda(x,y,z);
+  }
 }
 
 /**************************************************************************/

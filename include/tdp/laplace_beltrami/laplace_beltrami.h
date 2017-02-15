@@ -30,14 +30,24 @@ Matrix3fda getCovariance(const Image<Vector3fda>& pc,
 
 /*************Get Point Clouds****************************
 **********************************************************/
-ManagedHostImage<Vector3fda> GetSimplePc(int n=10);
+/*
+ * Get point clouds
+ * shapeOpt: int, string pair for shapeOpt index and path to mesh file
+         : (0,""), (1,""), (2,fpathToBunny), (3, fpathToManekine)
+ */
+void GetPc(const ManagedHostImage<Vector3fda>& pc,
+           const std::pair<int, std::string>& shapeOpt,
+           int nSamples);
 
 void GetSimplePc(ManagedHostImage<Vector3fda>& pc, int n=10);
 
-void GetSphericalPc(ManagedHostImage<Vector3fda>& pc);
+//Get points on sphere in spherical coordinates
+void GetPointsOnSphere(ManagedHostImage<Vector3fda>& pc,
+                      int nPoints=10,
+                      float r=1.0f);
 
 void GetSphericalPc(ManagedHostImage<Vector3fda>& pc,
-                    int nSamples);
+                    int nSamples=10);
 
 void GetCylindricalPc(ManagedHostImage<Vector3fda>& pc);
 
@@ -59,9 +69,13 @@ void GetSamples_seed(const Image<Vector3fda>& pc,
 void addGaussianNoise(const ManagedHostImage<Vector3fda>& src,
                       float std,
                       ManagedHostImage<Vector3fda>& dst);
+/*********Coordinate System************************************************/
+void toCartisean(const ManagedHostImage<Vector3fda>& pc_spherical,
+                 ManagedHostImage<Vector3fda>& pc_cartisean);
+
+
+
 /**********************************************************/
-
-
 template<typename T>
 inline void getAxesIds(const std::vector<T>& vec, std::vector<int>& sortIds){
 

@@ -54,7 +54,6 @@
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
-
 /************TODO***********************************************/
 /***************************************************************/
 //2. FOCUS ON arm.ply and bunny ply
@@ -433,10 +432,19 @@ int main(int argc, char* argv[]){
       std::cout << "C matrix is (re)calculated\n" << std::endl;
     }
 
-    if (cChanged || showFTransfer ){//transferZ.pushed
+//    if (cChanged || showFTransfer ){//transferZ.pushed
+//        int nTest = (int)pc_s.Area() - nPW;
+//        tdp::ManagedHostImage<tdp::Vector3fda> pc_test(nTest,1);
+////        tdp::GetPc(pc_test,shapeOpt,nTest);
+//        float error = 0;
+//        for ( int i=nPW; i<(int)pc_test.Area(); ++i){
+//            Eigen::VectorXf true_w, true_l, guess_w;
+////            tdp::f_landmark(pc_s, pc_test[i], alpha2, option, true_w);
+
+//          }
 
 
-    }
+//    }
 
 
     // Draw 3D stuff

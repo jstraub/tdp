@@ -5,11 +5,12 @@ using namespace tdp;
 
 TEST(laplace_beltrami, meanAndCov) {
     //TEST OF getMean and getCovariance
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    ManagedHostImage<Vector3fda> pc(10,1);
+    GetSimplePc(pc);
     Eigen::VectorXi nnIds(10);
     nnIds<< 0,1,2,3,4,5,6,7,8,9;
-    tdp::Vector3fda mean = getMean(pc, nnIds);
-    tdp::Matrix3fda cov = getCovariance(pc,nnIds);
+    Vector3fda mean = getMean(pc, nnIds);
+    Matrix3fda cov = getCovariance(pc,nnIds);
     std::cout << "mean: \n" << mean << std::endl << std::endl;
     std::cout << "cov: \n" << cov << std::endl << std::endl;
 }
@@ -17,8 +18,9 @@ TEST(laplace_beltrami, meanAndCov) {
 TEST(laplace_beltrami, getAllLocalBasis) {
 
     //test getAllLocalBasis
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
-    tdp::ManagedHostImage<tdp::SE3f> locals(pc.w_,1);
+    ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    GetSimplePc(pc);
+    ManagedHostImage<tdp::SE3f> locals(pc.w_,1);
 
     tdp::ANN ann;
     ann.ComputeKDtree(pc);
@@ -46,8 +48,7 @@ TEST(laplace_beltrami, getAllLocalBasis) {
 TEST(laplace_beltrami, poly2Basis) {
 
 
-    tdp::Vector3fda vec1(10.,10.,10.);
-    tdp::Vector3fda vec2(0,0,0);
+    Vector3fda vec1(10.,10.,10.), vec2(0,0,0);
     std::cout << poly2Basis(vec1) << std::endl;
     std::cout << poly2Basis(vec2) << std::endl;
 
@@ -55,10 +56,11 @@ TEST(laplace_beltrami, poly2Basis) {
 
 TEST(laplace_beltrami, getLocalRot) {
 
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
-    tdp::Vector3fda query;
-    tdp::Matrix3fda cov, localRot;
-    Eigen::SelfAdjointEigenSolver<tdp::Matrix3fda> es;
+    ManagedHostImage<Vector3fda> pc(10,1);
+    GetSimplePc(pc);
+    Vector3fda query;
+    Matrix3fda cov, localRot;
+    Eigen::SelfAdjointEigenSolver<Matrix3fda> es;
     int knn = 1;
     float eps = 1e-4;
     Eigen::VectorXi nnIds(knn);
@@ -86,9 +88,10 @@ TEST(laplace_beltrami, getLocalRot) {
 
 TEST(laplace_beltrami, Laplacian) {
 
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    ManagedHostImage<Vector3fda> pc(10,1);
+    GetSimplePc(pc);
 
-    tdp::ANN ann;
+    ANN ann;
     ann.ComputeKDtree(pc);
 
     Eigen::VectorXf evector(pc.Area(),1);
@@ -108,7 +111,7 @@ TEST(laplace_beltrami, Laplacian) {
 
     //Test getLevelSets
     int nBins = 2;
-    tdp::eigen_vector<tdp::Vector3fda> means;
+    eigen_vector<Vector3fda> means;
     means = getLevelSetMeans(pc, evector, nBins);
     std::cout << "means----" << std::endl;
     for (int i = 0; i< means.size(); ++i){
@@ -122,12 +125,13 @@ TEST(laplace_beltrami, LaplacianEvectors) {
     int idEv = 0; int knn=5; float eps=1e-6;
     int numEv = 3;
 
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    ManagedHostImage<tdp::Vector3fda> pc(10);
+    GetSimplePc(pc);
 
-    tdp::ANN ann;
+    ANN ann;
     ann.ComputeKDtree(pc);
 
-    tdp::eigen_vector<Eigen::VectorXf> evectors(numEv, Eigen::VectorXf(pc.Area(),1));
+    eigen_vector<Eigen::VectorXf> evectors(numEv, Eigen::VectorXf(pc.Area(),1));
     Eigen::VectorXf evector(pc.Area(),1);
     Eigen::SparseMatrix<float> L(pc.Area(), pc.Area());
 
@@ -150,12 +154,13 @@ TEST(laplace_beltrami, LaplacianEvectors) {
 
 TEST(laplace_beltrami, getCylinder) {
 
-    tdp::ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    ManagedHostImage<tdp::Vector3fda> pc(10,1);
     GetCylindricalPc(pc);
 }
 
 TEST(laplace_beltrami, RbfKernels){
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = GetSimplePc();
+    ManagedHostImage<tdp::Vector3fda> pc(10,1);
+    GetSimplePc(pc);
 //    std::vector<float> f;
 //    float alpha = 0.1;
 
@@ -175,36 +180,37 @@ TEST(laplace_beltrami, RbfKernels){
 }
 
 TEST(laplace_beltrami, randomSeed){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc1, pc2, pc3, pc4;
-  tdp::GetSphericalPc(pc1, 10);
-  tdp::GetSphericalPc(pc2, 10);
-  tdp::GetSphericalPc(pc3, 10);
+  ManagedHostImage<tdp::Vector3fda> pc1, pc2, pc3, pc4;
+  GetSphericalPc(pc1, 10);
+  GetSphericalPc(pc2, 10);
+  GetSphericalPc(pc3, 10);
   pc4.ResizeCopyFrom(pc3);
 
   std::cout << "PC1---" << std::endl;
-  tdp::printImage(pc1, 0, pc1.Area() -1);
+  printImage(pc1, 0, pc1.Area());
   std::cout << "PC2---" << std::endl;
-  tdp::printImage(pc2, 0, pc2.Area() -1);
+  printImage(pc2, 0, pc2.Area());
   std::cout << "PC3---" << std::endl;
-  tdp::printImage(pc3, 0, pc3.Area() -1);
+  printImage(pc3, 0, pc3.Area());
   std::cout << "PC4---" << std::endl;
-  tdp::printImage(pc4, 0, pc4.Area() -1);
+  printImage(pc4, 0, pc4.Area());
 }
 
 TEST(laplace_beltrami, f_landmark){
     std::string opt;
     float alpha = 0.1;
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
+    ManagedHostImage<Vector3fda> pc(10,1);
+    GetSimplePc(pc);
     Eigen::VectorXf f_w;
 
     for (int p_idx = 0; p_idx < pc.Area(); p_idx++){
         opt = "rbf";
-        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
+        f_landmark(pc, p_idx, alpha, opt, f_w);
         std::cout << "opt: " << opt << std::endl;
         std::cout << "fw: " << f_w.transpose() << std::endl;
 
         opt = "ind";
-        tdp::f_landmark(pc, p_idx, alpha, opt, f_w);
+        f_landmark(pc, p_idx, alpha, opt, f_w);
         std::cout << "opt: " << opt << std::endl;
         std::cout << "fw: " << f_w.transpose() << std::endl;
         std::cout << "\n\n" << std::endl;
@@ -213,28 +219,29 @@ TEST(laplace_beltrami, f_landmark){
 
 
 TEST(laplace_beltrami, printImage){
-    tdp::ManagedHostImage<tdp::Vector3fda> pc = tdp::GetSimplePc();
+    ManagedHostImage<Vector3fda> pc(10,1);
+    GetSimplePc(pc);
     std::cout << "---tdp::ing image---" << std::endl;
-    tdp::printImage(pc,0,pc.Area());
+    printImage(pc,0,pc.Area());
 
     pc.Reinitialise(10);
     for (int i =0; i< 10; ++i){
-        pc[i] = tdp::Vector3fda(i,i,i);
+        pc[i] = Vector3fda(i,i,i);
     }
     std::cout << "---Printing image---" << std::endl;
-    tdp::printImage(pc,0,pc.Area());
+    printImage(pc,0,pc.Area());
 }
 
 
 TEST(laplace_beltrami, addGaussianNoise){
-   tdp::ManagedHostImage<tdp::Vector3fda> pc_s, pc_t;
-   tdp::GetSimplePc(pc_s);
-   tdp::addGaussianNoise(pc_s, 0.1f, pc_t);
+   ManagedHostImage<Vector3fda> pc_s, pc_t;
+   GetSimplePc(pc_s);
+   addGaussianNoise(pc_s, 0.1f, pc_t);
 
    std::cout << "PC_S ----" << std::endl;
-   tdp::printImage(pc_s, 0, pc_s.Area());
+   printImage(pc_s, 0, pc_s.Area());
    std::cout << "PC_T ---" << std::endl;
-   tdp::printImage(pc_t, 0, pc_t.Area());
+   printImage(pc_t, 0, pc_t.Area());
 }
 
 TEST(laplace_beltrami, clean_near_zero_one){
@@ -242,7 +249,7 @@ TEST(laplace_beltrami, clean_near_zero_one){
   M << 1.0f, 1.001f, 0.99991,
        0.0f, 0.0001f, -0.0001f,
        0.0f, 1.0f, 1.0f;
-  tdp::clean_near_zero_one(M, 0.002);
+  clean_near_zero_one(M, 0.002);
   std::cout << M << std::endl;
 }
 
@@ -254,7 +261,7 @@ TEST(laplace_beltrami, makeCacheNames){
   float noiseStd = 0.001;
   int nEv = 5;
 
-  std::map<std::string, std::string> d = tdp::makeCacheNames(
+  std::map<std::string, std::string> d = makeCacheNames(
     shapeOpt, nSamples, knn, alpha, noiseStd, nEv, "./cache/");
 
   std::cout << "Checking the dictionary---" << std::endl;
@@ -263,7 +270,7 @@ TEST(laplace_beltrami, makeCacheNames){
   }
 
   std::cout << "\nTEST2---" << std::endl;
-  std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
+  std::map<std::string, std::string> cacheDic = makeCacheNames(
     shapeOpt, nSamples, knn, alpha, noiseStd, nEv, "./somedir/");
   const char* path_ls = cacheDic.at("ls").c_str();
   const char* path_lt = cacheDic.at("lt").c_str();
@@ -282,26 +289,75 @@ TEST(laplace_beltrami, makeCacheNames){
 }
 
 TEST(laplace_beltrami, f_height){
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(10);
-  tdp::GetSimplePc(pc);
-  tdp::printImage(pc,0,pc.Area());
+  ManagedHostImage<Vector3fda> pc(10);
+  GetSimplePc(pc);
+  printImage(pc,0,pc.Area());
 
   Eigen::VectorXf f_w(pc.Area());
-  tdp::f_height(pc,f_w);
+  f_height(pc,f_w);
   std::cout << f_w.transpose() << std::endl;
 
   std::cout << "Test with sphere" << std::endl;
-  tdp::GetSphericalPc(pc,10);
-  tdp::printImage(pc, 0, pc.Area());
+  GetSphericalPc(pc,10);
+  printImage(pc, 0, pc.Area());
 
-  tdp::f_height(pc,f_w);
+  f_height(pc,f_w);
   std::cout << f_w.transpose() << std::endl;
 
   std::cout << "finished." << std::endl;
 }
 
+TEST(laplace_beltrami, GetPc){
+  std::pair<int, std::string> shapeOpt;
+  int nSamples = 10;
+  ManagedHostImage<Vector3fda> pc(nSamples,1);
+
+  shapeOpt = std::make_pair(0,"");
+  GetPc(pc, shapeOpt, nSamples);
+  std::cout << "linear pc: ";
+  printImage(pc,0,pc.Area());
+
+  shapeOpt = std::make_pair(1,"");
+  GetPc(pc, shapeOpt, nSamples);
+  std::cout << "spherical pc: ";
+  printImage(pc,0,pc.Area());
+
+  shapeOpt = std::make_pair(2,"/home/hjsong/workspace/data/mesh/bun_zipper_res4.ply");
+  GetPc(pc, shapeOpt, nSamples);
+  std::cout << "bunny pc: ";
+  printImage(pc,0,pc.Area());
+
+
+  shapeOpt = std::make_pair(3,"/home/hjsong/workspace/data/mesh/cleanCylinder_0");
+  GetPc(pc, shapeOpt, nSamples);
+  std::cout << "manequine pc: ";
+  printImage(pc,0,pc.Area());
+
+}
+
+TEST(laplace_beltrami, GetPointsOnSphere){
+  ManagedHostImage<Vector3fda> pc(10,1),pc_cart(10,1);
+  GetPointsOnSphere(pc);
+  std::cout << "points on sphere with spherical coordinates:\n ";
+  printImage(pc,0,pc.Area());
+
+  std::cout << "to cartisean\n";
+  toCartisean(pc,pc_cart);
+  printImage(pc_cart,0,pc_cart.Area());
+  std::cout <<"\tcheck if they are on the sphere---";
+  for (int i=0; i<pc_cart.Area(); ++i){
+    std::cout << pc_cart[i].norm() << ", ";
+  }
+  std::cout << std::endl;
+
+}
+
+
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
+
+  std::cout << "test laplace beltrami" << std::endl;
     return RUN_ALL_TESTS();
 }
 

@@ -152,8 +152,9 @@ float getWKS(const Eigen::MatrixXf& LB_basis,
 
 
 void Test_simplePc(){
-    tdp::ManagedHostImage<tdp::Vector3fda> pc_s = tdp::GetSimplePc();
-    tdp::ManagedHostImage<tdp::Vector3fda> pc_t = tdp::GetSimplePc();
+    tdp::ManagedHostImage<tdp::Vector3fda> pc_s(10,1),pc_t(10,1);
+    tdp::GetSimplePc(pc_s);
+    tdp::GetSimplePc(pc_t);
     // parameters
     int numEv = pc_s.Area()/2;//pc_s.Area()-2; //get ALL eigenvectors of L
     int knn = pc_s.Area(); // use all points as neighbors

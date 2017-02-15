@@ -56,7 +56,6 @@
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
 
-
 /************TODO***********************************************/
 /***************************************************************/
 //1. MOVE THE TESTS TO A SEPARATE TEST FILE
@@ -69,6 +68,10 @@ void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
            tdp::ManagedHostImage<tdp::Vector3fda>& dst);
 void Test_scale();
 
+void Deform(tdp::ManagedHostImage<tdp::Vector3fda>& src,
+            float max_phi);
+
+void Test_deform();
 
 void scale(const tdp::ManagedHostImage<tdp::Vector3fda>& src,
            const float factor,
@@ -92,8 +95,37 @@ void Test_scale(){
   scale(src,2.0f, dst);
   std::cout << "scale: 2.0f" << std::endl;
   tdp::printImage(dst,0,dst.Area());
-
 }
+
+
+void Deform(tdp::ManagedHostImage<tdp::Vector3fda>& src,
+            float max_phi){
+  //Assumes src contain points on the unit sphere in spherical coordinate
+  //system: (p, theta, phi) where 0<=theta<=2pi and 0<=phi<=pi
+
+  for (int i=0; i< src.Area(); ++i){
+    if (src[i][2] <= max_phi){
+      //scale p in proportion to 1/phi
+      src[i][0] = src[i][0]*(1+1/src[i][2]); //todo: add parameter for 1/phi
+    }
+  }
+}
+
+void Test_deform(){
+  tdp::ManagedHostImage<tdp::Vector3fda> pc(10),pc_cart(10);
+  tdp::GetPointsOnSphere(pc, 100, 1);
+  tdp::toCartisean(pc,pc_cart);
+
+  std::cout << "Check if points are on unit sphere: \n";
+  tdp::printImage(pc,0,pc.Area());
+  std::cout << std::endl;
+
+  float max_phi = M_PI_2;
+  Deform(pc, max_phi);
+  std::cout << "Deformed---\n";
+  tdp::printImage(pc, 0, pc.Area());
+}
+
 /************TODO***********************************************/
 /***************************************************************/
 //2. FOCUS ON arm.ply and bunny ply
@@ -102,8 +134,8 @@ void Test_scale(){
  ***************************************************************/
 
 int main(int argc, char* argv[]){
-//  Test_scale();
-//  return 0;
+ Test_deform();
+ return 0;
   //Create openGL window - guess sensible dimensions
   int menu_w = 180;
   pangolin::CreateWindowAndBind("GuiBase", 1200+menu_w, 800);
@@ -205,10 +237,9 @@ int main(int argc, char* argv[]){
   //*****************Declare variables*********************************/
   std::string option("rbf");
 
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_all;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_s;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_t;
-  tdp::ManagedHostImage<tdp::Vector3fda> pc_grid((int)nEv*(int)nEv,1);
+  tdp::ManagedHostImage<tdp::Vector3fda> 
+    pc_all,pc_s, pc_t,
+    pc_grid((int)nEv*(int)nEv,1);
 
   std::string fpath_b, fpath_m;
   // std::map<std::string, std::string> cacheDic;
@@ -444,10 +475,10 @@ int main(int argc, char* argv[]){
           Eigen::VectorXf f_w(pc_s.Area()), g_w(pc_t.Area()), f_l, g_l;
 //          tdp::f_landmark(pc_s, i, alpha2, option, f_w); //points in order in pc
 //          tdp::f_landmark(pc_t, i, alpha2, option, g_w);
-          std::cout << "i: " << i << ", " << std::endl;
-          std::cout << "pindex: " << pIndices[i] << std::endl;
+//          std::cout << "i: " << i << ", " << std::endl;
+//          std::cout << "pindex: " << pIndices[i] << std::endl;
 
-          tdp::f_landmark(pc_s, pIndices[i], alpha2, option, f_w); //points in order in pc
+          tdp::f_landmark(pc_s, pIndices[i], alpha2, option, f_w); //points in suffled order
           tdp::f_landmark(pc_t, pIndices[i], alpha2, option, g_w);
 
           f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);

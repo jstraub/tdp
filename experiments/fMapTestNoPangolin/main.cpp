@@ -78,33 +78,37 @@ int main(int argc, char* argv[]){
   std::string option("rbf");
   int shapeOpt = 2;
   int nSamples = 450;
-  int nEv = 50;
-  float factor;// = 1.0f; //to decide nPW = ceil(factor*nEv);
+  int nEv = 30;
+  float factor = 8.0f;// = 1.0f; //to decide nPW = ceil(factor*nEv);
   int nHKS = 0;
   float noiseStd = 0;
   float thresh(0.f); //threshold for cmatrix pad to zero or one
   bool showDecomposition = false;
-  std::vector<float> thresholds{0.0f, 1e-4, 1e-5, 1e-6};
+  std::vector<float> thresholds{0.0f, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8};
  
-  // Test_samePc_sameSamples(nSamples,nEv, factor, nHKS,
-  //                         option,
-  //                         shapeOpt,
-  //                         showDecomposition);
-  std::cout << "Experiment-------------------------" <<std::endl;
-  std::cout << "shape: " << shapeOpt << ", nPoints: " << nSamples 
-            << ", nEv: " << nEv  << std::endl; 
+  Test_samePc_sameSamples(nSamples, noiseStd, nEv, factor, 
+                          nHKS,
+                          thresh,
+                          option,
+                          shapeOpt,
+                          showDecomposition);
 
-  for (int i =0; i<thresholds.size(); ++i){
-    std::cout << "\n================================="<< std::endl;
-    std::cout << i << ". threshold: " << thresholds[i] << std::endl;
-    for (int f=0; f< floor(nSamples/nEv); ++f){
-        std::cout << "\tfactor(nEv->nPW): " << f << std::endl;
 
-        Test_samePc_sameSamples(nSamples, noiseStd, nEv, (float)f, nHKS, thresholds[i],
-                              option, shapeOpt, showDecomposition);
-        std::cout << "=================================\n"<< std::endl;
-    }
-  } 
+  // std::cout << "Experiment-------------------------" <<std::endl;
+  // std::cout << "shape: " << shapeOpt << ", nPoints: " << nSamples 
+  //           << ", nEv: " << nEv  << std::endl; 
+
+  // for (int i =0; i<thresholds.size(); ++i){
+  //   std::cout << "\n================================="<< std::endl;
+  //   std::cout << i << ". threshold: " << thresholds[i] << std::endl;
+  //   for (int f=0; f< floor(nSamples/nEv); ++f){
+  //       std::cout << "\tfactor(nEv->nPW): " << f << std::endl;
+
+  //       Test_samePc_sameSamples(nSamples, noiseStd, nEv, (float)f, nHKS, thresholds[i],
+  //                             option, shapeOpt, showDecomposition);
+  //       std::cout << "=================================\n"<< std::endl;
+  //   }
+  // } 
 
 }
 
@@ -343,6 +347,19 @@ void Test_samePc_sameSamples(int nSamples, float noiseStd,
     std::cout << "Surface dim: " << pc_s.Area() << std::endl;
     std::cout << "N test points: " << nTest << std::endl;
     std::cout << "rms: " << error << std::endl;
+
+    //transfer z function
+    Eigen::VectorXf fz_w(pc_s.Area()), gz_w(pc_t.Area()),
+                    fz_l((int)nEv), gz_l((int)nEv);
+    for (int i=0; i< pc_s.Area(); ++i){
+      fz_w(i) = pc_s[i](2);//*pc_s[i](1);
+    }
+    fz_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*fz_w);
+    gz_l = C*fz_l;
+    gz_w = T_wl*gz_l;
+    std::cout << "f_l: " << fz_l.transpose() << std::endl;
+    std::cout << "g_l: " << gz_l.transpose() << std::endl;
+    std::cout << "diff: " << sqrt((fz_l-gz_l).squaredNorm()) << std::endl;
 }
 
 
