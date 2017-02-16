@@ -22,7 +22,7 @@ void RenderVboIds(
 void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
-  const pangolin::OpenGlRenderState& cam,
+  const pangolin::OpenGlRenderState& cam
     ) {
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->labelShader_;
   shader.Bind();

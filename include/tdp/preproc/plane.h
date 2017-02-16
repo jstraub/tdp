@@ -49,7 +49,7 @@ struct Plane {
       const tdp::SE3f& T_wc,
       const CameraBase<float,D,Derived>& cam,
       float u, float v,
-      const tdp::Vector2fda& gradGrey,
+      const tdp::Vector2fda& gradGrey
       ) {
     float uGrad = u + gradGrey(0);
     float vGrad = v + gradGrey(1);
