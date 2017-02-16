@@ -891,6 +891,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
 
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
+  pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
+  pangolin::Var<int> numInl("ui.num Inl",0,0,0);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
@@ -1362,8 +1364,6 @@ int main( int argc, char* argv[] )
   assoc.reserve(10000);
 
   uint32_t numObs = 0;
-  uint32_t numInlPrev = 0;
-
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -1517,7 +1517,6 @@ int main( int argc, char* argv[] )
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
-    size_t numProjected =0;
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
       TICK("icp");
@@ -1527,12 +1526,12 @@ int main( int argc, char* argv[] )
       float dotThr = cos(angleThr*M_PI/180.);
       std::vector<size_t> indK(invInd.size(),0);
       for (size_t it = 0; it < maxIt; ++it) {
-          mask.Fill(0);
-          assoc.clear();
+        mask.Fill(0);
+        assoc.clear();
 //          pc_c.MarkRead();
 //          n_c.MarkRead();
-          indK = std::vector<size_t>(invInd.size(),0);
-          numProjected = 0;
+        indK = std::vector<size_t>(invInd.size(),0);
+        numProjected = 0;
 
         A = Eigen::Matrix<float,6,6>::Zero();
         b = Eigen::Matrix<float,6,1>::Zero();
@@ -1540,16 +1539,12 @@ int main( int argc, char* argv[] )
         float err = 0.;
         float H = 1e10;
         float Hprev = 1e10;
-        uint32_t numInl = 0;
-        numObs = 0;
-
         tdp::SE3f T_cw = T_wc.Inverse();
 //        size_t numInl0 = numInl;
-        numInlPrev = numInl;
         // associate new data until enough
         bool exploredAll = false;
         uint32_t k = 0;
-        while (numObs < 10000 && !exploredAll) {
+        while (assoc.size() < 1000 && !exploredAll) {
           k = (k+1) % invInd.size();
           while (indK[k] < invInd[k].size()) {
             size_t i = invInd[k][indK[k]++];
@@ -1585,20 +1580,16 @@ int main( int argc, char* argv[] )
             }
             pl.lastFrame_ = frame;
             pl.numObs_ ++;
-            numInl ++;
             mask(u,v) ++;
             assoc.emplace_back(i,u+v*pc.w_);
             break;
           }
 
-          if (numInl > numInlPrev
-              && k == 0) {
+          if (k == 0) {
             if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
                   negLogEvThr, H, gui.verbose))
               break;
             Hprev = H;
-            numObs ++;
-            numInlPrev = numInl;
           }
 
           exploredAll = true;
@@ -1606,6 +1597,7 @@ int main( int argc, char* argv[] )
             exploredAll &= indK[k] >= invInd[k].size();
           }
         }
+        numInl = assoc.size();
 //        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
         if (numInl > 10) {
@@ -1622,8 +1614,8 @@ int main( int argc, char* argv[] )
         }
         if (x.topRows<3>().norm()*180./M_PI < icpdRThr
             && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f, negLogEvThr, H, gui.verbose)) {
-          std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
+            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
+              negLogEvThr, H, gui.verbose)) {
           break;
         }
       }
@@ -1636,7 +1628,7 @@ int main( int argc, char* argv[] )
               << " of " << invInd[k].size() << std::endl;
         }
       }
-      logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
+      logObs.Log(log(numInl)/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().real();
@@ -1662,7 +1654,7 @@ int main( int argc, char* argv[] )
       q0 *= (q0(maxId) > 0? 1.: -1.);
       logEv.Log(q0);
       T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr && numInlPrev > 10;
+      trackingGood = H <= HThr && numInl > 10;
       TOCK("icp");
       if (trackingGood) {
         if (gui.verbose) 
