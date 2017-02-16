@@ -439,8 +439,10 @@ bool AccumulateP2Pl(const Plane& pl,
         // texture
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
-             Eigen::Matrix3f::Identity();
+        Jse3.leftColumns<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+        Jse3.rightColumns<3>() = Eigen::Matrix3f::Identity();
+//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+//             Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
         bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
