@@ -374,16 +374,20 @@ bool AccumulateP2Pl(const Plane& pl,
 //             Eigen::Matrix3f::Identity();
 //        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
         // texture
-        Eigen::Matrix<float,3,6> Jse3;
-        Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
-        Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+        if (tdp::IsValidData(pl.grad_)) {
+          Eigen::Matrix<float,3,6> Jse3;
+          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
-        Ai = Jse3.transpose() * pl.grad_;
-        bi = grey_ci - pl.grey_;
-        A += lambda*(Ai * Ai.transpose());
-        b += lambda*(Ai * bi);
-        err += lambda*bi;
+          Ai = Jse3.transpose() * pl.grad_;
+          bi = grey_ci - pl.grey_;
+          A += lambda*(Ai * Ai.transpose());
+          b += lambda*(Ai * bi);
+          err += lambda*bi;
+        } else {
+          std::cout << " grad 3D is nan!" << std::endl; 
+        }
         // accumulate
         return true;
       }
@@ -469,6 +473,62 @@ bool AccumulateP2Pl(const Plane& pl,
 //  }
 //  return false;
 //}
+//
+/// uses normals and p2pl
+bool AccumulateP2PlNormal(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float distThr, 
+    float p2plThr, 
+    float dotThr,
+    float gamma,
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float bi=0;
+  float dist = (pc_w - pc_c_in_w).norm();
+  if (dist < distThr) {
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (n_w_in_c.dot(n_ci) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        // p2pl
+        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>() = n_w_in_c; 
+        bi = p2pl;
+        A += Ai * Ai.transpose();
+        b += Ai * bi;
+        err += bi;
+//        std::cout << "--" << std::endl;
+//        std::cout << Ai.transpose() << "; " << bi << std::endl;
+        // normal old
+        Ai.topRows<3>() = -n_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>().fill(0.); 
+        bi = n_ci.dot(n_w_in_c) - 1.;
+        A += gamma*(Ai * Ai.transpose());
+        b += gamma*(Ai * bi);
+        err += gamma*bi;
+        // normal new
+//        Eigen::Matrix3f Asi = -T_wc.rotation().matrix()*tdp::SO3fda::invVee(n_ci);
+//        Eigen::Vector3f bsi = -(T_wc.rotation()*n_ci - n_w);
+//        A.topLeftCorner<3,3>() += gamma*(Asi*Asi.transpose());
+//        b.topRows<3>() += gamma*(Asi.transpose() * bsi);
+//        err += gamma*bsi.norm();
+        // accumulate
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 /// uses 3D gradient and normal as well
 bool AccumulateP2Pl(const Plane& pl, 
@@ -522,17 +582,21 @@ bool AccumulateP2Pl(const Plane& pl,
         err += gamma*bsi.norm();
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
-        Eigen::Matrix<float,3,6> Jse3;
-        Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
-        Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+        if (tdp::IsValidData(pl.grad_)) {
+          Eigen::Matrix<float,3,6> Jse3;
+          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
         // TODO: should not be using the model image gradient here!!
-        Ai = Jse3.transpose() * pl.grad_;
-        bi = grey_ci - pl.grey_;
-        A += lambda*(Ai * Ai.transpose());
-        b += lambda*(Ai * bi);
-        err += lambda*bi;
+          Ai = Jse3.transpose() * pl.grad_;
+          bi = grey_ci - pl.grey_;
+          A += lambda*(Ai * Ai.transpose());
+          b += lambda*(Ai * bi);
+          err += lambda*bi;
+        } else {
+          std::cout << "gradient is nan " << std::endl;
+        }
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // accumulate
         return true;
@@ -1011,10 +1075,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
-  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,0.1);
-  pangolin::Var<bool> useTexture("ui.use Tex in ICP",true,true);
-  pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
+  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.0,1.);
+  pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.0,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
+  pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
+  pangolin::Var<bool> useNormals("ui.use Ns ICP",true,true);
+  pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",true,true);
 
 
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -1612,11 +1678,9 @@ int main( int argc, char* argv[] )
       std::vector<size_t> indK(invInd.size(),0);
       for (size_t it = 0; it < maxIt; ++it) {
         // TODO might not be okay to not reset this?
-//        mask.Fill(0);
-        for (auto& ass : assoc) mask[ass.second] = 0;
-        assoc.clear();
-//          pc_c.MarkRead();
-//          n_c.MarkRead();
+        mask.Fill(0);
+//        for (auto& ass : assoc) mask[ass.second] = 0;
+//        assoc.clear();
         indK = std::vector<size_t>(invInd.size(),0);
         numProjected = 0;
 
@@ -1648,6 +1712,11 @@ int main( int argc, char* argv[] )
                       A, Ai, b, err))
                   continue;
               } else if (useNormals) {
+                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
+                      distThr, p2plThr, dotThr, lambdaNsOld, A, Ai, b, err)) {
+                  continue;
+                }
+              } else if (useNormalsAndTexture) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
                       greyFl(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
                       A, Ai, b, err)) {
