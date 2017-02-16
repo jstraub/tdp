@@ -833,6 +833,7 @@ int main( int argc, char* argv[] )
 
   containerTracking.Show(false);
   viewAssoc.Show(false);
+  viewGreyGradNorm.Show(false);
   plotters.Show(false);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -867,7 +868,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
   tdp::ManagedHostImage<uint32_t> z(w, h);
 
-  tdp::ManagedHostImage<float> age;
+  tdp::ManagedHostImage<float> age(MAP_SIZE);
 
 
   // ICP stuff
@@ -875,7 +876,6 @@ int main( int argc, char* argv[] )
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
-  pangolin::GlBuffer valuebo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,1);
 
 //  tdp::ManagedHostImage<tdp::Vector3fda> pc_c;
 //  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
@@ -953,7 +953,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
-  pangolin::Var<bool> showNN("ui.show NN",true,true);
+  pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
   pangolin::Var<int> step("ui.step",10,0,100);
 
@@ -976,20 +976,26 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer gradbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
   pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
+  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
+  pangolin::GlBuffer valuebo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
-  pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
-  rs.Fill(NAN);
-  pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
   tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
-  rgb_w.Fill(tdp::Vector3bda::Zero());
-
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
+
+  rs.Fill(NAN);
+  pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  rgb_w.Fill(tdp::Vector3bda::Zero());
   grad_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   n_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  
+  vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
+  nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+  cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+  gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
 
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
@@ -1006,7 +1012,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
 
-  tdp::ManagedHostImage<uint16_t> labels;
+  tdp::ManagedHostImage<uint16_t> labels(MAP_SIZE);
 
   std::vector<std::pair<int32_t, int32_t>> mapNN;
   mapNN.reserve(MAP_SIZE*kNN);
@@ -1376,6 +1382,7 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+
     if (runLoopClosure.GuiChanged()) {
       showLoopClose = runLoopClosure;
     }
@@ -1478,8 +1485,8 @@ int main( int argc, char* argv[] )
       TOCK("dpvmf");
     }
 
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    glColor3f(1.0f, 1.0f, 1.0f);
 
     gui.NextFrames();
 
@@ -1762,6 +1769,8 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
+      glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+      glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
       glColor4f(0.,1.,0.,1.0);
 //      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
@@ -1777,9 +1786,9 @@ int main( int argc, char* argv[] )
 
       TICK("Draw 3D nbo upload");
       if (showSamples) {
-        nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
+        nbo_w.Upload(nS.ptr_, nS.SizeToReadBytes(), 0);
       } else {
-        nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
+        nbo_w.Upload(n_w.ptr_, n_w.SizeToReadBytes(), 0);
       }
       TOCK("Draw 3D nbo upload");
 
@@ -1787,45 +1796,44 @@ int main( int argc, char* argv[] )
         TICK("Draw 3D render PC");
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
-        vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
-        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
+        vbo_w.Upload(pc_w.ptr_, pc_w.SizeToReadBytes(), 0);
+        cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeToReadBytes(), 0);
 //        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
 //            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv) {
-          age.Reinitialise(pl_w.SizeToRead());
           if (showAge) {
-            for (size_t i=0; i<age.Area(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).lastFrame_;
           } else if (showObs) {
-            for (size_t i=0; i<age.Area(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).numObs_;
           } else {
-            for (size_t i=0; i<age.Area(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
           }
-          valuebo.Reinitialise(pangolin::GlArrayBuffer, age.Area(),  GL_FLOAT,
-              1, GL_DYNAMIC_DRAW);
-          valuebo.Upload(age.ptr_,  age.SizeBytes(), 0);
-
-          std::pair<float,float> minMaxAge = age.MinMax();
+          valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
+          std::pair<float,float> minMaxAge = age.GetRoi(0,0,pl_w.SizeToRead(),1).MinMax();
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
         } else if (showLabels && frame > 1) {
-          labels.Reinitialise(pl_w.SizeToRead());
+//          labels.Reinitialise(pl_w.SizeToRead());
+          std::pair<float,float> minMaxAge; //labels.MinMax();
+          minMaxAge.first = 0;
+          minMaxAge.second = invInd.size();
           if (showDPvMFlabels) {
-            for (size_t i=0; i<labels.Area(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               labels[i] = zS[i] == 9999? 0 : zS[i];
+            lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           } else {
-            for (size_t i=0; i<labels.Area(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               labels[i] = pl_w.GetCircular(i).z_;
+            lbo.Upload(labels.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           }
-          lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
-              1, GL_DYNAMIC_DRAW);
-          lbo.Upload(labels.ptr_,  labels.SizeBytes(), 0);
-          std::pair<float,float> minMaxAge = labels.MinMax();
+//          lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
+//              1, GL_DYNAMIC_DRAW);
           if (gui.verbose) 
             std::cout << "render labels " << minMaxAge.first 
               << " " << minMaxAge.second << std::endl;
@@ -1848,7 +1856,7 @@ int main( int argc, char* argv[] )
           }
           TOCK("Draw 3D render NN");
         }
-        TICK("Draw 3D render PC");
+        TOCK("Draw 3D render PC");
       }
 
       if (showNormals) {

@@ -13,7 +13,7 @@ Labels* Labels::Instance() {
 }
 
 Labels::Labels() {
-  std::string file = SHADER_DIR+std::string("/labels/rnd.png");
+  std::string file = SHADER_DIR+std::string("/labels/randi.png");
   std::cout << "loading labels texture" << std::endl;
   std::cout << file << std::endl;
   labelsImg_ = pangolin::LoadImage(file);
