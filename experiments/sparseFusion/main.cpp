@@ -385,7 +385,85 @@ bool AccumulateP2Pl(const Plane& pl,
   return false;
 }
 
+
 /// uses texture and normal as well
+/// the use of the image gradient information was wrong here since this
+/// derivation was using the fact that we know the pose between
+/// observing the gradiant and the current image. This is not given
+/// since we only know pose to world;
+//bool AccumulateP2Pl(const Plane& pl, 
+//    tdp::SE3f& T_wc, 
+//    tdp::SE3f& T_cw, 
+//    CameraT& cam,
+//    const Vector3fda& pc_ci,
+//    const Vector3fda& n_ci,
+//    float grey_ci,
+//    float distThr, 
+//    float p2plThr, 
+//    float dotThr,
+//    float gamma,
+//    float lambda,
+//    Eigen::Matrix<float,6,6>& A,
+//    Eigen::Matrix<float,6,1>& Ai,
+//    Eigen::Matrix<float,6,1>& b,
+//    float& err
+//    ) {
+//  const tdp::Vector3fda& n_w =  pl.n_;
+//  const tdp::Vector3fda& pc_w = pl.p_;
+//  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+//  float bi=0;
+//  float dist = (pc_w - pc_c_in_w).norm();
+//  if (dist < distThr) {
+//    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+//    if (n_w_in_c.dot(n_ci) > dotThr) {
+//      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+//      if (fabs(p2pl) < p2plThr) {
+//        // p2pl
+//        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+//        Ai.bottomRows<3>() = n_w_in_c; 
+//        bi = p2pl;
+//        A += Ai * Ai.transpose();
+//        b += Ai * bi;
+//        err += bi;
+////        std::cout << "--" << std::endl;
+////        std::cout << Ai.transpose() << "; " << bi << std::endl;
+//        // normal old
+////        Ai.topRows<3>() = -n_ci.cross(n_w_in_c); 
+////        Ai.bottomRows<3>().fill(0.); 
+////        bi = n_ci.dot(n_w_in_c) - 1.;
+////        A += gamma*(Ai * Ai.transpose());
+////        b += gamma*(Ai * bi);
+////        err += gamma*bi;
+//        // normal new
+//        Eigen::Matrix3f Asi = -T_wc.rotation().matrix()*tdp::SO3fda::invVee(n_ci);
+//        Eigen::Vector3f bsi = -(T_wc.rotation()*n_ci - n_w);
+//        A.topLeftCorner<3,3>() += gamma*(Asi*Asi.transpose());
+//        b.topRows<3>() += gamma*(Ai.transpose() * bi);
+//        err += gamma*bi.norm();
+////        std::cout << Ai.transpose() << "; " << bi << std::endl;
+//        // texture
+//        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+//        Eigen::Matrix<float,3,6> Jse3;
+//        Jse3.leftColumns<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+//        Jse3.rightColumns<3>() = Eigen::Matrix3f::Identity();
+////        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+////             Eigen::Matrix3f::Identity();
+//        // TODO: should not be using the model image gradient here!!
+//        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
+//        bi = grey_ci - pl.grey_;
+//        A += lambda*(Ai * Ai.transpose());
+//        b += lambda*(Ai * bi);
+//        err += lambda*bi;
+////        std::cout << Ai.transpose() << "; " << bi << std::endl;
+//        // accumulate
+//        return true;
+//      }
+//    }
+//  }
+//  return false;
+//}
+
+/// uses 3D gradient and normal as well
 bool AccumulateP2Pl(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
@@ -437,14 +515,13 @@ bool AccumulateP2Pl(const Plane& pl,
         err += gamma*bi.norm();
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
         Eigen::Matrix<float,3,6> Jse3;
         Jse3.leftColumns<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
         Jse3.rightColumns<3>() = Eigen::Matrix3f::Identity();
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
         // TODO: should not be using the model image gradient here!!
-        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
+        Ai = Jse3.transpose() * pl.grad_;
         bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
