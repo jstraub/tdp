@@ -568,15 +568,16 @@ bool AccumulateRot(const Plane& pl,
 bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
     float Hprev,
     float HThr, float condEntropyThr, float negLogEvThr,
-    float& H) {
+    float& H, bool verbose) {
 
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
   Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
   H = negLogEv.sum();
   if ((H < HThr || Hprev - H < condEntropyThr) 
       && (negLogEv.array() < negLogEvThr).all()) {
-    std::cout <<  " H " << H << " cond H " << (Hprev-H) 
-      << " neg log evs: " << negLogEv.transpose() << std::endl;
+    if (verbose)
+      std::cout <<  " H " << H << " cond H " << (Hprev-H) 
+        << " neg log evs: " << negLogEv.transpose() << std::endl;
     return true;
   }
   return false;
@@ -900,8 +901,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updateMap("ui.update map",true,true);
 
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
-  pangolin::Var<bool> doRegPc0("ui.reg pc0",true,true);
-  pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",false,true);
+  pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
+  pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",true,true);
   pangolin::Var<bool> doRegAbsN("ui.reg abs n",true,true);
   pangolin::Var<bool> doRegRelPlZ("ui.reg rel Pl",true,true);
   pangolin::Var<bool> doRegRelNZ("ui.reg rel N",true,true);
@@ -929,7 +930,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-0.,-2.,1.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1.,-2.,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1586,7 +1587,7 @@ int main( int argc, char* argv[] )
           if (numInl > numInlPrev
               && k == 0) {
             if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                  negLogEvThr, H))
+                  negLogEvThr, H, gui.verbose))
               break;
             Hprev = H;
             numObs ++;
@@ -1614,7 +1615,7 @@ int main( int argc, char* argv[] )
         }
         if (x.topRows<3>().norm()*180./M_PI < icpdRThr
             && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f, negLogEvThr, H)) {
+            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f, negLogEvThr, H, gui.verbose)) {
           std::cout << numInl << " " << numObs << " " << numProjected << std::endl;
           break;
         }
@@ -1711,7 +1712,7 @@ int main( int argc, char* argv[] )
             }
           }
         }
-        if (gui.verbose()) std::cout << "num NN measured " << numNN << std::endl;
+        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
       }
     }
@@ -1752,8 +1753,10 @@ int main( int argc, char* argv[] )
     TICK("Draw 3D");
 
     if (showPcCurrent) {
+      TICK("Draw 3D vbo cbo upload");
       vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
       cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+      TOCK("Draw 3D vbo cbo upload");
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -1772,13 +1775,16 @@ int main( int argc, char* argv[] )
       glColor4f(1.,1.,0.,0.6);
       glDrawPoses(T_wcs,20, 0.03f);
 
+      TICK("Draw 3D nbo upload");
       if (showSamples) {
         nbo_w.Upload(nS.ptr_, nS.SizeBytes(), 0);
       } else {
         nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       }
+      TOCK("Draw 3D nbo upload");
 
       if (showFullPc) {
+        TICK("Draw 3D render PC");
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1832,6 +1838,7 @@ int main( int argc, char* argv[] )
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
         if (showNN) {
+          TICK("Draw 3D render NN");
 //          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
 //             << mapNN.size()/kNN << std::endl;
           glColor4f(0.3,0.3,0.3,0.3);
@@ -1839,22 +1846,28 @@ int main( int argc, char* argv[] )
             if (ass.second >= 0)
               tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
           }
+          TOCK("Draw 3D render NN");
         }
+        TICK("Draw 3D render PC");
       }
 
       if (showNormals) {
+        TICK("Draw 3D render normals");
         tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
         }
+        TOCK("Draw 3D render normals");
       } else if (showGrads) {
+        TICK("Draw 3D render grads");
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<grad_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + scale*grad_w.GetCircular(i));
         }
+        TOCK("Draw 3D render grads");
       }
 
       // render current camera second in the propper frame of
