@@ -5,6 +5,7 @@
 #include <tdp/features/brief.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/geometry/cosy.h>
+#include <tdp/camera/ray.h>
 
 namespace tdp {
 
@@ -42,6 +43,21 @@ struct Plane {
   bool Close(const Plane& other, float dotThr, float distThr, float p2plThr);
 
   float p2plDist(const Vector3fda& p);
+
+  template<int D, typename Derived>
+  tdp::Vector3fda Compute3DGradient(
+      const tdp::SE3f& T_wc,
+      const CameraBase<float,D,Derived>& cam,
+      float u, float v,
+      const tdp::Vector2fda& gradGrey,
+      ) {
+    float uGrad = u + gradGrey(0);
+    float vGrad = v + gradGrey(1);
+    tdp::Rayfda ray(tdp::Vector3fda::Zero(), cam.Unproject(uGrad,vGrad,1.));
+    ray.Transform(T_wc);
+    tdp::Vector3fda grad = gradGrey.norm()*(ray.IntersectPlane(p_,n_)-p_).normalized();
+    return grad;
+  }
 
 };
 

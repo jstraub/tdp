@@ -176,13 +176,13 @@ void ExtractPlanes(
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
         pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
 
-
-        float uGrad = u + 10.*pl.gradGrey_(0);
-        float vGrad = v + 10.*pl.gradGrey_(1);
-        tdp::Rayfda ray(tdp::Vector3fda::Zero(),
-            cam.Unproject(uGrad,vGrad,1.));
-        ray.Transform(T_wc);
-        pl.grad_ = (ray.IntersectPlane(pl.p_,pl.n_) - pl.p_).normalized();
+        pl.grad_ = pl.Compute3DGradient(T_wc, cam, u, v, gradGrey[i]);
+//        float uGrad = u + 10.*pl.gradGrey_(0);
+//        float vGrad = v + 10.*pl.gradGrey_(1);
+//        tdp::Rayfda ray(tdp::Vector3fda::Zero(),
+//            cam.Unproject(uGrad,vGrad,1.));
+//        ray.Transform(T_wc);
+//        pl.grad_ = pl.gradGrey_.norm()*(ray.IntersectPlane(pl.p_,pl.n_) - pl.p_).normalized();
         // could project onto plane spanned by normal?
 
         pl_w.Insert(pl);
@@ -1770,9 +1770,13 @@ int main( int argc, char* argv[] )
             pc_w[ass.first] = pl_w[ass.first].p_;
           } 
           float w = numSum_w[ass.first];
+          // filtering grad grey
+          pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
+              + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
           pcSum_w[ass.first] += pc_c_in_w;
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
+
           for (size_t i=0; i<kNN; ++ i) {
             for (const auto& assB : assoc) {
               if (assB.first == nn[ass.first](i)){
