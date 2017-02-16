@@ -1776,7 +1776,7 @@ int main( int argc, char* argv[] )
 
       TICK("Draw 3D nbo upload");
       if (showSamples) {
-        nbo_w.Upload(nS.ptr_, nS.SizeToReadBytes(), 0);
+        nbo_w.Upload(nS.ptr_, n_w.SizeToReadBytes(), 0);
       } else {
         nbo_w.Upload(n_w.ptr_, n_w.SizeToReadBytes(), 0);
       }
@@ -1917,7 +1917,7 @@ int main( int argc, char* argv[] )
       normalsCam.GetModelViewMatrix() = Tview;
       viewGrads.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
-      gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
+      gradbo_w.Upload(grad_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
       pangolin::RenderVbo(gradbo_w);
     }
 
