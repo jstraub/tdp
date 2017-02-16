@@ -57,10 +57,10 @@ int main() {
   float logAlpha = log(10.);
 
   vmfs.push_back(base.sample(rnd));
+  size_t K = vmfs.size();
   for (size_t it=0; it<10000; ++it) {
     // sample labels | parameters
     tdp::Timer t0;
-    size_t K = vmfs.size();
     for (size_t i=0; i<x.size(); ++i) {
       Eigen::VectorXf logPdfs(K+1);
       Eigen::VectorXf pdfs(K+1);
@@ -81,9 +81,15 @@ int main() {
 //        std::cout << z[i] << " " << K << ": " << pdfs.transpose() << std::endl;
 //      }
       if (z[i] == K) {
-        vmfs.push_back(base.posterior(x[i],1).sample(rnd));
-        counts.push_back(0);
-        xSum.push_back(Eigen::Vector3f::Zero());
+        if (vmfs.size() > K) {
+          vmfs[K] = base.posterior(x[i],1).sample(rnd);
+          counts[K] = 0;
+          xSum[K] = Eigen::Vector3f::Zero();
+        } else {
+          vmfs.push_back(base.posterior(x[i],1).sample(rnd));
+          counts.push_back(0);
+          xSum.push_back(Eigen::Vector3f::Zero());
+        }
         K++;
       }
       if (zPrev != z[i]) {
@@ -91,6 +97,15 @@ int main() {
         counts[z[i]] ++;
         xSum[zPrev] -= x[i];
         xSum[z[i]] += x[i];
+      }
+    }
+    std::vector<uint32_t> labelMap(K);
+    std::iota(labelMap.begin(), labelMap.end(), 0);
+    size_t j=0;
+    for (size_t k=0; k<K; ++k) {
+      labelMap[k] = j;
+      if (counts[k] > 0) {
+        j++;
       }
     }
     t0.toctic("labels");
@@ -101,8 +116,17 @@ int main() {
 //    }
     for (size_t k=0; k<K; ++k) {
       if (counts[k] > 0) {
-        vmfs[k] = base.posterior(xSum[k],counts[k]).sample(rnd);
+        vmfs[labelMap[k]] = base.posterior(xSum[k],counts[k]).sample(rnd);
+        counts[labelMap[k]] = counts[k];
+        xSum[labelMap[k]] = xSum[k];
       }
+    }
+    K = j;
+//    vmfs.resize(K);
+//    counts.resize(K);
+//    xSum.resize(K);
+    for (size_t i=0; i<x.size(); ++i) {
+      z[i] = labelMap[z[i]];
     }
     t0.toctic("parameters");
     std::cout << "counts K: " << K << ": ";
