@@ -1405,7 +1405,7 @@ int main( int argc, char* argv[] )
           pl_w.SizeToRead());
       TOCK("data assoc");
       TICK("extract assoc");
-      z.Fill(0);
+//      z.Fill(0);
       idsCur.clear();
       projAssoc.GetAssoc(z, mask, idsCur);
       std::random_shuffle(idsCur.begin(), idsCur.end());
@@ -1425,8 +1425,12 @@ int main( int argc, char* argv[] )
             n_w, grad_w, rs);
         TOCK("normals");
         TICK("add to model");
+        if (!runSampling.Get()) {
+          for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
+            dpvmf.addObservation(&pl_w[i].n_, &pl_w[i].z_);
+          }
+        }
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
-          dpvmf.addObservation(&pl_w[i].n_, &pl_w[i].z_);
           pcSum_w[i] = pl_w[i].p_;
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] ++;
@@ -1441,7 +1445,7 @@ int main( int argc, char* argv[] )
           iReadCurW*sizeof(float));
 
       TOCK("add to model");
-        numMapPoints = pl_w.SizeToRead();
+      numMapPoints = pl_w.SizeToRead();
 //      if (gui.verbose) 
 //        std::cout << " # map points: " << pl_w.SizeToRead() 
 //          << " " << dpvmf.GetZs().size() << std::endl;
@@ -1457,7 +1461,7 @@ int main( int argc, char* argv[] )
         for (size_t k=0; k<K; ++k) {
           if (k >= invInd.size()) {
             invInd.push_back(std::vector<uint32_t>());
-            invInd.back().reserve(10000);
+            invInd.back().reserve(1000);
           } else {
             invInd[k].clear();
           }
@@ -1466,7 +1470,7 @@ int main( int argc, char* argv[] )
           // only use ids that were found by projecting into the current pose
           for (auto i : idsCur) {
             uint32_t k = pl_w[i].z_;
-            if (invInd[k].size() < 10000)
+            if (invInd[k].size() < 1000)
               invInd[k].push_back(i);
           }
         } else {      
@@ -1476,7 +1480,7 @@ int main( int argc, char* argv[] )
           // use all ids in the current map
           for (auto i : id_w) {
             uint32_t k = pl_w[i].z_;
-            if (invInd[k].size() < 10000)
+            if (invInd[k].size() < 1000)
               invInd[k].push_back(i);
           }
         }
@@ -1510,8 +1514,6 @@ int main( int argc, char* argv[] )
 ////    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
 //    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
     greyFl.CopyFrom(cuGreyFl);
-//    greyFl.CopyFrom(cuGreyFlSmooth);
-//    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
     gradGrey.CopyFrom(cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1524,13 +1526,16 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-      std::vector<size_t> indK(invInd.size(),0);
+      assoc.clear();
       for (size_t it = 0; it < maxIt; ++it) {
-        mask.Fill(0);
+        // TODO might not be okay to not reset this?
+//        mask.Fill(0);
+        for (auto& ass : assoc) mask[ass.second] = 0;
         assoc.clear();
 //          pc_c.MarkRead();
 //          n_c.MarkRead();
-        indK = std::vector<size_t>(invInd.size(),0);
+//        indK = std::vector<size_t>(invInd.size(),0);
+        std::vector<size_t> indK(invInd.size(),0);
         numProjected = 0;
 
         A = Eigen::Matrix<float,6,6>::Zero();
@@ -1548,9 +1553,9 @@ int main( int argc, char* argv[] )
           k = (k+1) % invInd.size();
           while (indK[k] < invInd[k].size()) {
             size_t i = invInd[k][indK[k]++];
+            int32_t u, v;
             tdp::Plane& pl = pl_w.GetCircular(i);
             numProjected++;
-            int32_t u, v;
             if (angleThr > 0.) {
               if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                     W, dpc, n, curv, u,v ))
@@ -1580,7 +1585,7 @@ int main( int argc, char* argv[] )
             }
             pl.lastFrame_ = frame;
             pl.numObs_ ++;
-            mask(u,v) ++;
+            mask(u,v) |= 1;
             assoc.emplace_back(i,u+v*pc.w_);
             break;
           }
@@ -1670,13 +1675,6 @@ int main( int argc, char* argv[] )
 
           int32_t u = ass.second%pc.w_;
           int32_t v = ass.second/pc.w_;
-//          int32_t uRe = ass.second%pc.w_;
-//          int32_t vRe = ass.second/pc.w_;
-//          tdp::Plane& pl = pl_w[ass.first];
-//          if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-//                W, dpc, n, curv, uRe,vRe ))
-//            continue;
-//          std::cout << u << " " << v << " redone: " << u << " " << v << std::endl;
 
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
@@ -1811,26 +1809,14 @@ int main( int argc, char* argv[] )
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
               P, MV);
         } else if (showLabels && frame > 1) {
-//          labels.Reinitialise(pl_w.SizeToRead());
-          std::pair<float,float> minMaxAge; //labels.MinMax();
-          minMaxAge.first = 0;
-          minMaxAge.second = invInd.size();
           if (showDPvMFlabels) {
-            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              labels[i] = zS[i] == 9999? 0 : zS[i];
             lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               labels[i] = pl_w.GetCircular(i).z_;
             lbo.Upload(labels.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           }
-//          lbo.Reinitialise(pangolin::GlArrayBuffer, labels.Area(),  GL_UNSIGNED_SHORT,
-//              1, GL_DYNAMIC_DRAW);
-          if (gui.verbose) 
-            std::cout << "render labels " << minMaxAge.first 
-              << " " << minMaxAge.second << std::endl;
-          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, minMaxAge.first,
-              minMaxAge.second);
+          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);

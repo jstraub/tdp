@@ -54,9 +54,7 @@ void RenderVboIds(
 void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
-  const pangolin::OpenGlRenderState& cam,
-  float minVal,
-  float maxVal); 
+  const pangolin::OpenGlRenderState& cam);
 
 void RenderVboIbo(
   pangolin::GlBuffer& vbo,
