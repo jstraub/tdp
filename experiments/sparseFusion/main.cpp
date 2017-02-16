@@ -443,6 +443,7 @@ bool AccumulateP2Pl(const Plane& pl,
         Jse3.rightColumns<3>() = Eigen::Matrix3f::Identity();
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
+        // TODO: should not be using the model image gradient here!!
         Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
         bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
