@@ -153,44 +153,42 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
     float pUniform
     ) {
   std::uniform_real_distribution<> coin(0, 1);
+  float unif = pUniform/float(I*J);
   for (size_t i=0; i<I; ++i) {
     for (size_t j=0; j<J; ++j) {
       size_t count = 0;
-      float dSum = 0, numD = 0;
       for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
         for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-          if (mask(u,v)) count++;
-          if (IsValidData(pc(u,v))) {
-            dSum += pc(u,v)(2);
-            numD ++;
+          if (mask(u,v)) {
+            count++;
+            mask(u,v) = 0;
           }
         }
       }
-      const float avgD = dSum/numD;
 //      const float area1 = I/cam.params_(0)*J/cam.params_(1);
 //      const float areaEst = avgD*avgD*area1;
 //      float prob = subsample*areaEst/area1;
-      float prob = subsample*avgD*avgD;
       if (count == 0) {
         float sumGradNorm = 0.;
+        float dSum = 0, numD = 0;
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
             sumGradNorm += greyGradNorm(u,v);
-          }
-        }
-        float unif = 1./float(I*J);
-        for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
-          for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (coin(gen) < prob*(pUniform*unif
-                  +(1.-pUniform)*greyGradNorm(u,v)/sumGradNorm)) {
-              mask(u,v) = 1;
+            if (IsValidData(pc(u,v))) {
+              dSum += pc(u,v)(2);
+              numD ++;
             }
           }
         }
-      } else {
+        const float avgD = dSum/numD;
+        const float prob = subsample*avgD*avgD;
+        const float pGradNorm = prob*(1.-pUniform)/sumGradNorm;
+        const float probUnif = prob*unif;
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
-            if (mask(u,v)) mask(u,v) = 0;
+            if (coin(gen) < probUnif+pGradNorm*greyGradNorm(u,v)) {
+              mask(u,v) = 1;
+            }
           }
         }
       }
