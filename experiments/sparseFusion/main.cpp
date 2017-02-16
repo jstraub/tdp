@@ -422,13 +422,19 @@ bool AccumulateP2Pl(const Plane& pl,
         err += bi;
 //        std::cout << "--" << std::endl;
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
-        // normal
-        Ai.topRows<3>() = -n_ci.cross(n_w_in_c); 
-        Ai.bottomRows<3>().fill(0.); 
-        bi = n_ci.dot(n_w_in_c) - 1.;
-        A += gamma*(Ai * Ai.transpose());
-        b += gamma*(Ai * bi);
-        err += gamma*bi;
+        // normal old
+//        Ai.topRows<3>() = -n_ci.cross(n_w_in_c); 
+//        Ai.bottomRows<3>().fill(0.); 
+//        bi = n_ci.dot(n_w_in_c) - 1.;
+//        A += gamma*(Ai * Ai.transpose());
+//        b += gamma*(Ai * bi);
+//        err += gamma*bi;
+        // normal new
+        Eigen::Matrix3f Asi = -T_wc.rotation().matrix()*tdp::SO3fda::invVee(n_ci);
+        Eigen::Vector3f bsi = -(T_wc.rotation()*n_ci - n_w);
+        A.topLeftCorner<3,3>() += gamma*(Asi*Asi.transpose());
+        b.topRows<3>() += gamma*(Ai.transpose() * bi);
+        err += gamma*bi.norm();
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
