@@ -22,6 +22,7 @@ struct Plane {
   float grey_;
   Vector2fda gradGrey_; 
   Vector3fda dir_; 
+  Vector3fda grad_; 
 
   Brief feat_;
 

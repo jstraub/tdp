@@ -141,6 +141,7 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Vector3fda>& pc0_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
+    ManagedHostCircularBuffer<Vector3fda>& grad_w,
     ManagedHostCircularBuffer<float>& rs
     ) {
   Plane pl;
@@ -154,8 +155,11 @@ void ExtractPlanes(
         && 0.3 < pc[i].norm() )  {
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
+      const uint32_t u = i%mask.w_;
+      const uint32_t v = i/mask.w_;
+  
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, i%mask.w_, i/mask.w_, Wscaled, 0.29,
+      if (tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
             dpc, n, curv, p)) {
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
@@ -172,10 +176,20 @@ void ExtractPlanes(
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
         pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
 
+
+        float uGrad = u + 10.*pl.gradGrey_(0);
+        float vGrad = v + 10.*pl.gradGrey_(1);
+        tdp::Rayfda ray(tdp::Vector3fda::Zero(),
+            cam.Unproject(uGrad,vGrad,1.));
+        ray.Transform(T_wc);
+        pl.grad_ = (ray.IntersectPlane(pl.p_,pl.n_) - pl.p_).normalized();
+        // could project onto plane spanned by normal?
+
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         pc0_w.Insert(pl.p_);
         n_w.Insert(pl.n_);
+        grad_w.Insert(pl.grad_);
         rgb_w.Insert(pl.rgb_);
         rs.Insert(pl.r_);
       }
@@ -767,6 +781,11 @@ int main( int argc, char* argv[] )
   viewPc3D.AddDisplay(viewNormals);
   viewNormals.SetBounds(0.,0.4,0.6,1.);
 
+  pangolin::View& viewGrads = pangolin::CreateDisplay()
+    .SetHandler(new pangolin::Handler3D(s_cam));
+  viewPc3D.AddDisplay(viewGrads);
+  viewGrads.SetBounds(0.6,1.0,0.6,1.);
+
   tdp::QuickView viewCurrent(wc, hc);
 //  gui.container().AddDisplay(viewCurrent);
   viewPc3D.AddDisplay(viewCurrent);
@@ -869,7 +888,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
-  pangolin::Var<bool> useFAST("ui.use FAST",false,true);
+
+  pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
@@ -924,6 +944,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",true,true);
+  pangolin::Var<bool> showGrads("ui.show grads",true,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
@@ -951,6 +972,7 @@ int main( int argc, char* argv[] )
 
   pangolin::GlBuffer vbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
+  pangolin::GlBuffer gradbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
   pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
 
@@ -965,6 +987,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
+  grad_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  n_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
@@ -1157,18 +1182,31 @@ int main( int argc, char* argv[] )
           zCountS[i] ++;
         }
       }
+      std::vector<uint32_t> labelMap(Ksample);
+      std::iota(labelMap.begin(), labelMap.end(), 0);
+      size_t j=0;
+      for (size_t k=0; k<Ksample; ++k) {
+        labelMap[k] = j;
+        if (vmfSS[k](3) > 0) {
+          j++;
+        }
+      }
       // sample dpvmf parameters
       {
         std::lock_guard<std::mutex> lock(vmfsLock);
+        std::lock_guard<std::mutex> lockZs(zsLock);
         for (size_t k=0; k<Ksample; ++k) {
           if (vmfSS[k](3) > 0) {
-            vmfs[k] = base.posterior(vmfSS[k]).sample(rnd);
+            vmfs[labelMap[k]] = base.posterior(vmfSS[k]).sample(rnd);
+            vmfSS[labelMap[k]] = vmfSS[k];
           }
         }
-      }
-      {
-        std::lock_guard<std::mutex> lockZs(zsLock);
+        Ksample = j;
+        vmfs.resize(Ksample);
+//      }
+//      {
         for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+          zS[i] = labelMap[zS[i]];
           pl_w[i].z_ = zS[i];
         }
         K = Ksample;
@@ -1376,7 +1414,7 @@ int main( int argc, char* argv[] )
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
-            n_w, rs);
+            n_w, grad_w, rs);
         TOCK("normals");
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
@@ -1395,8 +1433,10 @@ int main( int argc, char* argv[] )
           iReadCurW*sizeof(float));
 
       TOCK("add to model");
-      std::cout << " # map points: " << pl_w.SizeToRead() 
-        << " " << dpvmf.GetZs().size() << std::endl;
+        numMapPoints = pl_w.SizeToRead();
+//      if (gui.verbose) 
+//        std::cout << " # map points: " << pl_w.SizeToRead() 
+//          << " " << dpvmf.GetZs().size() << std::endl;
       TICK("dpvmf");
       if (!runSampling.Get()) {
         dpvmfLock.lock();
@@ -1579,11 +1619,14 @@ int main( int argc, char* argv[] )
           break;
         }
       }
-      for (size_t k=0; k<indK.size(); ++k) {
-        if (invInd[k].size() > 0 )
-          std::cout << "used different directions " << k << "/" 
-            << invInd.size() << ": " << indK[k] 
-            << " of " << invInd[k].size() << std::endl;
+
+      if (gui.verbose) {
+        for (size_t k=0; k<indK.size(); ++k) {
+          if (invInd[k].size() > 0 )
+            std::cout << "used different directions " << k << "/" 
+              << invInd.size() << ": " << indK[k] 
+              << " of " << invInd[k].size() << std::endl;
+        }
       }
       logObs.Log(log(numObs)/log(10.), log(numInlPrev)/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
@@ -1591,8 +1634,10 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().real();
       Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
       float H = -ev.array().log().sum();
-      std::cout << " H " << H << " neg log evs " << 
-        -ev.array().log().matrix().transpose() << std::endl;
+      if (gui.verbose) {
+        std::cout << " H " << H << " neg log evs " << 
+          -ev.array().log().matrix().transpose() << std::endl;
+      }
 
 //      for (size_t k=0; k<K; ++k) {
 //        Eigen::Matrix<float,6,1> Ai;
@@ -1612,7 +1657,8 @@ int main( int argc, char* argv[] )
       trackingGood = H <= HThr && numInlPrev > 10;
       TOCK("icp");
       if (trackingGood) {
-        std::cout << "tracking good" << std::endl;
+        if (gui.verbose) 
+          std::cout << "tracking good" << std::endl;
       }
 
       if (updatePlanes && trackingGood) {
@@ -1665,7 +1711,7 @@ int main( int argc, char* argv[] )
             }
           }
         }
-        std::cout << "num NN measured " << numNN << std::endl;
+        if (gui.verbose()) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
       }
     }
@@ -1774,16 +1820,14 @@ int main( int argc, char* argv[] )
               1, GL_DYNAMIC_DRAW);
           lbo.Upload(labels.ptr_,  labels.SizeBytes(), 0);
           std::pair<float,float> minMaxAge = labels.MinMax();
-          std::cout << "render labels " << minMaxAge.first << " " << minMaxAge.second << std::endl;
+          if (gui.verbose) 
+            std::cout << "render labels " << minMaxAge.first 
+              << " " << minMaxAge.second << std::endl;
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, minMaxAge.first,
               minMaxAge.second);
-          std::cout << "render labels done" << std::endl;
         } else if (showSurfels) {
-//          std::cout << "rbo upload " << rs.SizeBytes() << std::endl;
-//          rbo.Upload(rs.ptr_, rs.SizeBytes(), 0);
-          std::cout << "render surfels" << std::endl;
+          if (gui.verbose) std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
-          std::cout << "rendered surfels" << std::endl;
         } else {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
@@ -1799,16 +1843,18 @@ int main( int argc, char* argv[] )
       }
 
       if (showNormals) {
-        std::cout << "render normals local" << std::endl;
         tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
-        std::cout << "render normals global " << n_w.SizeToRead() << std::endl;
-        pangolin::glUnsetFrameOfReference();
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
         }
-        std::cout << "render normals done" << std::endl;
+      } else if (showGrads) {
+        glColor4f(0,1,0,0.5);
+        for (size_t i=0; i<grad_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w.GetCircular(i), 
+              pc_w.GetCircular(i) + scale*grad_w.GetCircular(i));
+        }
       }
 
       // render current camera second in the propper frame of
@@ -1850,18 +1896,30 @@ int main( int argc, char* argv[] )
       glColor4f(0,0,1,0.5);
 //      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
       pangolin::RenderVbo(nbo_w);
-      glColor4f(1,0,0,1.);
-      for (size_t k=0; k<dpvmf.GetK(); ++k) {
-        tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
-      }
-      glColor4f(0,1,0,1.);
-      {
-        std::lock_guard<std::mutex> lock(vmfsLock);
-        for (size_t k=0; k<vmfs.size(); ++k) {
-          if (vmfSS[k](3) > 0)
-            tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+      if (!runSampling.Get()) {
+        glColor4f(1,0,0,1.);
+        for (size_t k=0; k<dpvmf.GetK(); ++k) {
+          tdp::glDrawLine(tdp::Vector3fda::Zero(), dpvmf.GetCenter(k));
+        }
+      } else { 
+        glColor4f(0,1,0,1.);
+        {
+          std::lock_guard<std::mutex> lock(vmfsLock);
+          for (size_t k=0; k<vmfs.size(); ++k) {
+            if (vmfSS[k](3) > 0)
+              tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+          }
         }
       }
+    }
+    if (viewGrads.IsShown()) {
+      Eigen::Matrix4f Tview = s_cam.GetModelViewMatrix();
+      Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -2.2;
+      normalsCam.GetModelViewMatrix() = Tview;
+      viewGrads.Activate(normalsCam);
+      glColor4f(0,0,1,0.5);
+      gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
+      pangolin::RenderVbo(gradbo_w);
     }
 
     TOCK("Draw 3D");
@@ -1881,7 +1939,6 @@ int main( int argc, char* argv[] )
             pangolin::glDrawCircle(u,v,1);
           }
         }
-      std::cout << "dots of mask done"<< std::endl;
     }
 
     if (containerTracking.IsShown()) {
@@ -1891,26 +1948,21 @@ int main( int argc, char* argv[] )
       if (viewGrey.IsShown()) {
         viewGrey.SetImage(grey);
       }
-      std::cout << "grey image and mask done"<< std::endl;
     }
     if (!gui.finished() && plotters.IsShown()) {
-      std::cout << "scroll plots" << std::endl;
       plotdH.ScrollView(1,0);
       plotH.ScrollView(1,0);
       plotObs.ScrollView(1,0);
       plotEig.ScrollView(1,0);
       plotEv.ScrollView(1,0);
-      std::cout << "scrolling done"<< std::endl;
     }
 
     TOCK("Draw 2D");
-    std::cout << "2D done"<< std::endl;
     if (record) {
       std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
       name = std::string(name.begin(), name.end()-4);
       gui.container().SaveOnRender(name);
     }
-    std::cout << "record done"<< std::endl;
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.
