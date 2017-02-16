@@ -367,12 +367,19 @@ bool AccumulateP2Pl(const Plane& pl,
         A += Ai * Ai.transpose();
         b += Ai * bi;
         err += bi;
+        // texture old
+//        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+//        Eigen::Matrix<float,3,6> Jse3;
+//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+//             Eigen::Matrix3f::Identity();
+//        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
         // texture
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
-             Eigen::Matrix3f::Identity();
-        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
+        Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+        Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
+//             Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * pl.grad_;
         bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
@@ -511,13 +518,13 @@ bool AccumulateP2Pl(const Plane& pl,
         Eigen::Matrix3f Asi = -T_wc.rotation().matrix()*tdp::SO3fda::invVee(n_ci);
         Eigen::Vector3f bsi = -(T_wc.rotation()*n_ci - n_w);
         A.topLeftCorner<3,3>() += gamma*(Asi*Asi.transpose());
-        b.topRows<3>() += gamma*(Ai.transpose() * bi);
-        err += gamma*bi.norm();
+        b.topRows<3>() += gamma*(Asi.transpose() * bsi);
+        err += gamma*bsi.norm();
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3.leftColumns<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
-        Jse3.rightColumns<3>() = Eigen::Matrix3f::Identity();
+        Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+        Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
         // TODO: should not be using the model image gradient here!!
@@ -975,6 +982,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
   pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
+  pangolin::Var<float> bgGrey("ui.bg Grey",0.02,0.0,1);
 
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
   pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
@@ -1004,8 +1012,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.0,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.0001,0.0,0.1);
-  pangolin::Var<bool> useTexture("ui.use Tex in ICP",false,true);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,0.1);
+  pangolin::Var<bool> useTexture("ui.use Tex in ICP",true,true);
   pangolin::Var<bool> useNormals("ui.use Ns in ICP",true,true);
 
 
@@ -1043,7 +1051,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
   pangolin::Var<bool> showNN("ui.show NN",false,true);
   pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
-  pangolin::Var<int> step("ui.step",10,0,100);
+  pangolin::Var<int> step("ui.step",10,1,100);
 
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
@@ -1117,16 +1125,12 @@ int main( int argc, char* argv[] )
   std::mutex mapLock;
   std::mutex dpvmfLock;
   std::thread topology([&]() {
-    int32_t iRead = 0;
-    int32_t iInsert = 0;
     int32_t iReadNext = 0;
     int32_t sizeToRead = 0;
     tdp::VectorkNNfda values;
     while(runTopologyThread.Get()) {
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
-        iRead = pl_w.iRead_;
-        iInsert = pl_w.iInsert_;
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead > 0) {
@@ -1135,7 +1139,7 @@ int main( int argc, char* argv[] )
         tdp::VectorkNNida& ids = nn[iReadNext];
         tdp::VectorkNNida idsPrev = ids;
         ids = tdp::VectorkNNida::Ones()*(-1);
-        for (size_t i=0; i<sizeToRead; ++i) {
+        for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
             float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
             tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
@@ -1144,7 +1148,7 @@ int main( int argc, char* argv[] )
         }
         // for map constraints
         // TODO: should be updated as pairs are reobserved
-        for (int i=0; i<kNN; ++i) {
+        for (int32_t i=0; i<kNN; ++i) {
 //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
 //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
 //            mapObsNum[iReadNext][i] = 1;
@@ -1160,10 +1164,10 @@ int main( int argc, char* argv[] )
         }
         // just for visualization
         if (mapNN.size() < kNN*iReadNext) {
-          for (int i=0; i<kNN; ++i) 
+          for (int32_t i=0; i<kNN; ++i) 
             mapNN.emplace_back(iReadNext, ids(i));
         } else {
-          for (int i=0; i<kNN; ++i) 
+          for (int32_t i=0; i<kNN; ++i) 
             mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
         }
         iReadNext = (iReadNext+1)%sizeToRead;
@@ -1201,15 +1205,12 @@ int main( int argc, char* argv[] )
   vmfSS.Fill(tdp::Vector4fda::Zero());
 
   std::thread sampling([&]() {
-    int32_t iRead = 0;
     int32_t iInsert = 0;
-    int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 rnd(0);
     while(runSampling.Get()) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-        iRead = nn.iRead_;
         iInsert = nn.iInsert_;
       }
       pS.iInsert_ = nn.iInsert_;
@@ -1346,16 +1347,13 @@ int main( int argc, char* argv[] )
   tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
   std::thread mapping([&]() {
-    int32_t iRead = 0;
     int32_t iInsert = 0;
-    int32_t iReadNext = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(runMappingThread.Get()) {
     if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-        iRead = nn.iRead_;
         iInsert = nn.iInsert_;
       }
       // compute gradient
@@ -1448,8 +1446,6 @@ int main( int argc, char* argv[] )
 
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
-
-  uint32_t numObs = 0;
 
   std::vector<std::vector<uint32_t>> invInd;
   std::vector<size_t> id_w;
@@ -1570,13 +1566,13 @@ int main( int argc, char* argv[] )
               invInd[k].push_back(i);
           }
         }
-        uint32_t Kcur = K;
+//        uint32_t Kcur = K;
       }
       TOCK("dpvmf");
     }
 
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+//    glClearColor(bgGrey, bgGrey, bgGrey, 1.0f);
+//    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
     gui.NextFrames();
 
@@ -1613,6 +1609,7 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
       assoc.clear();
+      std::vector<size_t> indK(invInd.size(),0);
       for (size_t it = 0; it < maxIt; ++it) {
         // TODO might not be okay to not reset this?
 //        mask.Fill(0);
@@ -1620,8 +1617,7 @@ int main( int argc, char* argv[] )
         assoc.clear();
 //          pc_c.MarkRead();
 //          n_c.MarkRead();
-//        indK = std::vector<size_t>(invInd.size(),0);
-        std::vector<size_t> indK(invInd.size(),0);
+        indK = std::vector<size_t>(invInd.size(),0);
         numProjected = 0;
 
         A = Eigen::Matrix<float,6,6>::Zero();
@@ -1641,7 +1637,7 @@ int main( int argc, char* argv[] )
             size_t i = invInd[k][indK[k]++];
             int32_t u, v;
             tdp::Plane& pl = pl_w.GetCircular(i);
-            numProjected++;
+            numProjected = numProjected + 1;
             if (angleThr > 0.) {
               if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                     W, dpc, n, curv, u,v ))
@@ -1712,7 +1708,7 @@ int main( int argc, char* argv[] )
       }
 
       if (gui.verbose) {
-        for (size_t k=0; k<indK.size(); ++k) {
+        for (size_t k=0; k<invInd.size(); ++k) {
           if (invInd[k].size() > 0 )
             std::cout << "used different directions " << k << "/" 
               << invInd.size() << ": " << indK[k] 
@@ -1773,6 +1769,7 @@ int main( int argc, char* argv[] )
           // filtering grad grey
           pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
               + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
+          grad_w[ass.first] = pl_w[ass.first].grad_;
           pcSum_w[ass.first] += pc_c_in_w;
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
@@ -1849,7 +1846,7 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
-      glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+      glClearColor(bgGrey, bgGrey, bgGrey, 1.0f);
       glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
       glColor4f(0.,1.,0.,1.0);
@@ -1941,7 +1938,7 @@ int main( int argc, char* argv[] )
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<grad_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
-              pc_w.GetCircular(i) + scale*grad_w.GetCircular(i));
+              pc_w.GetCircular(i) + 10.*scale*grad_w.GetCircular(i));
         }
         TOCK("Draw 3D render grads");
       }
