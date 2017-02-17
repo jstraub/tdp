@@ -15,4 +15,7 @@ log*.txt
 lib
 3rdparty/spectra
 
+config/tmp_data/*.xml
 config/tmp_data/*
+config/output.json
+
