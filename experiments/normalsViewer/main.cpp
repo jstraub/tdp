@@ -196,9 +196,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool>  normalsViaConv("ui.normals via conv",true,true);
   pangolin::Var<bool>  normalsViaClustering("ui.normals via clustering",true,true);
   pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
+  pangolin::Var<bool>  normalsViaRMLS("ui.normals via RMLS",true,true);
   pangolin::Var<bool>  normalsViaScatter("ui.normals via scatter",false,true);
   pangolin::Var<int>   W("ui.W", 9, 1, 12);
   pangolin::Var<float>  votingInlierThr("ui.voting inlier Thr", 0.29, 0., 1.);
+  pangolin::Var<float>  rmlsInlierThr("ui.rmls inlier Thr", 0.06, 0., 0.2);
   pangolin::Var<int>   step("ui.step", 20, 1, 40);
   pangolin::Var<float>  scale("ui.scale ", 0.05, 0.001, 0.1);
 
@@ -281,6 +283,11 @@ int main( int argc, char* argv[] )
 
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
         NormalsViaVoting(pc, W, step, votingInlierThr, dpc, n, curv);
+        cuN.CopyFrom(n);
+      } else if (normalsViaRMLS) {
+
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaRMLS(pc, W, step, rmlsInlierThr, dpc, n, curv);
         cuN.CopyFrom(n);
       } else if (normalsViaScatter) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
