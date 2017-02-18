@@ -76,15 +76,12 @@ bool NormalViaRMLS(
     xSum += pc(u0+1,v0);
     xSum += pc(u0,v0+1);
 
-//    std::cout << "\t" << n.transpose() << std::endl;
-//    size_t N = 3;
     std::deque<std::pair<int32_t, float>> errs;
     for (size_t u=u0-W; u<=u0+W; ++u) {
       for (size_t v=v0-W; v<=v0+W; ++v) {
         int32_t id = u+v*pc.w_;
         if (IsValidData(pc(u,v))
             && id != id0 && id != id1 && id != id2) {
-//          dpc(u,v).topRows<3>() = pc0 - pc(u,v);
           errs.emplace_back(id, n.dot(pc(u,v)));
         }
       }
@@ -97,7 +94,6 @@ bool NormalViaRMLS(
 
     float a = n.dot(pc0);
     int32_t i=0;
-//    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
     while(errs.size() > 0 && errs.front().second - a < inlierThr) {
       for (int j=0; j < floor(pow(1.3,i)); ++i) {
         if (errs.size() == 0 || errs.front().second - a >= inlierThr) {
@@ -105,13 +101,9 @@ bool NormalViaRMLS(
         }
         xOuter += pc[errs.front().first]*pc[errs.front().first].transpose();
         xSum += pc[errs.front().first];
-//        N ++;
         errs.pop_front();
       }
       n = (xOuter.ldlt().solve(xSum)).normalized();
-//      eig.computeDirect(xOuter - xSum*xSum.transpose()/float(N));
-//      int id = 0;
-//      n = eig.eigenvectors().col(id).normalized();
       a = n.dot(pc0);
 
       for (auto& err : errs) {
@@ -124,10 +116,8 @@ bool NormalViaRMLS(
           });
       ++i;
     }
-//    int32_t id;
     curvature = 0.; 
 //    eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
-
     ni = n * (n(2)<0.?1.:-1.);
     p = pc0;
     return true;
