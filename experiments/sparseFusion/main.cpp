@@ -385,6 +385,7 @@ bool AccumulateP2Pl(const Plane& pl,
           A += lambda*(Ai * Ai.transpose());
           b += lambda*(Ai * bi);
           err += lambda*bi;
+//          std::cout << bi << "\t" << pl.grad_.transpose() << "\t" << Ai.transpose() << std::endl;
         } else {
           std::cout << " grad 3D is nan!" << std::endl; 
         }
@@ -594,6 +595,7 @@ bool AccumulateP2Pl(const Plane& pl,
           A += lambda*(Ai * Ai.transpose());
           b += lambda*(Ai * bi);
           err += lambda*bi;
+//          std::cout << bi << "\t" << pl.grad_.transpose() << "\t" << Ai.transpose() << std::endl;
         } else {
           std::cout << "gradient is nan " << std::endl;
         }
@@ -1674,13 +1676,13 @@ int main( int argc, char* argv[] )
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-      assoc.clear();
       std::vector<size_t> indK(invInd.size(),0);
+      mask.Fill(0);
       for (size_t it = 0; it < maxIt; ++it) {
         // TODO might not be okay to not reset this?
-        mask.Fill(0);
-//        for (auto& ass : assoc) mask[ass.second] = 0;
-//        assoc.clear();
+//        mask.Fill(0);
+        for (auto& ass : assoc) mask[ass.second] = 0;
+        assoc.clear();
         indK = std::vector<size_t>(invInd.size(),0);
         numProjected = 0;
 

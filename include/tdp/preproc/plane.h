@@ -51,12 +51,17 @@ struct Plane {
       float u, float v,
       const tdp::Vector2fda& gradGrey
       ) {
-    float uGrad = u + gradGrey(0);
-    float vGrad = v + gradGrey(1);
-    tdp::Rayfda ray(tdp::Vector3fda::Zero(), cam.Unproject(uGrad,vGrad,1.));
-    ray.Transform(T_wc);
-    tdp::Vector3fda grad = gradGrey.norm()*(ray.IntersectPlane(p_,n_)-p_).normalized();
-    return grad;
+    if (gradGrey.squaredNorm() > 1e-6) {
+      float uGrad = u + gradGrey(0);
+      float vGrad = v + gradGrey(1);
+      tdp::Rayfda ray(tdp::Vector3fda::Zero(),
+          cam.Unproject(uGrad,vGrad,1.));
+      ray.Transform(T_wc);
+      tdp::Vector3fda grad = gradGrey.norm()*(
+          ray.IntersectPlane(p_,n_)-p_).normalized();
+      return grad;
+    }
+    return tdp::Vector3fda::Zero();
   }
 
 };
