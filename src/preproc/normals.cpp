@@ -1,5 +1,5 @@
 
-#include <dequeue>
+#include <deque>
 #include <assert.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/utils/timer.hpp>
@@ -63,10 +63,12 @@ bool NormalViaRMLS(
     const Vector3fda& pc0 = pc(u0,v0);
     int32_t id0 = u0+v0*pc.w_;
 
+    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
+    if (!IsValidData(n))
+      return false;
+
     Eigen::Matrix3f xOuter = pc0 * pc0.transpose();
     Eigen::Vector3f xSum = pc0;
-
-    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
     int32_t id1 = u0+1+v0*pc.w_;
     int32_t id2 = u0+(v0+1)*pc.w_;
     xOuter += pc(u0+1,v0)*pc(u0+1,v0).transpose();
@@ -74,47 +76,57 @@ bool NormalViaRMLS(
     xSum += pc(u0+1,v0);
     xSum += pc(u0,v0+1);
 
-    if (!IsValidData(n))
-      return false;
 //    std::cout << "\t" << n.transpose() << std::endl;
-    size_t N = 3;
-    std::dequeue<std::pair<int32_t, float>> errs;
+//    size_t N = 3;
+    std::deque<std::pair<int32_t, float>> errs;
     for (size_t u=u0-W; u<=u0+W; ++u) {
       for (size_t v=v0-W; v<=v0+W; ++v) {
         int32_t id = u+v*pc.w_;
         if (IsValidData(pc(u,v))
             && id != id0 && id != id1 && id != id2) {
-          dpc(u,v).topRows<3>() = pc0 - pc(u,v);
-          errs.emplace_back(id, n.dot(dpc(u,v).topRows<3>()));
+//          dpc(u,v).topRows<3>() = pc0 - pc(u,v);
+          errs.emplace_back(id, n.dot(pc(u,v)));
         }
       }
     }
     std::sort(errs.begin(), errs.end(), 
-        [&](std::pair<int32_t,float>& l, std::pair<int32_t,float>& r){
+        [&](const std::pair<int32_t,float>& l, 
+          const std::pair<int32_t,float>& r){
           return l.second < r.second;
         });
 
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
-    while(errs.size() > 0 && errs[0].second < inlierThr) {
-
-      std::pair<int32_t, float> err = errs.pop_front();
-      xOuter += pc[err.first]*pc[err.first].transpose();
-      xSum += pc[err.first];
-      N ++;
-
-      eig.computeDirect(xOuter - xSum*xSum.transpose()/float(N));
-      int id = 0;
-      n = eig.eigenvectors().col(id).normalized();
+    float a = n.dot(pc0);
+    int32_t i=0;
+//    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
+    while(errs.size() > 0 && errs.front().second - a < inlierThr) {
+      for (int j=0; j < floor(pow(1.3,i)); ++i) {
+        if (errs.size() == 0 || errs.front().second - a >= inlierThr) {
+          break;
+        }
+        xOuter += pc[errs.front().first]*pc[errs.front().first].transpose();
+        xSum += pc[errs.front().first];
+//        N ++;
+        errs.pop_front();
+      }
+      n = (xOuter.ldlt().solve(xSum)).normalized();
+//      eig.computeDirect(xOuter - xSum*xSum.transpose()/float(N));
+//      int id = 0;
+//      n = eig.eigenvectors().col(id).normalized();
+      a = n.dot(pc0);
 
       for (auto& err : errs) {
-        err.second = n.dot(dpc[err.first].topRows<3>());
+        err.second = n.dot(pc[err.first]);
       }
       std::sort(errs.begin(), errs.end(), 
-          [&](std::pair<int32_t,float>& l, std::pair<int32_t,float>& r){
+          [&](const std::pair<int32_t,float>& l, 
+            const std::pair<int32_t,float>& r){
           return l.second < r.second;
           });
+      ++i;
     }
-    curvature = eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
+//    int32_t id;
+    curvature = 0.; 
+//    eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
 
     ni = n * (n(2)<0.?1.:-1.);
     p = pc0;
