@@ -1,4 +1,5 @@
 
+#include <dequeue>
 #include <assert.h>
 #include <tdp/preproc/normals.h>
 #include <tdp/utils/timer.hpp>
@@ -46,6 +47,82 @@ void Depth2Normals(
 //  ComputeNormals(cuD, cuDu, cuDv, cuN, R_rc, f, uc, vc);
 //}
 #endif
+
+bool NormalViaRMLS(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W, float inlierThr,
+    Image<Vector4fda>& dpc, 
+    Vector3fda& ni,
+    float& curvature,
+    Vector3fda& p
+    ) {
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+    const Vector3fda& pc0 = pc(u0,v0);
+    int32_t id0 = u0+v0*pc.w_;
+
+    Eigen::Matrix3f xOuter = pc0 * pc0.transpose();
+    Eigen::Vector3f xSum = pc0;
+
+    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
+    int32_t id1 = u0+1+v0*pc.w_;
+    int32_t id2 = u0+(v0+1)*pc.w_;
+    xOuter += pc(u0+1,v0)*pc(u0+1,v0).transpose();
+    xOuter += pc(u0,v0+1)*pc(u0,v0+1).transpose();
+    xSum += pc(u0+1,v0);
+    xSum += pc(u0,v0+1);
+
+    if (!IsValidData(n))
+      return false;
+//    std::cout << "\t" << n.transpose() << std::endl;
+    size_t N = 3;
+    std::dequeue<std::pair<int32_t, float>> errs;
+    for (size_t u=u0-W; u<=u0+W; ++u) {
+      for (size_t v=v0-W; v<=v0+W; ++v) {
+        int32_t id = u+v*pc.w_;
+        if (IsValidData(pc(u,v))
+            && id != id0 && id != id1 && id != id2) {
+          dpc(u,v).topRows<3>() = pc0 - pc(u,v);
+          errs.emplace_back(id, n.dot(dpc(u,v).topRows<3>()));
+        }
+      }
+    }
+    std::sort(errs.begin(), errs.end(), 
+        [&](std::pair<int32_t,float>& l, std::pair<int32_t,float>& r){
+          return l.second < r.second;
+        });
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
+    while(errs.size() > 0 && errs[0].second < inlierThr) {
+
+      std::pair<int32_t, float> err = errs.pop_front();
+      xOuter += pc[err.first]*pc[err.first].transpose();
+      xSum += pc[err.first];
+      N ++;
+
+      eig.computeDirect(xOuter - xSum*xSum.transpose()/float(N));
+      int id = 0;
+      n = eig.eigenvectors().col(id).normalized();
+
+      for (auto& err : errs) {
+        err.second = n.dot(dpc[err.first].topRows<3>());
+      }
+      std::sort(errs.begin(), errs.end(), 
+          [&](std::pair<int32_t,float>& l, std::pair<int32_t,float>& r){
+          return l.second < r.second;
+          });
+    }
+    curvature = eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
+
+    ni = n * (n(2)<0.?1.:-1.);
+    p = pc0;
+    return true;
+  }
+  return false;
+}
+
 
 bool NormalViaVoting(
     const Image<Vector3fda>& pc, 
@@ -117,7 +194,8 @@ bool NormalViaVoting(
       S(2,1) = S(1,2);
       eig.computeDirect(S - p*p.transpose()/float(N));
       int id = 0;
-      curvature = eig.eigenvalues().minCoeff(&id);
+      // curvature according to PCL
+      curvature = eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
       n = eig.eigenvectors().col(id).normalized();
       p /= N;
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
@@ -126,19 +204,20 @@ bool NormalViaVoting(
     }
 
     ni = n * (n(2)<0.?1.:-1.);
-    float mu = 0;
-    for (size_t u=u0-W; u<=u0+W; ++u) {
-      for (size_t v=v0-W; v<=v0+W; ++v) {
-        if (dpc(u,v)(3) > 0. && u != u0 && v != v0) {
-          float ang = dpc(u,v).topRows<3>().dot(n);
-          if (orthoU*dpc(u,v)(3) < ang && ang <= orthoL*dpc(u,v)(3)) {
-            mu += dpc(u,v)(3); 
-          }
-        }
-      }
-    }
-    mu /= (N-1); // average dist to neighbors -> 
-    curvature = 2.*(ni.dot(pc0 - p))/(mu*mu);
+//    float mu = 0;
+//    for (size_t u=u0-W; u<=u0+W; ++u) {
+//      for (size_t v=v0-W; v<=v0+W; ++v) {
+//        if (dpc(u,v)(3) > 0. && u != u0 && v != v0) {
+//          float ang = dpc(u,v).topRows<3>().dot(n);
+//          if (orthoU*dpc(u,v)(3) < ang && ang <= orthoL*dpc(u,v)(3)) {
+//            mu += dpc(u,v)(3); 
+//          }
+//        }
+//      }
+//    }
+//    mu /= (N-1); // average dist to neighbors -> 
+//    curvature = 2.*(ni.dot(pc0 - p))/(mu*mu);
+
 //    tdp::Vector3fda mu = p;
 //    N = 0;
 //    p.fill(0.);
@@ -283,6 +362,26 @@ void NormalsViaVoting(
   for(size_t u=W; u<n.w_-W; u+=step) {
     for(size_t v=W; v<n.h_-W; v+=step) {
       if(!NormalViaVoting(pc, u,v,W,inlierThr, dpc, n(u,v), curv(u,v), p)) {
+        n(u,v) << NAN,NAN,NAN;
+        curv(u,v) = NAN;
+      } else {
+        pc(u,v) = p;
+      }
+    }
+  }
+}
+
+void NormalsViaRMLS(
+    Image<Vector3fda>& pc, 
+    uint32_t W, uint32_t step,
+    float inlierThr, 
+    Image<Vector4fda>& dpc,
+    Image<Vector3fda>& n,
+    Image<float>& curv) {
+  Vector3fda p;
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
+      if(!NormalViaRMLS(pc, u,v,W,inlierThr, dpc, n(u,v), curv(u,v), p)) {
         n(u,v) << NAN,NAN,NAN;
         curv(u,v) = NAN;
       } else {

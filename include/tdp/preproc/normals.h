@@ -162,6 +162,15 @@ bool NormalViaScatter(
     uint32_t W, 
     Vector3fda& c);
 
+bool NormalViaRMLS(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W, float inlierThr,
+    Image<Vector4fda>& dpc, 
+    Vector3fda& ni,
+    float& curvature,
+    Vector3fda& p);
+
 bool NormalViaVoting(
     const Image<Vector3fda>& pc, 
     uint32_t u0, uint32_t v0,
@@ -181,6 +190,14 @@ void NormalsViaScatter(
     const Image<Vector3fda>& pc, 
     uint32_t W, uint32_t step,
     Image<Vector3fda>& n);
+
+void NormalsViaRMLS(
+    Image<Vector3fda>& pc, 
+    uint32_t W, uint32_t step,
+    float inlierThr,
+    Image<Vector4fda>& dpc,
+    Image<Vector3fda>& n,
+    Image<float>& curv);
 
 void NormalsViaVoting(
     Image<Vector3fda>& pc, 
