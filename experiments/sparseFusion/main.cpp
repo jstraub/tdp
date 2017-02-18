@@ -992,7 +992,7 @@ int main( int argc, char* argv[] )
 
   containerTracking.Show(false);
   viewAssoc.Show(false);
-  viewGreyGradNorm.Show(false);
+  viewGreyGradNorm.Show(true);
   plotters.Show(false);
 
   tdp::ManagedHostImage<float> d(wc, hc);
@@ -1661,9 +1661,9 @@ int main( int argc, char* argv[] )
       cuGreyGradTheta, cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 //    cuGreyFlSmooth.CopyFrom(cuGreyFl);
-////    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
 //    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
-    greyFl.CopyFrom(cuGreyFl);
+    greyFl.CopyFrom(cuGreyFlSmooth);
     gradGrey.CopyFrom(cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
