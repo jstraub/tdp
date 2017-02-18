@@ -2048,9 +2048,20 @@ int main( int argc, char* argv[] )
       Tview(0,3) = 0.; Tview(1,3) = 0.; Tview(2,3) = -2.2;
       normalsCam.GetModelViewMatrix() = Tview;
       viewNormals.Activate(normalsCam);
-      glColor4f(0,0,1,0.5);
-//      nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
-      pangolin::RenderVbo(nbo_w);
+      if (frame > 1) {
+        if (showDPvMFlabels) {
+          lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
+        tdp::RenderLabeledVbo(nbo_w, lbo, normalsCam);
+        } else if (showLabels) {
+          for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+            labels[i] = pl_w.GetCircular(i).z_;
+          lbo.Upload(labels.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
+        tdp::RenderLabeledVbo(nbo_w, lbo, normalsCam);
+        } else {
+          glColor4f(0,0,1,0.5);
+          pangolin::RenderVbo(nbo_w);
+        }
+      }  
       if (!runSampling.Get()) {
         glColor4f(1,0,0,1.);
         for (size_t k=0; k<dpvmf.GetK(); ++k) {
