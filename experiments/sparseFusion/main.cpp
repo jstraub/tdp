@@ -150,9 +150,7 @@ void ExtractPlanes(
   float curv;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i] 
-        && tdp::IsValidData(pc[i])
-        && pc[i].norm() < 5. 
-        && 0.3 < pc[i].norm() )  {
+        && tdp::IsValidData(pc[i]) ) {
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
       const uint32_t u = i%mask.w_;
@@ -1527,6 +1525,9 @@ int main( int argc, char* argv[] )
 //  std::random_device rd;
   std::mt19937 gen(19023);
 
+  std::vector<uint32_t> idNew;
+  idNew.reserve(w*h);
+
   mask.Fill(0);
   std::vector<uint32_t> idsCur;
   idsCur.reserve(w*h);
@@ -1548,6 +1549,7 @@ int main( int argc, char* argv[] )
       T_wc = tdp::SE3f();
     }
 
+    idNew.clear();
     if (!gui.paused() && !gui.finished()
         && frame > 0
         && (runMapping || frame == 1) 
@@ -1567,7 +1569,7 @@ int main( int argc, char* argv[] )
 
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
-          greyGradNorm, W, subsample, gen, 32, 32, w, h, pUniform);
+          greyGradNorm, W, subsample, gen, 32, 32, w, h, pUniform, idNew);
 //      tdp::UniformResampleEmptyPartsOfMask(pc, cam, mask, W,
 //          subsample, gen, 32, 32, w, h);
       TOCK("mask");
@@ -1853,6 +1855,10 @@ int main( int argc, char* argv[] )
           // filtering grad grey
           pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
               + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
+          pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + grey(u,v)) / (w+1);
+          pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
+                + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+
           grad_w[ass.first] = pl_w[ass.first].grad_;
           gradDir_w[ass.first] = grad_w[ass.first].normalized();
           pcSum_w[ass.first] += pc_c_in_w;
@@ -2125,12 +2131,13 @@ int main( int argc, char* argv[] )
     if (viewCurrent.IsShown()) {
       viewCurrent.SetImage(rgb);
       glColor3f(1,0,0);
-      for (size_t u=0; u<rgb.w_; ++u)
-        for (size_t v=0; v<rgb.h_; ++v) {
-          if (mask(u,v)) {
-            pangolin::glDrawCircle(u,v,1);
-          }
-        }
+      for (auto& ass : assoc) {
+        pangolin::glDrawCircle(ass.second%wc,ass.second/wc,1);
+      }
+      glColor3f(0,1,0);
+      for (auto& id : idNew) {
+        pangolin::glDrawCircle(id%wc,id/wc,1);
+      }
     }
 
     if (containerTracking.IsShown()) {
