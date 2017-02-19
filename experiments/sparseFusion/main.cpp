@@ -373,22 +373,22 @@ bool AccumulateP2Pl(const Plane& pl,
 //        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
 //             Eigen::Matrix3f::Identity();
 //        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
-        // texture
-        if (tdp::IsValidData(pl.grad_)) {
-          Eigen::Matrix<float,3,6> Jse3;
-          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
-          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
-//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
-//             Eigen::Matrix3f::Identity();
-          Ai = Jse3.transpose() * pl.grad_;
-          bi = grey_ci - pl.grey_;
-          A += lambda*(Ai * Ai.transpose());
-          b += lambda*(Ai * bi);
-          err += lambda*bi;
-//          std::cout << bi << "\t" << pl.grad_.transpose() << "\t" << Ai.transpose() << std::endl;
-        } else {
-          std::cout << " grad 3D is nan!" << std::endl; 
-        }
+        // texture 3D grads
+//        if (tdp::IsValidData(pl.grad_)) {
+//          Eigen::Matrix<float,3,6> Jse3;
+//          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()
+//              *SO3mat<float>::invVee(pc_ci));
+//          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+//          Ai = Jse3.transpose() * pl.grad_;
+//          bi = grey_ci - pl.grey_;
+//          A += lambda*(Ai * Ai.transpose());
+//          b += lambda*(Ai * bi);
+//          err += lambda*bi;
+//        } else {
+//          std::cout << " grad 3D is nan!" << std::endl; 
+//        }
+        // texture inverse transform
+        
         // accumulate
         return true;
       }
@@ -1738,19 +1738,20 @@ int main( int argc, char* argv[] )
                     W, dpc, n, curv, u,v ))
                 continue;
               if (useTexture) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      greyFl(u,v), distThr, p2plThr, dotThr, lambdaTex,
-                      A, Ai, b, err))
+                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), greyFl(u,v), distThr, p2plThr, dotThr,
+                      lambdaTex, A, Ai, b, err))
                   continue;
               } else if (useNormals) {
-                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      distThr, p2plThr, dotThr, lambdaNsOld, A, Ai, b, err)) {
+                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
+                      Ai, b, err)) {
                   continue;
                 }
               } else if (useNormalsAndTexture) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v), n(u,v), 
-                      greyFl(u,v), distThr, p2plThr, dotThr, lambdaNs, lambdaTex,
-                      A, Ai, b, err)) {
+                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), greyFl(u,v), distThr, p2plThr, dotThr,
+                      lambdaNs, lambdaTex, A, Ai, b, err)) {
                   continue;
                 }
               } else {
