@@ -1062,6 +1062,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
 
+  pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
+  pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
+
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
   pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
   pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",true,true);
@@ -1149,11 +1152,13 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
 
   rs.Fill(NAN);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   rgb_w.Fill(tdp::Vector3bda::Zero());
   grad_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+  gradDir_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   n_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   
   vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1581,6 +1586,7 @@ int main( int argc, char* argv[] )
           }
         }
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
+          gradDir_w[i] = pl_w[i].grad_.normalized();
           pcSum_w[i] = pl_w[i].p_;
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] ++;
@@ -1656,12 +1662,20 @@ int main( int argc, char* argv[] )
     cuRgb.CopyFrom(rgb);
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
-    tdp::Gradient(cuGreyFl, cuGreyDu, cuGreyDv, cuGradGrey);
+
+    if (smoothGrey==2) {
+      tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 10.);
+    } else if (smoothGrey==1) {
+      tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+    } else {
+      cuGreyFlSmooth.CopyFrom(cuGreyFl);
+    }
+
+    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
     tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv,
       cuGreyGradTheta, cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 //    cuGreyFlSmooth.CopyFrom(cuGreyFl);
-    tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
 //    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
     greyFl.CopyFrom(cuGreyFlSmooth);
     gradGrey.CopyFrom(cuGradGrey);
@@ -1841,6 +1855,7 @@ int main( int argc, char* argv[] )
           pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
               + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
           grad_w[ass.first] = pl_w[ass.first].grad_;
+          gradDir_w[ass.first] = grad_w[ass.first].normalized();
           pcSum_w[ass.first] += pc_c_in_w;
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
@@ -2086,7 +2101,11 @@ int main( int argc, char* argv[] )
       normalsCam.GetModelViewMatrix() = Tview;
       viewGrads.Activate(normalsCam);
       glColor4f(0,0,1,0.5);
-      gradbo_w.Upload(grad_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+      if (showGradDir) {
+        gradbo_w.Upload(gradDir_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+      } else {
+        gradbo_w.Upload(grad_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+      }
       pangolin::RenderVbo(gradbo_w);
     }
 
