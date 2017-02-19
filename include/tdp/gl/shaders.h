@@ -15,6 +15,7 @@ class Shaders {
   pangolin::GlSlProgram matcapShader_;
   pangolin::GlSlProgram colorByIdShader_;
   pangolin::GlSlProgram colorByIdOwnCamShader_;
+  pangolin::GlSlProgram colorByIdOwnCamNormalsShader_;
   pangolin::GlSlProgram surfelShader_;
  private:
   Shaders();

@@ -3,11 +3,11 @@
   "camera":{
     "model" : {
       "type" : "poly3",
-      "fu" : 517.3,
-      "fv" : 516.5,
-      "uc" : 318.6,
-      "vc" : 255.3,
-      "distortion" : [ 0.2624, -0.9531, -0.0054]
+      "fu" : 535.4,
+      "fv" : 539.2,
+      "uc" : 320.1,
+      "vc" : 247.6,
+      "distortion" : [ 0., 0., 0. ]
     },
     "type" : "rgb",
     "serialNumber" : "0000",
@@ -22,11 +22,11 @@
   "camera":{
     "model" : {
       "type" : "poly3",
-      "fu" : 517.3,
-      "fv" : 516.5,
-      "uc" : 318.6,
-      "vc" : 255.3,
-      "distortion" : [ 0.2624, -0.9531, -0.0054]
+      "fu" : 535.4,
+      "fv" : 539.2,
+      "uc" : 320.1,
+      "vc" : 247.6,
+      "distortion" : [ 0., 0., 0. ]
     },
     "type" : "ir",
     "depthScaleVsDepthModel" : [0., 1.],

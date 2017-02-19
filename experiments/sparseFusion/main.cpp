@@ -1555,7 +1555,7 @@ int main( int argc, char* argv[] )
 
       // update mask only once to know where to insert new planes
       TICK("data assoc");
-      projAssoc.Associate(vbo_w, T_wc.Inverse(), dMin, dMax, 
+      projAssoc.Associate(vbo_w, nbo_w, T_wc.Inverse(), dMin, dMax, 
           pl_w.SizeToRead());
       TOCK("data assoc");
       TICK("extract assoc");
@@ -1594,6 +1594,9 @@ int main( int argc, char* argv[] )
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
       vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
+          pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
+          iReadCurW*sizeof(tdp::Vector3fda));
+      nbo_w.Upload(&n_w.ptr_[iReadCurW], 
           pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
           iReadCurW*sizeof(tdp::Vector3fda));
       rbo.Upload(&rs.ptr_[iReadCurW],
