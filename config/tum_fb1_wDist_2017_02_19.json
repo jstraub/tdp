@@ -7,7 +7,7 @@
       "fv" : 516.5,
       "uc" : 318.6,
       "vc" : 255.3,
-      "distortion" : [ 0.,0.,0. ]
+      "distortion" : [ 0.2624, -0.9531, -0.0054]
     },
     "type" : "rgb",
     "serialNumber" : "0000",
@@ -26,7 +26,7 @@
       "fv" : 516.5,
       "uc" : 318.6,
       "vc" : 255.3,
-      "distortion" : [ 0.,0.,0. ]
+      "distortion" : [ 0.2624, -0.9531, -0.0054]
     },
     "type" : "ir",
     "depthScaleVsDepthModel" : [0., 1.],
