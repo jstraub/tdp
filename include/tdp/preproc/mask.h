@@ -154,7 +154,8 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
     std::vector<uint32_t>& idNew
     ) {
   std::uniform_real_distribution<> coin(0, 1);
-  float unif = pUniform/float(I*J);
+  float A = I*J;
+  float unif = pUniform/A;
   for (size_t i=0; i<I; ++i) {
     for (size_t j=0; j<J; ++j) {
       size_t count = 0;
@@ -182,7 +183,7 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
           }
         }
         const float avgD = dSum/numD;
-        const float prob = subsample*avgD*avgD;
+        const float prob = subsample*avgD*avgD*(A-count)/A;
         const float pGradNorm = prob*(1.-pUniform)/sumGradNorm;
         const float probUnif = prob*unif;
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
