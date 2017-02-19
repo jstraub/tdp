@@ -142,7 +142,8 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<Vector3fda>& grad_w,
-    ManagedHostCircularBuffer<float>& rs
+    ManagedHostCircularBuffer<float>& rs,
+    ManagedHostCircularBuffer<uint16_t>& ts
     ) {
   Plane pl;
   tdp::Brief feat;
@@ -190,6 +191,7 @@ void ExtractPlanes(
         grad_w.Insert(pl.grad_);
         rgb_w.Insert(pl.rgb_);
         rs.Insert(pl.r_);
+        ts.Insert(pl.lastFrame_);
       }
     }
   }
@@ -1078,6 +1080,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
+  pangolin::Var<int> dtAssoc("ui.dtAssoc",50,1,100);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.0,1.);
   pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
@@ -1140,12 +1143,14 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer nbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer gradbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
+  pangolin::GlBuffer tbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
   pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
   pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
   pangolin::GlBuffer valuebo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
+  tdp::ManagedHostCircularBuffer<uint16_t> ts(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
@@ -1153,6 +1158,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
 
   rs.Fill(NAN);
+  ts.Fill(0);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   rgb_w.Fill(tdp::Vector3bda::Zero());
   grad_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1163,6 +1169,7 @@ int main( int argc, char* argv[] )
   nbo_w.Upload(n_w.ptr_, n_w.SizeBytes(), 0);
   cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
   gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
+  tbo.Upload(ts.ptr_, ts.SizeBytes(), 0);
 
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
@@ -1185,7 +1192,7 @@ int main( int argc, char* argv[] )
   mapNN.reserve(MAP_SIZE*kNN);
 
   int32_t iReadCurW = 0;
-  size_t frame = 0;
+  int32_t frame = 0;
 
   tdp::ThreadedValue<bool> runSampling(true);
   tdp::ThreadedValue<bool> runTopologyThread(true);
@@ -1557,8 +1564,8 @@ int main( int argc, char* argv[] )
 
       // update mask only once to know where to insert new planes
       TICK("data assoc");
-      projAssoc.Associate(vbo_w, nbo_w, T_wc.Inverse(), dMin, dMax, 
-          pl_w.SizeToRead());
+      projAssoc.Associate(vbo_w, nbo_w, tbo, T_wc.Inverse(), dMin,
+          dMax, std::max(0, frame-dtAssoc), pl_w.SizeToRead());
       TOCK("data assoc");
       TICK("extract assoc");
 //      z.Fill(0);
@@ -1579,7 +1586,7 @@ int main( int argc, char* argv[] )
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
-            n_w, grad_w, rs);
+            n_w, grad_w, rs, ts);
         TOCK("normals");
         TICK("add to model");
         if (!runSampling.Get()) {
@@ -1604,6 +1611,9 @@ int main( int argc, char* argv[] )
       rbo.Upload(&rs.ptr_[iReadCurW],
           rs.SizeToRead(iReadCurW)*sizeof(float),
           iReadCurW*sizeof(float));
+      tbo.Upload(&ts.ptr_[iReadCurW],
+          ts.SizeToRead(iReadCurW)*sizeof(uint16_t),
+          iReadCurW*sizeof(int16_t));
 
       TOCK("add to model");
       numMapPoints = pl_w.SizeToRead();
@@ -1756,6 +1766,7 @@ int main( int argc, char* argv[] )
                 continue;
             }
             pl.lastFrame_ = frame;
+            ts[i] = frame;
             pl.numObs_ ++;
             mask(u,v) |= 1;
             assoc.emplace_back(i,u+v*pc.w_);
@@ -1980,7 +1991,7 @@ int main( int argc, char* argv[] )
         if (showAge || showObs || showCurv) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = pl_w.GetCircular(i).lastFrame_;
+              age[i] = ts.GetCircular(i);
           } else if (showObs) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).numObs_;
@@ -1989,9 +2000,10 @@ int main( int argc, char* argv[] )
               age[i] = pl_w.GetCircular(i).curvature_;
           }
           valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
-          std::pair<float,float> minMaxAge = age.GetRoi(0,0,pl_w.SizeToRead(),1).MinMax();
-          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first, minMaxAge.second,
-              P, MV);
+          std::pair<float,float> minMaxAge = age.GetRoi(0,0,
+              pl_w.SizeToRead(),1).MinMax();
+          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
+              minMaxAge.second, P, MV);
         } else if (showLabels && frame > 1) {
           if (showDPvMFlabels) {
             lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);

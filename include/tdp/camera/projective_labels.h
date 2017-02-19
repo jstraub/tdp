@@ -15,6 +15,26 @@ class ProjectiveAssociation {
   { }
   ~ProjectiveAssociation() {}
 
+  /// vertices, normals, and times
+  void Associate(pangolin::GlBuffer& vbo, pangolin::GlBuffer& nbo,
+      pangolin::GlBuffer& tbo,
+      SE3f T_cw, float dMin, float dMax,
+      int32_t tMin,
+      uint32_t numElems) {
+    fbo_.Bind();
+    glPushAttrib(GL_VIEWPORT_BIT);
+    glPointSize(1);
+    glViewport(0, 0, w_, h_);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    tdp::RenderVboIds(vbo, nbo, tbo, T_cw, cam_, w_, h_, dMin, dMax,
+        tMin, numElems);
+    fbo_.Unbind();
+    glPopAttrib();
+    glFinish();
+  }
+
+
   void Associate(pangolin::GlBuffer& vbo, pangolin::GlBuffer& nbo,
       SE3f T_cw, float dMin, float dMax, uint32_t numElems) {
     fbo_.Bind();

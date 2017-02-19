@@ -28,8 +28,8 @@ struct Plane {
   Brief feat_;
 
   uint16_t z_;
-  uint32_t lastFrame_;
-  uint32_t numObs_;
+  uint16_t lastFrame_;
+  uint16_t numObs_;
 
   float w_; // weight
   float N_; // number of Obs

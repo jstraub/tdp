@@ -57,6 +57,12 @@ Shaders::Shaders() {
       shaderRoot+std::string("colorById.frag"));
   colorByIdOwnCamNormalsShader_.Link();
 
+  colorByIdOwnCamNormalsTimeShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("colorByIdOwnCamNormalsTime.vert"));
+  colorByIdOwnCamNormalsTimeShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("colorById.frag"));
+  colorByIdOwnCamNormalsTimeShader_.Link();
+
   normalMeshShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("normalShading.vert"));
   normalMeshShader_.AddShaderFromFile(pangolin::GlSlGeometryShader, 
