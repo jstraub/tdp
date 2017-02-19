@@ -1080,7 +1080,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
-  pangolin::Var<int> dtAssoc("ui.dtAssoc",50,1,100);
+  pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.0,1.);
   pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
