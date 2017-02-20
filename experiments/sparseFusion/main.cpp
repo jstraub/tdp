@@ -1785,7 +1785,6 @@ int main( int argc, char* argv[] )
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
       TICK("icp");
-      std::vector<size_t> indK(invInd.size(),0);
       mask.Fill(0);
 
       if (doSO3prealign) {
@@ -1795,8 +1794,8 @@ int main( int argc, char* argv[] )
         for (size_t it = 0; it < SO3maxIt; ++it) {
           for (auto& ass : assoc) mask[ass.second] = 0;
           assoc.clear();
-          indK = std::vector<size_t>(invInd.size(),0);
-          numProjected = 0;
+//          indK = std::vector<size_t>(invInd.size(),0);
+//          numProjected = 0;
 
           A = Eigen::Matrix<float,3,3>::Zero();
           b = Eigen::Matrix<float,3,1>::Zero();
@@ -1805,49 +1804,33 @@ int main( int argc, char* argv[] )
           float H = 1e10;
           float Hprev = 1e10;
           tdp::SE3f T_cw = T_wc.Inverse();
-          //        size_t numInl0 = numInl;
-          // associate new data until enough
-          bool exploredAll = false;
-          uint32_t k = 0;
-          while (assoc.size() < 1000 && !exploredAll) {
-            k = (k+1) % invInd.size();
-            while (indK[k] < invInd[k].size()) {
-              size_t i = invInd[k][indK[k]++];
-              int32_t u, v;
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              numProjected = numProjected + 1;
+          for (auto& i : idsCur) {
+            int32_t u, v;
+            tdp::Plane& pl = pl_w.GetCircular(i);
 
-              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, curv, u,v ))
-                continue;
-              if (!AccumulateIntDiff(pl, T_cw, cam, greyFl(u,v),
-                    gradGrey(u,v), lambdaTex, A, Ai, b, err))
-                continue;
-              mask(u,v) |= 1;
-              assoc.emplace_back(i,u+v*pc.w_);
+            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                  W, dpc, n, curv, u,v ))
+              continue;
+            if (!AccumulateIntDiff(pl, T_cw, cam, greyFl(u,v),
+                  gradGrey(u,v), lambdaTex, A, Ai, b, err))
+              continue;
+            mask(u,v) |= 1;
+            assoc.emplace_back(i,u+v*pc.w_);
+              
+            if (tdp::CheckEntropyTermination(A, Hprev, SO3HThr, SO3condEntropyThr, 
+                  SO3negLogEvThr, H, gui.verbose))
               break;
-            }
-
-            if (k == 0) {
-              if (tdp::CheckEntropyTermination(A, Hprev, SO3HThr, SO3condEntropyThr, 
-                    SO3negLogEvThr, H, gui.verbose))
-                break;
-              Hprev = H;
-            }
-            exploredAll = true;
-            for (size_t k=0; k<indK.size(); ++k)
-              exploredAll &= indK[k] >= invInd[k].size();
+            Hprev = H;
           }
-          numInl = assoc.size();
           Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
-          if (numInl > 10) {
+          if (assoc.size() > 10) {
             // solve for x using ldlt
             x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
             T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
           }
           if (gui.verbose) {
             std::cout << "\tit " << it << ": err=" << err 
-              << "\t# inliers: " << numInl
+              << "\t# inliers: " << assoc.size()
               << "\t|x|: " << x.norm()*180./M_PI << std::endl;
           }
           if (x.norm()*180./M_PI < icpdRThr
@@ -1858,6 +1841,7 @@ int main( int argc, char* argv[] )
         }
       }
 
+      std::vector<size_t> indK(invInd.size(),0);
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
