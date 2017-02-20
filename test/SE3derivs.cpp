@@ -40,7 +40,7 @@ TEST(SE3, derivofInverse) {
       tdp::SE3f T_wcDelta = T_wc.Exp(delta);
       Eigen::Vector3f diffGt = T_wcDelta.Inverse()*p_w- T_wc.Inverse()*p_w; 
       Eigen::Matrix<float,3,6> J;
-      J << tdp::SO3f::invVee(T_wc.rotation().Inverse()*(p_w-T_wc.translation())), - T_wc.rotation().Inverse().matrix();
+      J << tdp::SO3f::invVee(T_wc.rotation().Inverse()*(p_w-T_wc.translation())), - Eigen::Matrix3f::Identity();
       Eigen::Vector3f diffJ = J*delta;
 
       std::cout << j << ": " << (diffGt-diffJ).norm() 
