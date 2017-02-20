@@ -1330,7 +1330,7 @@ int main( int argc, char* argv[] )
   float logAlpha = log(.1);
   float tauO = 100.;
 //  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
-//  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
+  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
@@ -1560,7 +1560,7 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      Eigen::Vector3fda mu;
+      tdp::Vector3fda mu;
         if (doVariationalUpdate && haveFullNeighborhood) {
           Eigen::Matrix3f SigmaPl;
           Eigen::Matrix3f Info =  InfoO*numSum_w[i];
