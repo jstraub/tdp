@@ -1138,9 +1138,9 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
-  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.0,1.);
-  pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.0,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
+  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.001,1.);
+  pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.01,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.01,1.);
   pangolin::Var<bool> useTexture("ui.use Tex ICP",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
@@ -1155,8 +1155,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
-  pangolin::Var<float> HThr("ui.H Thr",-12.,-20.,-8.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1.,-2.,1.);
+  pangolin::Var<float> HThr("ui.H Thr",-30.,-40.,-12.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-8.,-12.,-1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1164,7 +1164,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
-  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-30.,-40.,-20.);
+  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-35.,-40.,-20.);
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-8.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
   pangolin::Var<int> SO3maxIt("ui.SO3 max iter",5, 1, 20);
@@ -2305,20 +2305,22 @@ int main( int argc, char* argv[] )
     pangolin::DisplayBase().ActivatePixelOrthographic();
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
-  
-    if (streamTimeStamps.size() > frame-1) {
-       out << streamTimeStamps[frame-1] << " ";
-    } else {
-      out << pangolin::Time_us(pangolin::TimeNow())/1000000 << "."
-        << pangolin::Time_us(pangolin::TimeNow())%1000000 << " ";
+
+    if (!gui.finished()) {
+      if (streamTimeStamps.size() > frame-1) {
+        out << streamTimeStamps[frame-1] << " ";
+      } else {
+        out << pangolin::Time_us(pangolin::TimeNow())/1000000 << "."
+          << pangolin::Time_us(pangolin::TimeNow())%1000000 << " ";
+      }
+      out << T_wc.translation()(0) << " "  // tx
+        << T_wc.translation()(1) << " "  // ty
+        << T_wc.translation()(2) << " "  // tz
+        << T_wc.rotation().vector()(0) << " "  // qx
+        << T_wc.rotation().vector()(1) << " "  // qy
+        << T_wc.rotation().vector()(2) << " "  // qz
+        << T_wc.rotation().vector()(3) << std::endl;  // qw
     }
-    out << T_wc.translation()(0) << " "  // tx
-      << T_wc.translation()(1) << " "  // ty
-      << T_wc.translation()(2) << " "  // tz
-      << T_wc.rotation().vector()(0) << " "  // qx
-      << T_wc.rotation().vector()(1) << " "  // qy
-      << T_wc.rotation().vector()(2) << " "  // qz
-      << T_wc.rotation().vector()(3) << std::endl;  // qw
   }
   out.close();
 

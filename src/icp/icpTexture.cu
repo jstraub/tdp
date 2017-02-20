@@ -70,6 +70,7 @@ __global__ void KernelICPStep(
         Vector2fda gradI_m = gradGrey_m(x,y);
         float I_o = grey_o(u,v); // TODO: maybe interpolate here
         float abI[7];      
+        // rgb \| I_c - I_m(pi (wTc pc)) \|^2_2 works
         Eigen::Map<Vector6fda> J(&(abI[0]));
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_o_in_m);
         Eigen::Matrix<float,3,6> Jse3;
@@ -80,6 +81,17 @@ __global__ void KernelICPStep(
              Eigen::Matrix3f::Identity();
         J = Jse3.transpose() * Jpi.transpose() * gradI_m;
         abI[6] = -I_m + I_o;
+        //
+        // rgb \| I_c(pi (cTw pm)) - I_m \|^2_2 works
+//        Eigen::Map<Vector6fda> J(&(abI[0]));
+//        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(T_mo.InverseTransform(pc_mi));
+//        Eigen::Matrix<float,3,6> Jse3;
+//        Jse3 << SO3mat<float>::invVee(
+//           T_mo.rotation().matrix().transpose()*(pc_mi-T_mo.translation())), 
+//             -Eigen::Matrix3f::Identity();
+//        J = Jse3.transpose() * Jpi.transpose() * gradI_m;
+//        abI[6] = +I_m - I_o;
+        // p2pl
         float ab[7];      
         Eigen::Map<Vector3fda> top(&(ab[0]));
         Eigen::Map<Vector3fda> bottom(&(ab[3]));
