@@ -9,7 +9,7 @@
 using namespace tdp;
 
 TEST(SE3, deriv) {
-  float eps = 1e-5;
+  float eps = 1e-3;
 
   for (size_t i=0; i<100; ++i) {
     Eigen::Vector3f p_c = Eigen::Vector3f::Random();
@@ -20,7 +20,7 @@ TEST(SE3, deriv) {
       tdp::SE3f T_wcDelta = T_wc.Exp(delta);
       Eigen::Vector3f diffGt = T_wcDelta*p_c - T_wc*p_c ; 
       Eigen::Matrix<float,3,6> J;
-      J << -T_wc.rotation().matrix()* tdp::SO3f::invVee(p_c), Eigen::Matrix3f::Identity();
+      J << -T_wc.rotation().matrix() * tdp::SO3f::invVee(p_c), T_wc.rotation().matrix();
       Eigen::Vector3f diffJ = J*delta;
       std::cout << j << ": " << (diffGt-diffJ).norm() << std::endl;
 //        << ";\t" << diffGt.transpose() << " " << diffJ.transpose() << std::endl;
