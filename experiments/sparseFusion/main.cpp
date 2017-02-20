@@ -1784,10 +1784,9 @@ int main( int argc, char* argv[] )
 
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
-      TICK("icp");
       mask.Fill(0);
-
       if (doSO3prealign) {
+        TICK("icp RGB");
         Eigen::Matrix<float,3,3> A;
         Eigen::Matrix<float,3,1> b;
         Eigen::Matrix<float,3,1> Ai;
@@ -1836,16 +1835,16 @@ int main( int argc, char* argv[] )
             break;
           }
         }
+        TOCK("icp RGB");
       }
 
+      TICK("icp");
       std::vector<size_t> indK(invInd.size(),0);
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
       for (size_t it = 0; it < maxIt; ++it) {
-        // TODO might not be okay to not reset this?
-//        mask.Fill(0);
         for (auto& ass : assoc) mask[ass.second] = 0;
         assoc.clear();
         indK = std::vector<size_t>(invInd.size(),0);
@@ -1858,7 +1857,6 @@ int main( int argc, char* argv[] )
         float H = 1e10;
         float Hprev = 1e10;
         tdp::SE3f T_cw = T_wc.Inverse();
-//        size_t numInl0 = numInl;
         // associate new data until enough
         bool exploredAll = false;
         uint32_t k = 0;
@@ -1909,17 +1907,12 @@ int main( int argc, char* argv[] )
               break;
             Hprev = H;
           }
-
           exploredAll = true;
-          for (size_t k=0; k<indK.size(); ++k) {
-            exploredAll &= indK[k] >= invInd[k].size();
-          }
+          for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
         }
         numInl = assoc.size();
-//        std::cout << " added " << numInl - numInl0 << std::endl;
         Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-        if (numInl > 10) {
-          // solve for x using ldlt
+        if (assoc.size() > 10) { // solve for x using ldlt
           x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
           T_wc = T_wc * tdp::SE3f::Exp_(x);
         }
@@ -1927,8 +1920,7 @@ int main( int argc, char* argv[] )
           std::cout << "\tit " << it << ": err=" << err 
             << "\t# inliers: " << numInl
             << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
-            << " " <<  x.bottomRows(3).norm()
-            << std::endl;
+            << " " <<  x.bottomRows(3).norm() << std::endl;
         }
         if (x.topRows<3>().norm()*180./M_PI < icpdRThr
             && x.bottomRows<3>().norm() < icpdtThr
@@ -1946,7 +1938,7 @@ int main( int argc, char* argv[] )
               << " of " << invInd[k].size() << std::endl;
         }
       }
-      logObs.Log(log(numInl)/log(10.), 
+      logObs.Log(log(assoc.size())/log(10.), 
           log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
       Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
       Eigen::Matrix<float,6,1> ev = eig.eigenvalues().real();
@@ -1972,12 +1964,9 @@ int main( int argc, char* argv[] )
       q0 *= (q0(maxId) > 0? 1.: -1.);
       logEv.Log(q0);
       T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr && numInl > 10;
+      trackingGood = H <= HThr && assoc.size() > 10;
       TOCK("icp");
-      if (trackingGood) {
-        if (gui.verbose) 
-          std::cout << "tracking good" << std::endl;
-      }
+      if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
 
       if (updatePlanes && trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
