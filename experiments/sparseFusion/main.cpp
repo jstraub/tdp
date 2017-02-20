@@ -540,7 +540,46 @@ bool AccumulateP2PlNormal(const Plane& pl,
   return false;
 }
 
-/// uses 3D gradient and normal as well
+/// uses gradient only
+bool AccumulateIntDiff(const Plane& pl, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    float grey_ci,
+    const Vector2fda& gradGrey_ci,
+    float lambda,
+    Eigen::Matrix<float,3,3>& A,
+    Eigen::Matrix<float,3,1>& Ai,
+    Eigen::Matrix<float,3,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
+        // texture
+//        if (tdp::IsValidData(pl.grad_)) {
+//          Eigen::Matrix<float,3,6> Jse3;
+//          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+//          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+//          Ai = Jse3.transpose() * pl.grad_;
+//          bi = grey_ci - pl.grey_;
+//          A += lambda*(Ai * Ai.transpose());
+//          b += lambda*(Ai * bi);
+//          err += lambda*bi;
+//        } else {
+//          std::cout << "gradient is nan " << std::endl;
+//        }
+        // texture inverse transform verified Jse3 
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
+        Eigen::Matrix<float,3,3> Jso3 = SO3mat<float>::invVee(T_cw.rotation()*pc_w);
+        Ai = Jso3.transpose() * Jpi.transpose() * gradGrey_ci;
+        float bi = -grey_ci + pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+        err += lambda*bi;
+        // accumulate
+        return true;
+}
+
+/// uses gradient and normal as well
 bool AccumulateP2Pl(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
@@ -562,6 +601,7 @@ bool AccumulateP2Pl(const Plane& pl,
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
   float bi=0;
   float dist = (pc_w - pc_c_in_w).norm();
   if (dist < distThr) {
@@ -606,9 +646,9 @@ bool AccumulateP2Pl(const Plane& pl,
 //          std::cout << "gradient is nan " << std::endl;
 //        }
         // texture inverse transform verified Jse3 
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_ci-T_wc.translation())), 
+        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
         bi = -grey_ci + pl.grey_;
@@ -739,13 +779,14 @@ bool AccumulateRot(const Plane& pl,
   return false;
 }
 
-bool CheckEntropyTermination(const Eigen::Matrix<float,6,6>& A,
+template<int D>
+bool CheckEntropyTermination(const Eigen::Matrix<float,D,D>& A,
     float Hprev,
     float HThr, float condEntropyThr, float negLogEvThr,
     float& H, bool verbose) {
 
-  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
-  Eigen::Matrix<float,6,1> negLogEv = -eig.eigenvalues().real().array().log();
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,D,D>> eig(A);
+  Eigen::Matrix<float,D,1> negLogEv = -eig.eigenvalues().real().array().log();
   H = negLogEv.sum();
   if ((H < HThr || Hprev - H < condEntropyThr) 
       && (negLogEv.array() < negLogEvThr).all()) {
@@ -1120,6 +1161,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
   pangolin::Var<int> numRotThr("ui.numRot Thr",200, 100, 350);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
+
+  pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,false);
+  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-12.,-20.,-8.);
+  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-1.,-2.,1.);
+  pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-3,1e-2);
+  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",15, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1738,12 +1785,83 @@ int main( int argc, char* argv[] )
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
       TICK("icp");
+      std::vector<size_t> indK(invInd.size(),0);
+      mask.Fill(0);
+
+      if (doSO3prealign) {
+        Eigen::Matrix<float,3,3> A;
+        Eigen::Matrix<float,3,1> b;
+        Eigen::Matrix<float,3,1> Ai;
+        for (size_t it = 0; it < SO3maxIt; ++it) {
+          for (auto& ass : assoc) mask[ass.second] = 0;
+          assoc.clear();
+          indK = std::vector<size_t>(invInd.size(),0);
+          numProjected = 0;
+
+          A = Eigen::Matrix<float,3,3>::Zero();
+          b = Eigen::Matrix<float,3,1>::Zero();
+          Ai = Eigen::Matrix<float,3,1>::Zero();
+          float err = 0.;
+          float H = 1e10;
+          float Hprev = 1e10;
+          tdp::SE3f T_cw = T_wc.Inverse();
+          //        size_t numInl0 = numInl;
+          // associate new data until enough
+          bool exploredAll = false;
+          uint32_t k = 0;
+          while (assoc.size() < 1000 && !exploredAll) {
+            k = (k+1) % invInd.size();
+            while (indK[k] < invInd[k].size()) {
+              size_t i = invInd[k][indK[k]++];
+              int32_t u, v;
+              tdp::Plane& pl = pl_w.GetCircular(i);
+              numProjected = numProjected + 1;
+
+              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                    W, dpc, n, curv, u,v ))
+                continue;
+              if (!AccumulateIntDiff(pl, T_cw, cam, greyFl(u,v),
+                    gradGrey(u,v), lambdaTex, A, Ai, b, err))
+                continue;
+              mask(u,v) |= 1;
+              assoc.emplace_back(i,u+v*pc.w_);
+              break;
+            }
+
+            if (k == 0) {
+              if (tdp::CheckEntropyTermination(A, Hprev, SO3HThr, SO3condEntropyThr, 
+                    SO3negLogEvThr, H, gui.verbose))
+                break;
+              Hprev = H;
+            }
+            exploredAll = true;
+            for (size_t k=0; k<indK.size(); ++k)
+              exploredAll &= indK[k] >= invInd[k].size();
+          }
+          numInl = assoc.size();
+          Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
+          if (numInl > 10) {
+            // solve for x using ldlt
+            x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+            T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
+          }
+          if (gui.verbose) {
+            std::cout << "\tit " << it << ": err=" << err 
+              << "\t# inliers: " << numInl
+              << "\t|x|: " << x.norm()*180./M_PI << std::endl;
+          }
+          if (x.norm()*180./M_PI < icpdRThr
+              && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
+                SO3negLogEvThr, H, gui.verbose)) {
+            break;
+          }
+        }
+      }
+
       Eigen::Matrix<float,6,6> A;
       Eigen::Matrix<float,6,1> b;
       Eigen::Matrix<float,6,1> Ai;
       float dotThr = cos(angleThr*M_PI/180.);
-      std::vector<size_t> indK(invInd.size(),0);
-      mask.Fill(0);
       for (size_t it = 0; it < maxIt; ++it) {
         // TODO might not be okay to not reset this?
 //        mask.Fill(0);
@@ -1770,37 +1888,30 @@ int main( int argc, char* argv[] )
             int32_t u, v;
             tdp::Plane& pl = pl_w.GetCircular(i);
             numProjected = numProjected + 1;
-            if (angleThr > 0.) {
-              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, curv, u,v ))
+
+            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                  W, dpc, n, curv, u,v ))
+              continue;
+            if (useTexture) {
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+                    n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
+                    lambdaTex, A, Ai, b, err))
                 continue;
-              if (useTexture) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
-                      lambdaTex, A, Ai, b, err))
-                  continue;
-              } else if (useNormals) {
-                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
-                      Ai, b, err)) {
-                  continue;
-                }
-              } else if (useNormalsAndTexture) {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
-                      lambdaNs, lambdaTex, A, Ai, b, err)) {
-                  continue;
-                }
-              } else {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                      distThr, p2plThr, dotThr, A, Ai, b, err))
-                  continue;
+            } else if (useNormals) {
+              if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
+                    n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
+                    Ai, b, err)) {
+                continue;
+              }
+            } else if (useNormalsAndTexture) {
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+                    n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
+                    lambdaNs, lambdaTex, A, Ai, b, err)) {
+                continue;
               }
             } else {
-              if (!tdp::ProjectiveAssoc(pl, T_cw, cam, pc, u,v ))
-                continue;
-              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), 
-                    distThr, p2plThr, A, Ai, b, err))
+              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+                    distThr, p2plThr, dotThr, A, Ai, b, err))
                 continue;
             }
             pl.lastFrame_ = frame;
