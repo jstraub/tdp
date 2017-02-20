@@ -13,6 +13,9 @@ target_link_libraries(SE3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(SE3derivs SE3derivs.cpp)
 target_link_libraries(SE3derivs tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
+add_executable(SO3derivs SO3derivs.cpp)
+target_link_libraries(SO3derivs tdp ${GTEST_BOTH_LIBRARIES} pthread)
+
 add_executable(SO3 SO3.cpp)
 target_link_libraries(SO3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
