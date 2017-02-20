@@ -1141,11 +1141,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.0,1.);
   pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.0,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0,1.);
-  pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
-  pangolin::Var<bool> useNormals("ui.use Ns ICP",true,true);
-  pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",true,true);
+  pangolin::Var<bool> useTexture("ui.use Tex ICP",false,true);
+  pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
+  pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
 
 
+  pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
@@ -1162,11 +1163,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> numRotThr("ui.numRot Thr",200, 100, 350);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
-  pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,false);
-  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-12.,-20.,-8.);
-  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-1.,-2.,1.);
-  pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-3,1e-2);
-  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",15, 1, 20);
+  pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
+  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-30.,-40.,-20.);
+  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-8.,-10.,0.);
+  pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
+  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",5, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1498,6 +1499,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(nnLock); 
         sizeToRead = nn.SizeToRead();
       }
+      if (sizeToRead == 0) continue;
       // compute gradient
       tdp::VectorkNNida& ids = nn.GetCircular(i);
       tdp::Plane& pl = pl_w.GetCircular(i);
@@ -1786,6 +1788,7 @@ int main( int argc, char* argv[] )
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
       mask.Fill(0);
       if (doSO3prealign) {
+        if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
         TICK("icp RGB");
         Eigen::Matrix<float,3,3> A;
         Eigen::Matrix<float,3,1> b;
@@ -1801,11 +1804,11 @@ int main( int argc, char* argv[] )
           float Hprev = 1e10;
           tdp::SE3f T_cw = T_wc.Inverse();
           for (auto& i : idsCur) {
-            int32_t u, v;
             tdp::Plane& pl = pl_w.GetCircular(i);
-
-            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                  W, dpc, n, curv, u,v ))
+            Eigen::Vector2f x = cam.Project(T_cw*pl.p_);
+            int32_t u = floor(x(0)+0.5f);
+            int32_t v = floor(x(1)+0.5f);
+            if (0 > u || u >= pc.w_ || 0 > v || v >= pc.h_) 
               continue;
             if (!AccumulateIntDiff(pl, T_cw, cam, greyFl(u,v),
                   gradGrey(u,v), lambdaTex, A, Ai, b, err))
@@ -1813,10 +1816,10 @@ int main( int argc, char* argv[] )
             mask(u,v) |= 1;
             assoc.emplace_back(i,u+v*pc.w_);
               
-            if (tdp::CheckEntropyTermination(A, Hprev, SO3HThr, SO3condEntropyThr, 
-                  SO3negLogEvThr, H, gui.verbose))
-              break;
-            Hprev = H;
+//            tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
+//                SO3condEntropyThr, SO3negLogEvThr, H, gui.verbose);
+//              break;
+//            Hprev = H;
           }
           Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
           if (assoc.size() > 10) {
@@ -1824,20 +1827,22 @@ int main( int argc, char* argv[] )
             x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
             T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
           }
+          bool term = (x.norm()*180./M_PI < icpdRThr
+              && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
+                SO3negLogEvThr, H, gui.verbose));
           if (gui.verbose) {
             std::cout << "\tit " << it << ": err=" << err 
+              << "\tH: " << H 
               << "\t# inliers: " << assoc.size()
               << "\t|x|: " << x.norm()*180./M_PI << std::endl;
           }
-          if (x.norm()*180./M_PI < icpdRThr
-              && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
-                SO3negLogEvThr, H, gui.verbose)) {
-            break;
-          }
+          if (term) break;
         }
         TOCK("icp RGB");
       }
+      if (runICP) {
 
+      if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
       TICK("icp");
       std::vector<size_t> indK(invInd.size(),0);
       Eigen::Matrix<float,6,6> A;
@@ -1967,6 +1972,7 @@ int main( int argc, char* argv[] )
       trackingGood = H <= HThr && assoc.size() > 10;
       TOCK("icp");
       if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
+      }
 
       if (updatePlanes && trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
