@@ -1440,53 +1440,51 @@ int main( int argc, char* argv[] )
   tdp::DPvMFmeansSimple3fda dpvmf(lambDPvMFmeans);
 
   std::thread mapping([&]() {
-    int32_t iInsert = 0;
+    int32_t i = 0;
+    int32_t sizeToRead = 0;
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(runMappingThread.Get()) {
     if (updateMap) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-        iInsert = nn.iInsert_;
+        sizeToRead = nn.SizeToRead();
       }
       // compute gradient
-      size_t numGrads = 0;
-      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        tdp::VectorkNNida& ids = nn.GetCircular(i);
-        tdp::Plane& pl = pl_w.GetCircular(i);
-        tdp::Vector3fda& Jn = Jn_w[i];
-        tdp::Vector3fda& Jp = Jp_w[i];
-        Jn = tdp::Vector3fda::Zero();
-        Jp = tdp::Vector3fda::Zero();
-        if (doRegvMF && lambdaRegDir > 0) {
-          if (runSampling.Get()) {
-            vmfsLock.lock();
-            if (vmfs[pl.z_].tau_ > 0) {
-              Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
-            }
-            vmfsLock.unlock();
-          } else {
-            dpvmfLock.lock();
-            Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
-            dpvmfLock.unlock();
+      tdp::VectorkNNida& ids = nn.GetCircular(i);
+      tdp::Plane& pl = pl_w.GetCircular(i);
+//      tdp::Vector3fda& Jn = Jn_w[i];
+//      tdp::Vector3fda& Jp = Jp_w[i];
+      tdp::Vector3fda Jn = tdp::Vector3fda::Zero();
+      tdp::Vector3fda Jp = tdp::Vector3fda::Zero();
+      if (doRegvMF && lambdaRegDir > 0) {
+        if (runSampling.Get()) {
+          vmfsLock.lock();
+          if (vmfs[pl.z_].tau_ > 0) {
+            Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
           }
-          if (!tdp::IsValidData(Jn)) {
-            std::cout << Jn.transpose() << " " << pl.z_ <<
-              vmfs[pl.z_].mu_.transpose() << ", " << vmfs[pl.z_].tau_ << std::endl;
-            Jn = tdp::Vector3fda::Zero();
-          }
+          vmfsLock.unlock();
+        } else {
+          dpvmfLock.lock();
+          Jn = -lambdaRegDir*dpvmf.GetCenter(pl.z_);
+          dpvmfLock.unlock();
         }
-        if (doRegPc0) {
-          Jp += -2.*lambdaRegPc0*(pc0_w[i] - pl.p_);
+        if (!tdp::IsValidData(Jn)) {
+//          std::cout << Jn.transpose() << " " << pl.z_ <<
+//            vmfs[pl.z_].mu_.transpose() << ", " << vmfs[pl.z_].tau_ << std::endl;
+          Jn = tdp::Vector3fda::Zero();
         }
-        if (doRegAbsPc) {
-          Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
-        }
-        if (doRegAbsN) {
-          Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
-        }
-        if ((ids.array() == -1).any()) 
-          continue;
+      }
+      if (doRegPc0) {
+        Jp += -2.*lambdaRegPc0*(pc0_w[i] - pl.p_);
+      }
+      if (doRegAbsPc) {
+        Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
+      }
+      if (doRegAbsN) {
+        Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
+      }
+      if ((ids.array() >= 0).all()) {
         for (int j=0; j<kNN; ++j) {
           if (ids[j] > -1){
             const tdp::Plane& plO = pl_w[ids[j]];
@@ -1509,25 +1507,22 @@ int main( int argc, char* argv[] )
                 Jn += mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*(plO.p_-pl.p_);
                 Jp += -mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*pl.n_;
               }
-              numGrads++;
             }
           }
         }
       }
 //      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
-      for (int32_t i = 0; i!=iInsert;
-        i=(i+1)%nn.w_) {
-        tdp::Plane& pl = pl_w.GetCircular(i);
-        tdp::Vector3fda& Jn = Jn_w[i];
-        tdp::Vector3fda& Jp = Jp_w[i];
+//      tdp::Vector3fda& Jn = Jn_w[i];
+//      tdp::Vector3fda& Jp = Jp_w[i];
+      {
         std::lock_guard<std::mutex> mapGuard(mapLock);
         pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
-//        std::cout << Jn.transpose() << " " << pl.n_.transpose() << std::endl;
         pl.p_ -= alphaGrad * Jp;
         pc_w[i] = pl.p_;
         n_w[i] = pl.n_;
       }
+      i = (i+1)%sizeToRead;
 //      std::cout << "map updated " << i << " " 
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
