@@ -1794,9 +1794,6 @@ int main( int argc, char* argv[] )
         for (size_t it = 0; it < SO3maxIt; ++it) {
           for (auto& ass : assoc) mask[ass.second] = 0;
           assoc.clear();
-//          indK = std::vector<size_t>(invInd.size(),0);
-//          numProjected = 0;
-
           A = Eigen::Matrix<float,3,3>::Zero();
           b = Eigen::Matrix<float,3,1>::Zero();
           Ai = Eigen::Matrix<float,3,1>::Zero();
