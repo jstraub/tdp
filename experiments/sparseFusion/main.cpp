@@ -341,6 +341,7 @@ bool AccumulateP2Pl(const Plane& pl,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float grey_ci,
+    const Vector2fda& gradGrey_ci,
     float distThr, 
     float p2plThr, 
     float dotThr,
@@ -387,8 +388,16 @@ bool AccumulateP2Pl(const Plane& pl,
 //        } else {
 //          std::cout << " grad 3D is nan!" << std::endl; 
 //        }
-        // texture inverse transform
-        
+        // texture inverse transform verified Jse3 
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,3,6> Jse3;
+        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_ci-T_wc.translation())), 
+             -Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
+        bi = -grey_ci + pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+        err += lambda*bi;
         // accumulate
         return true;
       }
@@ -539,6 +548,7 @@ bool AccumulateP2Pl(const Plane& pl,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
     float grey_ci,
+    const Vector2fda& gradGrey_ci,
     float distThr, 
     float p2plThr, 
     float dotThr,
@@ -583,23 +593,28 @@ bool AccumulateP2Pl(const Plane& pl,
         err += gamma*bsi.norm();
 //        std::cout << Ai.transpose() << "; " << bi << std::endl;
         // texture
-        if (tdp::IsValidData(pl.grad_)) {
-          Eigen::Matrix<float,3,6> Jse3;
-          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
-          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
-//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
-//             Eigen::Matrix3f::Identity();
-        // TODO: should not be using the model image gradient here!!
-          Ai = Jse3.transpose() * pl.grad_;
-          bi = grey_ci - pl.grey_;
-          A += lambda*(Ai * Ai.transpose());
-          b += lambda*(Ai * bi);
-          err += lambda*bi;
-//          std::cout << bi << "\t" << pl.grad_.transpose() << "\t" << Ai.transpose() << std::endl;
-        } else {
-          std::cout << "gradient is nan " << std::endl;
-        }
-//        std::cout << Ai.transpose() << "; " << bi << std::endl;
+//        if (tdp::IsValidData(pl.grad_)) {
+//          Eigen::Matrix<float,3,6> Jse3;
+//          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci));
+//          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
+//          Ai = Jse3.transpose() * pl.grad_;
+//          bi = grey_ci - pl.grey_;
+//          A += lambda*(Ai * Ai.transpose());
+//          b += lambda*(Ai * bi);
+//          err += lambda*bi;
+//        } else {
+//          std::cout << "gradient is nan " << std::endl;
+//        }
+        // texture inverse transform verified Jse3 
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,3,6> Jse3;
+        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_ci-T_wc.translation())), 
+             -Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
+        bi = -grey_ci + pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+        err += lambda*bi;
         // accumulate
         return true;
       }
@@ -1739,7 +1754,7 @@ int main( int argc, char* argv[] )
                 continue;
               if (useTexture) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v), distThr, p2plThr, dotThr,
+                      n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
                       lambdaTex, A, Ai, b, err))
                   continue;
               } else if (useNormals) {
@@ -1750,7 +1765,7 @@ int main( int argc, char* argv[] )
                 }
               } else if (useNormalsAndTexture) {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v), distThr, p2plThr, dotThr,
+                      n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
                       lambdaNs, lambdaTex, A, Ai, b, err)) {
                   continue;
                 }
