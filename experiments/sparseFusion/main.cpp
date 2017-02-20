@@ -1088,6 +1088,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNZ("ui.reg rel N",true,true);
   pangolin::Var<bool> doRegRelPlObs("ui.reg rel PlObs",false,true);
   pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
+  pangolin::Var<bool> doVariationalUpdate("ui.variational",false,true);
   pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
   pangolin::Var<float> lambdaRegPc0("ui.lamb Reg Pc0",0.01,0.01,1.);
@@ -1484,7 +1485,8 @@ int main( int argc, char* argv[] )
       if (doRegAbsN) {
         Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
       }
-      if ((ids.array() >= 0).all()) {
+      bool haveFullNeighborhood = (ids.array() >= 0).all();
+      if (haveFullNeighborhood) {
         for (int j=0; j<kNN; ++j) {
           if (ids[j] > -1){
             const tdp::Plane& plO = pl_w[ids[j]];
@@ -1511,6 +1513,27 @@ int main( int argc, char* argv[] )
           }
         }
       }
+      Eigen::Vector3fda mu;
+        if (doVariationalUpdate && haveFullNeighborhood) {
+          Eigen::Matrix3f SigmaPl;
+          Eigen::Matrix3f Info =  InfoO*numSum_w[i];
+  //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
+          Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+          for (int i=0; i<kNN; ++i) {
+            if (ids[i] > -1) {
+//              && zS[ids[i]] < Ksample ) {
+//              SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
+              SigmaPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+              Info += SigmaPl;
+              xi += SigmaPl*pl_w[ids[i]].p_;
+            }
+          }
+//          Eigen::Matrix3f Sigma = Info.inverse();
+          mu = Info.ldlt().solve(xi);
+  //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//          pi = Normal<float,3>(mu, Sigma).sample(rnd);
+//          pl.p_ = mu;
+        }
 //      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
 //      tdp::Vector3fda& Jn = Jn_w[i];
@@ -1518,7 +1541,11 @@ int main( int argc, char* argv[] )
       {
         std::lock_guard<std::mutex> mapGuard(mapLock);
         pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
-        pl.p_ -= alphaGrad * Jp;
+        if (haveFullNeighborhood &&  doVariationalUpdate) {
+          pl.p_ = mu;
+        } else {
+          pl.p_ -= alphaGrad * Jp;
+        }
         pc_w[i] = pl.p_;
         n_w[i] = pl.n_;
       }
