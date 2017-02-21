@@ -1065,16 +1065,20 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
 
   tdp::ManagedHostImage<uint8_t> grey(w, h);
-  tdp::ManagedHostImage<float> greyFl(wc,hc);
+  tdp::ManagedHostPyramid<float,3> pyrGreyFl(wc,hc);
+  tdp::Image<float> greyFl = pyrGreyFl.GetImage(0);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
-  tdp::ManagedDeviceImage<float> cuGreyFlSmooth(wc,hc);
+  tdp::ManagedDevicePyramid<float,3> cuPyrGreyFlSmooth(wc,hc);
+  tdp::Image<float> cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
   tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyGradNorm(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyGradTheta(wc,hc);
   tdp::ManagedHostImage<float> greyGradNorm(wc,hc);
-  tdp::ManagedDeviceImage<tdp::Vector2fda> cuGradGrey(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey(wc,hc);
+  tdp::ManagedHostPyramid<tdp::Vector2fda,3> pyrGradGrey(wc,hc);
+  tdp::Image<tdp::Vector2fda> cuGradGrey = cuPyrGradGrey.GetImage(0);
   tdp::ManagedHostImage<tdp::Vector2fda> gradGrey(wc,hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
@@ -1169,7 +1173,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-35.,-40.,-20.);
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-8.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
-  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",5, 1, 20);
+  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",3, 1, 20);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1768,6 +1772,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
 
+    cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
     if (smoothGrey==2) {
       tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 10.);
     } else if (smoothGrey==1) {
@@ -1775,15 +1780,18 @@ int main( int argc, char* argv[] )
     } else {
       cuGreyFlSmooth.CopyFrom(cuGreyFl);
     }
+    tdp::CompletePyramid(cuPyrGreyFlSmooth);
+    pyrGreyFl.CopyFrom(cuPyrGreyFlSmooth);
+    greyFl = pyrGreyFl.GetImage(0);
 
+    cuGradGrey = cuPyrGradGrey.GetImage(0);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
-    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv,
-      cuGreyGradTheta, cuGreyGradNorm);
+    tdp::CompletePyramid(cuPyrGradGrey);
+    pyrGradGrey.Copyfrom(cuPyrGradGrey);
+    gradGrey = pyrGradGrey.GetImage(0);
+
+    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv, cuGreyGradTheta, cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
-//    cuGreyFlSmooth.CopyFrom(cuGreyFl);
-//    tdp::Convert(cuGreyFlSmooth, cuGrey, 255.);
-    greyFl.CopyFrom(cuGreyFlSmooth);
-    gradGrey.CopyFrom(cuGradGrey);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
@@ -1797,50 +1805,56 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,3,3> A;
         Eigen::Matrix<float,3,1> b;
         Eigen::Matrix<float,3,1> Ai;
-        for (size_t it = 0; it < SO3maxIt; ++it) {
-          for (auto& ass : assoc) mask[ass.second] = 0;
-          assoc.clear();
-          A = Eigen::Matrix<float,3,3>::Zero();
-          b = Eigen::Matrix<float,3,1>::Zero();
-          Ai = Eigen::Matrix<float,3,1>::Zero();
-          float err = 0.;
-          float H = 1e10;
-          float Hprev = 1e10;
-          tdp::SE3f T_cw = T_wc.Inverse();
-          for (auto& i : idsCur) {
-            tdp::Plane& pl = pl_w.GetCircular(i);
-            Eigen::Vector2f x = cam.Project(T_cw*pl.p_);
-            int32_t u = floor(x(0)+0.5f);
-            int32_t v = floor(x(1)+0.5f);
-            if (0 > u || u >= pc.w_ || 0 > v || v >= pc.h_) 
-              continue;
-            if (!AccumulateIntDiff(pl, T_cw, cam, greyFl(u,v),
-                  gradGrey(u,v), lambdaTex, A, Ai, b, err))
-              continue;
-            mask(u,v) |= 1;
-            assoc.emplace_back(i,u+v*pc.w_);
-              
-//            tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
-//                SO3condEntropyThr, SO3negLogEvThr, H, gui.verbose);
-//              break;
-//            Hprev = H;
+        for (int32_t pyr=2; pyr>=0; --pyr) {
+          if (gui.verbose) std::cout << "pyramid lvl " << pyr << std::endl;
+          float scale = pow(0.5,lvl);
+          CameraT camLvl = cam.Scale(scale);
+          tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
+          tdp::Image<float> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+          for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
+            for (auto& ass : assoc) mask[ass.second] = 0;
+            assoc.clear();
+            A = Eigen::Matrix<float,3,3>::Zero();
+            b = Eigen::Matrix<float,3,1>::Zero();
+            Ai = Eigen::Matrix<float,3,1>::Zero();
+            float err = 0.;
+            float H = 1e10;
+            float Hprev = 1e10;
+            tdp::SE3f T_cw = T_wc.Inverse();
+            for (auto& i : idsCur) {
+              tdp::Plane& pl = pl_w.GetCircular(i);
+              Eigen::Vector2f x = cam.Project(T_cw*pl.p_);
+              int32_t u = floor(x(0)+0.5f);
+              int32_t v = floor(x(1)+0.5f);
+              if (0 > u || u >= w*scale || 0 > v || v >= h*scale) 
+                continue;
+              if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl(u,v),
+                    gradGreyLvl(u,v), lambdaTex, A, Ai, b, err))
+                continue;
+              mask(u,v) |= 1;
+              assoc.emplace_back(i,u+v*w);
+              //tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
+              //    SO3condEntropyThr, SO3negLogEvThr, H, gui.verbose);
+              //  break;
+              //Hprev = H;
+            }
+            Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
+            if (assoc.size() > 10) {
+              // solve for x using ldlt
+              x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+              T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
+            }
+            bool term = (x.norm()*180./M_PI < icpdRThr
+                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
+                  SO3negLogEvThr, H, gui.verbose));
+            if (gui.verbose) {
+              std::cout << "\tit " << it << ": err=" << err 
+                << "\tH: " << H 
+                << "\t# inliers: " << assoc.size()
+                << "\t|x|: " << x.norm()*180./M_PI << std::endl;
+            }
+            if (term) break;
           }
-          Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
-          if (assoc.size() > 10) {
-            // solve for x using ldlt
-            x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-            T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
-          }
-          bool term = (x.norm()*180./M_PI < icpdRThr
-              && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
-                SO3negLogEvThr, H, gui.verbose));
-          if (gui.verbose) {
-            std::cout << "\tit " << it << ": err=" << err 
-              << "\tH: " << H 
-              << "\t# inliers: " << assoc.size()
-              << "\t|x|: " << x.norm()*180./M_PI << std::endl;
-          }
-          if (term) break;
         }
         TOCK("icp RGB");
       }
