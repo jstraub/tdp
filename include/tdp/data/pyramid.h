@@ -41,12 +41,31 @@ void PyrDown(
     );
 
 void PyrDownBlur(
+    const Image<Vector2fda>& Iin,
+    Image<Vector2fda>& Iout,
+    float sigma_in
+    );
+void PyrDownBlur(
     const Image<float>& Iin,
     Image<float>& Iout,
     float sigma_in
     );
-
 void PyrDownBlur(
+    const Image<uint8_t>& Iin,
+    Image<uint8_t>& Iout,
+    float sigma_in
+    );
+void PyrDownBlur9(
+    const Image<Vector2fda>& Iin,
+    Image<Vector2fda>& Iout,
+    float sigma_in
+    );
+void PyrDownBlur9(
+    const Image<float>& Iin,
+    Image<float>& Iout,
+    float sigma_in
+    );
+void PyrDownBlur9(
     const Image<uint8_t>& Iin,
     Image<uint8_t>& Iout,
     float sigma_in
@@ -205,6 +224,23 @@ void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma) {
       Image<T> Isrc = P.GetImage(lvl-1);
       Image<T> Idst = P.GetImage(lvl);
       PyrDownBlur(Isrc, Idst,sigma);
+    }
+  } else {
+    assert(false);
+  }
+}
+
+/// Use PyrDown with larger Gaussian Blur.
+/// @param sigma whats the expected std on the first level - to only
+/// smooth over pixels that are within 3 sigma of the center pixel
+template<typename T, int LEVELS>
+void CompletePyramidBlur9(Pyramid<T,LEVELS>& P, float sigma) {
+  if (P.storage_ == Storage::Gpu) {
+    // P is on GPU so perform downsampling on GPU
+    for (int lvl=1; lvl<LEVELS; ++lvl) {
+      Image<T> Isrc = P.GetImage(lvl-1);
+      Image<T> Idst = P.GetImage(lvl);
+      PyrDownBlur9(Isrc, Idst,sigma);
     }
   } else {
     assert(false);

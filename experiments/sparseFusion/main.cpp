@@ -1140,6 +1140,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.3,0.01,0.3);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
+  pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
 
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
@@ -1155,7 +1156,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
   pangolin::Var<float> lambdaRegPc0("ui.lamb Reg Pc0",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0005,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
@@ -1165,7 +1166,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
-
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -1798,19 +1798,27 @@ int main( int argc, char* argv[] )
 
     cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
     if (smoothGrey==2) {
-      tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 10.);
+      tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 1.);
     } else if (smoothGrey==1) {
-      tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 10.);
+      tdp::Blur5(cuGreyFl,cuGreyFlSmooth, 1.);
     } else {
       cuGreyFlSmooth.CopyFrom(cuGreyFl);
     }
-    tdp::CompletePyramid(cuPyrGreyFlSmooth);
+    if (smoothGreyPyr==1) {
+      tdp::CompletePyramidBlur9(cuPyrGreyFlSmooth, 1.);
+    } else {
+      tdp::CompletePyramidBlur(cuPyrGreyFlSmooth, 1.);
+    }
     pyrGreyFl.CopyFrom(cuPyrGreyFlSmooth);
     greyFl = pyrGreyFl.GetImage(0);
 
     cuGradGrey = cuPyrGradGrey.GetImage(0);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
-    tdp::CompletePyramid(cuPyrGradGrey);
+    if (smoothGreyPyr==1) {
+      tdp::CompletePyramidBlur9(cuPyrGradGrey, 1.);
+    } else {
+      tdp::CompletePyramidBlur(cuPyrGradGrey, 1.);
+    }
     pyrGradGrey.CopyFrom(cuPyrGradGrey);
     gradGrey = pyrGradGrey.GetImage(0);
 
