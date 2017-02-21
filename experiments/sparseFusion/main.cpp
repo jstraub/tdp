@@ -364,11 +364,13 @@ bool AccumulateP2PlIntensity(const Plane& pl,
       if (fabs(p2pl) < p2plThr) {
         // p2pl
         Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
-        Ai.bottomRows<3>() = n_w_in_c; 
+//        Ai.bottomRows<3>() = n_w_in_c; 
+        Ai.bottomRows<3>() = n_w; 
         bi = p2pl;
         A += Ai * Ai.transpose();
         b += Ai * bi;
         err += bi;
+//        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
         // texture old
 //        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
 //        Eigen::Matrix<float,3,6> Jse3;
@@ -398,6 +400,11 @@ bool AccumulateP2PlIntensity(const Plane& pl,
         bi = - grey_ci + pl.grey_;
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
+
+//        std::cout << " intensity " << bi << " " << Ai.transpose() << std::endl;
+//        std::cout << Jse3 << std::endl;
+//        std::cout << Jpi << std::endl;
+//        std::cout << gradGrey_ci << std::endl;
         err += lambda*bi;
         // accumulate
         return true;
@@ -576,6 +583,7 @@ bool AccumulateIntDiff(const Plane& pl,
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
         err += lambda*bi;
+//        std::cout << " intensity SO3 " << bi << " " << Ai.transpose() << std::endl;
         // accumulate
         return true;
 }
@@ -1175,11 +1183,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
-  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-35.,-40.,-20.);
-  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-8.,-10.,0.);
+  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
+  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-6.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
   pangolin::Var<int> SO3maxIt("ui.SO3 max iter",3, 1, 20);
-  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",0,0,2);
+  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",2,0,2);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1193,6 +1201,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
+  pangolin::Var<bool> showGrey("ui.show grey",false,true);
   pangolin::Var<bool> showDPvMFlabels("ui.show DPvMF labels",true,true);
   pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
@@ -1656,7 +1665,7 @@ int main( int argc, char* argv[] )
     
     if (useTexture.GuiChanged() && useTexture) {
       HThr = -32;
-      negLogEvThr = -8;
+      negLogEvThr = -4;
     }
 
     idNew.clear();
@@ -1823,9 +1832,9 @@ int main( int argc, char* argv[] )
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
-          std::cout << camLvl.params_.transpose() << std::endl <<
-            greyFlLvl.Description() <<  std::endl <<
-            gradGreyLvl.Description() << std::endl;
+//          std::cout << camLvl.params_.transpose() << std::endl <<
+//            greyFlLvl.Description() <<  std::endl <<
+//            gradGreyLvl.Description() << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
@@ -1838,9 +1847,13 @@ int main( int argc, char* argv[] )
             tdp::SE3f T_cw = T_wc.Inverse();
             for (auto& i : idsCur) {
               tdp::Plane& pl = pl_w.GetCircular(i);
-              Eigen::Vector2f x = cam.Project(T_cw*pl.p_);
+              Eigen::Vector2f x = camLvl.Project(T_cw*pl.p_);
               float u = x(0);
               float v = x(1);
+//              if (pyr == 2) {
+//                std::cout << pyr << ": " << u << ", " << v 
+//                  << " " << w*scale << "x" << h*scale << std::endl;
+//              }
               if (0 > u || u >= w*scale || 0 > v || v >= h*scale) 
                 continue;
               if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
@@ -1949,7 +1962,8 @@ int main( int argc, char* argv[] )
           }
           numInl = assoc.size();
           Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-          if (assoc.size() > 10) { // solve for x using ldlt
+          if (assoc.size() > 6) { // solve for x using ldlt
+//            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
             x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
             T_wc = T_wc * tdp::SE3f::Exp_(x);
           }
@@ -2023,7 +2037,7 @@ int main( int argc, char* argv[] )
           // filtering grad grey
           pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
               + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
-          pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + grey(u,v)) / (w+1);
+          pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + greyFl(u,v)) / (w+1);
           pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
                 + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
 
@@ -2145,13 +2159,16 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv) {
+        if (showAge || showObs || showCurv || showGrey) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
           } else if (showObs) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).numObs_;
+          } else if (showGrey) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = pl_w.GetCircular(i).grey_;
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
