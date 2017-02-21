@@ -1127,6 +1127,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
   pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
   pangolin::Var<int> numInl("ui.num Inl",0,0,0);
+  pangolin::Var<int> idMapUpdate("ui.id Map",0,0,0);
+  pangolin::Var<int> idNNUpdate("ui.id NN",0,0,0);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
@@ -1135,7 +1137,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
-  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.1,0.01,0.3);
+  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.3,0.01,0.3);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
@@ -1175,7 +1177,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-5.,-12.,-1.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-4.,-12.,-1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1340,6 +1342,7 @@ int main( int argc, char* argv[] )
 //          mapObsP2Pl.iInsert_ = std::max(iReadNext;
           nn.iInsert_ = std::max(iReadNext, nn.iInsert_);
         }
+        idNNUpdate = iReadNext;
       }
     };
   });
@@ -1620,6 +1623,7 @@ int main( int argc, char* argv[] )
         n_w[i] = pl.n_;
       }
       i = (i+1)%sizeToRead;
+      idMapUpdate = i;
 //      std::cout << "map updated " << i << " " 
 //        << (alphaGrad * Jn.transpose()) << "; "
 //        << (alphaGrad * Jp.transpose()) << std::endl;
@@ -1832,12 +1836,9 @@ int main( int argc, char* argv[] )
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
-//          std::cout << camLvl.params_.transpose() << std::endl <<
-//            greyFlLvl.Description() <<  std::endl <<
-//            gradGreyLvl.Description() << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
-            for (auto& ass : assoc) mask[ass.second] = 0;
-            assoc.clear();
+//            for (auto& ass : assoc) mask[ass.second] = 0;
+//            assoc.clear();
             A = Eigen::Matrix<float,3,3>::Zero();
             b = Eigen::Matrix<float,3,1>::Zero();
             Ai = Eigen::Matrix<float,3,1>::Zero();
@@ -1850,17 +1851,13 @@ int main( int argc, char* argv[] )
               Eigen::Vector2f x = camLvl.Project(T_cw*pl.p_);
               float u = x(0);
               float v = x(1);
-//              if (pyr == 2) {
-//                std::cout << pyr << ": " << u << ", " << v 
-//                  << " " << w*scale << "x" << h*scale << std::endl;
-//              }
               if (0 > u || u >= w*scale || 0 > v || v >= h*scale) 
                 continue;
               if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
                     gradGreyLvl.GetBilinear(u,v), lambdaTex, A, Ai, b, err))
                 continue;
-              mask(u,v) |= 1;
-              assoc.emplace_back(i,u+v*w);
+//              mask(u,v) |= 1;
+//              assoc.emplace_back(i,u+v*w);
               //tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
               //    SO3condEntropyThr, SO3negLogEvThr, H, gui.verbose);
               //  break;
