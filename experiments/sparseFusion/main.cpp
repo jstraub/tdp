@@ -1117,6 +1117,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
+  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.1,0.01,0.3);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
@@ -1656,7 +1657,9 @@ int main( int argc, char* argv[] )
       TICK("extract assoc");
 //      z.Fill(0);
       idsCur.clear();
-      projAssoc.GetAssoc(z, mask, idsCur);
+//      projAssoc.GetAssoc(z, mask, idsCur);
+      projAssoc.GetAssoc(pl_w, pc_c, T_wc.Inverse(), occlusionDepthThr,
+          z, mask, idsCur);
       std::random_shuffle(idsCur.begin(), idsCur.end());
       TOCK("extract assoc");
 

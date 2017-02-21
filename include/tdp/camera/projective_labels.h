@@ -95,6 +95,29 @@ class ProjectiveAssociation {
         ids.push_back(z[i]-1);
     }
   }
+  /// adds depth-based occlusion reasoning to filter data associations
+  void GetAssocOcclusion(
+      const tdp::Image<tdp::Plane>& pl_w,
+      const tdp::Image<tdp::Vector3fda>& pc_c,
+      const tdp::SE3f& T_cw,
+      float occlusionDepthThr,
+      tdp::Image<uint32_t>& z, 
+      tdp::Image<uint8_t>& mask, std::vector<uint32_t>& ids) {
+    GetAssoc(z);
+    for (size_t i=0; i<z.Area(); ++i) {
+      if (z[i]>0) {
+        uint32_t id = z[i]-1;
+        float d_w_in_c = (T_cw*pl_w[id].p_)(2);
+        float d_c = pc_c[i](2);
+        if (fabs(d_w_in_c - d_c) < occlusionDepthThr) {
+          mask[i] = 1;
+          ids.push_back(id);
+        } else {
+          mask[i] = 0;
+        }
+      }
+    }
+  }
 
   void Associate(const Image<Vector3fda>& pc_w,
       SE3f T_cw, float dMin, float dMax, uint32_t numElems) {
