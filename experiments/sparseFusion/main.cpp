@@ -1859,137 +1859,136 @@ int main( int argc, char* argv[] )
         TOCK("icp RGB");
       }
       if (runICP) {
+        if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
+        TICK("icp");
+        std::vector<size_t> indK(invInd.size(),0);
+        Eigen::Matrix<float,6,6> A;
+        Eigen::Matrix<float,6,1> b;
+        Eigen::Matrix<float,6,1> Ai;
+        float dotThr = cos(angleThr*M_PI/180.);
+        for (size_t it = 0; it < maxIt; ++it) {
+          for (auto& ass : assoc) mask[ass.second] = 0;
+          assoc.clear();
+          indK = std::vector<size_t>(invInd.size(),0);
+          numProjected = 0;
 
-      if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
-      TICK("icp");
-      std::vector<size_t> indK(invInd.size(),0);
-      Eigen::Matrix<float,6,6> A;
-      Eigen::Matrix<float,6,1> b;
-      Eigen::Matrix<float,6,1> Ai;
-      float dotThr = cos(angleThr*M_PI/180.);
-      for (size_t it = 0; it < maxIt; ++it) {
-        for (auto& ass : assoc) mask[ass.second] = 0;
-        assoc.clear();
-        indK = std::vector<size_t>(invInd.size(),0);
-        numProjected = 0;
+          A = Eigen::Matrix<float,6,6>::Zero();
+          b = Eigen::Matrix<float,6,1>::Zero();
+          Ai = Eigen::Matrix<float,6,1>::Zero();
+          float err = 0.;
+          float H = 1e10;
+          float Hprev = 1e10;
+          tdp::SE3f T_cw = T_wc.Inverse();
+          // associate new data until enough
+          bool exploredAll = false;
+          uint32_t k = 0;
+          while (assoc.size() < 1000 && !exploredAll) {
+            k = (k+1) % invInd.size();
+            while (indK[k] < invInd[k].size()) {
+              size_t i = invInd[k][indK[k]++];
+              int32_t u, v;
+              tdp::Plane& pl = pl_w.GetCircular(i);
+              numProjected = numProjected + 1;
 
-        A = Eigen::Matrix<float,6,6>::Zero();
-        b = Eigen::Matrix<float,6,1>::Zero();
-        Ai = Eigen::Matrix<float,6,1>::Zero();
-        float err = 0.;
-        float H = 1e10;
-        float Hprev = 1e10;
-        tdp::SE3f T_cw = T_wc.Inverse();
-        // associate new data until enough
-        bool exploredAll = false;
-        uint32_t k = 0;
-        while (assoc.size() < 1000 && !exploredAll) {
-          k = (k+1) % invInd.size();
-          while (indK[k] < invInd[k].size()) {
-            size_t i = invInd[k][indK[k]++];
-            int32_t u, v;
-            tdp::Plane& pl = pl_w.GetCircular(i);
-            numProjected = numProjected + 1;
-
-            if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                  W, dpc, n, curv, u,v ))
-              continue;
-            if (useTexture) {
-              if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
-                    n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
-                    lambdaTex, A, Ai, b, err))
+              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                    W, dpc, n, curv, u,v ))
                 continue;
-            } else if (useNormals) {
-              if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
-                    n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
-                    Ai, b, err)) {
-                continue;
+              if (useTexture) {
+                if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
+                      lambdaTex, A, Ai, b, err))
+                  continue;
+              } else if (useNormals) {
+                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
+                      Ai, b, err)) {
+                  continue;
+                }
+              } else if (useNormalsAndTexture) {
+                if (!AccumulateP2PlIntensityNormals(pl, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
+                      lambdaNs, lambdaTex, A, Ai, b, err)) {
+                  continue;
+                }
+              } else {
+                if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
+                      distThr, p2plThr, dotThr, A, Ai, b, err))
+                  continue;
               }
-            } else if (useNormalsAndTexture) {
-              if (!AccumulateP2PlIntensityNormals(pl, T_wc, T_cw, cam, pc(u,v),
-                    n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
-                    lambdaNs, lambdaTex, A, Ai, b, err)) {
-                continue;
-              }
-            } else {
-              if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                    distThr, p2plThr, dotThr, A, Ai, b, err))
-                continue;
+              pl.lastFrame_ = frame;
+              ts[i] = frame;
+              pl.numObs_ ++;
+              mask(u,v) |= 1;
+              assoc.emplace_back(i,u+v*pc.w_);
+              break;
             }
-            pl.lastFrame_ = frame;
-            ts[i] = frame;
-            pl.numObs_ ++;
-            mask(u,v) |= 1;
-            assoc.emplace_back(i,u+v*pc.w_);
+
+            if (k == 0) {
+              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+                    negLogEvThr, H, gui.verbose))
+                break;
+              Hprev = H;
+            }
+            exploredAll = true;
+            for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
+          }
+          numInl = assoc.size();
+          Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
+          if (assoc.size() > 10) { // solve for x using ldlt
+            x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+            T_wc = T_wc * tdp::SE3f::Exp_(x);
+          }
+          if (gui.verbose) {
+            std::cout << "\tit " << it << ": err=" << err 
+              << "\t# inliers: " << numInl
+              << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+              << " " <<  x.bottomRows(3).norm() << std::endl;
+          }
+          if (x.topRows<3>().norm()*180./M_PI < icpdRThr
+              && x.bottomRows<3>().norm() < icpdtThr
+              && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
+                negLogEvThr, H, gui.verbose)) {
             break;
           }
+        }
 
-          if (k == 0) {
-            if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                  negLogEvThr, H, gui.verbose))
-              break;
-            Hprev = H;
-          }
-          exploredAll = true;
-          for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
-        }
-        numInl = assoc.size();
-        Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-        if (assoc.size() > 10) { // solve for x using ldlt
-          x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-          T_wc = T_wc * tdp::SE3f::Exp_(x);
-        }
         if (gui.verbose) {
-          std::cout << "\tit " << it << ": err=" << err 
-            << "\t# inliers: " << numInl
-            << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
-            << " " <<  x.bottomRows(3).norm() << std::endl;
+          for (size_t k=0; k<invInd.size(); ++k) {
+            if (invInd[k].size() > 0 )
+              std::cout << "used different directions " << k << "/" 
+                << invInd.size() << ": " << indK[k] 
+                << " of " << invInd[k].size() << std::endl;
+          }
         }
-        if (x.topRows<3>().norm()*180./M_PI < icpdRThr
-            && x.bottomRows<3>().norm() < icpdtThr
-            && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
-              negLogEvThr, H, gui.verbose)) {
-          break;
+        logObs.Log(log(assoc.size())/log(10.), 
+            log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
+        Eigen::Matrix<float,6,1> ev = eig.eigenvalues().real();
+        Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
+        float H = -ev.array().log().sum();
+        if (gui.verbose) {
+          std::cout << " H " << H << " neg log evs " << 
+            -ev.array().log().matrix().transpose() << std::endl;
         }
-      }
 
-      if (gui.verbose) {
-        for (size_t k=0; k<invInd.size(); ++k) {
-          if (invInd[k].size() > 0 )
-            std::cout << "used different directions " << k << "/" 
-              << invInd.size() << ": " << indK[k] 
-              << " of " << invInd[k].size() << std::endl;
-        }
-      }
-      logObs.Log(log(assoc.size())/log(10.), 
-          log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,6,6>> eig(A);
-      Eigen::Matrix<float,6,1> ev = eig.eigenvalues().real();
-      Eigen::Matrix<float,6,6> Q = eig.eigenvectors();
-      float H = -ev.array().log().sum();
-      if (gui.verbose) {
-        std::cout << " H " << H << " neg log evs " << 
-          -ev.array().log().matrix().transpose() << std::endl;
-      }
+        //for (size_t k=0; k<K; ++k) {
+        //  Eigen::Matrix<float,6,1> Ai;
+        //  Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
+        //  std::cout << "k " << k << std::endl;
+        //  std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
+        //}
 
-//      for (size_t k=0; k<K; ++k) {
-//        Eigen::Matrix<float,6,1> Ai;
-//        Ai << Eigen::Vector3f::Zero(), dpvmf.GetCenter(k);
-//        std::cout << "k " << k << std::endl;
-//        std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
-//      }
-
-      logEntropy.Log(H);
-      logEig.Log(-ev.array().log().matrix());
-      Eigen::Matrix<float,6,1> q0 = Q.col(0);
-      uint32_t maxId = 0;
-      q0.array().abs().maxCoeff(&maxId);
-      q0 *= (q0(maxId) > 0? 1.: -1.);
-      logEv.Log(q0);
-      T_wcs.push_back(T_wc);
-      trackingGood = H <= HThr && assoc.size() > 10;
-      TOCK("icp");
-      if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
+        logEntropy.Log(H);
+        logEig.Log(-ev.array().log().matrix());
+        Eigen::Matrix<float,6,1> q0 = Q.col(0);
+        uint32_t maxId = 0;
+        q0.array().abs().maxCoeff(&maxId);
+        q0 *= (q0(maxId) > 0? 1.: -1.);
+        logEv.Log(q0);
+        T_wcs.push_back(T_wc);
+        trackingGood = H <= HThr && assoc.size() > 10;
+        TOCK("icp");
+        if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
       }
 
       if (updatePlanes && trackingGood) {
@@ -2025,17 +2024,17 @@ int main( int argc, char* argv[] )
                 if (assB.first == nn[ass.first](i)){
                   int32_t uB = assB.second%pc.w_;
                   int32_t vB = assB.second/pc.w_;
-                  //                mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
-                  //                mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
-                  //                mapObsNum[ass.first](i) ++;
+                  //mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
+                  //mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
+                  //mapObsNum[ass.first](i) ++;
                   float w = mapObsNum[ass.first](i);
                   mapObsP2Pl[ass.first](i) = (w*mapObsP2Pl[ass.first](i) + n(u,v).dot(pc(uB,vB)-pc(u,v)))/(w+1.);
                   mapObsDot[ass.first](i) = (mapObsDot[ass.first](i)*w + n(u,v).dot(n(uB,vB)))/(w+1.);
                   mapObsNum[ass.first](i) = std::min(100.f,w+1.f) ;
-                  //                std::cout << "found NN " << i << " of " << ass.first 
-                  //                  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
-                  //                  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
-                  //                  << " " << mapObsNum[ass.first](i) << std::endl;
+                  //std::cout << "found NN " << i << " of " << ass.first 
+                  //  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
+                  //  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
+                  //  << " " << mapObsNum[ass.first](i) << std::endl;
                   numNN++;
                   break;
                 }
