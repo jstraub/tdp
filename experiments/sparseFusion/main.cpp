@@ -1014,10 +1014,10 @@ int main( int argc, char* argv[] )
 
   pangolin::View& containerTracking = pangolin::Display("tracking");
   containerTracking.SetLayout(pangolin::LayoutEqual);
-  tdp::QuickView viewGrey(wc, hc);
+  tdp::QuickView viewGrey(3*wc/2, hc);
   containerTracking.AddDisplay(viewGrey);
-  tdp::QuickView viewMask(wc, hc);
-  containerTracking.AddDisplay(viewMask);
+  tdp::QuickView viewGradGrey(3*wc/2, hc);
+  containerTracking.AddDisplay(viewGradGrey);
   gui.container().AddDisplay(containerTracking);
 
 
@@ -1069,6 +1069,7 @@ int main( int argc, char* argv[] )
   tdp::Image<float> greyFl = pyrGreyFl.GetImage(0);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
+  tdp::ManagedHostImage<float> pyrGreyFlImg(3*wc/2, hc); 
   tdp::ManagedDevicePyramid<float,3> cuPyrGreyFlSmooth(wc,hc);
   tdp::Image<float> cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
   tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
@@ -1079,7 +1080,11 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey(wc,hc);
   tdp::ManagedHostPyramid<tdp::Vector2fda,3> pyrGradGrey(wc,hc);
   tdp::Image<tdp::Vector2fda> cuGradGrey = cuPyrGradGrey.GetImage(0);
-  tdp::ManagedHostImage<tdp::Vector2fda> gradGrey(wc,hc);
+  tdp::Image<tdp::Vector2fda> gradGrey = pyrGradGrey.GetImage(0);
+
+  tdp::ManagedDeviceImage<tdp::Vector2fda> cuGrad2D(3*wc/2, hc); 
+  tdp::ManagedDeviceImage<tdp::Vector3bda> cuGrad2DImg(3*wc/2, hc);
+  tdp::ManagedHostImage<tdp::Vector3bda> grad2DImg(3*wc/2, hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
   tdp::ManagedDeviceImage<float> cuD(wc, hc);
@@ -1161,8 +1166,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
-  pangolin::Var<float> HThr("ui.H Thr",-30.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-8.,-12.,-1.);
+  pangolin::Var<float> HThr("ui.H Thr",-12.,-40.,-12.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1.,-12.,-1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1174,6 +1179,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-8.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
   pangolin::Var<int> SO3maxIt("ui.SO3 max iter",3, 1, 20);
+  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",0,0,2);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1647,6 +1653,11 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
+    
+    if (useTexture.GuiChanged() && useTexture) {
+      HThr = -32;
+      negLogEvThr = -8;
+    }
 
     idNew.clear();
     if (!gui.paused() && !gui.finished()
@@ -1663,8 +1674,8 @@ int main( int argc, char* argv[] )
 //      z.Fill(0);
       idsCur.clear();
 //      projAssoc.GetAssoc(z, mask, idsCur);
-      projAssoc.GetAssoc(pl_w, pc_c, T_wc.Inverse(), occlusionDepthThr,
-          z, mask, idsCur);
+      projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
+          occlusionDepthThr, z, mask, idsCur);
       std::random_shuffle(idsCur.begin(), idsCur.end());
       TOCK("extract assoc");
 
@@ -1787,10 +1798,11 @@ int main( int argc, char* argv[] )
     cuGradGrey = cuPyrGradGrey.GetImage(0);
     tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
     tdp::CompletePyramid(cuPyrGradGrey);
-    pyrGradGrey.Copyfrom(cuPyrGradGrey);
+    pyrGradGrey.CopyFrom(cuPyrGradGrey);
     gradGrey = pyrGradGrey.GetImage(0);
 
-    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv, cuGreyGradTheta, cuGreyGradNorm);
+    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv, cuGreyGradTheta,
+        cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1805,12 +1817,15 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,3,3> A;
         Eigen::Matrix<float,3,1> b;
         Eigen::Matrix<float,3,1> Ai;
-        for (int32_t pyr=2; pyr>=0; --pyr) {
-          if (gui.verbose) std::cout << "pyramid lvl " << pyr << std::endl;
-          float scale = pow(0.5,lvl);
+        for (int32_t pyr=SO3maxLvl; pyr>=0; --pyr) {
+          float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
-          tdp::Image<float> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+          tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+          if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
+          std::cout << camLvl.params_.transpose() << std::endl <<
+            greyFlLvl.Description() <<  std::endl <<
+            gradGreyLvl.Description() << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
@@ -1824,12 +1839,12 @@ int main( int argc, char* argv[] )
             for (auto& i : idsCur) {
               tdp::Plane& pl = pl_w.GetCircular(i);
               Eigen::Vector2f x = cam.Project(T_cw*pl.p_);
-              int32_t u = floor(x(0)+0.5f);
-              int32_t v = floor(x(1)+0.5f);
+              float u = x(0);
+              float v = x(1);
               if (0 > u || u >= w*scale || 0 > v || v >= h*scale) 
                 continue;
-              if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl(u,v),
-                    gradGreyLvl(u,v), lambdaTex, A, Ai, b, err))
+              if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
+                    gradGreyLvl.GetBilinear(u,v), lambdaTex, A, Ai, b, err))
                 continue;
               mask(u,v) |= 1;
               assoc.emplace_back(i,u+v*w);
@@ -1882,7 +1897,7 @@ int main( int argc, char* argv[] )
           // associate new data until enough
           bool exploredAll = false;
           uint32_t k = 0;
-          while (assoc.size() < 1000 && !exploredAll) {
+          while (assoc.size() < 3000 && !exploredAll) {
             k = (k+1) % invInd.size();
             while (indK[k] < invInd[k].size()) {
               size_t i = invInd[k][indK[k]++];
@@ -2295,11 +2310,15 @@ int main( int argc, char* argv[] )
     }
 
     if (containerTracking.IsShown()) {
-      if (viewMask.IsShown()) {
-        viewMask.SetImage(mask);
-      }
       if (viewGrey.IsShown()) {
-        viewGrey.SetImage(grey);
+        tdp::PyramidToImage(pyrGreyFl, pyrGreyFlImg);
+        viewGrey.SetImage(pyrGreyFlImg);
+      }
+      if (viewGradGrey.IsShown()) {
+        tdp::PyramidToImage(cuPyrGradGrey, cuGrad2D);
+        tdp::Grad2Image(cuGrad2D, cuGrad2DImg);
+        grad2DImg.CopyFrom(cuGrad2DImg);
+        viewGradGrey.SetImage(grad2DImg);
       }
     }
     if (!gui.finished() && plotters.IsShown()) {

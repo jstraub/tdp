@@ -1,5 +1,6 @@
 #pragma once
 #include <tdp/data/image.h>
+#include <tdp/preproc/plane.h>
 #include <tdp/gl/render.h>
 #include <tdp/camera/camera_base.h>
 
