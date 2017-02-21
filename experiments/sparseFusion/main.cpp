@@ -334,7 +334,7 @@ bool AccumulateP2Pl(const Plane& pl,
 }
 
 /// uses texture as well
-bool AccumulateP2Pl(const Plane& pl, 
+bool AccumulateP2PlIntensity(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
@@ -395,7 +395,7 @@ bool AccumulateP2Pl(const Plane& pl,
         Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
-        bi = grey_ci - pl.grey_;
+        bi = - grey_ci + pl.grey_;
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
         err += lambda*bi;
@@ -581,7 +581,7 @@ bool AccumulateIntDiff(const Plane& pl,
 }
 
 /// uses gradient and normal as well
-bool AccumulateP2Pl(const Plane& pl, 
+bool AccumulateP2PlIntensityNormals(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
@@ -649,7 +649,7 @@ bool AccumulateP2Pl(const Plane& pl,
         // texture inverse transform verified Jse3 
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_w-T_wc.translation())), 
+        Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
         bi = -grey_ci + pl.grey_;
@@ -1881,7 +1881,7 @@ int main( int argc, char* argv[] )
                   W, dpc, n, curv, u,v ))
               continue;
             if (useTexture) {
-              if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+              if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
                     n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
                     lambdaTex, A, Ai, b, err))
                 continue;
@@ -1892,7 +1892,7 @@ int main( int argc, char* argv[] )
                 continue;
               }
             } else if (useNormalsAndTexture) {
-              if (!AccumulateP2Pl(pl, T_wc, T_cw, cam, pc(u,v),
+              if (!AccumulateP2PlIntensityNormals(pl, T_wc, T_cw, cam, pc(u,v),
                     n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
                     lambdaNs, lambdaTex, A, Ai, b, err)) {
                 continue;
