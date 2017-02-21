@@ -354,6 +354,7 @@ bool AccumulateP2Pl(const Plane& pl,
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
   float bi=0;
   float dist = (pc_w - pc_c_in_w).norm();
   if (dist < distThr) {
@@ -389,12 +390,12 @@ bool AccumulateP2Pl(const Plane& pl,
 //          std::cout << " grad 3D is nan!" << std::endl; 
 //        }
         // texture inverse transform verified Jse3 
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
         Eigen::Matrix<float,3,6> Jse3;
-        Jse3 << SO3mat<float>::invVee(T_wc.rotation().Inverse()*(pc_ci-T_wc.translation())), 
+        Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
-        bi = -grey_ci + pl.grey_;
+        bi = grey_ci - pl.grey_;
         A += lambda*(Ai * Ai.transpose());
         b += lambda*(Ai * bi);
         err += lambda*bi;
