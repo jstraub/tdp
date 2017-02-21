@@ -364,8 +364,8 @@ bool AccumulateP2PlIntensity(const Plane& pl,
       if (fabs(p2pl) < p2plThr) {
         // p2pl
         Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
-//        Ai.bottomRows<3>() = n_w_in_c; 
-        Ai.bottomRows<3>() = n_w; 
+        Ai.bottomRows<3>() = n_w_in_c; 
+//        Ai.bottomRows<3>() = n_w; 
         bi = p2pl;
         A += Ai * Ai.transpose();
         b += Ai * bi;
@@ -1160,7 +1160,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.001,1.);
   pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.01,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.01,1.);
-  pangolin::Var<bool> useTexture("ui.use Tex ICP",false,true);
+  pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
 
@@ -1174,8 +1174,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
-  pangolin::Var<float> HThr("ui.H Thr",-12.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-1.,-12.,-1.);
+  pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-5.,-12.,-1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1662,11 +1662,11 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
-    
-    if (useTexture.GuiChanged() && useTexture) {
-      HThr = -32;
-      negLogEvThr = -4;
-    }
+//    
+//    if (useTexture.GuiChanged() && useTexture) {
+//      HThr = -32;
+//      negLogEvThr = -4;
+//    }
 
     idNew.clear();
     if (!gui.paused() && !gui.finished()

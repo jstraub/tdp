@@ -100,7 +100,9 @@ __global__ void KernelICPStep(
 //        bottom = n_mi;
         // right multiplication
         top = (pc_oi).cross(T_mo.rotation().InverseTransform(n_mi));
-        bottom = n_mi;
+//        bottom = n_mi;
+        // This is likely correct:
+        bottom = T_mo.rotation().InverseTransform(n_mi);
         ab[6] = n_mi.dot(pc_mi-pc_o_in_m);
         Eigen::Matrix<float,29,1,Eigen::DontAlign> upperTriangle;
         int k=0;
