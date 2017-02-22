@@ -1095,7 +1095,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> grad2DImg(3*wc/2, hc);
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
-  tdp::ManagedDeviceImage<float> cuD(wc, hc);
 
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
@@ -1105,7 +1104,12 @@ int main( int argc, char* argv[] )
 
 
   // ICP stuff
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> pcs_c(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPc(wc,hc);
+  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrPc(wc,hc);
+
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrD(wc,hc);
+  tdp::Image<float> cuD = cuPyrD.GetImage(0);
+  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrD(wc,hc);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
@@ -1141,6 +1145,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
+  pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
   pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
 
   pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
@@ -1786,10 +1791,18 @@ int main( int argc, char* argv[] )
     int64_t t_host_us_d = 0;
     TICK("Setup");
     if (gui.verbose) std::cout << "collect d" << std::endl;
+    cuD = cuPyrD.GetImage(0);
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+    if (smoothDPyr==1) {
+      tdp::CompletePyramidBlur9(cuPyrD, 1.);
+    } else {
+      tdp::CompletePyramidBlur(cuPyrD, 1.);
+    }
+    pyrD.CopyFrom(cuPyrD);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
-    rig.ComputePc(cuD, true, pcs_c);
-    pc.CopyFrom(pcs_c.GetImage(0));
+    tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
+    rig.ComputePc(cuD, true, cuPc);
+    pc.CopyFrom(cuPyrPc.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
     cuRgb.CopyFrom(rgb);
@@ -1842,6 +1855,7 @@ int main( int argc, char* argv[] )
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
+          tdp::Image<float> dlLvl = pyrD.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
@@ -1856,11 +1870,14 @@ int main( int argc, char* argv[] )
             tdp::SE3f T_cw = T_wc.Inverse();
             for (auto& i : idsCur) {
               tdp::Plane& pl = pl_w.GetCircular(i);
-              Eigen::Vector2f x = camLvl.Project(T_cw*pl.p_);
+              tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
+              Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
               float u = x(0);
               float v = x(1);
-              if (0 > u || u >= w*scale || 0 > v || v >= h*scale) 
+              if (0 > u || u >= w*scale || 0 > v || v >= h*scale
+                  || fabs(dLvl.GetBilinear(u,v)-pc_w_in_c(2)) > occlusionDepthThr) 
                 continue;
+              //TODO oclusion check
               if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
                     gradGreyLvl.GetBilinear(u,v), lambdaTex, A, Ai, b, err))
                 continue;
@@ -1919,12 +1936,18 @@ int main( int argc, char* argv[] )
             k = (k+1) % invInd.size();
             while (indK[k] < invInd[k].size()) {
               size_t i = invInd[k][indK[k]++];
-              int32_t u, v;
               tdp::Plane& pl = pl_w.GetCircular(i);
+              tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
+              Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
+              if (0 > x(0) || x(0) >= w*scale || 0 > x(1) || x(1) >= h*scale
+                  || fabs(dLvl.GetBilinear(x(0),x(1))-pc_w_in_c(2)) > occlusionDepthThr) 
+                continue;
               numProjected = numProjected + 1;
-
-              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-                    W, dpc, n, curv, u,v ))
+              int32_t u = floor(x(0)+0.5f);
+              int32_t v = floor(x(1)+0.5f);
+              if (!EnsureNormal(pc, dpc, W, n, curv, u, v))
+//              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+//                    W, dpc, n, curv, u,v ))
                 continue;
               if (useTexture) {
                 if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
