@@ -1060,7 +1060,6 @@ int main( int argc, char* argv[] )
   viewGreyGradNorm.Show(true);
   plotters.Show(false);
 
-  tdp::ManagedHostImage<float> d(wc, hc);
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
@@ -1107,9 +1106,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPc(wc,hc);
   tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrPc(wc,hc);
 
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrD(wc,hc);
+  tdp::ManagedDevicePyramid<float,3> cuPyrD(wc,hc);
   tdp::Image<float> cuD = cuPyrD.GetImage(0);
-  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrD(wc,hc);
+  tdp::ManagedHostPyramid<float,3> pyrD(wc,hc);
+  tdp::Image<float> d = pyrD.GetImage(0);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
@@ -1799,6 +1799,7 @@ int main( int argc, char* argv[] )
       tdp::CompletePyramidBlur(cuPyrD, 1.);
     }
     pyrD.CopyFrom(cuPyrD);
+    d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
     tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
     rig.ComputePc(cuD, true, cuPc);
@@ -1855,10 +1856,11 @@ int main( int argc, char* argv[] )
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
-          tdp::Image<float> dlLvl = pyrD.GetImage(pyr);
+          tdp::Image<float> dLvl = pyrD.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
+            numInl = 0;
 //            for (auto& ass : assoc) mask[ass.second] = 0;
 //            assoc.clear();
             A = Eigen::Matrix<float,3,3>::Zero();
@@ -1874,13 +1876,18 @@ int main( int argc, char* argv[] )
               Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
               float u = x(0);
               float v = x(1);
+              float d_c = dLvl.GetBilinear(u,v);
+//              std::cout << d_c << " " << pc_w_in_c(2) << " " << fabs(d_c-pc_w_in_c(2))<< std::endl;
               if (0 > u || u >= w*scale || 0 > v || v >= h*scale
-                  || fabs(dLvl.GetBilinear(u,v)-pc_w_in_c(2)) > occlusionDepthThr) 
+                  || d_c != d_c
+                  || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
                 continue;
+//              std::cout << "accepted " << std::endl;
               //TODO oclusion check
               if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
                     gradGreyLvl.GetBilinear(u,v), lambdaTex, A, Ai, b, err))
                 continue;
+              numInl = numInl + 1;
 //              mask(u,v) |= 1;
 //              assoc.emplace_back(i,u+v*w);
               //tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
@@ -1900,7 +1907,7 @@ int main( int argc, char* argv[] )
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
                 << "\tH: " << H 
-                << "\t# inliers: " << assoc.size()
+                << "\t# inliers: " << numInl
                 << "\t|x|: " << x.norm()*180./M_PI << std::endl;
             }
             if (term) break;
@@ -1938,9 +1945,11 @@ int main( int argc, char* argv[] )
               size_t i = invInd[k][indK[k]++];
               tdp::Plane& pl = pl_w.GetCircular(i);
               tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
-              Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
-              if (0 > x(0) || x(0) >= w*scale || 0 > x(1) || x(1) >= h*scale
-                  || fabs(dLvl.GetBilinear(x(0),x(1))-pc_w_in_c(2)) > occlusionDepthThr) 
+              Eigen::Vector2f x = cam.Project(pc_w_in_c);
+              float d_c = d.GetBilinear(x(0),x(1));
+              if (0 > x(0) || x(0) >= w || 0 > x(1) || x(1) >= h
+                  || d_c != d_c
+                  || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
                 continue;
               numProjected = numProjected + 1;
               int32_t u = floor(x(0)+0.5f);
