@@ -588,6 +588,30 @@ bool AccumulateIntDiff(const Plane& pl,
         return true;
 }
 
+/// uses gradient only
+bool AccumulatePhotoSO3only(
+    tdp::SO3f& R_cp, 
+    CameraT& cam,
+    float grey_ci,
+    const Vector2fda& gradGrey_ci,
+    tdp::Vector3fda dir_p,
+    float grey_pi, // previous image
+    Eigen::Matrix<float,3,3>& A,
+    Eigen::Matrix<float,3,1>& Ai,
+    Eigen::Matrix<float,3,1>& b,
+    float& err
+    ) {
+  // texture inverse transform verified Jse3 
+  Eigen::Matrix<float,2,3> Jpi = cam.Jproject(R_cp*dir_p);
+  Eigen::Matrix<float,3,3> Jso3 = -R_cp.matrix()*SO3mat<float>::invVee(dir_p);
+  Ai = Jso3.transpose() * Jpi.transpose() * gradGrey_ci;
+  float bi = -grey_ci + pl.grey_;
+  A += Ai*Ai.transpose();
+  b += Ai*bi;
+  err += bi;
+  return true;
+}
+
 /// uses gradient and normal as well
 bool AccumulateP2PlIntensityNormals(const Plane& pl, 
     tdp::SE3f& T_wc, 
@@ -1072,6 +1096,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
 
   tdp::ManagedHostImage<uint8_t> grey(w, h);
+  tdp::ManagedHostPyramid<float,3> pyrGreyFlPrev(wc,hc);
   tdp::ManagedHostPyramid<float,3> pyrGreyFl(wc,hc);
   tdp::Image<float> greyFl = pyrGreyFl.GetImage(0);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
@@ -1101,6 +1126,10 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<float> age(MAP_SIZE);
 
+  tdp::ManagedHostPyramid<tdp::Vector3fda> pyrRay;
+  tdp::ManagedDevicePyramid<tdp::Vector3fda> cuPyrRay;
+  tdp::ComputeCameraRays(cam, cuPyrRay);
+  pyrRay.CopyFrom(cuPyrRay);
 
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPc(wc,hc);
@@ -1823,6 +1852,7 @@ int main( int argc, char* argv[] )
     } else {
       tdp::CompletePyramidBlur(cuPyrGreyFlSmooth, 1.);
     }
+    pyrGreyFlPrev.CopyFrom(pyrGreyFl);
     pyrGreyFl.CopyFrom(cuPyrGreyFlSmooth);
     greyFl = pyrGreyFl.GetImage(0);
 
@@ -1852,12 +1882,14 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,3,3> A;
         Eigen::Matrix<float,3,1> b;
         Eigen::Matrix<float,3,1> Ai;
+        tdp::SO3f R_cp;
         for (int32_t pyr=SO3maxLvl; pyr>=0; --pyr) {
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
-          tdp::Image<float> dLvl = pyrD.GetImage(pyr);
+          tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+          tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
             numInl = 0;
@@ -1870,37 +1902,17 @@ int main( int argc, char* argv[] )
             float H = 1e10;
             float Hprev = 1e10;
             tdp::SE3f T_cw = T_wc.Inverse();
-            for (auto& i : idsCur) {
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
-              Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
-              float u = x(0);
-              float v = x(1);
-              float d_c = dLvl.GetBilinear(u,v);
-//              std::cout << d_c << " " << pc_w_in_c(2) << " " << fabs(d_c-pc_w_in_c(2))<< std::endl;
-              if (0 > u || u >= w*scale || 0 > v || v >= h*scale
-                  || d_c != d_c
-                  || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
-                continue;
-//              std::cout << "accepted " << std::endl;
-              //TODO oclusion check
-              if (!AccumulateIntDiff(pl, T_cw, camLvl, greyFlLvl.GetBilinear(u,v),
-                    gradGreyLvl.GetBilinear(u,v), lambdaTex, A, Ai, b, err))
-                continue;
-              numInl = numInl + 1;
-//              mask(u,v) |= 1;
-//              assoc.emplace_back(i,u+v*w);
-              //tdp::CheckEntropyTermination(A, Hprev, SO3HThr,
-              //    SO3condEntropyThr, SO3negLogEvThr, H, gui.verbose);
-              //  break;
-              //Hprev = H;
+            for (int32_t uP=0; uP<floor(w*scale); ++uP) {
+              for (int32_t vP=0; vP<floor(h*scale); ++vP) {
+                tdp::Vector2fda x = camLvl.project(R_cp*rayLvl(uP,vP));
+                AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x(0),x(1)),
+                      gradGreyLvl.GetBilinear(x(0),x(1)),
+                      rayLvl(uP,vP), greyFlPrevLvl(uP,vP), A, Ai, b, err);
+              }
             }
-            Eigen::Matrix<float,3,1> x = Eigen::Matrix<float,3,1>::Zero();
-            if (assoc.size() > 10) {
-              // solve for x using ldlt
-              x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-              T_wc.rotation() = T_wc.rotation() * tdp::SO3f::Exp_(x);
-            }
+            // solve for x using ldlt
+            Eigen::Matrix<float,3,1> x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+            R_cp.rotation() = R_cp.rotation() * tdp::SO3f::Exp_(x);
             bool term = (x.norm()*180./M_PI < icpdRThr
                 && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
                   SO3negLogEvThr, H, gui.verbose));
@@ -1914,6 +1926,7 @@ int main( int argc, char* argv[] )
           }
         }
         TOCK("icp RGB");
+        T_wc.rotation() = T_wc.rotation() * R_cp.Inverse();
       }
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;

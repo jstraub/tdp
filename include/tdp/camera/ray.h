@@ -2,6 +2,7 @@
 #include <Eigen/Dense>
 #include <tdp/manifold/SE3.h>
 #include <tdp/camera/camera_base.h>
+#include <tdp/data/pyramid.h>
 
 namespace tdp {
 
@@ -10,6 +11,18 @@ void ComputeCameraRays(
     const CameraBase<float,D,Derived>& cam,
     Image<Vector3fda>& ray 
     );
+
+template<int D, typename Derived, int LEVELS>
+void ComputeCameraRays(
+    const CameraBase<float,D,Derived>& cam,
+    Pyramid<Vector3fda,LEVELS>& ray 
+    ) {
+  for (int lvl=0; lvl<LEVELS; ++lvl) {
+    CameraBase<float,D,Derived> camLvl = cam.Scale(pow(0.5,lvl));
+    Image<Vector3fda> rayLvl = ray.GetImage(lvl);
+    ComputeCameraRays(camLvl, rayLvl);
+  }
+}
 
 template <typename T, int Option = Eigen::ColMajor>
 struct Ray {
