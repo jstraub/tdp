@@ -2287,8 +2287,10 @@ int main( int argc, char* argv[] )
       {
         std::lock_guard<std::mutex> lock(vmfsLock);
         for (size_t k=0; k<vmfs.size(); ++k) {
-          if (vmfSS[k](3) > 0)
+          if (vmfSS[k](3) > 0) {
             tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
+            std::cout << "vmf " << k << " tau: " << vmfs[k].tau_ << std::endl;
+          }
         }
       }
     }
