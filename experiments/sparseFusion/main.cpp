@@ -1682,7 +1682,7 @@ int main( int argc, char* argv[] )
           gradDir_w[i] = pl_w[i].grad_.normalized();
           pcSum_w[i] = pl_w[i].p_;
           nSum_w[i] = pl_w[i].n_;
-          numSum_w[i] ++;
+          numSum_w[i] = 1;
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -2050,33 +2050,33 @@ int main( int argc, char* argv[] )
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
 
-          if (updateMap) {
-            for (size_t i=0; i<kNN; ++ i) {
-              for (const auto& assB : assoc) {
-                if (assB.first == nn[ass.first](i)){
-                  int32_t uB = assB.second%pc.w_;
-                  int32_t vB = assB.second/pc.w_;
-                  //mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
-                  //mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
-                  //mapObsNum[ass.first](i) ++;
-                  float w = mapObsNum[ass.first](i);
-                  mapObsP2Pl[ass.first](i) = (w*mapObsP2Pl[ass.first](i) + n(u,v).dot(pc(uB,vB)-pc(u,v)))/(w+1.);
-                  mapObsDot[ass.first](i) = (mapObsDot[ass.first](i)*w + n(u,v).dot(n(uB,vB)))/(w+1.);
-                  mapObsNum[ass.first](i) = std::min(100.f,w+1.f) ;
-                  //std::cout << "found NN " << i << " of " << ass.first 
-                  //  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
-                  //  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
-                  //  << " " << mapObsNum[ass.first](i) << std::endl;
-                  numNN++;
-                  break;
-                }
-              }
-            }
-          } else {
-            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
-            n_w[ass.first] =  pl_w[ass.first].n_;
-            pc_w[ass.first] = pl_w[ass.first].p_;
-          }
+//          if (updateMap) {
+//            for (size_t i=0; i<kNN; ++ i) {
+//              for (const auto& assB : assoc) {
+//                if (assB.first == nn[ass.first](i)){
+//                  int32_t uB = assB.second%pc.w_;
+//                  int32_t vB = assB.second/pc.w_;
+//                  //mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
+//                  //mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
+//                  //mapObsNum[ass.first](i) ++;
+//                  float w = mapObsNum[ass.first](i);
+//                  mapObsP2Pl[ass.first](i) = (w*mapObsP2Pl[ass.first](i) + n(u,v).dot(pc(uB,vB)-pc(u,v)))/(w+1.);
+//                  mapObsDot[ass.first](i) = (mapObsDot[ass.first](i)*w + n(u,v).dot(n(uB,vB)))/(w+1.);
+//                  mapObsNum[ass.first](i) = std::min(100.f,w+1.f) ;
+//                  //std::cout << "found NN " << i << " of " << ass.first 
+//                  //  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
+//                  //  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
+//                  //  << " " << mapObsNum[ass.first](i) << std::endl;
+//                  numNN++;
+//                  break;
+//                }
+//              }
+//            }
+//          } else {
+//            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
+//            n_w[ass.first] =  pl_w[ass.first].n_;
+//            pc_w[ass.first] = pl_w[ass.first].p_;
+//          }
         }
         if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
