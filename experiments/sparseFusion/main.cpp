@@ -931,6 +931,9 @@ int main( int argc, char* argv[] )
 //  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
+  pangolin::CreatePanel("visPanel").SetBounds(0.,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::Display("visPanel").Show(false);
+
   gui.container().SetLayout(pangolin::LayoutEqual);
 
   tdp::Rig<CameraT> rig;
@@ -1131,10 +1134,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
   pangolin::Var<bool> doVariationalUpdate("ui.variational",false,true);
   pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
-  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",1.0,0.01,10.);
+  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",0.01,0.01,10.);
   pangolin::Var<float> lambdaRegPc0("ui.lamb Reg Pc0",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0005,0.0,1.);
+  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
@@ -1173,6 +1176,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
 
+  pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
   pangolin::Var<bool> showPlanes("ui.show planes",false,true);
   pangolin::Var<bool> showPcModel("ui.show model",false,true);
   pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
@@ -1185,6 +1189,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
   pangolin::Var<bool> showGrey("ui.show grey",false,true);
   pangolin::Var<bool> showNumSum("ui.show numSum",false,true);
+  pangolin::Var<bool> showZCounts("ui.show zCounts",false,true);
   pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
@@ -1251,6 +1256,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
@@ -1373,7 +1379,7 @@ int main( int argc, char* argv[] )
 //        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
 //        std::cout << pl.w_ * pl.n_.transpose() << " " 
 //          << nSum_w[i].transpose() << std::endl;
-        Eigen::Vector3f mu = nSum_w[i]*tauO;
+        Eigen::Vector3f mu = normSum_w[i]*nSum_w[i]*tauO;
         if (zi < Ksample) {
           mu += vmfs[zi].mu_*vmfs[zi].tau_;
         }
@@ -1510,14 +1516,16 @@ int main( int argc, char* argv[] )
 //      tdp::Vector3fda& Jp = Jp_w[i];
       tdp::Vector3fda Jn = tdp::Vector3fda::Zero();
       tdp::Vector3fda Jp = tdp::Vector3fda::Zero();
+      tdp::Vector3fda mu = tdp::Vector3fda::Zero();
+      float tau = 0.;
+      vmfsLock.lock();
+      if (vmfs[pl.z_].tau_ > 0) {
+        mu = vmfs[pl.z_].mu_;
+        tau= vmfs[pl.z_].tau_;
+      }
+      vmfsLock.unlock();
       if (doRegvMF && lambdaRegDir > 0) {
-        if (runSampling.Get()) {
-          vmfsLock.lock();
-          if (vmfs[pl.z_].tau_ > 0) {
-            Jn = -lambdaRegDir*vmfs[pl.z_].mu_*vmfs[pl.z_].tau_;
-          }
-          vmfsLock.unlock();
-        }
+        Jn = -lambdaRegDir*mu*tau;
         if (!tdp::IsValidData(Jn)) {
 //          std::cout << Jn.transpose() << " " << pl.z_ <<
 //            vmfs[pl.z_].mu_.transpose() << ", " << vmfs[pl.z_].tau_ << std::endl;
@@ -1528,10 +1536,11 @@ int main( int argc, char* argv[] )
         Jp += -2.*lambdaRegPc0*(pc0_w[i] - pl.p_);
       }
       if (doRegAbsPc) {
-        Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - pcSum_w[i]);
+        Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
+//        Jp += 2.*(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
       }
       if (doRegAbsN) {
-        Jn += 2*(numSum_w[i]*pl.n_ - nSum_w[i]);
+        Jn += 2*(numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
       }
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood) {
@@ -1540,13 +1549,13 @@ int main( int argc, char* argv[] )
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
               if (pl.z_ == plO.z_) {
-                Jn +=  2.*lambdaRegPl*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
-                Jp += -2.*lambdaRegPl*(pl.p2plDist(plO.p_))*pl.n_;
+                Jn +=  2.*lambdaRegPl*tau*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
+                Jp += -2.*lambdaRegPl*tau*(pl.p2plDist(plO.p_))*pl.n_;
               }
             }
             if (doRegRelNZ) {
               if (pl.z_ == plO.z_) {
-                Jn +=  2.*lambdaRegPl*(pl.n_ - plO.n_);
+                Jn +=  2.*lambdaRegPl*tau*(pl.n_ - plO.n_);
               }
             }
             if (mapObsNum[i](j) > 0.) {
@@ -1561,7 +1570,7 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      tdp::Vector3fda mu;
+      tdp::Vector3fda pmu;
         if (doVariationalUpdate && haveFullNeighborhood) {
           Eigen::Matrix3f SigmaPl;
           Eigen::Matrix3f Info =  InfoO*numSum_w[i];
@@ -1577,7 +1586,7 @@ int main( int argc, char* argv[] )
             }
           }
 //          Eigen::Matrix3f Sigma = Info.inverse();
-          mu = Info.ldlt().solve(xi);
+          pmu = Info.ldlt().solve(xi);
   //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
 //          pi = Normal<float,3>(mu, Sigma).sample(rnd);
 //          pl.p_ = mu;
@@ -1590,7 +1599,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> mapGuard(mapLock);
         pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
         if (haveFullNeighborhood &&  doVariationalUpdate) {
-          pl.p_ = mu;
+          pl.p_ = pmu;
         } else {
           pl.p_ -= alphaGrad * Jp;
         }
@@ -1631,6 +1640,9 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (showVisPanel.GuiChanged()) {
+      pangolin::Display("visPanel").Show(showVisPanel);
+    }
 
     if (runLoopClosure.GuiChanged()) {
       showLoopClose = runLoopClosure;
@@ -1687,6 +1699,7 @@ int main( int argc, char* argv[] )
           pcSum_w[i] = pl_w[i].p_;
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
+          normSum_w[i] = 1;
           pcEst_w[i] = pcSum_w[i];
         }
       }
@@ -1911,10 +1924,10 @@ int main( int argc, char* argv[] )
               tdp::Plane& pl = pl_w.GetCircular(i);
               tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
               Eigen::Vector2f x = cam.Project(pc_w_in_c);
+              if (!d.Inside(x)) 
+                continue;
               float d_c = d.GetBilinear(x(0),x(1));
-              if (0 > x(0) || x(0) >= w || 0 > x(1) || x(1) >= h
-                  || d_c != d_c
-                  || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
+              if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
                 continue;
               numProjected = numProjected + 1;
               int32_t u = floor(x(0)+0.5f);
@@ -2050,13 +2063,16 @@ int main( int argc, char* argv[] )
           pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + greyFl(u,v)) / (w+1);
           pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
                 + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+          pcSum_w[ass.first] = (pcSum_w[ass.first]*w + pc_c_in_w)/(w+1.);
 
+          nSum_w[ass.first] = (nSum_w[ass.first]*w + n_c_in_w)/(w+1.);
+          normSum_w[ass.first] = nSum_w[ass.first].norm();
+          nSum_w[ass.first] /= nSum_w[ass.first].norm();
+          numSum_w[ass.first] = std::min(50.f, w+1.f);
+
+          pcEst_w[ass.first] = pcSum_w[ass.first];
           grad_w[ass.first] = pl_w[ass.first].grad_;
           gradDir_w[ass.first] = grad_w[ass.first].normalized();
-          pcSum_w[ass.first] += pc_c_in_w;
-          nSum_w[ass.first] += n_c_in_w;
-          numSum_w[ass.first] ++;
-          pcEst_w[ass.first] = pcSum_w[ass.first]/numSum_w[ass.first];
 
 //          if (updateMap) {
 //            for (size_t i=0; i<kNN; ++ i) {
@@ -2170,7 +2186,7 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv || showGrey || showNumSum) {
+        if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
@@ -2183,6 +2199,9 @@ int main( int argc, char* argv[] )
           } else if (showNumSum) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = numSum_w[i];
+          } else if (showZCounts) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = zCountS[i];
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
@@ -2190,6 +2209,7 @@ int main( int argc, char* argv[] )
           valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
           std::pair<float,float> minMaxAge = age.GetRoi(0,0,
               pl_w.SizeToRead(),1).MinMax();
+          std::cout << "drawn values are min " << minMaxAge.first << " max " << minMaxAge.second << std::endl;
           tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
               minMaxAge.second, P, MV);
         } else if (showLabels && frame > 1) {
