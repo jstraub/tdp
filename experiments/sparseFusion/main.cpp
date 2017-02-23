@@ -1049,8 +1049,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> pyrGreyFlImg(3*wc/2, hc); 
   tdp::ManagedDevicePyramid<float,3> cuPyrGreyFlSmooth(wc,hc);
   tdp::Image<float> cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
-  tdp::ManagedDeviceImage<float> cuGreyDu(wc,hc);
-  tdp::ManagedDeviceImage<float> cuGreyDv(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyGradNorm(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyGradTheta(wc,hc);
   tdp::ManagedHostImage<float> greyGradNorm(wc,hc);
@@ -1801,7 +1799,7 @@ int main( int argc, char* argv[] )
     greyFl = pyrGreyFl.GetImage(0);
 
     cuGradGrey = cuPyrGradGrey.GetImage(0);
-    tdp::Gradient(cuGreyFlSmooth, cuGreyDu, cuGreyDv, cuGradGrey);
+    tdp::GradientShar(cuGreyFlSmooth, cuGradGrey);
     if (smoothGreyPyr==1) {
       tdp::CompletePyramidBlur9(cuPyrGradGrey, 1.);
     } else {
@@ -1810,7 +1808,7 @@ int main( int argc, char* argv[] )
     pyrGradGrey.CopyFrom(cuPyrGradGrey);
     gradGrey = pyrGradGrey.GetImage(0);
 
-    tdp::Gradient2AngleNorm(cuGreyDu, cuGreyDv, cuGreyGradTheta,
+    tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta,
         cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 

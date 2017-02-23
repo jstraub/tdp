@@ -7,6 +7,40 @@
 namespace tdp {
 
 __global__
+void KernelGradientShar(Image<float> I,
+    Image<Vector2fda> gradI) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (0 < idx && idx < I.w_-1 && 0 < idy && idy < I.h_-1) {
+    float Iui = -3.*I(idx-1,idy-1);
+    float Ivi = Iui -10.*I(idx,idy-1)-3.*I(idx+1,idy-1);
+    Iui += 3.*I(idx+1,idy-1) 
+      -10.*I(idx-1,idy) 
+      +10.*I(idx+1,idy) 
+      -3.0*I(idx-1,idy+1);
+    Ivi += 3.*I(idx-1,idy+1) 
+      +10.*I(idx,idy+1)
+      +3.0*I(idx+1,idy+1);
+    Iui += 3.*I(idx+1,idy+1);
+    gradI(idx,idy)(0) = Iui*0.03125;
+    gradI(idx,idy)(1) = Ivi*0.03125;
+  } else if (idx == 0 || idx == I.w_-1
+      || idy == 0 || idy == I.h_-1) {
+    gradI(idx,idy)(0) = 0.;
+    gradI(idx,idy)(1) = 0.;
+  }
+}
+
+void GradientShar(const Image<float>& I,
+    Image<Vector2fda>& gradI) {
+
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,I,32,32);
+  KernelGradientShar<<<blocks,threads>>>(I,gradI);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__global__
 void KernelGradient2Vector(Image<float> Iu, Image<float> Iv,
     Image<Vector2fda> gradI) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -48,6 +82,29 @@ void Gradient2AngleNorm(const Image<float>& Iu, const Image<float>& Iv,
   KernelGradient2AngleNorm<<<blocks,threads>>>(Iu,Iv,Itheta,Inorm);
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+__global__
+void KernelGradient2AngleNorm(Image<Vector2fda> gradI, 
+    Image<float> Itheta, Image<float> Inorm) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+  if (idx < Iu.w_ && idy < Iu.h_) {
+    float Iui = gradI(idx,idy)(0);
+    float Ivi = gradI(idx,idy)(1);
+    Itheta(idx,idy) = atan2(Ivi, Iui);
+    Inorm(idx,idy) = sqrtf(Iui*Iui + Ivi*Ivi);
+  }
+}
+
+void Gradient2AngleNorm(const Image<tdp::Vector2fda>& gradI, 
+    Image<float>& Itheta, Image<float>& Inorm) {
+
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,Iu,32,32);
+  KernelGradient2AngleNorm<<<blocks,threads>>>(gradI,Itheta,Inorm);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 
 template<int D, typename Derived>
 __global__

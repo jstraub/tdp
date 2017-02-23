@@ -6,6 +6,12 @@
 
 namespace tdp {
 
+/// This directly computes the gradient image in a custom kernel -
+/// should be faster so use this.
+/// also does not care about size of image
+void GradientShar(const Image<float>& I,
+    Image<Vector2fda>& gradI);
+
 void Gradient(const Image<float>& I, 
     Image<float>& Iu, Image<float>& Iv);
 
@@ -18,6 +24,7 @@ void Gradient2AngleNorm(const Image<float>& Iu, const Image<float>& Iv,
 void Gradient(const Image<float>& I, 
     Image<float>& Iu, Image<float>& Iv,
     Image<Vector2fda>& gradI);
+
 
 void Grad2Image(const Image<Vector2fda>& grad,
     Image<Vector3bda>& grad2d);
