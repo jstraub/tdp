@@ -273,38 +273,7 @@ bool AccumulateP2Pl(const Plane& pl,
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
-    float distThr, 
-    float p2plThr, 
-    Eigen::Matrix<float,6,6>& A,
-    Eigen::Matrix<float,6,1>& Ai,
-    Eigen::Matrix<float,6,1>& b,
-    float& err
-    ) {
-  const tdp::Vector3fda& n_w =  pl.n_;
-  const tdp::Vector3fda& pc_w = pl.p_;
-  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
-    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    float p2pl = n_w.dot(pc_w - pc_c_in_w);
-    if (fabs(p2pl) < p2plThr) {
-      Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
-      Ai.bottomRows<3>() = n_w_in_c; 
-      A += Ai * Ai.transpose();
-      b += Ai * p2pl;
-      err += p2pl;
-      return true;
-    }
-  }
-  return false;
-}
-
-bool AccumulateP2Pl(const Plane& pl, 
-    tdp::SE3f& T_wc, 
-    tdp::SE3f& T_cw, 
-    const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
-    float distThr, 
     float p2plThr, 
     float dotThr,
     Eigen::Matrix<float,6,6>& A,
@@ -314,20 +283,16 @@ bool AccumulateP2Pl(const Plane& pl,
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
-  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
-    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (n_w_in_c.dot(n_ci) > dotThr) {
-      float p2pl = n_w.dot(pc_w - pc_c_in_w);
-      if (fabs(p2pl) < p2plThr) {
-        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
-        Ai.bottomRows<3>() = n_w_in_c; 
-        A += Ai * Ai.transpose();
-        b += Ai * p2pl;
-        err += p2pl;
-        return true;
-      }
+  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+  if (n_w_in_c.dot(n_ci) > dotThr) {
+    float p2pl = n_w.dot(pc_w - T_wc*pc_ci);
+    if (fabs(p2pl) < p2plThr) {
+      Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+      Ai.bottomRows<3>() = n_w_in_c; 
+      A += Ai * Ai.transpose();
+      b += Ai * p2pl;
+      err += p2pl;
+      return true;
     }
   }
   return false;
@@ -342,7 +307,6 @@ bool AccumulateP2PlIntensity(const Plane& pl,
     const Vector3fda& n_ci,
     float grey_ci,
     const Vector2fda& gradGrey_ci,
-    float distThr, 
     float p2plThr, 
     float dotThr,
     float lambda,
@@ -354,10 +318,7 @@ bool AccumulateP2PlIntensity(const Plane& pl,
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
-  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
   float bi=0;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
     if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
@@ -392,7 +353,7 @@ bool AccumulateP2PlIntensity(const Plane& pl,
 //          std::cout << " grad 3D is nan!" << std::endl; 
 //        }
         // texture inverse transform verified Jse3 
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(T_cw*pc_w);
         Eigen::Matrix<float,3,6> Jse3;
         Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
@@ -409,7 +370,6 @@ bool AccumulateP2PlIntensity(const Plane& pl,
         // accumulate
         return true;
       }
-    }
   }
   return false;
 }
@@ -494,12 +454,12 @@ bool AccumulateP2PlIntensity(const Plane& pl,
 //
 /// uses normals and p2pl
 bool AccumulateP2PlNormal(const Plane& pl, 
+    const tdp::Vector3fda& n_w,
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
-    float distThr, 
     float p2plThr, 
     float dotThr,
     float gamma,
@@ -508,15 +468,11 @@ bool AccumulateP2PlNormal(const Plane& pl,
     Eigen::Matrix<float,6,1>& b,
     float& err
     ) {
-  const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
-  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
   float bi=0;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
     if (n_w_in_c.dot(n_ci) > dotThr) {
-      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      float p2pl = n_w.dot(pc_w - T_wc*pc_ci);
       if (fabs(p2pl) < p2plThr) {
         // p2pl
         Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
@@ -543,7 +499,6 @@ bool AccumulateP2PlNormal(const Plane& pl,
         // accumulate
         return true;
       }
-    }
   }
   return false;
 }
@@ -614,6 +569,7 @@ bool AccumulatePhotoSO3only(
 
 /// uses gradient and normal as well
 bool AccumulateP2PlIntensityNormals(const Plane& pl, 
+    const tdp::Vector3fda& n_w,
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
@@ -621,7 +577,6 @@ bool AccumulateP2PlIntensityNormals(const Plane& pl,
     const Vector3fda& n_ci,
     float grey_ci,
     const Vector2fda& gradGrey_ci,
-    float distThr, 
     float p2plThr, 
     float dotThr,
     float gamma,
@@ -631,13 +586,9 @@ bool AccumulateP2PlIntensityNormals(const Plane& pl,
     Eigen::Matrix<float,6,1>& b,
     float& err
     ) {
-  const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
-  tdp::Vector3fda pc_w_in_c = T_cw*pc_w;
   float bi=0;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
     Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
     if (n_w_in_c.dot(n_ci) > dotThr) {
       float p2pl = n_w.dot(pc_w - pc_c_in_w);
@@ -679,7 +630,7 @@ bool AccumulateP2PlIntensityNormals(const Plane& pl,
 //          std::cout << "gradient is nan " << std::endl;
 //        }
         // texture inverse transform verified Jse3 
-        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_w_in_c);
+        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(T_cw*pc_w);
         Eigen::Matrix<float,3,6> Jse3;
         Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
              -Eigen::Matrix3f::Identity();
@@ -691,7 +642,6 @@ bool AccumulateP2PlIntensityNormals(const Plane& pl,
         // accumulate
         return true;
       }
-    }
   }
   return false;
 }
@@ -790,23 +740,18 @@ bool AccumulateRot(const Plane& pl,
     tdp::SE3f& T_cw, 
     const Vector3fda& pc_ci,
     const Vector3fda& n_ci,
-    float distThr, 
     float p2plThr, 
     float dotThr,
     Eigen::Matrix<float,3,3>& N
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
-  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
-  float dist = (pc_w - pc_c_in_w).norm();
-  if (dist < distThr) {
-    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
-    if (n_w_in_c.dot(n_ci) > dotThr) {
-      float p2pl = n_w.dot(pc_w - pc_c_in_w);
-      if (fabs(p2pl) < p2plThr) {
-        N += n_w * n_ci.transpose();
-        return true;
-      }
+  Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+  if (n_w_in_c.dot(n_ci) > dotThr) {
+    float p2pl = n_w.dot(pc_w - T_wc*pc_ci);
+    if (fabs(p2pl) < p2plThr) {
+      N += n_w * n_ci.transpose();
+      return true;
     }
   }
   return false;
@@ -1200,6 +1145,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
+  pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -1207,7 +1153,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
 //  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
-  pangolin::Var<float> distThr("ui.dist Thr",0.1,0,0.3);
   pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
   pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
@@ -1973,24 +1918,34 @@ int main( int argc, char* argv[] )
                 continue;
               if (useTexture) {
                 if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v), gradGrey(u,v), distThr, p2plThr, dotThr,
+                      n(u,v), greyFl(u,v), gradGrey(u,v), p2plThr, dotThr,
                       lambdaTex, A, Ai, b, err))
                   continue;
               } else if (useNormals) {
-                if (!AccumulateP2PlNormal(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), distThr, p2plThr, dotThr, lambdaNsOld, A,
+                tdp::Vector3fda n = pl.n_;
+                if (usevMFmeans) {
+                  std::lock_guard<std::mutex> lock(vmfsLock);
+                  n = vmfs[pl.z_].mu_;
+                }
+                if (!AccumulateP2PlNormal(pl, n, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), p2plThr, dotThr, lambdaNsOld, A,
                       Ai, b, err)) {
                   continue;
                 }
               } else if (useNormalsAndTexture) {
-                if (!AccumulateP2PlIntensityNormals(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v),gradGrey(u,v), distThr, p2plThr, dotThr,
+                tdp::Vector3fda n = pl.n_;
+                if (usevMFmeans) {
+                  std::lock_guard<std::mutex> lock(vmfsLock);
+                  n = vmfs[pl.z_].mu_;
+                }
+                if (!AccumulateP2PlIntensityNormals(pl, n, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), greyFl(u,v),gradGrey(u,v), p2plThr, dotThr,
                       lambdaNs, lambdaTex, A, Ai, b, err)) {
                   continue;
                 }
               } else {
                 if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                      distThr, p2plThr, dotThr, A, Ai, b, err))
+                      p2plThr, dotThr, A, Ai, b, err))
                   continue;
               }
               pl.lastFrame_ = frame;
