@@ -944,10 +944,10 @@ int main( int argc, char* argv[] )
 
   size_t w = video.Streams()[gui.iRGB[0]].Width();
   size_t h = video.Streams()[gui.iRGB[0]].Height();
-  size_t wc = (w+w%64); // for convolution
-  size_t hc = rig.NumCams()*(h+h%64);
-  wc += wc%64;
-  hc += hc%64;
+  size_t wc = w; //+w%64); // for convolution
+  size_t hc = rig.NumCams()*h; //+h%64);
+//  wc += wc%64;
+//  hc += hc%64;
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
@@ -1849,24 +1849,27 @@ int main( int argc, char* argv[] )
             for (int32_t uP=0; uP<floor(w*scale); ++uP) {
               for (int32_t vP=0; vP<floor(h*scale); ++vP) {
                 tdp::Vector2fda x = camLvl.project(R_cp*rayLvl(uP,vP));
-                AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x(0),x(1)),
-                      gradGreyLvl.GetBilinear(x(0),x(1)),
+                if (gradGreyLvl.Inside(x)) {
+                  AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x),
+                      gradGreyLvl.GetBilinear(x),
                       rayLvl(uP,vP), greyFlPrevLvl(uP,vP), A, Ai, b, err);
+                  numInl = numInl +1;
+                }
               }
             }
             // solve for x using ldlt
             Eigen::Matrix<float,3,1> x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
             R_cp.rotation() = R_cp.rotation() * tdp::SO3f::Exp_(x);
-            bool term = (x.norm()*180./M_PI < icpdRThr
-                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
-                  SO3negLogEvThr, H, gui.verbose));
+//            bool term = (x.norm()*180./M_PI < icpdRThr
+//                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
+//                  SO3negLogEvThr, H, gui.verbose));
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
                 << "\tH: " << H 
                 << "\t# inliers: " << numInl
                 << "\t|x|: " << x.norm()*180./M_PI << std::endl;
             }
-            if (term) break;
+//            if (term) break;
           }
         }
         TOCK("icp RGB");
