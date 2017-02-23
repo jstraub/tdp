@@ -75,6 +75,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
+#define PYR 4
 #define kNN 12
 #define MAP_SIZE 1000000
 
@@ -560,7 +561,7 @@ bool AccumulatePhotoSO3only(
   Eigen::Matrix<float,2,3> Jpi = cam.Jproject(R_cp*dir_p);
   Eigen::Matrix<float,3,3> Jso3 = -R_cp.matrix()*SO3mat<float>::invVee(dir_p);
   Ai = Jso3.transpose() * Jpi.transpose() * gradGrey_ci;
-  float bi = -grey_ci + pl.grey_;
+  float bi = -grey_ci + grey_pi;
   A += Ai*Ai.transpose();
   b += Ai*bi;
   err += bi;
@@ -1041,19 +1042,19 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
 
   tdp::ManagedHostImage<uint8_t> grey(w, h);
-  tdp::ManagedHostPyramid<float,3> pyrGreyFlPrev(wc,hc);
-  tdp::ManagedHostPyramid<float,3> pyrGreyFl(wc,hc);
+  tdp::ManagedHostPyramid<float,PYR> pyrGreyFlPrev(wc,hc);
+  tdp::ManagedHostPyramid<float,PYR> pyrGreyFl(wc,hc);
   tdp::Image<float> greyFl = pyrGreyFl.GetImage(0);
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
   tdp::ManagedHostImage<float> pyrGreyFlImg(3*wc/2, hc); 
-  tdp::ManagedDevicePyramid<float,3> cuPyrGreyFlSmooth(wc,hc);
+  tdp::ManagedDevicePyramid<float,PYR> cuPyrGreyFlSmooth(wc,hc);
   tdp::Image<float> cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
   tdp::ManagedDeviceImage<float> cuGreyGradNorm(wc,hc);
   tdp::ManagedDeviceImage<float> cuGreyGradTheta(wc,hc);
   tdp::ManagedHostImage<float> greyGradNorm(wc,hc);
-  tdp::ManagedDevicePyramid<tdp::Vector2fda,3> cuPyrGradGrey(wc,hc);
-  tdp::ManagedHostPyramid<tdp::Vector2fda,3> pyrGradGrey(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector2fda,PYR> cuPyrGradGrey(wc,hc);
+  tdp::ManagedHostPyramid<tdp::Vector2fda,PYR> pyrGradGrey(wc,hc);
   tdp::Image<tdp::Vector2fda> cuGradGrey = cuPyrGradGrey.GetImage(0);
   tdp::Image<tdp::Vector2fda> gradGrey = pyrGradGrey.GetImage(0);
 
@@ -1069,18 +1070,18 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostImage<float> age(MAP_SIZE);
 
-  tdp::ManagedHostPyramid<tdp::Vector3fda> pyrRay;
-  tdp::ManagedDevicePyramid<tdp::Vector3fda> cuPyrRay;
+  tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrRay(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrRay(wc,hc);
   tdp::ComputeCameraRays(cam, cuPyrRay);
   pyrRay.CopyFrom(cuPyrRay);
 
   // ICP stuff
-  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrPc(wc,hc);
-  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrPc(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrPc(wc,hc);
+  tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrPc(wc,hc);
 
-  tdp::ManagedDevicePyramid<float,3> cuPyrD(wc,hc);
+  tdp::ManagedDevicePyramid<float,PYR> cuPyrD(wc,hc);
   tdp::Image<float> cuD = cuPyrD.GetImage(0);
-  tdp::ManagedHostPyramid<float,3> pyrD(wc,hc);
+  tdp::ManagedHostPyramid<float,PYR> pyrD(wc,hc);
   tdp::Image<float> d = pyrD.GetImage(0);
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
@@ -1138,8 +1139,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
-  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.001,1.);
-  pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.01,1.);
+  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.001,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.01,1.);
   pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
@@ -1166,8 +1166,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-6.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
-  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",3, 1, 20);
-  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",2,0,2);
+  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",1, 1, 20);
+  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",PYR-1,0,PYR-1);
+  pangolin::Var<int> SO3minLvl("ui.SO3 min Lvl",1,0,PYR-1);
 
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
@@ -1182,6 +1183,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
   pangolin::Var<bool> showGrey("ui.show grey",false,true);
+  pangolin::Var<bool> showNumSum("ui.show numSum",false,true);
   pangolin::Var<bool> showLabels("ui.show labels",true,true);
   pangolin::Var<bool> showSamples("ui.show Samples",false,true);
   pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
@@ -1808,8 +1810,7 @@ int main( int argc, char* argv[] )
     pyrGradGrey.CopyFrom(cuPyrGradGrey);
     gradGrey = pyrGradGrey.GetImage(0);
 
-    tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta,
-        cuGreyGradNorm);
+    tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta, cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 
     n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1825,7 +1826,7 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,3,1> b;
         Eigen::Matrix<float,3,1> Ai;
         tdp::SO3f R_cp;
-        for (int32_t pyr=SO3maxLvl; pyr>=0; --pyr) {
+        for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
@@ -1841,12 +1842,13 @@ int main( int argc, char* argv[] )
             b = Eigen::Matrix<float,3,1>::Zero();
             Ai = Eigen::Matrix<float,3,1>::Zero();
             float err = 0.;
-            float H = 1e10;
-            float Hprev = 1e10;
+//            float H = 1e10;
             tdp::SE3f T_cw = T_wc.Inverse();
             for (int32_t uP=0; uP<floor(w*scale); ++uP) {
               for (int32_t vP=0; vP<floor(h*scale); ++vP) {
-                tdp::Vector2fda x = camLvl.project(R_cp*rayLvl(uP,vP));
+//                std::cout << uP << "," << vP << " " << floor(w*scale) << " " << floor(h*scale) << " "
+//                  << rayLvl.Description() << std::endl;
+                tdp::Vector2fda x = camLvl.Project(R_cp*rayLvl(uP,vP));
                 if (gradGreyLvl.Inside(x)) {
                   AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x),
                       gradGreyLvl.GetBilinear(x),
@@ -1857,13 +1859,13 @@ int main( int argc, char* argv[] )
             }
             // solve for x using ldlt
             Eigen::Matrix<float,3,1> x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-            R_cp.rotation() = R_cp.rotation() * tdp::SO3f::Exp_(x);
+            R_cp = R_cp * tdp::SO3f::Exp_(scale*x);
 //            bool term = (x.norm()*180./M_PI < icpdRThr
 //                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
 //                  SO3negLogEvThr, H, gui.verbose));
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
-                << "\tH: " << H 
+//                << "\tH: " << H 
                 << "\t# inliers: " << numInl
                 << "\t|x|: " << x.norm()*180./M_PI << std::endl;
             }
@@ -1922,23 +1924,22 @@ int main( int argc, char* argv[] )
                       lambdaTex, A, Ai, b, err))
                   continue;
               } else if (useNormals) {
-                tdp::Vector3fda n = pl.n_;
+                tdp::Vector3fda n_wi = pl.n_;
                 if (usevMFmeans) {
                   std::lock_guard<std::mutex> lock(vmfsLock);
-                  n = vmfs[pl.z_].mu_;
+                  n_wi = vmfs[pl.z_].mu_;
                 }
-                if (!AccumulateP2PlNormal(pl, n, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), p2plThr, dotThr, lambdaNsOld, A,
-                      Ai, b, err)) {
+                if (!AccumulateP2PlNormal(pl, n_wi, T_wc, T_cw, cam, pc(u,v),
+                      n(u,v), p2plThr, dotThr, lambdaNs, A, Ai, b, err)) {
                   continue;
                 }
               } else if (useNormalsAndTexture) {
-                tdp::Vector3fda n = pl.n_;
+                tdp::Vector3fda n_wi = pl.n_;
                 if (usevMFmeans) {
                   std::lock_guard<std::mutex> lock(vmfsLock);
-                  n = vmfs[pl.z_].mu_;
+                  n_wi = vmfs[pl.z_].mu_;
                 }
-                if (!AccumulateP2PlIntensityNormals(pl, n, T_wc, T_cw, cam, pc(u,v),
+                if (!AccumulateP2PlIntensityNormals(pl, n_wi, T_wc, T_cw, cam, pc(u,v),
                       n(u,v), greyFl(u,v),gradGrey(u,v), p2plThr, dotThr,
                       lambdaNs, lambdaTex, A, Ai, b, err)) {
                   continue;
@@ -2027,7 +2028,7 @@ int main( int argc, char* argv[] )
       if (updatePlanes && trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
-        size_t numNN = 0;
+//        size_t numNN = 0;
 //        tdp::SE3f T_cw = T_wc.Inverse();
         for (const auto& ass : assoc) {
 
@@ -2079,7 +2080,7 @@ int main( int argc, char* argv[] )
 //            pc_w[ass.first] = pl_w[ass.first].p_;
 //          }
         }
-        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
+//        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
       }
     }
@@ -2163,7 +2164,7 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv || showGrey) {
+        if (showAge || showObs || showCurv || showGrey || showNumSum) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
@@ -2173,6 +2174,9 @@ int main( int argc, char* argv[] )
           } else if (showGrey) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).grey_;
+          } else if (showNumSum) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = numSum_w[i];
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;

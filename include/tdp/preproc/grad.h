@@ -21,6 +21,9 @@ void Gradient2Vector(const Image<float>& Iu, const Image<float>& Iv,
 void Gradient2AngleNorm(const Image<float>& Iu, const Image<float>& Iv,
     Image<float>& Itheta, Image<float>& Inorm);
 
+void Gradient2AngleNorm(const Image<tdp::Vector2fda>& gradI, 
+    Image<float>& Itheta, Image<float>& Inorm);
+
 void Gradient(const Image<float>& I, 
     Image<float>& Iu, Image<float>& Iv,
     Image<Vector2fda>& gradI);

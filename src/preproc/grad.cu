@@ -88,7 +88,7 @@ void KernelGradient2AngleNorm(Image<Vector2fda> gradI,
     Image<float> Itheta, Image<float> Inorm) {
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idy = threadIdx.y + blockDim.y * blockIdx.y;
-  if (idx < Iu.w_ && idy < Iu.h_) {
+  if (idx < gradI.w_ && idy < gradI.h_) {
     float Iui = gradI(idx,idy)(0);
     float Ivi = gradI(idx,idy)(1);
     Itheta(idx,idy) = atan2(Ivi, Iui);
@@ -100,7 +100,7 @@ void Gradient2AngleNorm(const Image<tdp::Vector2fda>& gradI,
     Image<float>& Itheta, Image<float>& Inorm) {
 
   dim3 threads, blocks;
-  ComputeKernelParamsForImage(blocks,threads,Iu,32,32);
+  ComputeKernelParamsForImage(blocks,threads,gradI,32,32);
   KernelGradient2AngleNorm<<<blocks,threads>>>(gradI,Itheta,Inorm);
   checkCudaErrors(cudaDeviceSynchronize());
 }
