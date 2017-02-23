@@ -1138,6 +1138,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> alphaGrad("ui.alpha Grad",.0005,0.0,1.);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
+  pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.01,0.001,1.);
   pangolin::Var<float> lambdaNsOld("ui.lamb Ns old",0.1,0.01,1.);
@@ -1729,30 +1730,51 @@ int main( int argc, char* argv[] )
         for (size_t k=0; k<K; ++k) {
           if (k >= invInd.size()) {
             invInd.push_back(std::vector<uint32_t>());
-            invInd.back().reserve(1000);
+            invInd.back().reserve(3000);
           } else {
             invInd[k].clear();
           }
         }
-        if (pruneAssocByRender) {
-          // only use ids that were found by projecting into the current pose
-          for (auto i : idsCur) {
-            uint32_t k = pl_w[i].z_;
-            if (invInd[k].size() < 1000)
-              invInd[k].push_back(i);
+        if (semanticObsSelect && frame > 10) {
+          if (pruneAssocByRender) {
+            // only use ids that were found by projecting into the current pose
+            for (auto i : idsCur) {
+              uint32_t k = pl_w[i].z_;
+              if (invInd[k].size() < 3000)
+                invInd[k].push_back(i);
+            }
+          } else {      
+            id_w.resize(pl_w.SizeToRead());
+            std::iota(id_w.begin(), id_w.end(), 0);
+            std::random_shuffle(id_w.begin(), id_w.end());
+            // use all ids in the current map
+            for (auto i : id_w) {
+              uint32_t k = pl_w[i].z_;
+              if (invInd[k].size() < 3000)
+                invInd[k].push_back(i);
+            }
           }
-        } else {      
-          id_w.resize(pl_w.SizeToRead());
-          std::iota(id_w.begin(), id_w.end(), 0);
-          std::random_shuffle(id_w.begin(), id_w.end());
-          // use all ids in the current map
-          for (auto i : id_w) {
-            uint32_t k = pl_w[i].z_;
-            if (invInd[k].size() < 1000)
-              invInd[k].push_back(i);
+        } else {
+          uint32_t k = 0;
+          if (pruneAssocByRender) {
+            // only use ids that were found by projecting into the current pose
+            for (auto i : idsCur) {
+              if (invInd[k].size() < 3000)
+                invInd[k].push_back(i);
+              k = (k+1)%invInd.size();
+            }
+          } else {      
+            id_w.resize(pl_w.SizeToRead());
+            std::iota(id_w.begin(), id_w.end(), 0);
+            std::random_shuffle(id_w.begin(), id_w.end());
+            // use all ids in the current map
+            for (auto i : id_w) {
+              if (invInd[k].size() < 3000)
+                invInd[k].push_back(i);
+              k = (k+1)%invInd.size();
+            }
           }
         }
-//        uint32_t Kcur = K;
       }
       TOCK("dpvmf");
     }
@@ -1955,7 +1977,6 @@ int main( int argc, char* argv[] )
               assoc.emplace_back(i,u+v*pc.w_);
               break;
             }
-
             if (k == 0) {
               if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
                     negLogEvThr, H, gui.verbose))
