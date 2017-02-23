@@ -1179,6 +1179,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showFullPc("ui.show full",true,true);
   pangolin::Var<bool> showNormals("ui.show ns",true,true);
   pangolin::Var<bool> showGrads("ui.show grads",true,true);
+  pangolin::Var<bool> showPcEst("ui.show PcEst",false,true);
   pangolin::Var<bool> showAge("ui.show age",false,true);
   pangolin::Var<bool> showObs("ui.show # obs",false,true);
   pangolin::Var<bool> showCurv("ui.show curvature",false,true);
@@ -1213,6 +1214,7 @@ int main( int argc, char* argv[] )
   pangolin::GlBuffer lbo(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_SHORT,1);
   pangolin::GlBuffer cbo_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_UNSIGNED_BYTE,3);
   pangolin::GlBuffer valuebo(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,1);
+  pangolin::GlBuffer vboEst_w(pangolin::GlArrayBuffer,MAP_SIZE,GL_FLOAT,3);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
@@ -1222,6 +1224,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcEst_w(MAP_SIZE);
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1236,6 +1239,7 @@ int main( int argc, char* argv[] )
   cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
   gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
   tbo.Upload(ts.ptr_, ts.SizeBytes(), 0);
+  vboEst_w.Upload(pcEst_w.ptr_, pcEst_w.SizeBytes(), 0);
 
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
@@ -1683,6 +1687,7 @@ int main( int argc, char* argv[] )
           pcSum_w[i] = pl_w[i].p_;
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
+          pcEst_w[i] = pcSum_w[i];
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1834,7 +1839,7 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
-          for (size_t it = 0; it < SO3maxIt*(pyr+1); ++it) {
+          for (size_t it = 0; it < SO3maxIt*(pyr-SO3minLvl)+1; ++it) {
             numInl = 0;
 //            for (auto& ass : assoc) mask[ass.second] = 0;
 //            assoc.clear();
@@ -2051,6 +2056,7 @@ int main( int argc, char* argv[] )
           pcSum_w[ass.first] += pc_c_in_w;
           nSum_w[ass.first] += n_c_in_w;
           numSum_w[ass.first] ++;
+          pcEst_w[ass.first] = pcSum_w[ass.first]/numSum_w[ass.first];
 
 //          if (updateMap) {
 //            for (size_t i=0; i<kNN; ++ i) {
@@ -2074,11 +2080,11 @@ int main( int argc, char* argv[] )
 //                }
 //              }
 //            }
-//          } else {
-//            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
-//            n_w[ass.first] =  pl_w[ass.first].n_;
-//            pc_w[ass.first] = pl_w[ass.first].p_;
-//          }
+          if (!updateMap) {
+            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
+            n_w[ass.first] =  pl_w[ass.first].n_;
+            pc_w[ass.first] = pl_w[ass.first].p_;
+          }
         }
 //        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
@@ -2239,6 +2245,15 @@ int main( int argc, char* argv[] )
           pangolin::RenderVbo(vbo);
         }
         pangolin::glUnsetFrameOfReference();
+      }
+      if (showPcEst) {
+        vboEst_w.Upload(pcEst_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+        glColor3f(0.,1.,1.);
+        pangolin::RenderVbo(vboEst_w);
+        glColor4f(1,0,1,0.5);
+        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w[i], pcEst_w[i]);
+        }
       }
     }
 
