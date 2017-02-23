@@ -118,7 +118,7 @@ bool NormalViaRMLS(
     }
     curvature = 0.; 
 //    eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
-    ni = n * (n(2)<0.?1.:-1.);
+    ni = n * (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
     p = pc0;
     return true;
   }
@@ -205,7 +205,7 @@ bool NormalViaVoting(
       Nprev = N;
     }
 
-    ni = n * (n(2)<0.?1.:-1.);
+    ni = n * (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
 //    float mu = 0;
 //    for (size_t u=u0-W; u<=u0+W; ++u) {
 //      for (size_t v=v0-W; v<=v0+W; ++v) {

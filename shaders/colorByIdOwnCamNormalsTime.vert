@@ -19,8 +19,8 @@ out vec4 color;
 
 void main() {
   vec3 n_c = (T_cw * (vec4(n_w,0.))).xyz;
-  if ( n_c.z < 0 && t > tMin) {
-    vec4 p_c = T_cw * (vec4(pos_w,1.));
+  vec3 p_c = (T_cw * (vec4(pos_w,1.))).xyz;
+  if ( dot(n_c,p_c)/length(p_c) < 0 && t > tMin) {
     vec3 x = vec3((2.*(p_c.x/p_c.z * cam.x + cam.z) / w  - 1.),
         (2.*(p_c.y/p_c.z * cam.y + cam.w) / h - 1.),
         (2.*(p_c.z-dMin)/(dMax-dMin) - 1.));
