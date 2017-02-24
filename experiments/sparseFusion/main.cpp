@@ -153,18 +153,25 @@ void ExtractPlanes(
   Vector3fda n, p;
   float curv;
   for (size_t i=0; i<mask.Area(); ++i) {
-    if (mask[i] 
-        && tdp::IsValidData(pc[i]) ) {
+    if (mask[i]) {
+//      std::cout << "mask point " << i << std::endl;
+      if( tdp::IsValidData(pc[i]) ) {
 //      uint32_t Wscaled = floor(W*pc[i](2));
       uint32_t Wscaled = W;
       const uint32_t u = i%mask.w_;
       const uint32_t v = i/mask.w_;
+      std::cout << "found valid point in mask " << u << "," << v << std::endl;
   
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
-            dpc, n, curv, p)) ||
-          (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
-            dpc, n, curv, p))) {
+      bool success = false;
+      if (viaRMLs) {
+        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+      } else {
+        success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+      }
+      if (success) {
+        std::cout << "extracted normal at " << u << "," << v << std::endl;
+
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*p;
@@ -200,6 +207,7 @@ void ExtractPlanes(
       }
     }
   }
+    }
 }
 
 bool ProjectiveAssoc(const Plane& pl, 
@@ -1012,7 +1020,9 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewGradGrey(3*wc/2, hc);
   containerTracking.AddDisplay(viewGradGrey);
   gui.container().AddDisplay(containerTracking);
-
+  tdp::QuickView viewD(wc, hc);
+  containerTracking.AddDisplay(viewD);
+  gui.container().AddDisplay(containerTracking);
 
   pangolin::View& plotters = pangolin::Display("plotters");
   plotters.SetLayout(pangolin::LayoutEqualVertical);
@@ -1090,8 +1100,10 @@ int main( int argc, char* argv[] )
 
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrPc(wc,hc);
+  tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
   tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrPc(wc,hc);
   tdp::Image<tdp::Vector3fda> pc = pyrPc.GetImage(0);
+  pc.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrN(wc,hc);
   tdp::Image<tdp::Vector3fda> n = pyrN.GetImage(0);
 
@@ -1685,6 +1697,7 @@ int main( int argc, char* argv[] )
         && frame > 0
         && (runMapping || frame == 1) 
         && (trackingGood || frame < 10)) { // add new observations
+      std::cout << " adding new planes to map " << std::endl;
 
       // update mask only once to know where to insert new planes
       TICK("data assoc");
@@ -1698,7 +1711,15 @@ int main( int argc, char* argv[] )
       projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
           occlusionDepthThr, z, mask, idsCur);
       std::random_shuffle(idsCur.begin(), idsCur.end());
+      std::cout << " projected " << idsCur.size() << " of " << pl_w.SizeToRead() << std::endl;
       TOCK("extract assoc");
+
+      size_t nOk = 0;
+      for (size_t i=0; i<pc.Area(); ++i) {
+        if (tdp::IsValidData(pc[i]))
+          nOk ++;
+      }
+      std::cout << " pc cointains  " << nOk << " ok points" << std::endl;
 
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
@@ -1713,6 +1734,8 @@ int main( int argc, char* argv[] )
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
             n_w, grad_w, rs, ts, normalViaRMLS);
+
+        std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
         TOCK("normals");
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
@@ -1818,9 +1841,12 @@ int main( int argc, char* argv[] )
     pyrD.CopyFrom(cuPyrD);
     d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
-//    tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
-    rig.ComputePc(cuD, true, cuPyrPc);
+    cuPc = cuPyrPc.GetImage(0);
+    rig.ComputePc(cuD, true, cuPc);
+    tdp::CompletePyramid(cuPyrPc);
 //    pc.CopyFrom(cuPyrPc.GetImage(0));
+    pyrPc.CopyFrom(cuPyrPc);
+    pc = pyrPc.GetImage(0);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
     cuRgb.CopyFrom(rgb);
@@ -1862,7 +1888,6 @@ int main( int argc, char* argv[] )
 
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
-      mask.Fill(0);
       if (doSO3prealign) {
         if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
         TICK("icp RGB");
@@ -1919,6 +1944,7 @@ int main( int argc, char* argv[] )
         TOCK("icp RGB");
         T_wc.rotation() = T_wc.rotation() * R_cp.Inverse();
       }
+      mask.Fill(0);
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
         TICK("icp");
@@ -2391,6 +2417,9 @@ int main( int argc, char* argv[] )
         tdp::Grad2Image(cuGrad2D, cuGrad2DImg);
         grad2DImg.CopyFrom(cuGrad2DImg);
         viewGradGrey.SetImage(grad2DImg);
+      }
+      if (viewD.IsShown()) {
+        viewD.SetImage(d);
       }
     }
     if (!gui.finished() && plotters.IsShown()) {
