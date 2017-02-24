@@ -1036,10 +1036,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
   memset(n2D.ptr_,0,n2D.SizeBytes());
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
-  tdp::ManagedHostImage<tdp::Vector3fda> n(wc,hc);
   tdp::ManagedHostImage<float> curv(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
-  tdp::ManagedHostImage<tdp::Vector3fda> pc(wc, hc);
   tdp::ManagedHostImage<tdp::Vector4fda> dpc(wc, hc);
 
   tdp::ManagedDeviceImage<tdp::Vector3bda> cuRgb(wc,hc);
@@ -1081,6 +1079,9 @@ int main( int argc, char* argv[] )
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrPc(wc,hc);
   tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrPc(wc,hc);
+  tdp::Image<tdp::Vector3fda> pc = pyrPc.GetImage(0);
+  tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrN(wc,hc);
+  tdp::Image<tdp::Vector3fda> n = pyrN.GetImage(0);
 
   tdp::ManagedDevicePyramid<float,PYR> cuPyrD(wc,hc);
   tdp::Image<float> cuD = cuPyrD.GetImage(0);
@@ -1164,6 +1165,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
   pangolin::Var<int> numRotThr("ui.numRot Thr",200, 100, 350);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
+  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",2, 0, PYR-1);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
@@ -1792,9 +1794,9 @@ int main( int argc, char* argv[] )
     pyrD.CopyFrom(cuPyrD);
     d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
-    tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
-    rig.ComputePc(cuD, true, cuPc);
-    pc.CopyFrom(cuPyrPc.GetImage(0));
+//    tdp::Image<tdp::Vector3fda> cuPc = cuPyrPc.GetImage(0);
+    rig.ComputePc(cuD, true, cuPyrPc);
+//    pc.CopyFrom(cuPyrPc.GetImage(0));
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
     cuRgb.CopyFrom(rgb);
@@ -1896,120 +1898,129 @@ int main( int argc, char* argv[] )
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
         TICK("icp");
-        std::vector<size_t> indK(invInd.size(),0);
-        Eigen::Matrix<float,6,6> A;
-        Eigen::Matrix<float,6,1> b;
-        Eigen::Matrix<float,6,1> Ai;
-        float dotThr = cos(angleThr*M_PI/180.);
-        for (size_t it = 0; it < maxIt; ++it) {
-          for (auto& ass : assoc) mask[ass.second] = 0;
-          assoc.clear();
-          indK = std::vector<size_t>(invInd.size(),0);
-          numProjected = 0;
-
-          A = Eigen::Matrix<float,6,6>::Zero();
-          b = Eigen::Matrix<float,6,1>::Zero();
-          Ai = Eigen::Matrix<float,6,1>::Zero();
-          float err = 0.;
-          float H = 1e10;
-          float Hprev = 1e10;
-          tdp::SE3f T_cw = T_wc.Inverse();
-          // associate new data until enough
-          bool exploredAll = false;
-          uint32_t k = 0;
-          while (assoc.size() < 3000 && !exploredAll) {
-            k = (k+1) % invInd.size();
-            while (indK[k] < invInd[k].size()) {
-              size_t i = invInd[k][indK[k]++];
-              tdp::Plane& pl = pl_w.GetCircular(i);
-              tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
-              Eigen::Vector2f x = cam.Project(pc_w_in_c);
-              if (!d.Inside(x)) 
-                continue;
-              float d_c = d.GetBilinear(x(0),x(1));
-              if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
-                continue;
-              numProjected = numProjected + 1;
-              int32_t u = floor(x(0)+0.5f);
-              int32_t v = floor(x(1)+0.5f);
-              if (!EnsureNormal(pc, dpc, W, n, curv, u, v))
-//              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
-//                    W, dpc, n, curv, u,v ))
-                continue;
-              if (useTexture) {
-                if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v), gradGrey(u,v), p2plThr, dotThr,
-                      lambdaTex, A, Ai, b, err))
+        for (int32_t pyr=ICPmaxLvl; pyr>=0; --pyr) {
+          std::vector<size_t> indK(invInd.size(),0);
+          Eigen::Matrix<float,6,6> A;
+          Eigen::Matrix<float,6,1> b;
+          Eigen::Matrix<float,6,1> Ai;
+          float dotThr = cos(angleThr*M_PI/180.);
+          float scale = pow(0.5,pyr);
+          CameraT camLvl = cam.Scale(scale);
+          tdp::Image<float> dLvl = pyrD.GetImage(pyr);
+          tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
+          tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
+          tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+          tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
+          tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
+          for (size_t it = 0; it < maxIt*pyr+1; ++it) {
+            for (auto& ass : assoc) mask[ass.second] = 0;
+            assoc.clear();
+            indK = std::vector<size_t>(invInd.size(),0);
+            numProjected = 0;
+            A = Eigen::Matrix<float,6,6>::Zero();
+            b = Eigen::Matrix<float,6,1>::Zero();
+            Ai = Eigen::Matrix<float,6,1>::Zero();
+            float err = 0.;
+            float H = 1e10;
+            float Hprev = 1e10;
+            tdp::SE3f T_cw = T_wc.Inverse();
+            // associate new data until enough
+            bool exploredAll = false;
+            uint32_t k = 0;
+            while (assoc.size() < 3000 && !exploredAll) {
+              k = (k+1) % invInd.size();
+              while (indK[k] < invInd[k].size()) {
+                size_t i = invInd[k][indK[k]++];
+                tdp::Plane& pl = pl_w.GetCircular(i);
+                tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
+                Eigen::Vector2f x = cam.Project(pc_w_in_c);
+                if (!dLvl.Inside(x)) 
                   continue;
-              } else if (useNormals) {
-                tdp::Vector3fda n_wi = pl.n_;
-                if (usevMFmeans) {
-                  std::lock_guard<std::mutex> lock(vmfsLock);
-                  n_wi = vmfs[pl.z_].mu_;
-                }
-                if (!AccumulateP2PlNormal(pl, n_wi, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), p2plThr, dotThr, lambdaNs, A, Ai, b, err)) {
+                float d_c = dLvl.GetBilinear(x(0),x(1));
+                if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
                   continue;
-                }
-              } else if (useNormalsAndTexture) {
-                tdp::Vector3fda n_wi = pl.n_;
-                if (usevMFmeans) {
-                  std::lock_guard<std::mutex> lock(vmfsLock);
-                  n_wi = vmfs[pl.z_].mu_;
-                }
-                if (!AccumulateP2PlIntensityNormals(pl, n_wi, T_wc, T_cw, cam, pc(u,v),
-                      n(u,v), greyFl(u,v),gradGrey(u,v), p2plThr, dotThr,
-                      lambdaNs, lambdaTex, A, Ai, b, err)) {
+                numProjected = numProjected + 1;
+                int32_t u = floor(x(0)+0.5f);
+                int32_t v = floor(x(1)+0.5f);
+                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v))
+                  //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                  //                    W, dpc, n, curv, u,v ))
                   continue;
+                if (useTexture) {
+                  if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
+                        nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
+                        lambdaTex, A, Ai, b, err))
+                    continue;
+                } else if (useNormals) {
+                  tdp::Vector3fda n_wi = pl.n_;
+                  if (usevMFmeans) {
+                    std::lock_guard<std::mutex> lock(vmfsLock);
+                    n_wi = vmfs[pl.z_].mu_;
+                  }
+                  if (!AccumulateP2PlNormal(pl, n_wi, T_wc, T_cw, camLvl, pcLvl(u,v),
+                        nLvl(u,v), p2plThr, dotThr, lambdaNs, A, Ai, b, err)) {
+                    continue;
+                  }
+                } else if (useNormalsAndTexture) {
+                  tdp::Vector3fda n_wi = pl.n_;
+                  if (usevMFmeans) {
+                    std::lock_guard<std::mutex> lock(vmfsLock);
+                    n_wi = vmfs[pl.z_].mu_;
+                  }
+                  if (!AccumulateP2PlIntensityNormals(pl, n_wi, T_wc, T_cw, camLvl, pcLvl(u,v),
+                        nLvl(u,v), greyFlLvl(u,v),gradGreyLvl(u,v), p2plThr, dotThr,
+                        lambdaNs, lambdaTex, A, Ai, b, err)) {
+                    continue;
+                  }
+                } else {
+                  if (!AccumulateP2Pl(pl, T_wc, T_cw, pcLvl(u,v), nLvl(u,v),
+                        p2plThr, dotThr, A, Ai, b, err))
+                    continue;
                 }
-              } else {
-                if (!AccumulateP2Pl(pl, T_wc, T_cw, pc(u,v), n(u,v),
-                      p2plThr, dotThr, A, Ai, b, err))
-                  continue;
+                pl.lastFrame_ = frame;
+                ts[i] = frame;
+                pl.numObs_ ++;
+                mask(u,v) |= 1;
+                assoc.emplace_back(i,u+v*pc.w_);
+                break;
               }
-              pl.lastFrame_ = frame;
-              ts[i] = frame;
-              pl.numObs_ ++;
-              mask(u,v) |= 1;
-              assoc.emplace_back(i,u+v*pc.w_);
+              if (k == 0) {
+                if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+                      negLogEvThr, H, gui.verbose))
+                  break;
+                Hprev = H;
+              }
+              exploredAll = true;
+              for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
+            }
+            numInl = assoc.size();
+            Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
+            if (assoc.size() > 6) { // solve for x using ldlt
+              //            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
+              x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+              T_wc = T_wc * tdp::SE3f::Exp_(x);
+            }
+            if (gui.verbose) {
+              std::cout << "\tit " << it << ": err=" << err 
+                << "\t# inliers: " << numInl
+                << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
+                << " " <<  x.bottomRows(3).norm() << std::endl;
+            }
+            if (x.topRows<3>().norm()*180./M_PI < icpdRThr
+                && x.bottomRows<3>().norm() < icpdtThr
+                && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
+                  negLogEvThr, H, gui.verbose)) {
               break;
             }
-            if (k == 0) {
-              if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                    negLogEvThr, H, gui.verbose))
-                break;
-              Hprev = H;
-            }
-            exploredAll = true;
-            for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
           }
-          numInl = assoc.size();
-          Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
-          if (assoc.size() > 6) { // solve for x using ldlt
-//            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
-            x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-            T_wc = T_wc * tdp::SE3f::Exp_(x);
-          }
-          if (gui.verbose) {
-            std::cout << "\tit " << it << ": err=" << err 
-              << "\t# inliers: " << numInl
-              << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
-              << " " <<  x.bottomRows(3).norm() << std::endl;
-          }
-          if (x.topRows<3>().norm()*180./M_PI < icpdRThr
-              && x.bottomRows<3>().norm() < icpdtThr
-              && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
-                negLogEvThr, H, gui.verbose)) {
-            break;
-          }
-        }
 
-        if (gui.verbose) {
-          for (size_t k=0; k<invInd.size(); ++k) {
-            if (invInd[k].size() > 0 )
-              std::cout << "used different directions " << k << "/" 
-                << invInd.size() << ": " << indK[k] 
-                << " of " << invInd[k].size() << std::endl;
+          if (gui.verbose) {
+            for (size_t k=0; k<invInd.size(); ++k) {
+              if (invInd[k].size() > 0 )
+                std::cout << "used different directions " << k << "/" 
+                  << invInd.size() << ": " << indK[k] 
+                  << " of " << invInd[k].size() << std::endl;
+            }
           }
         }
         logObs.Log(log(assoc.size())/log(10.), 
