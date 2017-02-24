@@ -62,6 +62,7 @@
 #include <tdp/camera/projective_labels.h>
 #include <tdp/ransac/ransac.h>
 #include <tdp/utils/file.h>
+#include <tdp/io/tinyply.h>
 
 #include <tdp/sampling/sample.hpp>
 #include <tdp/sampling/vmf.hpp>
@@ -1104,6 +1105,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
   pangolin::Var<bool> showMapPanel("ui.map panel",false,true);
 
+  pangolin::Var<bool> savePly("ui.save ply",false,true);
+
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
   pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
   pangolin::Var<int> numInl("ui.num Inl",0,0,0);
@@ -1649,11 +1652,13 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
     }
-//    
-//    if (useTexture.GuiChanged() && useTexture) {
-//      HThr = -32;
-//      negLogEvThr = -4;
-//    }
+    if (pangolin::Pushed(savePly)) {
+      std::string path = pangolin::MakeUniqueFilename("./surfelMap.ply");
+      std::vector<std::string> comments;
+      comments.push_back(input_uri);
+      comments.push_back(calibPath);
+      tdp::SavePointCloud(path, pc_w, n_w, rgb_w, true, comments);
+    }
 
     idNew.clear();
     if (!gui.paused() && !gui.finished()
