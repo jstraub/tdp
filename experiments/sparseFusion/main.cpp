@@ -164,7 +164,7 @@ void ExtractPlanes(
       if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
             dpc, n, curv, p)) ||
           (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
-            dpc, n, curv, p)) {
+            dpc, n, curv, p))) {
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*p;
@@ -243,9 +243,9 @@ bool EnsureNormal(
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
         if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
-              dpc, n, curvi, pi)) ||
+              dpc, ni, curvi, pi)) ||
             (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
-              dpc, n, curvi, pi)) {
+              dpc, ni, curvi, pi))) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
@@ -1154,7 +1154,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
-  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",2, 0, PYR-1);
+  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",0, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
@@ -1793,6 +1793,10 @@ int main( int argc, char* argv[] )
           }
         }
       }
+      std::cout << " inverse index " << invInd.size() 
+        << " " << idsCur.size() << " " << id_w.size() << std::endl;
+      for (size_t k=0; k<invInd.size(); ++k) std::cout << invInd[k].size() << " ";
+      std::cout << std::endl;
       TOCK("inverseIndex");
     }
 
@@ -1918,11 +1922,11 @@ int main( int argc, char* argv[] )
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
         TICK("icp");
+        Eigen::Matrix<float,6,6> A;
+        Eigen::Matrix<float,6,1> b;
+        Eigen::Matrix<float,6,1> Ai;
         for (int32_t pyr=ICPmaxLvl; pyr>=0; --pyr) {
           std::vector<size_t> indK(invInd.size(),0);
-          Eigen::Matrix<float,6,6> A;
-          Eigen::Matrix<float,6,1> b;
-          Eigen::Matrix<float,6,1> Ai;
           float dotThr = cos(angleThr*M_PI/180.);
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
@@ -1932,6 +1936,7 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
+          if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < maxIt*pyr+1; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
@@ -1947,6 +1952,7 @@ int main( int argc, char* argv[] )
             // associate new data until enough
             bool exploredAll = false;
             uint32_t k = 0;
+            std::cout << invInd.size() << std::endl;
             while (assoc.size() < 3000 && !exploredAll) {
               k = (k+1) % invInd.size();
               while (indK[k] < invInd[k].size()) {
