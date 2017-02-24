@@ -2,12 +2,12 @@
 #include <tdp/icp/photoSO3.h> 
 namespace tdp {
 
-template<int D, typename Derived>
+template<int D, typename Derived, int LEVELS>
 void PhotometricSO3::ComputeProjective(
-    Pyramid<float,3>& grey_p,
-    Pyramid<float,3>& grey_c,
-    Pyramid<Vector2fda,3>& gradGrey_c,
-    Pyramid<Vector3fda,3>& rays,
+    Pyramid<float,LEVELS>& grey_p,
+    Pyramid<float,LEVELS>& grey_c,
+    Pyramid<Vector2fda,LEVELS>& gradGrey_c,
+    Pyramid<Vector3fda,LEVELS>& rays,
     const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, 
     bool verbose,
@@ -78,6 +78,30 @@ void PhotometricSO3::ComputeProjective(
     Pyramid<float,3>& grey_c,
     Pyramid<Vector2fda,3>& gradGrey_c,
     Pyramid<Vector3fda,3>& rays,
+    const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
+    const std::vector<size_t>& maxIt, 
+    bool verbose,
+    SO3f& R_cp
+  );
+
+template
+void PhotometricSO3::ComputeProjective(
+    Pyramid<float,4>& grey_p,
+    Pyramid<float,4>& grey_c,
+    Pyramid<Vector2fda,4>& gradGrey_c,
+    Pyramid<Vector3fda,4>& rays,
+    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+    const std::vector<size_t>& maxIt, 
+    bool verbose,
+    SO3f& R_cp
+  );
+
+template
+void PhotometricSO3::ComputeProjective(
+    Pyramid<float,4>& grey_p,
+    Pyramid<float,4>& grey_c,
+    Pyramid<Vector2fda,4>& gradGrey_c,
+    Pyramid<Vector3fda,4>& rays,
     const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
     const std::vector<size_t>& maxIt, 
     bool verbose,

@@ -29,12 +29,12 @@ void SO3TextureStep (
 class PhotometricSO3 {
  public:
 
-  template<int D, typename Derived>
+  template<int D, typename Derived, int LEVELS>
   static void ComputeProjective(
-    Pyramid<float,3>& grey_p,
-    Pyramid<float,3>& grey_c,
-    Pyramid<Vector2fda,3>& gradGrey_c,
-    Pyramid<Vector3fda,3>& rays,
+    Pyramid<float,LEVELS>& grey_p,
+    Pyramid<float,LEVELS>& grey_c,
+    Pyramid<Vector2fda,LEVELS>& gradGrey_c,
+    Pyramid<Vector3fda,LEVELS>& rays,
     const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, 
     bool verbose,
