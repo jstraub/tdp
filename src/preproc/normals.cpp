@@ -63,13 +63,13 @@ bool NormalViaRMLS(
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc0)) {
 
-    Vector3fda pcvF = pc(v0+1,u0)-pc0;
-    Vector3fda pcvB =-pc(v0-1,u0)+pc0;
+    Vector3fda pcvF = pc(u0,v0+1)-pc0;
+    Vector3fda pcvB =-pc(u0,v0-1)+pc0;
     if (!IsValidData(pcvF) && !IsValidData(pcvB)) {
       return false;
     }
-    Vector3fda pcuF = pc(v0,u0+1)-pc0;
-    Vector3fda pcuB =-pc(v0,u0-1)+pc0;
+    Vector3fda pcuF = pc(u0+1,v0)-pc0;
+    Vector3fda pcuB =-pc(u0-1,v0)+pc0;
     if (!IsValidData(pcuF) && !IsValidData(pcuB)) {
       return false;
     }
@@ -124,10 +124,12 @@ bool NormalViaRMLS(
     
     // TODO could also implement the incremental inverse computation
     // here - that gave 3x speedup over normal inverse
+    // DONE Tried that and did not speed up
 
     // TODO could also try of speed, if I use a vector and just set
     // accepted datas second value to something huge; using partial
     // sort that should not be too bad?
+    // DONE using std::vector was a bad idea as well
     std::deque<std::pair<int32_t, float>> errs;
     for (size_t u=u0-W; u<=u0+W; ++u) {
       for (size_t v=v0-W; v<=v0+W; ++v) {
