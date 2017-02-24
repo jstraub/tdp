@@ -933,6 +933,8 @@ int main( int argc, char* argv[] )
   tdp::GuiBase gui(1200,800,video);
   pangolin::CreatePanel("visPanel").SetBounds(0.,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
   pangolin::Display("visPanel").Show(false);
+  pangolin::CreatePanel("mapPanel").SetBounds(0.,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::Display("mapPanel").Show(false);
 
   gui.container().SetLayout(pangolin::LayoutEqual);
 
@@ -1099,46 +1101,48 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
-
-  pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
-  pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
-  pangolin::Var<float> scale("ui.scale",0.05,0.1,1);
-  pangolin::Var<float> bgGrey("ui.bg Grey",0.02,0.0,1);
+  pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
+  pangolin::Var<bool> showMapPanel("ui.map panel",false,true);
 
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
   pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
   pangolin::Var<int> numInl("ui.num Inl",0,0,0);
   pangolin::Var<int> idMapUpdate("ui.id Map",0,0,0);
   pangolin::Var<int> idNNUpdate("ui.id NN",0,0,0);
+  pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
-  pangolin::Var<bool> runLoopClosure("ui.run loop closure",false,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
-  pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
-  pangolin::Var<bool> updatePlanes("ui.update planes",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
-  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.3,0.01,0.3);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
   pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
+  pangolin::Var<int>   W("ui.W ",9,1,15);
+  pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
+  pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
-  pangolin::Var<bool> doRegvMF("ui.reg vMF",false,true);
-  pangolin::Var<bool> doRegPc0("ui.reg pc0",false,true);
-  pangolin::Var<bool> doRegAbsPc("ui.reg abs pc",true,true);
-  pangolin::Var<bool> doRegAbsN("ui.reg abs n",true,true);
-  pangolin::Var<bool> doRegRelPlZ("ui.reg rel Pl",true,true);
-  pangolin::Var<bool> doRegRelNZ("ui.reg rel N",true,true);
-  pangolin::Var<bool> doRegRelPlObs("ui.reg rel PlObs",false,true);
-  pangolin::Var<bool> doRegRelNObs("ui.reg rel NObs",false,true);
-  pangolin::Var<bool> doVariationalUpdate("ui.variational",false,true);
-  pangolin::Var<float> lambdaRegDir("ui.lamb Reg Dir",0.01,0.01,1.);
-  pangolin::Var<float> lambdaRegPl("ui.lamb Reg Pl",0.01,0.01,10.);
-  pangolin::Var<float> lambdaRegPc0("ui.lamb Reg Pc0",0.01,0.01,1.);
-  pangolin::Var<float> lambdaMRF("ui.lamb z MRF",.1,0.01,10.);
-  pangolin::Var<float> alphaGrad("ui.alpha Grad",.0001,0.0,1.);
+  pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
+  pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",false,true);
+  pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
+  pangolin::Var<bool> doRegAbsN("mapPanel.reg abs n",true,true);
+  pangolin::Var<bool> doRegRelPlZ("mapPanel.reg rel Pl",true,true);
+  pangolin::Var<bool> doRegRelNZ("mapPanel.reg rel N",true,true);
+  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
+  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
+  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
+  pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
+  pangolin::Var<float> lambdaRegPl("mapPanel.lamb Reg Pl",0.01,0.01,10.);
+  pangolin::Var<float> lambdaRegPc0("mapPanel.lamb Reg Pc0",0.01,0.01,1.);
+  pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
+  pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
+
+  pangolin::Var<bool> runICP("ui.run ICP",true,true);
+  pangolin::Var<bool> icpReset("ui.reset icp",true,false);
+  pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
+  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",2, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
@@ -1150,22 +1154,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
   pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
 
-  pangolin::Var<bool> runICP("ui.run ICP",true,true);
-  pangolin::Var<bool> icpReset("ui.reset icp",true,false);
-  pangolin::Var<float> angleUniformityThr("ui.angle unif thr",5, 0, 90);
+  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.3,0.01,0.3);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
-//  pangolin::Var<float> angleThr("ui.angle Thr",-1, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
-  pangolin::Var<float> curvThr("ui.curv Thr",1.,0.01,1.0);
-  pangolin::Var<float> assocDistThr("ui.assoc dist Thr",0.1,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-4.,-12.,-1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
-  pangolin::Var<int> numRotThr("ui.numRot Thr",200, 100, 350);
-  pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
-  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",2, 0, PYR-1);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
@@ -1175,29 +1171,27 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",PYR-1,0,PYR-1);
   pangolin::Var<int> SO3minLvl("ui.SO3 min Lvl",1,0,PYR-1);
 
-  pangolin::Var<int>   W("ui.W ",9,1,15);
-  pangolin::Var<int>   dispLvl("ui.disp lvl",0,0,2);
-
-  pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
-  pangolin::Var<bool> showPlanes("ui.show planes",false,true);
-  pangolin::Var<bool> showPcModel("ui.show model",false,true);
-  pangolin::Var<bool> showPcCurrent("ui.show current",false,true);
-  pangolin::Var<bool> showFullPc("ui.show full",true,true);
-  pangolin::Var<bool> showNormals("ui.show ns",true,true);
-  pangolin::Var<bool> showGrads("ui.show grads",true,true);
-  pangolin::Var<bool> showPcEst("ui.show PcEst",false,true);
-  pangolin::Var<bool> showAge("ui.show age",false,true);
-  pangolin::Var<bool> showObs("ui.show # obs",false,true);
-  pangolin::Var<bool> showCurv("ui.show curvature",false,true);
-  pangolin::Var<bool> showGrey("ui.show grey",false,true);
-  pangolin::Var<bool> showNumSum("ui.show numSum",false,true);
-  pangolin::Var<bool> showZCounts("ui.show zCounts",false,true);
-  pangolin::Var<bool> showLabels("ui.show labels",true,true);
-  pangolin::Var<bool> showSamples("ui.show Samples",false,true);
-  pangolin::Var<bool> showSurfels("ui.show surfels",true,true);
-  pangolin::Var<bool> showNN("ui.show NN",false,true);
-  pangolin::Var<bool> showLoopClose("ui.show loopClose",false,true);
-  pangolin::Var<int> step("ui.step",10,1,100);
+  pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
+  pangolin::Var<int> step("visPanel.step",10,1,100);
+  pangolin::Var<float> bgGrey("visPanel.bg Grey",0.02,0.0,1);
+  pangolin::Var<bool> showPlanes("visPanel.show planes",false,true);
+  pangolin::Var<bool> showPcModel("visPanel.show model",false,true);
+  pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
+  pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
+  pangolin::Var<bool> showNormals("visPanel.show ns",true,true);
+  pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
+  pangolin::Var<bool> showPcEst("visPanel.show PcEst",false,true);
+  pangolin::Var<bool> showAge("visPanel.show age",false,true);
+  pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
+  pangolin::Var<bool> showCurv("visPanel.show curvature",false,true);
+  pangolin::Var<bool> showGrey("visPanel.show grey",false,true);
+  pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
+  pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
+  pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
+  pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
+  pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
+  pangolin::Var<bool> showNN("visPanel.show NN",false,true);
+  pangolin::Var<bool> showLoopClose("visPanel.show loopClose",false,true);
 
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
   pangolin::Var<float> ransacThr("ui.thr",0.09,0.01,1.0);
@@ -1645,10 +1639,10 @@ int main( int argc, char* argv[] )
     if (showVisPanel.GuiChanged()) {
       pangolin::Display("visPanel").Show(showVisPanel);
     }
-
-    if (runLoopClosure.GuiChanged()) {
-      showLoopClose = runLoopClosure;
+    if (showMapPanel.GuiChanged()) {
+      pangolin::Display("mapPanel").Show(showMapPanel);
     }
+
     if (runLoopClosureGeom.GuiChanged()) {
       showLoopClose = runLoopClosureGeom;
     }
@@ -2054,7 +2048,7 @@ int main( int argc, char* argv[] )
         if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
       }
 
-      if (updatePlanes && trackingGood) {
+      if (trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
         TICK("update planes");
 //        size_t numNN = 0;
@@ -2269,12 +2263,7 @@ int main( int argc, char* argv[] )
       // reference
       if (showPcCurrent) {
         pangolin::glSetFrameOfReference(T_wc.matrix());
-        if(dispLvl == 0){
-          pangolin::RenderVboCbo(vbo, cbo, true);
-        } else {
-          glColor3f(1,0,0);
-          pangolin::RenderVbo(vbo);
-        }
+        pangolin::RenderVboCbo(vbo, cbo, true);
         pangolin::glUnsetFrameOfReference();
       }
       if (showPcEst) {
