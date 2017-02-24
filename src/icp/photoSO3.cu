@@ -94,13 +94,13 @@ void SO3TextureStep (
   const size_t BLK_SIZE = 32;
   size_t N = grey_p.w_*grey_p.h_;
   dim3 threads, blocks;
-  ComputeKernelParamsForArray(blocks,threads,N/2,BLK_SIZE);
+  ComputeKernelParamsForArray(blocks,threads,N/10,BLK_SIZE);
   ManagedDeviceImage<float> out(11,1);
   cudaMemset(out.ptr_, 0, 11*sizeof(float));
 
   KernelSO3TextureStep<BLK_SIZE,D,Derived><<<blocks,threads,
     BLK_SIZE*sizeof(Vector11fda)>>>( grey_p, grey_c, gradGrey_c, rays,
-        R_cp, cam, 2, out);
+        R_cp, cam, 10, out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(11,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,11*sizeof(float), cudaMemcpyDeviceToHost);
@@ -121,10 +121,10 @@ void SO3TextureStep (
       }
     }
   }
-  count = sumAb[11];
-  error = sumAb[10]/count;
-  //std::cout << ATA << std::endl << ATb.transpose() << std::endl;
-  //std::cout << "\terror&count " << error << " " << count << std::endl;
+  count = sumAb[10];
+  error = sumAb[9]/count;
+//  std::cout << ATA << std::endl << ATb.transpose() << std::endl;
+//  std::cout << "\terror&count " << error << " " << count << std::endl;
 }
 
 template void SO3TextureStep (

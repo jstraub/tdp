@@ -33,8 +33,8 @@ void PhotometricSO3::ComputeProjective(
       CameraBase<float,D,Derived> camLvl = cam.Scale(scale);
 
       // Compute ATA and ATb from A x = b
-      SO3TextureStep(grey_pl, grey_cl, gradGrey_cl, rays_l, R_cp, camLvl,
-          ATA,ATb,error,count);
+      SO3TextureStep(grey_pl, grey_cl, gradGrey_cl, rays_l, R_cp,
+          camLvl, ATA,ATb,error,count);
       if (count < 4) {
         std::cout << "# inliers " << count << " to small " << std::endl;
         break;

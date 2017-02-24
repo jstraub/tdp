@@ -140,6 +140,11 @@ class Pyramid {
     return w*h*((1<<lvl)-1)/(1<<(std::max(0,lvl-1))); 
   }
 
+  void Fill(T value) { 
+    for (size_t i=0; i<NumElemsToLvl(w_,h_,LEVELS); ++i) 
+      ptr_[i] = value; 
+  }
+
   std::string Description() const {
     std::stringstream ss;
     ss << w_ << "x" << h_ << " lvls: " << LEVELS

@@ -73,7 +73,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
-#define PYR 3
+#define PYR 4
 #define kNN 12
 #define MAP_SIZE 1000000
 
@@ -157,8 +157,7 @@ void ExtractPlanes(
       uint32_t Wscaled = W;
       const uint32_t u = i%mask.w_;
       const uint32_t v = i/mask.w_;
-      std::cout << "found valid point in mask " << u << "," << v << std::endl;
-  
+//      std::cout << "found valid point in mask " << u << "," << v << std::endl;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       bool success = false;
       if (viaRMLs) {
@@ -167,8 +166,7 @@ void ExtractPlanes(
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
       }
       if (success) {
-        std::cout << "extracted normal at " << u << "," << v << std::endl;
-
+//        std::cout << "extracted normal at " << u << "," << v << std::endl;
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*p;
@@ -247,10 +245,15 @@ bool EnsureNormal(
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
-        if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
-              dpc, ni, curvi, pi)) ||
-            (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
-              dpc, ni, curvi, pi))) {
+        bool success = false;
+        if (viaRMLs) {
+          success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
+              dpc, ni, curvi, pi);
+        } else {
+          success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
+              dpc, ni, curvi, pi);
+        }
+        if (success) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
@@ -1014,10 +1017,11 @@ int main( int argc, char* argv[] )
   containerTracking.SetLayout(pangolin::LayoutEqual);
   tdp::QuickView viewGrey(3*wc/2, hc);
   containerTracking.AddDisplay(viewGrey);
+
   tdp::QuickView viewGradGrey(3*wc/2, hc);
   containerTracking.AddDisplay(viewGradGrey);
-  gui.container().AddDisplay(containerTracking);
-  tdp::QuickView viewD(wc, hc);
+
+  tdp::QuickView viewD(3*wc/2, hc);
   containerTracking.AddDisplay(viewD);
   gui.container().AddDisplay(containerTracking);
 
@@ -1109,6 +1113,7 @@ int main( int argc, char* argv[] )
   tdp::Image<float> cuD = cuPyrD.GetImage(0);
   tdp::ManagedHostPyramid<float,PYR> pyrD(wc,hc);
   tdp::Image<float> d = pyrD.GetImage(0);
+  tdp::ManagedHostImage<float> pyrDImg(3*wc/2, hc); 
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,wc*hc,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,wc*hc,GL_UNSIGNED_BYTE,3);
@@ -1164,7 +1169,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
-  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",0, 0, PYR-1);
+  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",PYR-1, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
@@ -1186,11 +1191,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
-  pangolin::Var<bool> useGpuPrealign("ui.GPU prealign",false,true);
+  pangolin::Var<bool> useGpuPrealign("ui.GPU prealign",true,true);
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-6.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
-  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",1, 1, 20);
+  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",2, 1, 20);
   pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",PYR-1,0,PYR-1);
   pangolin::Var<int> SO3minLvl("ui.SO3 min Lvl",1,0,PYR-1);
 
@@ -1201,6 +1206,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPlanes("visPanel.show planes",false,true);
   pangolin::Var<bool> showPcModel("visPanel.show model",false,true);
   pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
+  pangolin::Var<int> showPcLvl("visPanel.cur Lvl",0,0,PYR-1);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",true,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
@@ -1883,7 +1889,7 @@ int main( int argc, char* argv[] )
     tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta, cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 
-    n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+    pyrN.Fill(tdp::Vector3fda(NAN,NAN,NAN));
     TOCK("Setup");
 
     trackingGood = false;
@@ -1892,6 +1898,7 @@ int main( int argc, char* argv[] )
         tdp::SO3f R_cp;
         if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
         if (useGpuPrealign) {
+          TICK("icp RGB GPU");
           std::vector<size_t> maxIt(PYR, 0);
           for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
             maxIt[pyr] = SO3maxIt*(pyr-SO3minLvl)+1;
@@ -1899,6 +1906,7 @@ int main( int argc, char* argv[] )
           tdp::PhotometricSO3::ComputeProjective(cuPyrGreyFlPrev,
               cuPyrGreyFlSmooth, cuPyrGradGrey, cuPyrRay, cam, maxIt,
               gui.verbose, R_cp);
+          TOCK("icp RGB GPU");
         } else {
           TICK("icp RGB");
           Eigen::Matrix<float,3,3> A;
@@ -1972,6 +1980,9 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
+          std::cout << nLvl.Description() << std::endl;
+          std::cout << pcLvl.Description() << std::endl;
+          std::cout << dLvl.Description() << std::endl;
           for (size_t it = 0; it < maxIt*pyr+1; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
@@ -1994,17 +2005,19 @@ int main( int argc, char* argv[] )
                 size_t i = invInd[k][indK[k]++];
                 tdp::Plane& pl = pl_w.GetCircular(i);
                 tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
-                Eigen::Vector2f x = cam.Project(pc_w_in_c);
+                Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
+//                std::cout << x.transpose() << std::endl;
                 if (!dLvl.Inside(x)) 
                   continue;
                 float d_c = dLvl.GetBilinear(x(0),x(1));
+//                std::cout << d_c << std::endl;
                 if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
                   continue;
                 numProjected = numProjected + 1;
                 int32_t u = floor(x(0)+0.5f);
                 int32_t v = floor(x(1)+0.5f);
                 if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v, normalViaRMLS))
-                  //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
+                  //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, camLvl, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
                 if (useTexture) {
@@ -2067,10 +2080,10 @@ int main( int argc, char* argv[] )
                 << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
                 << " " <<  x.bottomRows(3).norm() << std::endl;
             }
-            if (x.topRows<3>().norm()*180./M_PI < icpdRThr
-                && x.bottomRows<3>().norm() < icpdtThr
-                && tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
-                  negLogEvThr, H, gui.verbose)) {
+            if ( tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
+                  negLogEvThr, H, gui.verbose)
+                && x.topRows<3>().norm()*180./M_PI < icpdRThr
+                && x.bottomRows<3>().norm() < icpdtThr) {
               break;
             }
           }
@@ -2217,8 +2230,14 @@ int main( int argc, char* argv[] )
 
     if (showPcCurrent) {
       TICK("Draw 3D vbo cbo upload");
-      vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
-      cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+      if (showPcLvl == 0) {
+        vbo.Reinitialise(pangolin::GlArrayBuffer,pc.Area(),GL_FLOAT,3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pc.ptr_, pc.SizeBytes(), 0);
+        cbo.Upload(rgb.ptr_, rgb.SizeBytes(), 0);
+      } else {
+        vbo.Reinitialise(pangolin::GlArrayBuffer,pyrPc.GetImage(showPcLvl).Area(),GL_FLOAT,3, GL_DYNAMIC_DRAW);
+        vbo.Upload(pyrPc.GetImage(showPcLvl).ptr_, pyrPc.GetImage(showPcLvl).SizeBytes(), 0);
+      }
       TOCK("Draw 3D vbo cbo upload");
     }
 
@@ -2350,7 +2369,12 @@ int main( int argc, char* argv[] )
       pangolin::glSetFrameOfReference(T_wc.matrix());
       pangolin::glDrawAxis(0.1f);
       if (showPcCurrent) {
-        pangolin::RenderVboCbo(vbo, cbo, true);
+        if (showPcLvl == 0) {
+          pangolin::RenderVboCbo(vbo, cbo, true);
+        } else {
+          glColor3f(0,1,1);
+          pangolin::RenderVbo(vbo);
+        }
       }
       pangolin::glUnsetFrameOfReference();
 
@@ -2428,7 +2452,8 @@ int main( int argc, char* argv[] )
         viewGradGrey.SetImage(grad2DImg);
       }
       if (viewD.IsShown()) {
-        viewD.SetImage(d);
+        tdp::PyramidToImage(pyrD, pyrDImg);
+        viewD.SetImage(pyrDImg);
       }
     }
     if (!gui.finished() && plotters.IsShown()) {
