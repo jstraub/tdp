@@ -1262,6 +1262,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
   mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> outerSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
@@ -1542,14 +1543,16 @@ int main( int argc, char* argv[] )
         }
       }
       if (doRegPc0) {
-        Jp += -2.*lambdaRegPc0*(pc0_w[i] - pl.p_);
+        Jp += -lambdaRegPc0*(pc0_w[i] - pl.p_);
       }
       if (doRegAbsPc) {
-        Jp += pl.n_ *2.*pl.n_.dot(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
+        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
 //        Jp += 2.*(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
       }
       if (doRegAbsN) {
-        Jn += 2*(numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
+//        Jn += (numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
+        Jn += -tauO*normSum_w[i]*nSum_w[i];
+        Jn += numSum_w[i]*(outerSum_w[i]*pl.n_ - pl.n_.dot(pcSum_w[i])*pl.p_ - pl.n_.dot(pl.p_)*(pcSum_w[i] - pl.p_));
       }
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood) {
@@ -1558,13 +1561,14 @@ int main( int argc, char* argv[] )
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
               if (pl.z_ == plO.z_) {
-                Jn +=  2.*lambdaRegPl*tau*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
-                Jp += -2.*lambdaRegPl*tau*(pl.p2plDist(plO.p_))*pl.n_;
+                Jp += -lambdaRegPl*tau*(pl.p2plDist(plO.p_))*pl.n_;
+                Jn +=  lambdaRegPl*tau*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
               }
             }
             if (doRegRelNZ) {
               if (pl.z_ == plO.z_) {
-                Jn +=  2.*lambdaRegPl*tau*(pl.n_ - plO.n_);
+//                Jn +=  2.*lambdaRegPl*tau*(pl.n_ - plO.n_);
+                Jn += -lambdaRegPl*tau*plO.n_;
               }
             }
             if (mapObsNum[i](j) > 0.) {
@@ -1708,6 +1712,7 @@ int main( int argc, char* argv[] )
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
           pcSum_w[i] = pl_w[i].p_;
+          outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
           normSum_w[i] = 1;
@@ -2084,6 +2089,7 @@ int main( int argc, char* argv[] )
           pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
                 + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
           pcSum_w[ass.first] = (pcSum_w[ass.first]*w + pc_c_in_w)/(w+1.);
+          outerSum_w[ass.first] = (outerSum_w[ass.first]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
           nSum_w[ass.first] = (nSum_w[ass.first]*w + n_c_in_w)/(w+1.);
           normSum_w[ass.first] = nSum_w[ass.first].norm();
