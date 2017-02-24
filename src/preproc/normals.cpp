@@ -70,40 +70,45 @@ bool NormalViaRMLS(
     }
     Vector3fda pcuF = pc(v0,u0+1)-pc0;
     Vector3fda pcuB =-pc(v0,u0-1)+pc0;
-    if (!IsValidData(pcuF) && !IsValidData(pcuF)) {
+    if (!IsValidData(pcuF) && !IsValidData(pcuB)) {
       return false;
     }
-    Vector3fda pcv, pcu;
-    int32_t id1, id2;
+    Vector3fda pcv = Vector3fda::Zero(); 
+    Vector3fda pcu = Vector3fda::Zero(); 
+    int32_t id1=-1;
+    int32_t id2=-1;
 
-    if (IsValidData(pcvF)) {
-      if (!IsValidData(pcvB) || pcvF.squaredNorm() < pcvB.squaredNorm() ) {
-        pcv = pcvF;
-        id1 = u0+(v0+1)*pc.w_;
-      }
+    if ((IsValidData(pcvF) && !IsValidData(pcvB))
+        ||(IsValidData(pcvF) && IsValidData(pcvB) && pcvF.squaredNorm() < pcvB.squaredNorm())) {
+      pcv = pcvF;
+      id1 = u0+(v0+1)*pc.w_;
     }
-    if (IsValidData(pcvB)) {
-      if (!IsValidData(pcvF) || pcvB.squaredNorm() < pcvF.squaredNorm() ) {
-        pcv = pcvB;
-        id1 = u0+(v0-1)*pc.w_;
-      }
+    if ((IsValidData(pcvB) && !IsValidData(pcvF))
+        ||(IsValidData(pcvB) && IsValidData(pcvF) && pcvF.squaredNorm() >= pcvB.squaredNorm())) {
+      pcv = pcvB;
+      id1 = u0+(v0-1)*pc.w_;
     }
-    if (IsValidData(pcuF)) {
-      if (!IsValidData(pcuB) || pcuF.squaredNorm() < pcuB.squaredNorm() ) {
+    if ((IsValidData(pcuF) && !IsValidData(pcuB))
+        ||(IsValidData(pcuF) && IsValidData(pcuB) && pcuF.squaredNorm() < pcuB.squaredNorm())) {
         pcu = pcuF;
-        id1 = u0+1+v0*pc.w_;
-      }
+        id2 = u0+1+v0*pc.w_;
     }
-    if (IsValidData(pcuB)) {
-      if (!IsValidData(pcuF) || pcuB.squaredNorm() < pcuF.squaredNorm() ) {
+    if ((IsValidData(pcuB) && !IsValidData(pcuF))
+        ||(IsValidData(pcuB) && IsValidData(pcuF) && pcuF.squaredNorm() >= pcuB.squaredNorm())) {
         pcu = pcuB;
-        id1 = u0-1+v0*pc.w_;
-      }
+        id2 = u0-1+v0*pc.w_;
     }
     Vector3fda n = (pcv.cross(pcu)).normalized();
-    Eigen::Matrix3f xOuter = pc0 * pc0.transpose() +
-      pc[id1]*pc[id1].transpose() + pc[id2]*pc[id2].transpose();
-    Eigen::Vector3f xSum = pc0 + pc[id1] + pc[id2];
+    if ( fabs(1-n.norm()) > 1e-4) 
+      return false;
+//    std::cout << "dpc " << pcv.transpose() << ", " << pcu.transpose() << ", " << n.transpose() << std::endl;
+//    std::cout << "ids " << id1 << ", " << id2 << std::endl;
+//    std::cout << "pci " << pc[id1].transpose() << ", " << pc[id2].transpose() << ", " << pc0.transpose() << std::endl;
+    tdp::Matrix3fda xOuter = pc0 * pc0.transpose() + pc[id1]*pc[id1].transpose() + pc[id2]*pc[id2].transpose();
+    tdp::Vector3fda xSum = pc0 + pc[id1] + pc[id2];
+
+//    std::cout << "init :" << n.transpose() << std::endl;
+//    std::cout << pc[id1].transpose() << ", " << pc[id2].transpose() << ", " << pc0.transpose() << std::endl;
 
 //    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
 //    if (!IsValidData(n))
@@ -133,6 +138,8 @@ bool NormalViaRMLS(
         }
       }
     }
+
+//    std::sort(errs.begin(), errs.end(), 
     std::partial_sort(errs.begin(), errs.begin()+1, errs.end(), 
         [&](const std::pair<int32_t,float>& l, 
           const std::pair<int32_t,float>& r){
@@ -140,23 +147,28 @@ bool NormalViaRMLS(
         });
 
     float a = n.dot(pc0);
+//    std::cout << errs.size() << " " << a << std::endl; 
     int32_t i=0;
     while(errs.size() > 0 && errs.front().second - a < inlierThr) {
-      for (int j=0; j < floor(pow(1.3,i)); ++i) {
+      for (int j=0; j < floor(pow(1.3,i)); ++j) {
         if (errs.size() == 0 || errs.front().second - a >= inlierThr) {
           break;
         }
+//        std::cout << " -- " << j << " " << pc[errs.front().first].transpose() << std::endl;
         xOuter += pc[errs.front().first]*pc[errs.front().first].transpose();
         xSum += pc[errs.front().first];
         errs.pop_front();
       }
       n = (xOuter.ldlt().solve(xSum)).normalized();
       a = n.dot(pc0);
+//      std::cout << "@" << errs.size() << ": " << n.transpose() << " " << xSum.transpose() << std::endl;
+//      std::cout << xOuter << std::endl;
 
       for (auto& err : errs) {
         err.second = n.dot(pc[err.first]);
       }
       std::partial_sort(errs.begin(), errs.begin()+1, errs.end(), 
+//      std::sort(errs.begin(), errs.end(), 
           [&](const std::pair<int32_t,float>& l, 
             const std::pair<int32_t,float>& r){
           return l.second < r.second;
