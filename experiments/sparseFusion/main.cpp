@@ -145,7 +145,8 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<Vector3fda>& grad_w,
     ManagedHostCircularBuffer<float>& rs,
-    ManagedHostCircularBuffer<uint16_t>& ts
+    ManagedHostCircularBuffer<uint16_t>& ts,
+    bool viaRMLs
     ) {
   Plane pl;
   tdp::Brief feat;
@@ -160,7 +161,9 @@ void ExtractPlanes(
       const uint32_t v = i/mask.w_;
   
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
-      if (tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
+      if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
+            dpc, n, curv, p)) ||
+          (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
             dpc, n, curv, p)) {
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
@@ -226,7 +229,8 @@ bool EnsureNormal(
     Image<Vector3fda>& n,
     Image<float>& curv,
     int32_t u,
-    int32_t v
+    int32_t v,
+    bool viaRMLs
     ) {
   if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
     if (tdp::IsValidData(pc(u,v))) {
@@ -237,7 +241,11 @@ bool EnsureNormal(
       float curvi;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
-        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
+//        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
+        if ((viaRMLs && tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
+              dpc, n, curvi, pi)) ||
+            (!viaRMLs && tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
+              dpc, n, curvi, pi)) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
@@ -260,14 +268,15 @@ bool ProjectiveAssocNormalExtract(const Plane& pl,
     Image<Vector3fda>& n,
     Image<float>& curv,
     int32_t& u,
-    int32_t& v
+    int32_t& v,
+    bool normalViaRMLS
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
   const tdp::Vector3fda& pc_w = pl.p_;
   Eigen::Vector2f x = cam.Project(T_cw*pc_w);
   u = floor(x(0)+0.5f);
   v = floor(x(1)+0.5f);
-  return EnsureNormal(pc, dpc, W, n, curv, u, v);
+  return EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS);
 }
 
 
@@ -1122,7 +1131,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
-  pangolin::Var<bool> showGradDir("ui.showGradDir",true,true);
+  pangolin::Var<bool> normalViaRMLS("ui.normal RMLS",false,true);
   pangolin::Var<int>   W("ui.W ",9,1,15);
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
@@ -1177,6 +1186,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
   pangolin::Var<int> step("visPanel.step",10,1,100);
   pangolin::Var<float> bgGrey("visPanel.bg Grey",0.02,0.0,1);
+  pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showPlanes("visPanel.show planes",false,true);
   pangolin::Var<bool> showPcModel("visPanel.show model",false,true);
   pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
@@ -1692,7 +1702,7 @@ int main( int argc, char* argv[] )
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
-            n_w, grad_w, rs, ts);
+            n_w, grad_w, rs, ts, normalViaRMLS);
         TOCK("normals");
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
@@ -1941,7 +1951,7 @@ int main( int argc, char* argv[] )
                 numProjected = numProjected + 1;
                 int32_t u = floor(x(0)+0.5f);
                 int32_t v = floor(x(1)+0.5f);
-                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v))
+                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v, normalViaRMLS))
                   //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, cam, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
