@@ -2059,8 +2059,8 @@ int main( int argc, char* argv[] )
                 break;
               }
               if (k == 0) {
-                if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                      negLogEvThr, H, gui.verbose))
+                if (tdp::CheckEntropyTermination(A, Hprev, HThr*scale, condEntropyThr/scale, 
+                      negLogEvThr*scale, H, gui.verbose))
                   break;
                 Hprev = H;
               }
@@ -2072,7 +2072,7 @@ int main( int argc, char* argv[] )
             if (assoc.size() > 6) { // solve for x using ldlt
               //            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
               x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-              T_wc = T_wc * tdp::SE3f::Exp_(x);
+              T_wc = T_wc * tdp::SE3f::Exp_(x*scale);
             }
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
@@ -2080,10 +2080,10 @@ int main( int argc, char* argv[] )
                 << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
                 << " " <<  x.bottomRows(3).norm() << std::endl;
             }
-            if ( tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
-                  negLogEvThr, H, gui.verbose)
-                && x.topRows<3>().norm()*180./M_PI < icpdRThr
-                && x.bottomRows<3>().norm() < icpdtThr) {
+            if ( tdp::CheckEntropyTermination(A, Hprev, HThr*scale, 0.f,
+                  negLogEvThr*scale, H, gui.verbose)
+                && x.topRows<3>().norm()*180./M_PI*scale < icpdRThr
+                && x.bottomRows<3>().norm()*scale < icpdtThr) {
               break;
             }
           }
