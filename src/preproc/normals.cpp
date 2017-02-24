@@ -57,36 +57,83 @@ bool NormalViaRMLS(
     float& curvature,
     Vector3fda& p
     ) {
+  int32_t id0 = u0+v0*pc.w_;
+  const Vector3fda& pc0 = pc[id0];
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
-    && IsValidData(pc(u0,v0))) {
-    const Vector3fda& pc0 = pc(u0,v0);
-    int32_t id0 = u0+v0*pc.w_;
+    && IsValidData(pc0)) {
 
-    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
-    if (!IsValidData(n))
+    Vector3fda pcvF = pc(v0+1,u0)-pc0;
+    Vector3fda pcvB =-pc(v0-1,u0)+pc0;
+    if (!IsValidData(pcvF) && !IsValidData(pcvB)) {
       return false;
+    }
+    Vector3fda pcuF = pc(v0,u0+1)-pc0;
+    Vector3fda pcuB =-pc(v0,u0-1)+pc0;
+    if (!IsValidData(pcuF) && !IsValidData(pcuF)) {
+      return false;
+    }
+    Vector3fda pcv, pcu;
+    int32_t id1, id2;
 
-    Eigen::Matrix3f xOuter = pc0 * pc0.transpose();
-    Eigen::Vector3f xSum = pc0;
-    int32_t id1 = u0+1+v0*pc.w_;
-    int32_t id2 = u0+(v0+1)*pc.w_;
-    xOuter += pc(u0+1,v0)*pc(u0+1,v0).transpose();
-    xOuter += pc(u0,v0+1)*pc(u0,v0+1).transpose();
-    xSum += pc(u0+1,v0);
-    xSum += pc(u0,v0+1);
+    if (IsValidData(pcvF)) {
+      if (!IsValidData(pcvB) || pcvF.squaredNorm() < pcvB.squaredNorm() ) {
+        pcv = pcvF;
+        id1 = u0+(v0+1)*pc.w_;
+      }
+    }
+    if (IsValidData(pcvB)) {
+      if (!IsValidData(pcvF) || pcvB.squaredNorm() < pcvF.squaredNorm() ) {
+        pcv = pcvB;
+        id1 = u0+(v0-1)*pc.w_;
+      }
+    }
+    if (IsValidData(pcuF)) {
+      if (!IsValidData(pcuB) || pcuF.squaredNorm() < pcuB.squaredNorm() ) {
+        pcu = pcuF;
+        id1 = u0+1+v0*pc.w_;
+      }
+    }
+    if (IsValidData(pcuB)) {
+      if (!IsValidData(pcuF) || pcuB.squaredNorm() < pcuF.squaredNorm() ) {
+        pcu = pcuB;
+        id1 = u0-1+v0*pc.w_;
+      }
+    }
+    Vector3fda n = (pcv.cross(pcu)).normalized();
+    Eigen::Matrix3f xOuter = pc0 * pc0.transpose() +
+      pc[id1]*pc[id1].transpose() + pc[id2]*pc[id2].transpose();
+    Eigen::Vector3f xSum = pc0 + pc[id1] + pc[id2];
 
+//    Vector3fda n = ((pc0-pc(u0+1,v0)).cross(pc0-pc(u0,v0+1))).normalized();
+//    if (!IsValidData(n))
+//      return false;
+//    Eigen::Matrix3f xOuter = pc0 * pc0.transpose();
+//    Eigen::Vector3f xSum = pc0;
+//    int32_t id1 = u0+1+v0*pc.w_;
+//    int32_t id2 = u0+(v0+1)*pc.w_;
+//    xOuter += pc(u0+1,v0)*pc(u0+1,v0).transpose();
+//    xOuter += pc(u0,v0+1)*pc(u0,v0+1).transpose();
+//    xSum += pc(u0+1,v0);
+//    xSum += pc(u0,v0+1);
+    
+    // TODO could also implement the incremental inverse computation
+    // here - that gave 3x speedup over normal inverse
+
+    // TODO could also try of speed, if I use a vector and just set
+    // accepted datas second value to something huge; using partial
+    // sort that should not be too bad?
     std::deque<std::pair<int32_t, float>> errs;
     for (size_t u=u0-W; u<=u0+W; ++u) {
       for (size_t v=v0-W; v<=v0+W; ++v) {
         int32_t id = u+v*pc.w_;
-        if (IsValidData(pc(u,v))
+        if (IsValidData(pc[id])
             && id != id0 && id != id1 && id != id2) {
-          errs.emplace_back(id, n.dot(pc(u,v)));
+          errs.emplace_back(id, n.dot(pc[id]));
         }
       }
     }
-    std::sort(errs.begin(), errs.end(), 
+    std::partial_sort(errs.begin(), errs.begin()+1, errs.end(), 
         [&](const std::pair<int32_t,float>& l, 
           const std::pair<int32_t,float>& r){
           return l.second < r.second;
@@ -109,7 +156,7 @@ bool NormalViaRMLS(
       for (auto& err : errs) {
         err.second = n.dot(pc[err.first]);
       }
-      std::sort(errs.begin(), errs.end(), 
+      std::partial_sort(errs.begin(), errs.begin()+1, errs.end(), 
           [&](const std::pair<int32_t,float>& l, 
             const std::pair<int32_t,float>& r){
           return l.second < r.second;
