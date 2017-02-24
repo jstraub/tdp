@@ -73,7 +73,7 @@
 typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
-#define PYR 4
+#define PYR 3
 #define kNN 12
 #define MAP_SIZE 1000000
 
@@ -1852,7 +1852,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
 
-    cuPyrGreyFlPrev.copyFrom(cuPyrGreyFlSmooth);
+    cuPyrGreyFlPrev.CopyFrom(cuPyrGreyFlSmooth);
     cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
     if (smoothGrey==2) {
       tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 1.);
@@ -1896,8 +1896,8 @@ int main( int argc, char* argv[] )
           for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
             maxIt[pyr] = SO3maxIt*(pyr-SO3minLvl)+1;
           }
-          PhotometricSO3::ComputeProjective(cuPyrGreyFlPrev,
-              cuPyrGreyFlSmooth, cuPyrGradGrey, cuPyrRay, maxIt,
+          tdp::PhotometricSO3::ComputeProjective(cuPyrGreyFlPrev,
+              cuPyrGreyFlSmooth, cuPyrGradGrey, cuPyrRay, cam, maxIt,
               gui.verbose, R_cp);
         } else {
           TICK("icp RGB");

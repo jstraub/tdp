@@ -235,6 +235,16 @@ struct SharedMemory <Vector10fda>
 };
 
 template <>
+struct SharedMemory <Vector11fda>
+{
+    __device__ Vector11fda *getPointer()
+    {
+        extern __shared__ Vector11fda s_vetor11fda[];
+        return s_vetor11fda;
+    }
+};
+
+template <>
 struct SharedMemory <Vector29fda>
 {
     __device__ Vector29fda *getPointer()

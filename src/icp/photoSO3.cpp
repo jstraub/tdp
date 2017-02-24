@@ -2,13 +2,13 @@
 #include <tdp/icp/photoSO3.h> 
 namespace tdp {
 
-template<typename CameraT>
+template<int D, typename Derived>
 void PhotometricSO3::ComputeProjective(
     Pyramid<float,3>& grey_p,
     Pyramid<float,3>& grey_c,
     Pyramid<Vector2fda,3>& gradGrey_c,
     Pyramid<Vector3fda,3>& rays,
-    const CameraBase<float,D,Derived> cam,
+    const CameraBase<float,D,Derived>& cam,
     const std::vector<size_t>& maxIt, 
     bool verbose,
     SO3f& R_cp
@@ -33,7 +33,7 @@ void PhotometricSO3::ComputeProjective(
       CameraBase<float,D,Derived> camLvl = cam.Scale(scale);
 
       // Compute ATA and ATb from A x = b
-      ICPStep(grey_pl, grey_cl, gradGrey_cl, rays_l, R_cp, camLvl,
+      SO3TextureStep(grey_pl, grey_cl, gradGrey_cl, rays_l, R_cp, camLvl,
           ATA,ATb,error,count);
       if (count < 4) {
         std::cout << "# inliers " << count << " to small " << std::endl;
@@ -60,7 +60,7 @@ void PhotometricSO3::ComputeProjective(
   }
 }
 
-template<typename CameraT>
+template
 void PhotometricSO3::ComputeProjective(
     Pyramid<float,3>& grey_p,
     Pyramid<float,3>& grey_c,
@@ -72,7 +72,7 @@ void PhotometricSO3::ComputeProjective(
     SO3f& R_cp
   );
 
-template<typename CameraT>
+template
 void PhotometricSO3::ComputeProjective(
     Pyramid<float,3>& grey_p,
     Pyramid<float,3>& grey_c,

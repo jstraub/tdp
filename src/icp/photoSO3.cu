@@ -13,7 +13,8 @@
 #include <tdp/reductions/reductions.cuh>
 #include <tdp/manifold/SO3.h>
 #include <tdp/cuda/cuda.cuh>
-#include <tdp/icp/photoSO3.h>
+//#include <tdp/icp/icp.cuh>
+//#include <tdp/icp/photoSO3.h>
 
 namespace tdp {
 
@@ -25,7 +26,7 @@ __global__ void KernelSO3TextureStep(
     Image<Vector2fda> gradGrey_c,
     Image<Vector3fda> rays,
     SO3f R_cp, 
-    const CameraBase<float,D,Derived> cam,
+    CameraBase<float,D,Derived> cam,
     int N_PER_T,
     Image<float> out
     ) {
@@ -33,7 +34,7 @@ __global__ void KernelSO3TextureStep(
   const int tid = threadIdx.x;
   const int idx = threadIdx.x + blockDim.x * blockIdx.x;
   const int idS = idx*N_PER_T;
-  const int N = grey_p.w_*gray_p.h_;
+  const int N = grey_p.w_*grey_p.h_;
   const int idE = min(N,(idx+1)*N_PER_T);
 
   SharedMemory<Vector11fda> smem;
@@ -43,25 +44,24 @@ __global__ void KernelSO3TextureStep(
   for (int id=idS; id<idE; ++id) {
     const int u = id%grey_p.w_;
     const int v = id/grey_p.w_;
-    tdp::Vector3fda ray_c = R_cp*ray(u,v);
+    tdp::Vector3fda ray_c = R_cp*rays(u,v);
     tdp::Vector2fda x = cam.Project(ray_c);
     if (grey_p.Inside(x)) {
-        float ab[4];      
-        Eigen::Map<Vector3fda> Ai(&(ab[0]));
-        Ai = -(R_cp.matrix()*SO3mat<float>::invVee(ray(u,v))).transpose()*
-          cam.Jproject(ray_c).transpose() * gradGrey_c.GetBiliear(x);
-        ab[3] = -grey_c.GetBilinear(x) + grey_p(u,v);
-        Eigen::Matrix<float,11,1,Eigen::DontAlign> upperTriangle;
-        int k=0;
+      float ab[4];      
+      Eigen::Map<Vector3fda> Ai(&(ab[0]));
+      Ai = -(R_cp.matrix()*SO3mat<float>::invVee(rays(u,v))).transpose()*
+        cam.Jproject(ray_c).transpose() * gradGrey_c.GetBilinear(x);
+      ab[3] = -grey_c.GetBilinear(x) + grey_p(u,v);
+      Eigen::Matrix<float,11,1,Eigen::DontAlign> upperTriangle;
+      int k=0;
 #pragma unroll
-        for (int i=0; i<4; ++i) {
-          for (int j=i; j<4; ++j) {
-            upperTriangle(k++) = ab[i]*ab[j];
-          }
+      for (int i=0; i<4; ++i) {
+        for (int j=i; j<4; ++j) {
+          upperTriangle(k++) = ab[i]*ab[j];
         }
-        upperTriangle(10) = 1.; // to get number of data points
-        sum[tid] += upperTriangle;
       }
+      upperTriangle(10) = 1.; // to get number of data points
+      sum[tid] += upperTriangle;
     }
   }
   __syncthreads(); //sync the threads
@@ -79,13 +79,13 @@ __global__ void KernelSO3TextureStep(
 }
 
 template<int D, typename Derived>
-void ICPStep (
+void SO3TextureStep (
     Image<float> grey_p,
     Image<float> grey_c,
     Image<Vector2fda> gradGrey_c,
     Image<Vector3fda> rays,
     SO3f R_cp, 
-    const CameraBase<float,D,Derived> cam,
+    const CameraBase<float,D,Derived>& cam,
     Eigen::Matrix<float,3,3,Eigen::DontAlign>& ATA,
     Eigen::Matrix<float,3,1,Eigen::DontAlign>& ATb,
     float& error,
@@ -98,10 +98,9 @@ void ICPStep (
   ManagedDeviceImage<float> out(11,1);
   cudaMemset(out.ptr_, 0, 11*sizeof(float));
 
-  KernelICPStep<BLK_SIZE,D,Derived><<<blocks,threads,
-    BLK_SIZE*sizeof(Vector11fda)>>>(
-        pc_m,n_m,gradGrey_m, grey_m, pc_o,n_o, gradGrey_o, grey_o,
-        T_mo,T_cm,cam, dotThr,distThr, lambda,2,out);
+  KernelSO3TextureStep<BLK_SIZE,D,Derived><<<blocks,threads,
+    BLK_SIZE*sizeof(Vector11fda)>>>( grey_p, grey_c, gradGrey_c, rays,
+        R_cp, cam, 2, out);
   checkCudaErrors(cudaDeviceSynchronize());
   ManagedHostImage<float> sumAb(11,1);
   cudaMemcpy(sumAb.ptr_,out.ptr_,11*sizeof(float), cudaMemcpyDeviceToHost);
@@ -128,9 +127,7 @@ void ICPStep (
   //std::cout << "\terror&count " << error << " " << count << std::endl;
 }
 
-// explicit instantiation
-template<int D, typename Derived>
-void ICPStep (
+template void SO3TextureStep (
     Image<float> grey_p,
     Image<float> grey_c,
     Image<Vector2fda> gradGrey_c,
@@ -142,8 +139,7 @@ void ICPStep (
     float& error,
     float& count
     );
-template<int D, typename Derived>
-void ICPStep (
+template void SO3TextureStep (
     Image<float> grey_p,
     Image<float> grey_c,
     Image<Vector2fda> gradGrey_c,
@@ -155,6 +151,32 @@ void ICPStep (
     float& error,
     float& count
     );
+
+// explicit instantiation
+//template void SO3TextureStep (
+//    Image<float> grey_p,
+//    Image<float> grey_c,
+//    Image<Vector2fda> gradGrey_c,
+//    Image<Vector3fda> rays,
+//    SO3f R_cp, 
+//    const CameraBase<float,Camera<float>::NumParams,Camera<float>>& cam,
+//    Eigen::Matrix<float,3,3,Eigen::DontAlign>& ATA,
+//    Eigen::Matrix<float,3,1,Eigen::DontAlign>& ATb,
+//    float& error,
+//    float& count
+//    );
+//template void SO3TextureStep (
+//    Image<float> grey_p,
+//    Image<float> grey_c,
+//    Image<Vector2fda> gradGrey_c,
+//    Image<Vector3fda> rays,
+//    SO3f R_cp, 
+//    const CameraBase<float,CameraPoly3<float>::NumParams,CameraPoly3<float>>& cam,
+//    Eigen::Matrix<float,3,3,Eigen::DontAlign>& ATA,
+//    Eigen::Matrix<float,3,1,Eigen::DontAlign>& ATb,
+//    float& error,
+//    float& count
+//    );
 
 
 }

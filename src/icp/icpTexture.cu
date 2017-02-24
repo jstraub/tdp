@@ -17,7 +17,6 @@
 
 namespace tdp {
 
-
 // T_mc: R_model_observation
 template<int BLK_SIZE, int D, typename Derived>
 __global__ void KernelICPStep(
