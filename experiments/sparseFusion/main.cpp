@@ -1912,7 +1912,6 @@ int main( int argc, char* argv[] )
             Ai = Eigen::Matrix<float,3,1>::Zero();
             float err = 0.;
 //            float H = 1e10;
-            tdp::SE3f T_cw = T_wc.Inverse();
             for (int32_t uP=0; uP<floor(w*scale); ++uP) {
               for (int32_t vP=0; vP<floor(h*scale); ++vP) {
 //                std::cout << uP << "," << vP << " " << floor(w*scale) << " " << floor(h*scale) << " "

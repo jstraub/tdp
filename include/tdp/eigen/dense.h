@@ -12,6 +12,7 @@ typedef Eigen::Matrix<uint8_t,3,1,Eigen::DontAlign> Vector3bda;
 
 
 typedef Eigen::Matrix<float,29,1,Eigen::DontAlign> Vector29fda;
+typedef Eigen::Matrix<float,11,1,Eigen::DontAlign> Vector11fda;
 typedef Eigen::Matrix<float,10,1,Eigen::DontAlign> Vector10fda;
 typedef Eigen::Matrix<float,7,1,Eigen::DontAlign> Vector7fda;
 typedef Eigen::Matrix<float,6,1,Eigen::DontAlign> Vector6fda;
