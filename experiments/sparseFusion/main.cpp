@@ -1255,6 +1255,8 @@ int main( int argc, char* argv[] )
   tbo.Upload(ts.ptr_, ts.SizeBytes(), 0);
   vboEst_w.Upload(pcEst_w.ptr_, pcEst_w.SizeBytes(), 0);
 
+  tdp::ManagedHostCircularBuffer<uint8_t> nnFixed(MAP_SIZE);
+  nnFixed.Fill(0);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
@@ -1297,41 +1299,45 @@ int main( int argc, char* argv[] )
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead > 0) {
-        values.fill(std::numeric_limits<float>::max());
-        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        tdp::VectorkNNida& ids = nn[iReadNext];
-        tdp::VectorkNNida idsPrev = ids;
-        ids = tdp::VectorkNNida::Ones()*(-1);
-        for (int32_t i=0; i<sizeToRead; ++i) {
-          if (i != iReadNext) {
-            float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
-            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
-//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
+        if (nnFixed[iReadNext] < kNN) {
+          values.fill(std::numeric_limits<float>::max());
+          tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+          tdp::VectorkNNida& ids = nn[iReadNext];
+          tdp::VectorkNNida idsPrev = ids;
+          ids = tdp::VectorkNNida::Ones()*(-1);
+          for (int32_t i=0; i<sizeToRead; ++i) {
+            if (i != iReadNext) {
+              float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
+              tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
+  //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
+            }
           }
-        }
-        // for map constraints
-        // TODO: should be updated as pairs are reobserved
-        for (int32_t i=0; i<kNN; ++i) {
-//            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-//            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-//            mapObsNum[iReadNext][i] = 1;
-          if (ids(i) != idsPrev(i)) {
-            mapObsDot[iReadNext][i] = 0.;
-            mapObsP2Pl[iReadNext][i] = 0.;
-            mapObsNum[iReadNext][i] = 0.;
-//            std::cout << "resetting " << iReadNext << " " << i << std::endl;
+          // for map constraints
+          // TODO: should be updated as pairs are reobserved
+          nnFixed[iReadNext] = kNN;
+          for (int32_t i=0; i<kNN; ++i) {
+  //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+  //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+  //            mapObsNum[iReadNext][i] = 1;
+            if (ids(i) != idsPrev(i)) {
+              mapObsDot[iReadNext][i] = 0.;
+              mapObsP2Pl[iReadNext][i] = 0.;
+              mapObsNum[iReadNext][i] = 0.;
+  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
+            }
+            if (values(i) > 0.01) {
+              ids(i) = -1;
+              nnFixed[iReadNext]-- ;
+            }
           }
-          if (values(i) > 0.01) {
-            ids(i) = -1;
+          // just for visualization
+          if (mapNN.size() < kNN*iReadNext) {
+            for (int32_t i=0; i<kNN; ++i) 
+              mapNN.emplace_back(iReadNext, ids(i));
+          } else {
+            for (int32_t i=0; i<kNN; ++i) 
+              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
           }
-        }
-        // just for visualization
-        if (mapNN.size() < kNN*iReadNext) {
-          for (int32_t i=0; i<kNN; ++i) 
-            mapNN.emplace_back(iReadNext, ids(i));
-        } else {
-          for (int32_t i=0; i<kNN; ++i) 
-            mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
         }
         iReadNext = (iReadNext+1)%sizeToRead;
         {
