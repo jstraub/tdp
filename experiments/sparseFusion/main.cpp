@@ -25,10 +25,7 @@
 #include <tdp/gl/gl_draw.h>
 #include <tdp/gui/gui_base.hpp>
 #include <tdp/gui/quickView.h>
-#include <tdp/icp/icp.h>
-#include <tdp/icp/icpRot.h>
-#include <tdp/icp/icpGrad3d.h>
-#include <tdp/icp/icpTexture.h>
+#include <tdp/icp/photoSO3.h>
 #include <tdp/manifold/SE3.h>
 #include <tdp/nvidia/helper_cuda.h>
 #include <tdp/preproc/depth.h>
@@ -1071,6 +1068,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedDeviceImage<uint8_t> cuGrey(wc, hc);
   tdp::ManagedDeviceImage<float> cuGreyFl(wc,hc);
   tdp::ManagedHostImage<float> pyrGreyFlImg(3*wc/2, hc); 
+  tdp::ManagedDevicePyramid<float,PYR> cuPyrGreyFlPrev(wc,hc);
   tdp::ManagedDevicePyramid<float,PYR> cuPyrGreyFlSmooth(wc,hc);
   tdp::Image<float> cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
   tdp::ManagedDeviceImage<float> cuGreyGradNorm(wc,hc);
@@ -1188,6 +1186,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
 
   pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
+  pangolin::Var<bool> useGpuPrealign("ui.GPU prealign",false,true);
   pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
   pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-6.,-10.,0.);
   pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
@@ -1853,6 +1852,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
 
+    cuPyrGreyFlPrev.copyFrom(cuPyrGreyFlSmooth);
     cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
     if (smoothGrey==2) {
       tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 1.);
@@ -1889,58 +1889,68 @@ int main( int argc, char* argv[] )
     trackingGood = false;
     if (frame > 1 && runTracking && !gui.finished()) { // tracking
       if (doSO3prealign) {
-        if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
-        TICK("icp RGB");
-        Eigen::Matrix<float,3,3> A;
-        Eigen::Matrix<float,3,1> b;
-        Eigen::Matrix<float,3,1> Ai;
         tdp::SO3f R_cp;
-        for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
-          float scale = pow(0.5,pyr);
-          CameraT camLvl = cam.Scale(scale);
-          tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
-          tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
-          tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
-          tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
-          if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
-          for (size_t it = 0; it < SO3maxIt*(pyr-SO3minLvl)+1; ++it) {
-            numInl = 0;
-//            for (auto& ass : assoc) mask[ass.second] = 0;
-//            assoc.clear();
-            A = Eigen::Matrix<float,3,3>::Zero();
-            b = Eigen::Matrix<float,3,1>::Zero();
-            Ai = Eigen::Matrix<float,3,1>::Zero();
-            float err = 0.;
-//            float H = 1e10;
-            for (int32_t uP=0; uP<floor(w*scale); ++uP) {
-              for (int32_t vP=0; vP<floor(h*scale); ++vP) {
-//                std::cout << uP << "," << vP << " " << floor(w*scale) << " " << floor(h*scale) << " "
-//                  << rayLvl.Description() << std::endl;
-                tdp::Vector2fda x = camLvl.Project(R_cp*rayLvl(uP,vP));
-                if (gradGreyLvl.Inside(x)) {
-                  AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x),
-                      gradGreyLvl.GetBilinear(x),
-                      rayLvl(uP,vP), greyFlPrevLvl(uP,vP), A, Ai, b, err);
-                  numInl = numInl +1;
+        if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
+        if (useGpuPrealign) {
+          std::vector<size_t> maxIt(PYR, 0);
+          for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
+            maxIt[pyr] = SO3maxIt*(pyr-SO3minLvl)+1;
+          }
+          PhotometricSO3::ComputeProjective(cuPyrGreyFlPrev,
+              cuPyrGreyFlSmooth, cuPyrGradGrey, cuPyrRay, maxIt,
+              gui.verbose, R_cp);
+        } else {
+          TICK("icp RGB");
+          Eigen::Matrix<float,3,3> A;
+          Eigen::Matrix<float,3,1> b;
+          Eigen::Matrix<float,3,1> Ai;
+          for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
+            float scale = pow(0.5,pyr);
+            CameraT camLvl = cam.Scale(scale);
+            tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
+            tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
+            tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
+            tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
+            if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
+            for (size_t it = 0; it < SO3maxIt*(pyr-SO3minLvl)+1; ++it) {
+              numInl = 0;
+  //            for (auto& ass : assoc) mask[ass.second] = 0;
+  //            assoc.clear();
+              A = Eigen::Matrix<float,3,3>::Zero();
+              b = Eigen::Matrix<float,3,1>::Zero();
+              Ai = Eigen::Matrix<float,3,1>::Zero();
+              float err = 0.;
+  //            float H = 1e10;
+              for (int32_t uP=0; uP<floor(w*scale); ++uP) {
+                for (int32_t vP=0; vP<floor(h*scale); ++vP) {
+  //                std::cout << uP << "," << vP << " " << floor(w*scale) << " " << floor(h*scale) << " "
+  //                  << rayLvl.Description() << std::endl;
+                  tdp::Vector2fda x = camLvl.Project(R_cp*rayLvl(uP,vP));
+                  if (gradGreyLvl.Inside(x)) {
+                    AccumulatePhotoSO3only(R_cp, camLvl, greyFlLvl.GetBilinear(x),
+                        gradGreyLvl.GetBilinear(x),
+                        rayLvl(uP,vP), greyFlPrevLvl(uP,vP), A, Ai, b, err);
+                    numInl = numInl +1;
+                  }
                 }
               }
+              // solve for x using ldlt
+              Eigen::Matrix<float,3,1> x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
+              R_cp = R_cp * tdp::SO3f::Exp_(scale*x);
+  //            bool term = (x.norm()*180./M_PI < icpdRThr
+  //                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
+  //                  SO3negLogEvThr, H, gui.verbose));
+              if (gui.verbose) {
+                std::cout << "\tit " << it << ": err=" << err 
+  //                << "\tH: " << H 
+                  << "\t# inliers: " << numInl
+                  << "\t|x|: " << x.norm()*180./M_PI << std::endl;
+              }
+  //            if (term) break;
             }
-            // solve for x using ldlt
-            Eigen::Matrix<float,3,1> x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-            R_cp = R_cp * tdp::SO3f::Exp_(scale*x);
-//            bool term = (x.norm()*180./M_PI < icpdRThr
-//                && tdp::CheckEntropyTermination(A, Hprev, SO3HThr, 0.f,
-//                  SO3negLogEvThr, H, gui.verbose));
-            if (gui.verbose) {
-              std::cout << "\tit " << it << ": err=" << err 
-//                << "\tH: " << H 
-                << "\t# inliers: " << numInl
-                << "\t|x|: " << x.norm()*180./M_PI << std::endl;
-            }
-//            if (term) break;
           }
+          TOCK("icp RGB");
         }
-        TOCK("icp RGB");
         T_wc.rotation() = T_wc.rotation() * R_cp.Inverse();
       }
       mask.Fill(0);
