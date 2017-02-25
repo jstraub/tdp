@@ -35,7 +35,7 @@ void main() {
     color = vec4(b/255., g/255., r/255., 1.);
   } else {
     gl_Position = vec4(999,999,999,1);
-    color = vec4(0,0,0,0);
+    color = vec4(0,0,0,1);
   }
 }
 

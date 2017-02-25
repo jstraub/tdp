@@ -1217,17 +1217,19 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
   pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
   pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
-  pangolin::Var<float> lambdaRegPl("mapPanel.lamb Reg Pl",0.01,0.01,10.);
-  pangolin::Var<float> lambdaRegPc0("mapPanel.lamb Reg Pc0",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
+  pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
+  pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",10.,0.0,200.);
+  pangolin::Var<float> sigmaPc0("mapPanel.lamb Reg Pc0",10.,0.01,1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
   pangolin::Var<int> maxIt0("ui.max iter 0",10, 1, 20);
-  pangolin::Var<int> maxIt1("ui.max iter 1",3, 1, 20);
+  pangolin::Var<int> maxIt1("ui.max iter 1",7, 1, 20);
   pangolin::Var<int> maxIt2("ui.max iter 2",5, 1, 20);
-  pangolin::Var<int> maxIt3("ui.max iter 3",7, 1, 20);
+  pangolin::Var<int> maxIt3("ui.max iter 3",5, 1, 20);
   pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",1, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
@@ -1248,6 +1250,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
   pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-4.,-12.,-1.);
+  pangolin::Var<float> dPyrHThr("ui.d Pyr H Thr",4.,0.,8.);
+  pangolin::Var<float> dPyrNewLogEvHThr("ui.d Pyr H Thr",1.,0.,3.);
+  pangolin::Var<float> dPyrdAlpha("ui.d Pyr dAlpha",0.9,0.1,1.);
   pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
   pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
   pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
@@ -1441,7 +1446,6 @@ int main( int argc, char* argv[] )
   std::mutex vmfsLock;
   std::mt19937 rnd(910481);
   float logAlpha = log(.1);
-  float tauO = 100.;
 //  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
   Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
@@ -1487,6 +1491,7 @@ int main( int argc, char* argv[] )
             mu += vmfs[zi].mu_*vmfs[zi].tau_;
           }
           ni = vMF<float,3>(mu).sample(rnd);
+          pl_w[i].n_ = ni;
         } else {
           ni = pl_w[i].n_;
         }
@@ -1640,7 +1645,7 @@ int main( int argc, char* argv[] )
         }
       }
       if (doRegPc0) {
-        Jp += -lambdaRegPc0*(pc0_w[i] - pl.p_);
+        Jp += -1./(sigmaPc0*sigmaPc0)*(pc0_w[i] - pl.p_);
       }
       if (doRegAbsPc) {
         Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
@@ -1658,14 +1663,14 @@ int main( int argc, char* argv[] )
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
               if (pl.z_ == plO.z_) {
-                Jp += -lambdaRegPl*tau*(pl.p2plDist(plO.p_))*pl.n_;
-                Jn +=  lambdaRegPl*tau*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
+                Jp += -1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
+                Jn +=  1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
               }
             }
             if (doRegRelNZ) {
               if (pl.z_ == plO.z_) {
 //                Jn +=  2.*lambdaRegPl*tau*(pl.n_ - plO.n_);
-                Jn += -lambdaRegPl*tau*plO.n_;
+                Jn += -tauP*plO.n_;
               }
             }
             if (mapObsNum[i](j) > 0.) {
@@ -1707,7 +1712,8 @@ int main( int argc, char* argv[] )
 //      tdp::Vector3fda& Jp = Jp_w[i];
       {
         std::lock_guard<std::mutex> mapGuard(mapLock);
-        pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
+        if (!sampleNormals) 
+          pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
         if (haveFullNeighborhood &&  doVariationalUpdate) {
           pl.p_ = pmu;
         } else {
@@ -2103,9 +2109,6 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
-          std::cout << nLvl.Description() << std::endl;
-          std::cout << pcLvl.Description() << std::endl;
-          std::cout << dLvl.Description() << std::endl;
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
@@ -2121,7 +2124,6 @@ int main( int argc, char* argv[] )
             // associate new data until enough
             bool exploredAll = false;
             uint32_t k = 0;
-            std::cout << invInd[pyr]->size() << std::endl;
             while (assoc.size() < 3000 && !exploredAll) {
               k = (k+1) % invInd[pyr]->size();
               while (indK[k] < invInd[pyr]->at(k).size()) {
@@ -2190,8 +2192,8 @@ int main( int argc, char* argv[] )
                 break;
               }
               if (k == 0) {
-                if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
-                      negLogEvThr, H, gui.verbose))
+                if (tdp::CheckEntropyTermination(A, Hprev, HThr+pyr*dPyrHThr, condEntropyThr, 
+                      negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose))
                   break;
                 Hprev = H;
               }
@@ -2203,7 +2205,7 @@ int main( int argc, char* argv[] )
             if (assoc.size() > 6) { // solve for x using ldlt
               //            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
               x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-              T_wc = T_wc * tdp::SE3f::Exp_(x);
+              T_wc = T_wc * tdp::SE3f::Exp_(x*pow(dPyrdAlpha,pyr));
             }
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
@@ -2211,22 +2213,21 @@ int main( int argc, char* argv[] )
                 << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
                 << " " <<  x.bottomRows(3).norm() << std::endl;
             }
-            if ( tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
-                  negLogEvThr, H, gui.verbose)
-                && x.topRows<3>().norm()*180./M_PI < icpdRThr
-                && x.bottomRows<3>().norm() < icpdtThr) {
+            if (x.topRows<3>().norm()*180./M_PI < icpdRThr
+                && x.bottomRows<3>().norm() < icpdtThr
+                && tdp::CheckEntropyTermination(A, Hprev, HThr+pyr*dPyrHThr, 0.f,
+                  negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose)) {
               break;
             }
           }
-
-          if (gui.verbose) {
-            for (size_t k=0; k<invInd[pyr]->size(); ++k) {
-              if (invInd[pyr]->at(k).size() > 0 )
-                std::cout << "used different directions " << k << "/" 
-                  << invInd[pyr]->size() << ": " << indK[k] 
-                  << " of " << invInd[pyr]->at(k).size() << std::endl;
-            }
-          }
+//          if (gui.verbose) {
+//            for (size_t k=0; k<invInd[pyr]->size(); ++k) {
+//              if (invInd[pyr]->at(k).size() > 0 )
+//                std::cout << "used different directions " << k << "/" 
+//                  << invInd[pyr]->size() << ": " << indK[k] 
+//                  << " of " << invInd[pyr]->at(k).size() << std::endl;
+//            }
+//          }
         }
         logObs.Log(log(assoc.size())/log(10.), 
             log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
@@ -2279,6 +2280,7 @@ int main( int argc, char* argv[] )
           pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
               + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
           pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + greyFl(u,v)) / (w+1);
+          pl_w[ass.first].gradNorm_ = (pl_w[ass.first].gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
                 + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
           pcSum_w[ass.first] = (pcSum_w[ass.first]*w + pc_c_in_w)/(w+1.);
