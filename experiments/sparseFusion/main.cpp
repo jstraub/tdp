@@ -1067,7 +1067,7 @@ int main( int argc, char* argv[] )
   tdp::QuickView viewD(3*wc/2, hc);
   containerTracking.AddDisplay(viewD);
 
-  tdp::QuickView viewMask(wc, hc);
+  tdp::QuickView viewMask(3*wc/2, hc);
   containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
 
@@ -1135,10 +1135,13 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<uint16_t> cuDraw(wc, hc);
 
-  tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
-  tdp::ManagedHostImage<uint8_t> mask(wc, hc);
-  tdp::ManagedHostImage<uint8_t> maskDisp(wc, hc);
-  tdp::ManagedHostImage<uint32_t> z(w, h);
+  tdp::ManagedHostPyramid<uint8_t,PYR> pyrMask(wc, hc);
+  tdp::Image<uint8_t> mask = pyrMask.GetImage(0);
+  tdp::ManagedHostPyramid<uint8_t,PYR> pyrMaskDisp(wc, hc);
+  tdp::ManagedHostImage<uint8_t> pyrMaskImg(3*wc/2, hc);
+
+  tdp::ManagedHostPyramid<uint32_t,PYR> pyrZ(w, h);
+  tdp::Image<uint32_t> z = pyrZ.GetImage(0);
 
   tdp::ManagedHostImage<float> age(MAP_SIZE);
 
@@ -1378,10 +1381,8 @@ int main( int argc, char* argv[] )
         if (nnFixed[iReadNext] < kNN) {
           tdp::Plane& pl = pl_w.GetCircular(iReadNext);
           if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
-            pl.p_ = tdp::Vector3fda(NAN,NAN,NAN); 
-            pl.n_ = tdp::Vector3fda(NAN,NAN,NAN); 
-            pc_w[iReadNext] = pl.p_;
-            n_w[iReadNext]  = pl.n_;
+            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
             pl.valid_ = false;
           }
           values.fill(std::numeric_limits<float>::max());
@@ -1474,6 +1475,8 @@ int main( int argc, char* argv[] )
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         uint16_t& zi = zS[i];
         tdp::Vector3fda& ni = nS[i];
+        if (!pl_w[i].valid_)
+          continue;
         if (sampleNormals) {
           //tdp::plane& pl = pl_w[i];
           //eigen::vector3f mu = pl.w_*pl.n_*tauo;
@@ -1651,7 +1654,7 @@ int main( int argc, char* argv[] )
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood) {
         for (int j=0; j<kNN; ++j) {
-          if (ids[j] > -1){
+          if (ids[j] > -1 && pl_w[ids[j]].valid_){
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
               if (pl.z_ == plO.z_) {
@@ -1684,7 +1687,7 @@ int main( int argc, char* argv[] )
   //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
           Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
           for (int i=0; i<kNN; ++i) {
-            if (ids[i] > -1) {
+            if (ids[i] > -1 && pl_w[ids[i]].valid_) {
 //              && zS[ids[i]] < Ksample ) {
 //              SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
               SigmaPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
@@ -1727,7 +1730,10 @@ int main( int argc, char* argv[] )
   std::vector<std::pair<size_t, size_t>> assoc;
   assoc.reserve(10000);
 
-  std::vector<std::vector<uint32_t>> invInd;
+  std::vector<std::vector<std::vector<uint32_t>>*> invInd;
+  for (size_t lvl=0; lvl<PYR; ++lvl) {
+    invInd.push_back(new std::vector<std::vector<uint32_t>>());
+  }
   std::vector<size_t> id_w;
   id_w.reserve(MAP_SIZE);
 
@@ -1737,9 +1743,12 @@ int main( int argc, char* argv[] )
   std::vector<uint32_t> idNew;
   idNew.reserve(w*h);
 
-  mask.Fill(0);
-  std::vector<uint32_t> idsCur;
-  idsCur.reserve(w*h);
+  pyrMask.Fill(0);
+  std::vector<std::vector<uint32_t>*> idsCur;
+  for (size_t lvl=0; lvl<PYR; ++lvl) {
+    idsCur.push_back(new std::vector<uint32_t>());
+    idsCur.back()->reserve(w*h);
+  }
 
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
@@ -1789,12 +1798,14 @@ int main( int argc, char* argv[] )
       TOCK("data assoc");
       TICK("extract assoc");
 //      z.Fill(0);
-      idsCur.clear();
+      for (size_t lvl=0; lvl<PYR; ++lvl) idsCur[lvl]->clear();
 //      projAssoc.GetAssoc(z, mask, idsCur);
-      projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
-          occlusionDepthThr, z, mask, idsCur);
+//      projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
+//          occlusionDepthThr, z, mask, idsCur);
+      projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
+          occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
       TOCK("extract assoc");
-      maskDisp.CopyFrom(mask);
+      pyrMaskDisp.CopyFrom(pyrMask);
 
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
@@ -1821,7 +1832,7 @@ int main( int argc, char* argv[] )
           numSum_w[i] = 1;
           normSum_w[i] = 1;
           pcEst_w[i] = pcSum_w[i];
-          idsCur.emplace_back(i);
+          idsCur[0]->emplace_back(i);
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1838,77 +1849,96 @@ int main( int argc, char* argv[] )
           ts.SizeToRead(iReadCurW)*sizeof(uint16_t),
           iReadCurW*sizeof(int16_t));
 
-      std::random_shuffle(idsCur.begin(), idsCur.end());
-      std::cout << " projected " << idsCur.size() << " of " << pl_w.SizeToRead() << std::endl;
+      for (size_t lvl=0; lvl<PYR; ++lvl) {
+        std::random_shuffle(idsCur[lvl]->begin(), idsCur[lvl]->end());
+        std::cout << "@" << lvl <<  " lvl projected " 
+          << idsCur[lvl]->size() 
+          << " of " << pl_w.SizeToRead() << std::endl;
+      }
 
       TOCK("add to model");
       numMapPoints = pl_w.SizeToRead();
       TICK("inverseIndex");
       {
         std::lock_guard<std::mutex> lockZs(zsLock);
-        for (size_t k=0; k<K+1; ++k) {
-          if (k >= invInd.size()) {
-            invInd.push_back(std::vector<uint32_t>());
-            invInd.back().reserve(3000);
-          } else {
-            invInd[k].clear();
+        for (size_t lvl=0; lvl<PYR; ++lvl) {
+          for (size_t k=0; k<K+1; ++k) {
+            if (k >= invInd[lvl]->size()) {
+              invInd[lvl]->push_back(std::vector<uint32_t>());
+              invInd[lvl]->back().reserve(3000);
+            } else {
+              invInd[lvl]->at(k).clear();
+            }
           }
         }
         if (semanticObsSelect && frame > 10) {
           if (pruneAssocByRender) {
             // only use ids that were found by projecting into the current pose
-            for (auto i : idsCur) {
-              uint32_t k = pl_w[i].z_;
-              if (invInd[k].size() < 3000)
-                invInd[k].push_back(i);
+            for (size_t lvl=0; lvl<PYR; ++lvl) {
+              for (auto i : *idsCur[lvl]) {
+                uint32_t k = pl_w[i].z_;
+                if (invInd[lvl]->at(k).size() < 3000)
+                  invInd[lvl]->at(k).push_back(i);
+              }
             }
           } else {      
             id_w.resize(pl_w.SizeToRead());
             std::iota(id_w.begin(), id_w.end(), 0);
             std::random_shuffle(id_w.begin(), id_w.end());
             // use all ids in the current map
-            for (auto i : id_w) {
-              uint32_t k = pl_w[i].z_;
-              if (invInd[k].size() < 3000)
-                invInd[k].push_back(i);
+            for (size_t lvl=0; lvl<PYR; ++lvl) {
+              for (auto i : id_w) {
+                uint32_t k = pl_w[i].z_;
+                if (invInd[lvl]->at(k).size() < 3000)
+                  invInd[lvl]->at(k).push_back(i);
+              }
             }
           }
         } else {
           uint32_t k = 0;
           if (pruneAssocByRender) {
             // only use ids that were found by projecting into the current pose
-            for (auto i : idsCur) {
-              if (invInd[k].size() < 3000)
-                invInd[k].push_back(i);
-              k = (k+1)%invInd.size();
+            for (size_t lvl=0; lvl<PYR; ++lvl) {
+              for (auto i : *idsCur[lvl]) {
+                if (invInd[lvl]->at(k).size() < 3000)
+                  invInd[lvl]->at(k).push_back(i);
+                k = (k+1)%invInd[lvl]->size();
+              }
             }
           } else {      
             id_w.resize(pl_w.SizeToRead());
             std::iota(id_w.begin(), id_w.end(), 0);
             std::random_shuffle(id_w.begin(), id_w.end());
             // use all ids in the current map
-            for (auto i : id_w) {
-              if (invInd[k].size() < 3000)
-                invInd[k].push_back(i);
-              k = (k+1)%invInd.size();
+            for (size_t lvl=0; lvl<PYR; ++lvl) {
+              for (auto i : id_w) {
+                if (invInd[lvl]->at(k).size() < 3000)
+                  invInd[lvl]->at(k).push_back(i);
+                k = (k+1)%invInd[lvl]->size();
+              }
             }
           }
         }
         if (sortByGradient) {
           // TODO realy this should look at the current image? although
           // maybe not since that is not even propperly aligned yet 
-          for (size_t k=0; k<invInd.size(); ++k) {
-            std::sort(invInd[k].begin(), invInd[k].end(),
-                [&](uint32_t ida, uint32_t idb) {
-                  return pl_w[ida].gradNorm_ > pl_w[idb].gradNorm_;
-                });
+            for (size_t lvl=0; lvl<PYR; ++lvl)
+              for (size_t k=0; k<invInd[lvl]->size(); ++k) {
+                std::sort(invInd[lvl]->at(k).begin(), invInd[lvl]->at(k).end(),
+                    [&](uint32_t ida, uint32_t idb) {
+                    return pl_w[ida].gradNorm_ > pl_w[idb].gradNorm_;
+                    });
           }
         }
       }
-      std::cout << " inverse index " << invInd.size() 
-        << " " << idsCur.size() << " " << id_w.size() << std::endl;
-      for (size_t k=0; k<invInd.size(); ++k) std::cout << invInd[k].size() << " ";
-      std::cout << std::endl;
+      std::cout << " inverse index " << invInd.size()  << std::endl;
+      for (size_t lvl=0; lvl<PYR; ++lvl) {
+        std::cout << "@" << lvl << " lvl: " << idsCur[lvl]->size() << " " << id_w.size() << std::endl;
+        std::cout << "      ";
+        for (size_t k=0; k<invInd[lvl]->size(); ++k) 
+          std::cout << invInd[lvl]->at(k).size() << " ";
+        std::cout << std::endl;
+      }
       TOCK("inverseIndex");
     }
 
@@ -2053,7 +2083,7 @@ int main( int argc, char* argv[] )
         }
         T_wc.rotation() = T_wc.rotation() * R_cp.Inverse();
       }
-      mask.Fill(0);
+      pyrMask.Fill(0);
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
         TICK("icp");
@@ -2062,7 +2092,7 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,6,1> Ai;
         std::vector<uint32_t> maxItLvl = {maxIt0, maxIt1, maxIt2, maxIt3};
         for (int32_t pyr=ICPmaxLvl; pyr>=0; --pyr) {
-          std::vector<size_t> indK(invInd.size(),0);
+          std::vector<size_t> indK(invInd[pyr]->size(),0);
           float dotThr = cos(angleThr*M_PI/180.);
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
@@ -2079,7 +2109,7 @@ int main( int argc, char* argv[] )
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
-            indK = std::vector<size_t>(invInd.size(),0);
+            indK = std::vector<size_t>(invInd[pyr]->size(),0);
             numProjected = 0;
             A = Eigen::Matrix<float,6,6>::Zero();
             b = Eigen::Matrix<float,6,1>::Zero();
@@ -2091,12 +2121,14 @@ int main( int argc, char* argv[] )
             // associate new data until enough
             bool exploredAll = false;
             uint32_t k = 0;
-            std::cout << invInd.size() << std::endl;
+            std::cout << invInd[pyr]->size() << std::endl;
             while (assoc.size() < 3000 && !exploredAll) {
-              k = (k+1) % invInd.size();
-              while (indK[k] < invInd[k].size()) {
-                size_t i = invInd[k][indK[k]++];
+              k = (k+1) % invInd[pyr]->size();
+              while (indK[k] < invInd[pyr]->at(k).size()) {
+                size_t i = invInd[pyr]->at(k)[indK[k]++];
                 tdp::Plane& pl = pl_w.GetCircular(i);
+                if (!pl.valid_)
+                  continue;
                 tdp::Vector3fda pc_w_in_c = T_cw*pl.p_;
                 Eigen::Vector2f x = camLvl.Project(pc_w_in_c);
 //                std::cout << x.transpose() << std::endl;
@@ -2164,7 +2196,7 @@ int main( int argc, char* argv[] )
                 Hprev = H;
               }
               exploredAll = true;
-              for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[k].size();
+              for (size_t k=0; k<indK.size(); ++k) exploredAll &= indK[k] >= invInd[pyr]->at(k).size();
             }
             numInl = assoc.size();
             Eigen::Matrix<float,6,1> x = Eigen::Matrix<float,6,1>::Zero();
@@ -2188,11 +2220,11 @@ int main( int argc, char* argv[] )
           }
 
           if (gui.verbose) {
-            for (size_t k=0; k<invInd.size(); ++k) {
-              if (invInd[k].size() > 0 )
+            for (size_t k=0; k<invInd[pyr]->size(); ++k) {
+              if (invInd[pyr]->at(k).size() > 0 )
                 std::cout << "used different directions " << k << "/" 
-                  << invInd.size() << ": " << indK[k] 
-                  << " of " << invInd[k].size() << std::endl;
+                  << invInd[pyr]->size() << ": " << indK[k] 
+                  << " of " << invInd[pyr]->at(k).size() << std::endl;
             }
           }
         }
@@ -2233,6 +2265,8 @@ int main( int argc, char* argv[] )
 //        size_t numNN = 0;
 //        tdp::SE3f T_cw = T_wc.Inverse();
         for (const auto& ass : assoc) {
+          if (!pl_w[ass.first].valid_)
+            continue;
 
           int32_t u = ass.second%pc.w_;
           int32_t v = ass.second/pc.w_;
@@ -2555,7 +2589,8 @@ int main( int argc, char* argv[] )
         viewD.SetImage(pyrDImg);
       }
       if (viewMask.IsShown()) {
-        viewMask.SetImage(maskDisp);
+        tdp::PyramidToImage(pyrMaskDisp, pyrMaskImg);
+        viewMask.SetImage(pyrMaskImg);
       }
     }
     if (!gui.finished() && plotters.IsShown()) {
@@ -2596,6 +2631,11 @@ int main( int argc, char* argv[] )
     }
   }
   out.close();
+
+  for (size_t lvl=0; lvl<PYR; ++lvl) {
+    delete idsCur[lvl];
+    delete invInd[lvl];
+  }
 
 //  imuInterp.Stop();
 //  if (imu) imu->Stop();
