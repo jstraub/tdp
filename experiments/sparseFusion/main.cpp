@@ -1168,8 +1168,11 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
-  pangolin::Var<int> maxIt("ui.max iter",15, 1, 20);
-  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",PYR-1, 0, PYR-1);
+  pangolin::Var<int> maxIt0("ui.max iter 0",10, 1, 20);
+  pangolin::Var<int> maxIt1("ui.max iter 1",3, 1, 20);
+  pangolin::Var<int> maxIt2("ui.max iter 2",5, 1, 20);
+  pangolin::Var<int> maxIt3("ui.max iter 3",7, 1, 20);
+  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",1, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
@@ -1700,8 +1703,8 @@ int main( int argc, char* argv[] )
     idNew.clear();
     if (!gui.paused() && !gui.finished()
         && frame > 0
-        && (runMapping || frame == 1) 
-        && (trackingGood || frame < 10)) { // add new observations
+        && runMapping
+        && (trackingGood || frame == 1)) { // add new observations
       std::cout << " adding new planes to map " << std::endl;
 
       // update mask only once to know where to insert new planes
@@ -1715,16 +1718,7 @@ int main( int argc, char* argv[] )
 //      projAssoc.GetAssoc(z, mask, idsCur);
       projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
           occlusionDepthThr, z, mask, idsCur);
-      std::random_shuffle(idsCur.begin(), idsCur.end());
-      std::cout << " projected " << idsCur.size() << " of " << pl_w.SizeToRead() << std::endl;
       TOCK("extract assoc");
-
-      size_t nOk = 0;
-      for (size_t i=0; i<pc.Area(); ++i) {
-        if (tdp::IsValidData(pc[i]))
-          nOk ++;
-      }
-      std::cout << " pc cointains  " << nOk << " ok points" << std::endl;
 
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
@@ -1751,6 +1745,7 @@ int main( int argc, char* argv[] )
           numSum_w[i] = 1;
           normSum_w[i] = 1;
           pcEst_w[i] = pcSum_w[i];
+          idsCur.emplace_back(i);
         }
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
@@ -1767,12 +1762,15 @@ int main( int argc, char* argv[] )
           ts.SizeToRead(iReadCurW)*sizeof(uint16_t),
           iReadCurW*sizeof(int16_t));
 
+      std::random_shuffle(idsCur.begin(), idsCur.end());
+      std::cout << " projected " << idsCur.size() << " of " << pl_w.SizeToRead() << std::endl;
+
       TOCK("add to model");
       numMapPoints = pl_w.SizeToRead();
       TICK("inverseIndex");
       {
         std::lock_guard<std::mutex> lockZs(zsLock);
-        for (size_t k=0; k<K; ++k) {
+        for (size_t k=0; k<K+1; ++k) {
           if (k >= invInd.size()) {
             invInd.push_back(std::vector<uint32_t>());
             invInd.back().reserve(3000);
@@ -1846,9 +1844,17 @@ int main( int argc, char* argv[] )
     pyrD.CopyFrom(cuPyrD);
     d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
+
+    tdp::SE3f T_rc;
+    for (size_t pyr=0; pyr<PYR; ++pyr) {
+      tdp::Image<float> cuDLvl = cuPyrD.GetImage(pyr);
+      tdp::Image<tdp::Vector3fda> cuPcLvl = cuPyrPc.GetImage(pyr);
+      CameraT camLvl = cam.Scale(pow(0.5,pyr));
+      tdp::Depth2PCGpu(cuDLvl, camLvl, T_rc, cuPcLvl);
+    }
     cuPc = cuPyrPc.GetImage(0);
-    rig.ComputePc(cuD, true, cuPc);
-    tdp::CompletePyramid(cuPyrPc);
+//    rig.ComputePc(cuD, true, cuPc);
+//    tdp::CompletePyramid(cuPyrPc);
 //    pc.CopyFrom(cuPyrPc.GetImage(0));
     pyrPc.CopyFrom(cuPyrPc);
     pc = pyrPc.GetImage(0);
@@ -1893,7 +1899,7 @@ int main( int argc, char* argv[] )
     TOCK("Setup");
 
     trackingGood = false;
-    if (frame > 1 && runTracking && !gui.finished()) { // tracking
+    if (frame > 0 && runTracking && !gui.finished()) { // tracking
       if (doSO3prealign) {
         tdp::SO3f R_cp;
         if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
@@ -1968,6 +1974,7 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,6,6> A;
         Eigen::Matrix<float,6,1> b;
         Eigen::Matrix<float,6,1> Ai;
+        std::vector<uint32_t> maxItLvl = {maxIt0, maxIt1, maxIt2, maxIt3};
         for (int32_t pyr=ICPmaxLvl; pyr>=0; --pyr) {
           std::vector<size_t> indK(invInd.size(),0);
           float dotThr = cos(angleThr*M_PI/180.);
@@ -1983,7 +1990,7 @@ int main( int argc, char* argv[] )
           std::cout << nLvl.Description() << std::endl;
           std::cout << pcLvl.Description() << std::endl;
           std::cout << dLvl.Description() << std::endl;
-          for (size_t it = 0; it < maxIt*pyr+1; ++it) {
+          for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
             indK = std::vector<size_t>(invInd.size(),0);
@@ -2059,8 +2066,8 @@ int main( int argc, char* argv[] )
                 break;
               }
               if (k == 0) {
-                if (tdp::CheckEntropyTermination(A, Hprev, HThr*scale, condEntropyThr/scale, 
-                      negLogEvThr*scale, H, gui.verbose))
+                if (tdp::CheckEntropyTermination(A, Hprev, HThr, condEntropyThr, 
+                      negLogEvThr, H, gui.verbose))
                   break;
                 Hprev = H;
               }
@@ -2072,7 +2079,7 @@ int main( int argc, char* argv[] )
             if (assoc.size() > 6) { // solve for x using ldlt
               //            std::cout << "A: " << std::endl << A << std::endl << "b: " << b.transpose() << std::endl;
               x = (A.cast<double>().ldlt().solve(b.cast<double>())).cast<float>(); 
-              T_wc = T_wc * tdp::SE3f::Exp_(x*scale);
+              T_wc = T_wc * tdp::SE3f::Exp_(x);
             }
             if (gui.verbose) {
               std::cout << "\tit " << it << ": err=" << err 
@@ -2080,10 +2087,10 @@ int main( int argc, char* argv[] )
                 << "\t|x|: " << x.topRows(3).norm()*180./M_PI 
                 << " " <<  x.bottomRows(3).norm() << std::endl;
             }
-            if ( tdp::CheckEntropyTermination(A, Hprev, HThr*scale, 0.f,
-                  negLogEvThr*scale, H, gui.verbose)
-                && x.topRows<3>().norm()*180./M_PI*scale < icpdRThr
-                && x.bottomRows<3>().norm()*scale < icpdtThr) {
+            if ( tdp::CheckEntropyTermination(A, Hprev, HThr, 0.f,
+                  negLogEvThr, H, gui.verbose)
+                && x.topRows<3>().norm()*180./M_PI < icpdRThr
+                && x.bottomRows<3>().norm() < icpdtThr) {
               break;
             }
           }
