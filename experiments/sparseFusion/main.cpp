@@ -174,11 +174,12 @@ void ExtractPlanes(
         pl.curvature_ = curv;
         pl.rgb_ = rgb[i];
         pl.gradGrey_ = gradGrey[i];
-        pl.gradNorm_ = gradGrey_.norm();
+        pl.gradNorm_ = pl.gradGrey_.norm();
         pl.grey_ = greyFl[i];
         pl.lastFrame_ = frame;
         pl.w_ = 1.;
         pl.numObs_ = 1;
+        pl.valid_ = true;
 //        pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
         pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
@@ -354,7 +355,7 @@ bool AccumulateP2Pl3DGrad(const Plane& pl,
         err += bi;
 //        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
         tdp::Rayfda ray(tdp::Vector3fda::Zero(),
-            cam.Unproject(u + gradGrey(0),v + gradGrey(1),1.));
+            cam.Unproject(u + gradGrey_ci(0),v + gradGrey_ci(1),1.));
         tdp::Vector3fda grad3d = ray.IntersectPlane(pc_ci,n_ci)-pc_ci;
         // texture inverse transform verified Jse3 
         Eigen::Matrix<float,3,6> Jse3;
@@ -919,12 +920,14 @@ int main( int argc, char* argv[] )
   std::string input_uri = "openni2://";
   std::string output_uri = "pango://video.pango";
   std::string calibPath = "";
+  std::string varsFile = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
+    varsFile = (argc > 3) ? std::string(argv[3]) : "";
 //    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
 
@@ -1187,15 +1190,17 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
   // TODO if sample normals if off then doRegvMF shoudl be on
-  pangolin::Var<bool> sampleNormals("ui.sampleNormals",true,true);
+  pangolin::Var<bool> sampleNormals("ui.sampleNormals",false,true);
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
+  pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
+  pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
   pangolin::Var<bool> normalViaRMLS("ui.normal RMLS",false,true);
-  pangolin::Var<int>   W("ui.W ",9,1,15);
+  pangolin::Var<int>  W("ui.W ",9,1,15);
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
@@ -1370,11 +1375,13 @@ int main( int argc, char* argv[] )
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead > 0) {
-        if (true || nnFixed[iReadNext] < kNN) {
+        if (nnFixed[iReadNext] < kNN) {
           tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-          if (pruneNoise && pl.lastFrame_+100 < frame && numObs_ < 5) {
-            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN); 
-            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN); 
+          if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
+            pl.p_ = tdp::Vector3fda(NAN,NAN,NAN); 
+            pl.n_ = tdp::Vector3fda(NAN,NAN,NAN); 
+            pc_w[iReadNext] = pl.p_;
+            n_w[iReadNext]  = pl.n_;
             pl.valid_ = false;
           }
           values.fill(std::numeric_limits<float>::max());
@@ -1465,22 +1472,22 @@ int main( int argc, char* argv[] )
       size_t Ksample = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        uint16_t& zi = zS[i];
+        tdp::Vector3fda& ni = nS[i];
         if (sampleNormals) {
-          tdp::vector3fda& ni = ns[i];
-          uint16_t& zi = zs[i];
           //tdp::plane& pl = pl_w[i];
           //eigen::vector3f mu = pl.w_*pl.n_*tauo;
           //std::cout << pl.w_ * pl.n_.transpose() << " " 
           //  << nsum_w[i].transpose() << std::endl;
-          eigen::vector3f mu = normsum_w[i]*nsum_w[i]*tauo;
-          if (zi < ksample) {
+          tdp::Vector3fda mu = normSum_w[i]*nSum_w[i]*tauO;
+          if (zi < Ksample) {
             mu += vmfs[zi].mu_*vmfs[zi].tau_;
           }
-          ni = vmf<float,3>(mu).sample(rnd);
-          vmfSS[zi].topRows<3>() += ni;
+          ni = vMF<float,3>(mu).sample(rnd);
         } else {
-          vmfSS[zi].topRows<3>() += pl_w[i].n_;
+          ni = pl_w[i].n_;
         }
+        vmfSS[zi].topRows<3>() += ni;
         vmfSS[zi](3) ++;
       }
       // sample dpvmf labels
@@ -1605,9 +1612,10 @@ int main( int argc, char* argv[] )
         sizeToRead = nn.SizeToRead();
       }
       if (sizeToRead == 0) continue;
+      tdp::Plane& pl = pl_w.GetCircular(i);
+      if (!pl.valid_) continue;
       // compute gradient
       tdp::VectorkNNida& ids = nn.GetCircular(i);
-      tdp::Plane& pl = pl_w.GetCircular(i);
 //      tdp::Vector3fda& Jn = Jn_w[i];
 //      tdp::Vector3fda& Jp = Jp_w[i];
       tdp::Vector3fda Jn = tdp::Vector3fda::Zero();
@@ -1735,6 +1743,13 @@ int main( int argc, char* argv[] )
 
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
+
+  if (varsFile.size() > 0)
+    pangolin::LoadJsonFile(varsFile, "");
+
+  pangolin::SaveJsonFile("./varsUi.json", "ui");
+  pangolin::SaveJsonFile("./varsMap.json", "mapPanel");
+  pangolin::SaveJsonFile("./varsVis.json", "visPanel");
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
