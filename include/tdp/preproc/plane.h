@@ -31,9 +31,13 @@ struct Plane {
   uint16_t lastFrame_;
   uint16_t numObs_;
 
+  float gradNorm_;
+
   float w_; // weight
   float N_; // number of Obs
   float r_; // radius
+
+  bool valid_;
 
   void AddObs(const Vector3fda& p, const Vector3fda& n);
   void AddObs(const Vector3fda& p, const Vector3fda& n, const Vector3bda& rgb);

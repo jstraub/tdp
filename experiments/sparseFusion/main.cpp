@@ -174,6 +174,7 @@ void ExtractPlanes(
         pl.curvature_ = curv;
         pl.rgb_ = rgb[i];
         pl.gradGrey_ = gradGrey[i];
+        pl.gradNorm_ = gradGrey_.norm();
         pl.grey_ = greyFl[i];
         pl.lastFrame_ = frame;
         pl.w_ = 1.;
@@ -318,6 +319,65 @@ bool AccumulateP2Pl(const Plane& pl,
 }
 
 /// uses texture as well
+bool AccumulateP2Pl3DGrad(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    tdp::SE3f& T_cw, 
+    CameraT& cam,
+    const Vector3fda& pc_ci,
+    const Vector3fda& n_ci,
+    float grey_ci,
+    const Vector2fda& gradGrey_ci,
+    float u, float v,
+    float p2plThr, 
+    float dotThr,
+    float lambda,
+    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,1>& Ai,
+    Eigen::Matrix<float,6,1>& b,
+    float& err
+    ) {
+  const tdp::Vector3fda& n_w =  pl.n_;
+  const tdp::Vector3fda& pc_w = pl.p_;
+  tdp::Vector3fda pc_c_in_w = T_wc*pc_ci;
+  float bi=0;
+    Eigen::Vector3f n_w_in_c = T_cw.rotation()*n_w;
+    if (n_w_in_c.dot(n_ci) > dotThr) {
+      float p2pl = n_w.dot(pc_w - pc_c_in_w);
+      if (fabs(p2pl) < p2plThr) {
+        // p2pl
+        Ai.topRows<3>() = pc_ci.cross(n_w_in_c); 
+        Ai.bottomRows<3>() = n_w_in_c; 
+//        Ai.bottomRows<3>() = n_w; 
+        bi = p2pl;
+        A += Ai * Ai.transpose();
+        b += Ai * bi;
+        err += bi;
+//        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
+        tdp::Rayfda ray(tdp::Vector3fda::Zero(),
+            cam.Unproject(u + gradGrey(0),v + gradGrey(1),1.));
+        tdp::Vector3fda grad3d = ray.IntersectPlane(pc_ci,n_ci)-pc_ci;
+        // texture inverse transform verified Jse3 
+        Eigen::Matrix<float,3,6> Jse3;
+        Jse3 << SO3mat<float>::invVee(T_cw.rotation()*(pc_w-T_wc.translation())), 
+             -Eigen::Matrix3f::Identity();
+        Ai = Jse3.transpose() * grad3d;
+        bi = - grey_ci + pl.grey_;
+        A += lambda*(Ai * Ai.transpose());
+        b += lambda*(Ai * bi);
+//        std::cout << " intensity " << bi << " " << Ai.transpose() << std::endl;
+//        std::cout << Jse3 << std::endl;
+//        std::cout << Jpi << std::endl;
+//        std::cout << gradGrey_ci << std::endl;
+        err += lambda*bi;
+        // accumulate
+        return true;
+      }
+  }
+  return false;
+}
+
+
+/// uses texture as well
 bool AccumulateP2PlIntensity(const Plane& pl, 
     tdp::SE3f& T_wc, 
     tdp::SE3f& T_cw, 
@@ -351,26 +411,6 @@ bool AccumulateP2PlIntensity(const Plane& pl,
         b += Ai * bi;
         err += bi;
 //        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
-        // texture old
-//        Eigen::Matrix<float,2,3> Jpi = cam.Jproject(pc_c_in_w);
-//        Eigen::Matrix<float,3,6> Jse3;
-//        Jse3 << -(T_wc.rotation().matrix()*SO3mat<float>::invVee(pc_ci)), 
-//             Eigen::Matrix3f::Identity();
-//        Ai = Jse3.transpose() * Jpi.transpose() * pl.gradGrey_;
-        // texture 3D grads
-//        if (tdp::IsValidData(pl.grad_)) {
-//          Eigen::Matrix<float,3,6> Jse3;
-//          Jse3.leftCols<3>() = -(T_wc.rotation().matrix()
-//              *SO3mat<float>::invVee(pc_ci));
-//          Jse3.rightCols<3>() = Eigen::Matrix3f::Identity();
-//          Ai = Jse3.transpose() * pl.grad_;
-//          bi = grey_ci - pl.grey_;
-//          A += lambda*(Ai * Ai.transpose());
-//          b += lambda*(Ai * bi);
-//          err += lambda*bi;
-//        } else {
-//          std::cout << " grad 3D is nan!" << std::endl; 
-//        }
         // texture inverse transform verified Jse3 
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(T_cw*pc_w);
         Eigen::Matrix<float,3,6> Jse3;
@@ -1023,6 +1063,9 @@ int main( int argc, char* argv[] )
 
   tdp::QuickView viewD(3*wc/2, hc);
   containerTracking.AddDisplay(viewD);
+
+  tdp::QuickView viewMask(wc, hc);
+  containerTracking.AddDisplay(viewMask);
   gui.container().AddDisplay(containerTracking);
 
   pangolin::View& plotters = pangolin::Display("plotters");
@@ -1091,6 +1134,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedDeviceImage<uint8_t> cuMask(wc, hc);
   tdp::ManagedHostImage<uint8_t> mask(wc, hc);
+  tdp::ManagedHostImage<uint8_t> maskDisp(wc, hc);
   tdp::ManagedHostImage<uint32_t> z(w, h);
 
   tdp::ManagedHostImage<float> age(MAP_SIZE);
@@ -1142,6 +1186,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
+  // TODO if sample normals if off then doRegvMF shoudl be on
+  pangolin::Var<bool> sampleNormals("ui.sampleNormals",true,true);
+
+  pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
@@ -1175,11 +1223,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",1, 0, PYR-1);
 
   pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
-  pangolin::Var<bool> semanticObsSelect("ui.sem. obs. selevt",true,true);
+  pangolin::Var<bool> semanticObsSelect("ui.semObsSelect",true,true);
+  pangolin::Var<bool> sortByGradient("ui.sortByGradient",true,true);
+
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.001,1.);
   pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.01,1.);
   pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
+  pangolin::Var<bool> use3dGrads("ui.use 3D grads ",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
   pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
@@ -1319,9 +1370,14 @@ int main( int argc, char* argv[] )
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead > 0) {
-        if (nnFixed[iReadNext] < kNN) {
-          values.fill(std::numeric_limits<float>::max());
+        if (true || nnFixed[iReadNext] < kNN) {
           tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+          if (pruneNoise && pl.lastFrame_+100 < frame && numObs_ < 5) {
+            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN); 
+            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN); 
+            pl.valid_ = false;
+          }
+          values.fill(std::numeric_limits<float>::max());
           tdp::VectorkNNida& ids = nn[iReadNext];
           tdp::VectorkNNida idsPrev = ids;
           ids = tdp::VectorkNNida::Ones()*(-1);
@@ -1409,18 +1465,22 @@ int main( int argc, char* argv[] )
       size_t Ksample = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        tdp::Vector3fda& ni = nS[i];
-        uint16_t& zi = zS[i];
-//        tdp::Plane& pl = pl_w[i];
-//        Eigen::Vector3f mu = pl.w_*pl.n_*tauO;
-//        std::cout << pl.w_ * pl.n_.transpose() << " " 
-//          << nSum_w[i].transpose() << std::endl;
-        Eigen::Vector3f mu = normSum_w[i]*nSum_w[i]*tauO;
-        if (zi < Ksample) {
-          mu += vmfs[zi].mu_*vmfs[zi].tau_;
+        if (sampleNormals) {
+          tdp::vector3fda& ni = ns[i];
+          uint16_t& zi = zs[i];
+          //tdp::plane& pl = pl_w[i];
+          //eigen::vector3f mu = pl.w_*pl.n_*tauo;
+          //std::cout << pl.w_ * pl.n_.transpose() << " " 
+          //  << nsum_w[i].transpose() << std::endl;
+          eigen::vector3f mu = normsum_w[i]*nsum_w[i]*tauo;
+          if (zi < ksample) {
+            mu += vmfs[zi].mu_*vmfs[zi].tau_;
+          }
+          ni = vmf<float,3>(mu).sample(rnd);
+          vmfSS[zi].topRows<3>() += ni;
+        } else {
+          vmfSS[zi].topRows<3>() += pl_w[i].n_;
         }
-        ni = vMF<float,3>(mu).sample(rnd);
-        vmfSS[zi].topRows<3>() += ni;
         vmfSS[zi](3) ++;
       }
       // sample dpvmf labels
@@ -1719,6 +1779,7 @@ int main( int argc, char* argv[] )
       projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
           occlusionDepthThr, z, mask, idsCur);
       TOCK("extract assoc");
+      maskDisp.CopyFrom(mask);
 
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
@@ -1816,6 +1877,16 @@ int main( int argc, char* argv[] )
                 invInd[k].push_back(i);
               k = (k+1)%invInd.size();
             }
+          }
+        }
+        if (sortByGradient) {
+          // TODO realy this should look at the current image? although
+          // maybe not since that is not even propperly aligned yet 
+          for (size_t k=0; k<invInd.size(); ++k) {
+            std::sort(invInd[k].begin(), invInd[k].end(),
+                [&](uint32_t ida, uint32_t idb) {
+                  return pl_w[ida].gradNorm_ > pl_w[idb].gradNorm_;
+                });
           }
         }
       }
@@ -2031,6 +2102,12 @@ int main( int argc, char* argv[] )
                   if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
                         lambdaTex, A, Ai, b, err))
+                    continue;
+                } else if (use3dGrads) {
+                  if (!AccumulateP2Pl3DGrad(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
+                        nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v),
+                        x(0),x(1), p2plThr, dotThr, lambdaTex, A, Ai, b,
+                        err))
                     continue;
                 } else if (useNormals) {
                   tdp::Vector3fda n_wi = pl.n_;
@@ -2461,6 +2538,9 @@ int main( int argc, char* argv[] )
       if (viewD.IsShown()) {
         tdp::PyramidToImage(pyrD, pyrDImg);
         viewD.SetImage(pyrDImg);
+      }
+      if (viewMask.IsShown()) {
+        viewMask.SetImage(maskDisp);
       }
     }
     if (!gui.finished() && plotters.IsShown()) {

@@ -111,7 +111,7 @@ class ProjectiveAssociation {
         float d_w_in_c = (T_cw*pl_w[id].p_)(2);
         float d_c = pc_c[i](2);
         if (fabs(d_w_in_c - d_c) < occlusionDepthThr) {
-          mask[i] = 1;
+          mask[i] = 255;
           ids.push_back(id);
         } else {
           mask[i] = 0;

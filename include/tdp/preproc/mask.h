@@ -189,7 +189,7 @@ void GradientNormBiasedResampleEmptyPartsOfMask(
         for (size_t u=i*w/I; u<(i+1)*w/I; ++u) {
           for (size_t v=j*h/J; v<(j+1)*h/J; ++v) {
             if (coin(gen) < probUnif+pGradNorm*greyGradNorm(u,v)) {
-              mask(u,v) = 1;
+              mask(u,v) = 128;
               idNew.push_back(u+v*mask.w_);
             }
           }
