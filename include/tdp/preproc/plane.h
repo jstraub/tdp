@@ -37,6 +37,10 @@ struct Plane {
   float N_; // number of Obs
   float r_; // radius
 
+  Matrix3fda Info_;
+  float Hp_;
+  float Hn_;
+
   bool valid_;
 
   void AddObs(const Vector3fda& p, const Vector3fda& n);

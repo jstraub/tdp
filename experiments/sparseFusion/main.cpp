@@ -1223,7 +1223,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.1,1.);
-  pangolin::Var<float> sigmaPc0("mapPanel.lamb Reg Pc0",0.6,0.1,1.);
+  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.6,0.1,1.);
+  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.1,0.1,1.);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
@@ -1286,6 +1287,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showGrey("visPanel.show grey",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
+  pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
+  pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
@@ -1355,6 +1358,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> infoObsSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
@@ -1466,7 +1470,6 @@ int main( int argc, char* argv[] )
   std::mt19937 rnd(910481);
   float logAlpha = log(.1);
 //  Eigen::Matrix3f SigmaO = 0.0001*Eigen::Matrix3f::Identity();
-  Eigen::Matrix3f InfoO = 10000.*Eigen::Matrix3f::Identity();
   vMFprior<float> base(Eigen::Vector3f(0,0,1), .01, 0.);
   std::vector<vMF<float,3>> vmfs;
   vmfs.push_back(base.sample(rnd));
@@ -1669,14 +1672,15 @@ int main( int argc, char* argv[] )
         Jp += -1./(sigmaPc0*sigmaPc0)*(pc0_w[i] - pl.p_);
       }
       if (doRegAbsPc) {
-        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
+        Jp += pl.n_ *pl.n_.dot(pl.p_*infoObsSum[i] - pcSum_w[i]);
+//        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
 //        Jp += 2.*(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
       }
-      if (doRegAbsN) {
-//        Jn += (numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
-        Jn += -tauO*normSum_w[i]*nSum_w[i];
-        Jn += numSum_w[i]*(outerSum_w[i]*pl.n_ - pl.n_.dot(pcSum_w[i])*pl.p_ - pl.n_.dot(pl.p_)*(pcSum_w[i] - pl.p_));
-      }
+//      if (doRegAbsN) {
+////        Jn += (numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
+//        Jn += -tauO*normSum_w[i]*nSum_w[i];
+//        Jn += numSum_w[i]*(outerSum_w[i]*pl.n_ - pl.n_.dot(pcSum_w[i])*pl.p_ - pl.n_.dot(pl.p_)*(pcSum_w[i] - pl.p_));
+//      }
       // TODO this seems to not work!
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood) {
@@ -1719,26 +1723,22 @@ int main( int argc, char* argv[] )
       }
       tdp::Vector3fda pmu;
         if (doVariationalUpdate && haveFullNeighborhood) {
-          Eigen::Matrix3f SigmaPl;
-          Eigen::Matrix3f Info =  InfoO*numSum_w[i];
-  //        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-          Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
+          Eigen::Matrix3f InfoPl;
+          Eigen::Matrix3f InfoO = 1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
+          Eigen::Matrix3f Info = InfoO + pl_w[i]*pl_w[i].transpose()/infoObsSum[i];
+          Eigen::Vector3f xi = Info*pc0_w[i] + pl_w[i]*pl_w[i].transpose()*pcSum_w[i]; //*pl.w_;
           for (int i=0; i<kNN; ++i) {
             if (ids[i] > -1 && pl_w[ids[i]].valid_) {
-//              && zS[ids[i]] < Ksample ) {
-//              SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
-              SigmaPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
-              Info += SigmaPl;
-              xi += SigmaPl*pl_w[ids[i]].p_;
+              InfoPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+              Info += InfoPl;
+              xi += InfoPl*pl_w[ids[i]].p_;
             }
           }
-//          Eigen::Matrix3f Sigma = Info.inverse();
           pmu = Info.ldlt().solve(xi);
+          pl.Info_ = Info;
+          pl.Hp_ = -log(Info.determinant());
   //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-//          pi = Normal<float,3>(mu, Sigma).sample(rnd);
-//          pl.p_ = mu;
         }
-//      std::cout << "have " << numGrads << " gradients > 0  off " << iInsert-iRead  << std::endl;
       // apply gradient
 //      tdp::Vector3fda& Jn = Jn_w[i];
 //      tdp::Vector3fda& Jp = Jp_w[i];
@@ -1864,12 +1864,13 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
-          pcSum_w[i] = pl_w[i].p_;
+          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
+          infoObsSum[i] = 1./(sigmaObsP*sigmaObsP);
           outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
           normSum_w[i] = 1;
-          pcEst_w[i] = pcSum_w[i];
+          pcEst_w[i] = pl_w[i].p_;
           idsCur[0]->emplace_back(i);
         }
       }
@@ -2316,15 +2317,16 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w)/(w+1.);
+          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
           outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
+          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
           nSum_w[i] /= nSum_w[i].norm();
           numSum_w[i] = std::min(50.f, w+1.f);
 
-          pcEst_w[i] = pcSum_w[i];
+          pcEst_w[i] = pcSum_w[i]/infoObsSum[i];
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
@@ -2389,15 +2391,16 @@ int main( int argc, char* argv[] )
             pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w)/(w+1.);
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
             outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
             nSum_w[i] /= nSum_w[i].norm();
             numSum_w[i] = std::min(50.f, w+1.f);
 
-            pcEst_w[i] = pcSum_w[i];
+            pcEst_w[i] = pcSum_w[i]/infoObsSum[i];
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();
 
@@ -2512,6 +2515,12 @@ int main( int argc, char* argv[] )
           } else if (showZCounts) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = zCountS[i];
+          } else if (showHp) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = pl_w[i].Hp_;
+          } else if (showHn) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = pl_w[i].Hn_;
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
