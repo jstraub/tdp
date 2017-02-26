@@ -1211,11 +1211,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
   pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",true,true);
   pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
-  pangolin::Var<bool> doRegAbsN("mapPanel.reg abs n",true,true);
+  pangolin::Var<bool> doRegAbsN("mapPanel.reg abs n",false,true);
   pangolin::Var<bool> doRegRelPlZ("mapPanel.reg rel Pl",true,true);
   pangolin::Var<bool> doRegRelNZ("mapPanel.reg rel N",true,true);
-  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
-  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
+//  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
+//  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
   pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
   pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
@@ -1345,10 +1345,10 @@ int main( int argc, char* argv[] )
   nnFixed.Fill(0);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
-  mapObsNum.Fill(tdp::VectorkNNfda::Zero());
+//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
+//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(MAP_SIZE);
+//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
+//  mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> outerSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(MAP_SIZE);
@@ -1427,12 +1427,12 @@ int main( int argc, char* argv[] )
   //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
   //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
   //            mapObsNum[iReadNext][i] = 1;
-            if (ids(i) != idsPrev(i)) {
-              mapObsDot[iReadNext][i] = 0.;
-              mapObsP2Pl[iReadNext][i] = 0.;
-              mapObsNum[iReadNext][i] = 0.;
-  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
-            }
+//            if (ids(i) != idsPrev(i)) {
+//              mapObsDot[iReadNext][i] = 0.;
+//              mapObsP2Pl[iReadNext][i] = 0.;
+//              mapObsNum[iReadNext][i] = 0.;
+//  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
+//            }
             if (values(i) > maxNnDist*maxNnDist) {
               ids(i) = -1;
               nnFixed[iReadNext]-- ;
@@ -1677,14 +1677,20 @@ int main( int argc, char* argv[] )
         Jn += -tauO*normSum_w[i]*nSum_w[i];
         Jn += numSum_w[i]*(outerSum_w[i]*pl.n_ - pl.n_.dot(pcSum_w[i])*pl.p_ - pl.n_.dot(pl.p_)*(pcSum_w[i] - pl.p_));
       }
+      // TODO this seems to not work!
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood) {
+        tdp::Vector3fda JpMRF = tdp::Vector3fda::Zero();
+        float wMRF = 0.f;
         for (int j=0; j<kNN; ++j) {
-          if (ids[j] > -1 && pl_w[ids[j]].valid_){
+          if (ids[j] > -1 && pl_w[ids[j]].valid_) {
             const tdp::Plane& plO = pl_w[ids[j]];
             if (doRegRelPlZ) {
               if (pl.z_ == plO.z_) {
-                Jp += -1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
+                float wi = exp(-(pl.p_-plO.p_).squaredNorm());
+                wMRF += wi;
+                JpMRF += -wi/(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
+//                JpMRF += -1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
                 Jn +=  1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
               }
             }
@@ -1694,16 +1700,21 @@ int main( int argc, char* argv[] )
                 Jn += -tauP*plO.n_;
               }
             }
-            if (mapObsNum[i](j) > 0.) {
-              if (doRegRelNObs) {
-                Jn += mapObsNum[i](j)*2.*(pl.n_.dot(plO.n_)-mapObsDot[i](j)/mapObsNum[i](j))*plO.n_;
-              }
-              if (doRegRelPlObs) {
-                Jn += mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*(plO.p_-pl.p_);
-                Jp += -mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*pl.n_;
-              }
-            }
+//            if (mapObsNum[i](j) > 0.) {
+//              if (doRegRelNObs) {
+//                Jn += mapObsNum[i](j)*2.*(pl.n_.dot(plO.n_)-mapObsDot[i](j)/mapObsNum[i](j))*plO.n_;
+//              }
+//              if (doRegRelPlObs) {
+//                Jn += mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*(plO.p_-pl.p_);
+//                Jp += -mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*pl.n_;
+//              }
+//            }
           }
+        }
+        if (doRegRelPlZ && wMRF > 0.) {
+//          std::cout << wMRF << " " << JpMRF.transpose() << std::endl;
+          Jp += JpMRF/wMRF;
+//          Jp += JpMRF;
         }
       }
       tdp::Vector3fda pmu;
