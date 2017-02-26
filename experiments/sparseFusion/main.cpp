@@ -1193,11 +1193,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("ui.run mapping",true,true);
   pangolin::Var<bool> updateMap("ui.update map",true,true);
   // TODO if sample normals if off then doRegvMF shoudl be on
-  pangolin::Var<bool> sampleNormals("ui.sampleNormals",false,true);
+  pangolin::Var<bool> sampleNormals("ui.sampleNormals",true,true);
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
+  pangolin::Var<int> numAdditionalObs("ui.num add Obs",300,0,1000);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
@@ -1208,7 +1209,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
   pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
-  pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",false,true);
+  pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",true,true);
   pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
   pangolin::Var<bool> doRegAbsN("mapPanel.reg abs n",true,true);
   pangolin::Var<bool> doRegRelPlZ("mapPanel.reg rel Pl",true,true);
@@ -1221,8 +1222,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
-  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",10.,0.0,200.);
-  pangolin::Var<float> sigmaPc0("mapPanel.lamb Reg Pc0",10.,0.01,1.);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.1,1.);
+  pangolin::Var<float> sigmaPc0("mapPanel.lamb Reg Pc0",0.6,0.1,1.);
+  pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
   pangolin::Var<bool> icpReset("ui.reset icp",true,false);
@@ -1375,14 +1377,31 @@ int main( int argc, char* argv[] )
   std::mutex mapLock;
   std::thread topology([&]() {
     int32_t iReadNext = 0;
+    int32_t sizeToReadPrev = 0;
     int32_t sizeToRead = 0;
+    std::deque<int32_t> newIds;
     tdp::VectorkNNfda values;
+    std::mt19937 rnd(0);
     while(runTopologyThread.Get()) {
+      sizeToReadPrev = sizeToRead;
       {
         std::lock_guard<std::mutex> lock(pl_wLock); 
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead > 0) {
+        if (sizeToRead == sizeToReadPrev) {
+          if (newIds.size() > 0) {
+            iReadNext = newIds.front();
+            newIds.pop_front();
+          } else {
+            std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
+            iReadNext = unif(rnd);
+          }
+        } else {
+          for (int32_t i=sizeToReadPrev+1; i<sizeToRead; ++i)
+            newIds.push_back(i);
+          iReadNext = sizeToReadPrev;
+        }
         if (nnFixed[iReadNext] < kNN) {
           tdp::Plane& pl = pl_w.GetCircular(iReadNext);
           if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
@@ -1414,7 +1433,7 @@ int main( int argc, char* argv[] )
               mapObsNum[iReadNext][i] = 0.;
   //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
             }
-            if (values(i) > 0.01) {
+            if (values(i) > maxNnDist*maxNnDist) {
               ids(i) = -1;
               nnFixed[iReadNext]-- ;
             }
@@ -2186,10 +2205,7 @@ int main( int argc, char* argv[] )
                         p2plThr, dotThr, A, Ai, b, err))
                     continue;
                 }
-                pl.lastFrame_ = frame;
-                ts[i] = frame;
-                pl.numObs_ ++;
-                mask(u,v) |= 1;
+                mask(u,v) = 255;
                 assoc.emplace_back(i,u+v*pc.w_);
                 break;
               }
@@ -2268,7 +2284,9 @@ int main( int argc, char* argv[] )
 //        size_t numNN = 0;
 //        tdp::SE3f T_cw = T_wc.Inverse();
         for (const auto& ass : assoc) {
-          if (!pl_w[ass.first].valid_)
+          size_t i = ass.first;
+          tdp::Plane& pl = pl_w[i];
+          if (!pl.valid_)
             continue;
 
           int32_t u = ass.second%pc.w_;
@@ -2277,25 +2295,27 @@ int main( int argc, char* argv[] )
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
 
-          float w = numSum_w[ass.first];
+          ts[i] = frame;
+          pl.lastFrame_ = frame;
+          pl.numObs_ ++;
+
+          float w = numSum_w[i];
           // filtering grad grey
-          pl_w[ass.first].grad_ = (pl_w[ass.first].grad_*w 
-              + pl_w[ass.first].Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
-          pl_w[ass.first].grey_ = (pl_w[ass.first].grey_*w + greyFl(u,v)) / (w+1);
-          pl_w[ass.first].gradNorm_ = (pl_w[ass.first].gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
-          pl_w[ass.first].rgb_ = ((pl_w[ass.first].rgb_.cast<float>()*w
-                + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          pcSum_w[ass.first] = (pcSum_w[ass.first]*w + pc_c_in_w)/(w+1.);
-          outerSum_w[ass.first] = (outerSum_w[ass.first]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
+          pl.grad_ = (pl.grad_*w + pl.Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
+          pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
+          pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
+          pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w)/(w+1.);
+          outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
-          nSum_w[ass.first] = (nSum_w[ass.first]*w + n_c_in_w)/(w+1.);
-          normSum_w[ass.first] = nSum_w[ass.first].norm();
-          nSum_w[ass.first] /= nSum_w[ass.first].norm();
-          numSum_w[ass.first] = std::min(50.f, w+1.f);
+          nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
+          normSum_w[i] = nSum_w[i].norm();
+          nSum_w[i] /= nSum_w[i].norm();
+          numSum_w[i] = std::min(50.f, w+1.f);
 
-          pcEst_w[ass.first] = pcSum_w[ass.first];
-          grad_w[ass.first] = pl_w[ass.first].grad_;
-          gradDir_w[ass.first] = grad_w[ass.first].normalized();
+          pcEst_w[i] = pcSum_w[i];
+          grad_w[i] = pl.grad_;
+          gradDir_w[i] = grad_w[i].normalized();
 
 //          if (updateMap) {
 //            for (size_t i=0; i<kNN; ++ i) {
@@ -2320,11 +2340,61 @@ int main( int argc, char* argv[] )
 //              }
 //            }
           if (!updateMap) {
-            pl_w[ass.first].AddObs(pc_c_in_w, n_c_in_w);
-            n_w[ass.first] =  pl_w[ass.first].n_;
-            pc_w[ass.first] = pl_w[ass.first].p_;
+            pl.AddObs(pc_c_in_w, n_c_in_w);
+            n_w[i] =  pl.n_;
+            pc_w[i] = pl.p_;
           }
         }
+        uint32_t j = 0;
+        for (auto& i : *idsCur[0]) {
+          if (pl_w[i].lastFrame_ < frame && j++ < numAdditionalObs) {
+            tdp::Plane& pl = pl_w[i];
+            if (!pl.valid_)
+              continue;
+            tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*pl.p_;
+            Eigen::Vector2f x = cam.Project(pc_w_in_c);
+            if (!d.Inside(x)) 
+              continue;
+            int32_t u = floor(x(0)+0.5f);
+            int32_t v = floor(x(1)+0.5f);
+            float d_c = d(u,v);
+            if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
+              continue;
+            if (!EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS))
+              continue;
+//            std::cout << " adding " << j << " of " << numAdditionalObs 
+//              << " id " << i << " uv " << u << "," << v << std::endl;
+            numProjected = numProjected + 1;
+            tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
+            tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
+
+            // TODO: copied from above
+            ts[i] = frame;
+            pl.lastFrame_ = frame;
+            pl.numObs_ ++;
+            float w = numSum_w[i];
+            // filtering grad grey
+            pl.grad_ = (pl.grad_*w + pl.Compute3DGradient(T_wc, cam, u, v, gradGrey(u,v)))/(w+1);
+            pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
+            pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
+            pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w)/(w+1.);
+            outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
+
+            nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
+            normSum_w[i] = nSum_w[i].norm();
+            nSum_w[i] /= nSum_w[i].norm();
+            numSum_w[i] = std::min(50.f, w+1.f);
+
+            pcEst_w[i] = pcSum_w[i];
+            grad_w[i] = pl.grad_;
+            gradDir_w[i] = grad_w[i].normalized();
+
+//            if (j++ >= numAdditionalObs) 
+//              break;
+          }
+        }
+        
 //        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
         TOCK("update planes");
       }
