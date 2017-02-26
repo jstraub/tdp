@@ -243,13 +243,30 @@ int main( int argc, char* argv[] )
   float f = 1.;
   float fKF = 1.;
 
-  std::string nPath = pangolin::MakeUniqueFilename("./normals.csv");
-  std::ofstream normalsOut(nPath);
-  normalsOut << "normals from " << input_uri << std::endl;
 
+  std::ofstream normalsOut;
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+
+    if (recordNormals.GuiChanged() && recordNormals) {
+      std::string nPath = pangolin::MakeUniqueFilename("./normals.csv");
+      normalsOut.open(nPath);
+      normalsOut << "# normals from " << input_uri << std::endl;
+      if (normalsViaRMLS) {
+        normalsOut << "# method RMLS W " << W << " thr " << rmlsInlierThr<< std::endl;
+      } else if (normalsViaVoting) {
+        normalsOut << "# method Voting W " << W << " thr " << votingInlierThr << std::endl;
+      } else if (normalsViaScatter) {
+        normalsOut << "# method Scatter W " << W << std::endl;
+      } else if (normalsViaConv) {
+        normalsOut << "# method Conv " << std::endl;
+      }
+    }
+    if (recordNormals.GuiChanged() && !recordNormals) {
+      normalsOut.close();
+    }
+
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -272,6 +289,9 @@ int main( int argc, char* argv[] )
     ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
     tdp::Blur5(cuDrawf, cuD, 0.03);
     TOCK("Convert Depth");
+    uint32_t stepToUse = step;
+    if (recordNormals) 
+      stepToUse = W;
     {
       TICK("Compute Normals");
       pangolin::CudaScopedMappedPtr cuNbufp(cuNbuf);
@@ -284,30 +304,31 @@ int main( int argc, char* argv[] )
         n.CopyFrom(cuN);
       } else if (normalsViaClustering) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-        NormalsViaClustering(pc, W, step, n);
+        NormalsViaClustering(pc, W, stepToUse, n);
         cuN.CopyFrom(n);
       } else if (normalsViaVoting) {
-
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-        NormalsViaVoting(pc, W, step, votingInlierThr, dpc, n, curv);
+        NormalsViaVoting(pc, W, stepToUse, votingInlierThr, dpc, n, curv);
         cuN.CopyFrom(n);
       } else if (normalsViaRMLS) {
 
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-        NormalsViaRMLS(pc, W, step, rmlsInlierThr, dpc, n, curv);
+        NormalsViaRMLS(pc, W, stepToUse, rmlsInlierThr, dpc, n, curv);
         cuN.CopyFrom(n);
       } else if (normalsViaScatter) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
-        NormalsViaScatter(pc, W, step, n);
+        NormalsViaScatter(pc, W, stepToUse, n);
         cuN.CopyFrom(n);
       }
       TOCK("Compute Normals");
       
-      if(recordNormals) {
+      if(recordNormals && !gui.finished()) {
         for (size_t v=(hc-recW)/2; v<hc-(wc-recW)/2; ++v) {
           for (size_t u=(wc-recW)/2; u<wc-(wc-recW)/2; ++u) {
             if (tdp::IsValidData(n(u,v))) {
-              normalsOut << n(u,v)(0) << " " << n(u,v)(1) <<  " " << n(u,v)(2) << std::endl;
+              normalsOut << n(u,v)(0) << " " << n(u,v)(1) <<  " " << n(u,v)(2) 
+                << pc(u,v)(0) << " " << pc(u,v)(1) <<  " " << pc(u,v)(2) 
+                << std::endl;
             }
           }
         }
@@ -497,8 +518,8 @@ int main( int argc, char* argv[] )
 
       glColor4f(1,0,0,0.8);
       glLineWidth(0.5f);
-      for (size_t u=W; u<n.w_-W; u+=step) {
-        for (size_t v=W; v<n.h_-W; v+=step) {
+      for (size_t u=W; u<n.w_-W; u+=stepToUse) {
+        for (size_t v=W; v<n.h_-W; v+=stepToUse) {
           tdp::glDrawLine(pc(u,v), pc(u,v)+scale*n(u,v));
         }
       }

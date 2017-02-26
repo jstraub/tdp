@@ -155,6 +155,7 @@ def KL(x, pX, pdfX, N):
 #    w = np.sin(thetas[itheta]*np.pi/180.)*(np.pi/N)*(2*np.pi/N)
 #    print pX[itheta,iphi]/w
     Hpq -= np.log(pdfX[itheta,iphi]) 
+    print Hpq
 #    Hpp -= pX[itheta,iphi] * np.log(pX[itheta,iphi]/w)
     Hpp -= np.log(pX[itheta,iphi]) #/w)
   Hpq /= Ni
