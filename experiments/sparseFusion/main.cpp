@@ -1175,7 +1175,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> record("ui.record",false,true);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
-  pangolin::Var<float> dMax("ui.d max",6.,0.1,10.);
+  pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
   pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
   pangolin::Var<bool> showMapPanel("ui.map panel",false,true);
 
@@ -1245,7 +1245,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
   pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
 
-  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.3,0.01,0.3);
+  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.06,0.01,0.3);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
@@ -1500,6 +1500,8 @@ int main( int argc, char* argv[] )
       }
       // sample dpvmf labels
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        if (!pl_w[i].valid_)
+          continue;
         Eigen::VectorXf logPdfs(Ksample+1);
         Eigen::VectorXf pdfs(Ksample+1);
 
@@ -2255,7 +2257,7 @@ int main( int argc, char* argv[] )
         q0 *= (q0(maxId) > 0? 1.: -1.);
         logEv.Log(q0);
         T_wcs.push_back(T_wc);
-        trackingGood = H <= HThr && assoc.size() > 10;
+        trackingGood = (H <= HThr && assoc.size() > 10) || assoc.size() > 0.5*idsCur[0]->size();
         TOCK("icp");
         if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
       }
