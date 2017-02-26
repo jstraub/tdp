@@ -228,6 +228,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> newKf("ui.new KF", true,false);
   pangolin::Var<bool> filterHalfSphere("ui.filter half sphere", true, true);
 
+  pangolin::Var<bool> recordNormals("ui.record Normals", false, true);
+  pangolin::Var<int> recW("ui.recording width", 100, 1, 200);
+
   tdp::vMFMMF<1> rtmf(tauR);
   std::vector<tdp::vMF<float,3>> vmfs;
   Eigen::Matrix<float,4,Eigen::Dynamic> xSums;
@@ -239,6 +242,10 @@ int main( int argc, char* argv[] )
   size_t nFramesTracked = 0;
   float f = 1.;
   float fKF = 1.;
+
+  std::string nPath = pangolin::MakeUniqueFilename("./normals.csv");
+  std::ofstream normalsOut(nPath);
+  normalsOut << "normals from " << input_uri << std::endl;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -295,6 +302,16 @@ int main( int argc, char* argv[] )
         cuN.CopyFrom(n);
       }
       TOCK("Compute Normals");
+      
+      if(recordNormals) {
+        for (size_t v=(hc-recW)/2; v<hc-(wc-recW)/2; ++v) {
+          for (size_t u=(wc-recW)/2; u<wc-(wc-recW)/2; ++u) {
+            if (tdp::IsValidData(n(u,v))) {
+              normalsOut << n(u,v)(0) << " " << n(u,v)(1) <<  " " << n(u,v)(2) << std::endl;
+            }
+          }
+        }
+      }
 
       TICK("Compute 3D grads");
       grad3Ddir.Fill(tdp::Vector3fda(0,0,1));
@@ -533,5 +550,6 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
   }
+  normalsOut.close();
   return 0;
 }

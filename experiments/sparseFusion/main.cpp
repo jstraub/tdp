@@ -180,6 +180,8 @@ void ExtractPlanes(
         pl.w_ = 1.;
         pl.numObs_ = 1;
         pl.valid_ = true;
+        pl.Hn_ = 0;
+        pl.Hp_ = 0;
 //        pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
         pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
@@ -1223,8 +1225,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.1,1.);
-  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.6,0.1,1.);
-  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.1,0.1,1.);
+  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
+  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
@@ -1392,74 +1394,73 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         sizeToRead = pl_w.SizeToRead();
       }
-      if (sizeToRead > 0) {
-        if (sizeToRead == sizeToReadPrev) {
-          if (newIds.size() > 0) {
-            iReadNext = newIds.front();
-            newIds.pop_front();
-          } else {
-            std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
-            iReadNext = unif(rnd);
-          }
+      if (sizeToRead ==0) continue;
+      if (sizeToRead == sizeToReadPrev) {
+        if (newIds.size() > 0) {
+          iReadNext = newIds.front();
+          newIds.pop_front();
         } else {
-          for (int32_t i=sizeToReadPrev+1; i<sizeToRead; ++i)
-            newIds.push_back(i);
-          iReadNext = sizeToReadPrev;
+          std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
+          iReadNext = unif(rnd);
         }
-        if (nnFixed[iReadNext] < kNN) {
-          tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-          if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
-            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
-            n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
-            pl.valid_ = false;
+      } else {
+        for (int32_t i=sizeToReadPrev+1; i<sizeToRead; ++i)
+          newIds.push_back(i);
+        iReadNext = sizeToReadPrev;
+      }
+      if (nnFixed[iReadNext] < kNN) {
+        tdp::Plane& pl = pl_w.GetCircular(iReadNext);
+        if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
+          pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+          n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
+          pl.valid_ = false;
+        }
+        values.fill(std::numeric_limits<float>::max());
+        tdp::VectorkNNida& ids = nn[iReadNext];
+        tdp::VectorkNNida idsPrev = ids;
+        ids = tdp::VectorkNNida::Ones()*(-1);
+        for (int32_t i=0; i<sizeToRead; ++i) {
+          if (i != iReadNext) {
+            float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
+            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
+//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
-          values.fill(std::numeric_limits<float>::max());
-          tdp::VectorkNNida& ids = nn[iReadNext];
-          tdp::VectorkNNida idsPrev = ids;
-          ids = tdp::VectorkNNida::Ones()*(-1);
-          for (int32_t i=0; i<sizeToRead; ++i) {
-            if (i != iReadNext) {
-              float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
-              tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
-  //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
-            }
-          }
-          // for map constraints
-          // TODO: should be updated as pairs are reobserved
-          nnFixed[iReadNext] = kNN;
-          for (int32_t i=0; i<kNN; ++i) {
-  //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-  //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-  //            mapObsNum[iReadNext][i] = 1;
+        }
+        // for map constraints
+        // TODO: should be updated as pairs are reobserved
+        nnFixed[iReadNext] = kNN;
+        for (int32_t i=0; i<kNN; ++i) {
+//            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
+//            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
+//            mapObsNum[iReadNext][i] = 1;
 //            if (ids(i) != idsPrev(i)) {
 //              mapObsDot[iReadNext][i] = 0.;
 //              mapObsP2Pl[iReadNext][i] = 0.;
 //              mapObsNum[iReadNext][i] = 0.;
 //  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
 //            }
-            if (values(i) > maxNnDist*maxNnDist) {
-              ids(i) = -1;
-              nnFixed[iReadNext]-- ;
-            }
-          }
-          // just for visualization
-          if (mapNN.size() < kNN*iReadNext) {
-            for (int32_t i=0; i<kNN; ++i) 
-              mapNN.emplace_back(iReadNext, ids(i));
-          } else {
-            for (int32_t i=0; i<kNN; ++i) 
-              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
+          if (values(i) > maxNnDist*maxNnDist) {
+            ids(i) = -1;
+            nnFixed[iReadNext]-- ;
           }
         }
-        iReadNext = (iReadNext+1)%sizeToRead;
-        {
-          std::lock_guard<std::mutex> lock(nnLock); 
+        // just for visualization
+        if (mapNN.size() < kNN*iReadNext) {
+          for (int32_t i=0; i<kNN; ++i) 
+            mapNN.emplace_back(iReadNext, ids(i));
+        } else {
+          for (int32_t i=0; i<kNN; ++i) 
+            mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, ids[i]);
+        }
+      }
+      iReadNext = (iReadNext+1)%sizeToRead;
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
 //          mapObsDot.iInsert_ = std::max(iReadNext;
 //          mapObsP2Pl.iInsert_ = std::max(iReadNext;
-          nn.iInsert_ = std::max(iReadNext, nn.iInsert_);
-        }
-        idNNUpdate = iReadNext;
+        nn.iInsert_ = std::max(iReadNext, nn.iInsert_);
       }
+      idNNUpdate = iReadNext;
     };
   });
 
@@ -1493,6 +1494,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(nnLock); 
         iInsert = nn.iInsert_;
       }
+      if (iInsert == 0) continue;
       pS.iInsert_ = nn.iInsert_;
       nS.iInsert_ = nn.iInsert_;
       // sample normals using dpvmf and observations from planes
@@ -1725,11 +1727,12 @@ int main( int argc, char* argv[] )
         if (doVariationalUpdate && haveFullNeighborhood) {
           Eigen::Matrix3f InfoPl;
           Eigen::Matrix3f InfoO = 1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
-          Eigen::Matrix3f Info = InfoO + pl_w[i]*pl_w[i].transpose()/infoObsSum[i];
-          Eigen::Vector3f xi = Info*pc0_w[i] + pl_w[i]*pl_w[i].transpose()*pcSum_w[i]; //*pl.w_;
+          Eigen::Matrix3f Info = InfoO + pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
+          Eigen::Vector3f xi = InfoO*pc0_w[i] + pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
           for (int i=0; i<kNN; ++i) {
             if (ids[i] > -1 && pl_w[ids[i]].valid_) {
               InfoPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+//              InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
               Info += InfoPl;
               xi += InfoPl*pl_w[ids[i]].p_;
             }
@@ -1737,7 +1740,8 @@ int main( int argc, char* argv[] )
           pmu = Info.ldlt().solve(xi);
           pl.Info_ = Info;
           pl.Hp_ = -log(Info.determinant());
-  //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//          std::cout << pl.Hp_ << ": " << pl_w[i].p_.transpose() << " " << pmu.transpose() << std::endl;
+//          std::cout << Info << std::endl;
         }
       // apply gradient
 //      tdp::Vector3fda& Jn = Jn_w[i];
@@ -1978,6 +1982,7 @@ int main( int argc, char* argv[] )
           std::cout << invInd[lvl]->at(k).size() << " ";
         std::cout << std::endl;
       }
+      std::cout << " inverse done" << std::endl;
       TOCK("inverseIndex");
     }
 
@@ -2130,7 +2135,7 @@ int main( int argc, char* argv[] )
         Eigen::Matrix<float,6,1> b;
         Eigen::Matrix<float,6,1> Ai;
         std::vector<uint32_t> maxItLvl = {maxIt0, maxIt1, maxIt2, maxIt3};
-        for (int32_t pyr=ICPmaxLvl; pyr>=0; --pyr) {
+        for (int32_t pyr=frame==1? 0 : ICPmaxLvl; pyr>=0; --pyr) {
           std::vector<size_t> indK(invInd[pyr]->size(),0);
           float dotThr = cos(angleThr*M_PI/180.);
           float scale = pow(0.5,pyr);
@@ -2499,7 +2504,8 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts) {
+        if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
+            || showHn || showHp) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
