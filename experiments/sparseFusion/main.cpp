@@ -82,6 +82,29 @@ namespace tdp {
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
 typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 
+//https://ai2-s2-pdfs.s3.amazonaws.com/a8a6/18363b8dee8037df9133668ec8dcd532ee4e.pdf
+void NoiseModelNguyen(
+    const tdp::Vector3fda& n,
+    const tdp::Vector3fda& p,
+    const CameraT& cam,
+    tdp::Matrix3fda& SigmaO
+    ) {
+  float theta = acos(std::min(1.f,std::max(-1.f,(float)n.dot(p)/p.norm())));
+  float d_c = p(2);
+  float sigmaL = (0.8f + 0.035*theta/(M_PI*0.5-theta))*d_c/cam.params_(0);
+  float sigmaA = 0.;
+  if (10.*M_PI/180. < theta && theta < 60.*M_PI/180.) {
+    sigmaA = 0.0012 + 0.0019*(d_c-0.4)*(d_c-0.4);
+  } else {
+    sigmaA = 0.0012 + 0.0019*(d_c-0.4)*(d_c-0.4) + 0.0001/sqrtf(d_c)*(theta*theta/((M_PI*0.5-theta)*(M_PI*0.5-theta)));
+  }
+//  std::cout << sigmaL << ", " << sigmaA << std::endl;
+  SigmaO = tdp::Matrix3fda::Zero();
+  SigmaO(0,0) = sigmaL*sigmaL;
+  SigmaO(1,1) = sigmaL*sigmaL;
+  SigmaO(2,2) = sigmaA*sigmaA;
+}
+
 bool ExtractClosestBrief(
     const Image<Vector3fda>& pc, 
     const Image<uint8_t>& grey,
@@ -138,6 +161,7 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
     ManagedHostCircularBuffer<Vector3fda>& pc0_w,
+    ManagedHostCircularBuffer<Matrix3fda>& pc0Info_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<Vector3fda>& grad_w,
@@ -195,6 +219,10 @@ void ExtractPlanes(
 //        pl.grad_ = pl.gradGrey_.norm()*(ray.IntersectPlane(pl.p_,pl.n_) - pl.p_).normalized();
         // could project onto plane spanned by normal?
 
+        tdp::Matrix3fda SigmaO;
+        NoiseModelNguyen(n, p, cam, SigmaO);
+        SigmaO = T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose();
+        pc0Info_w[pl_w.iInsert_] = SigmaO.inverse();
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         pc0_w.Insert(pl.p_);
@@ -994,9 +1022,9 @@ int main( int argc, char* argv[] )
 //  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
-  pangolin::CreatePanel("visPanel").SetBounds(0.,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::CreatePanel("visPanel").SetBounds(0.4,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
   pangolin::Display("visPanel").Show(false);
-  pangolin::CreatePanel("mapPanel").SetBounds(0.,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::CreatePanel("mapPanel").SetBounds(0.4,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
   pangolin::Display("mapPanel").Show(false);
 
   gui.container().SetLayout(pangolin::LayoutEqual);
@@ -1218,13 +1246,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNZ("mapPanel.reg rel N",true,true);
 //  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
 //  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
-  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
+  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",true,true);
   pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
-  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.1,1.);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.03,0.01,.2);
   pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
   pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
@@ -1291,6 +1319,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
   pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
+  pangolin::Var<bool> showInfoObs("visPanel.show InfoObs",false,true);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
@@ -1362,6 +1391,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> infoObsSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pc0Info_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
@@ -1657,7 +1687,7 @@ int main( int argc, char* argv[] )
       tdp::Vector3fda mu = tdp::Vector3fda::Zero();
       float tau = 0.;
       vmfsLock.lock();
-      if (vmfs[pl.z_].tau_ > 0) {
+      if (pl.z_ < K && vmfs[pl.z_].tau_ > 0) {
         mu = vmfs[pl.z_].mu_;
         tau= vmfs[pl.z_].tau_;
       }
@@ -1685,7 +1715,7 @@ int main( int argc, char* argv[] )
 //      }
       // TODO this seems to not work!
       bool haveFullNeighborhood = (ids.array() >= 0).all();
-      if (haveFullNeighborhood) {
+      if (haveFullNeighborhood && !doVariationalUpdate) {
         tdp::Vector3fda JpMRF = tdp::Vector3fda::Zero();
         float wMRF = 0.f;
         for (int j=0; j<kNN; ++j) {
@@ -1726,22 +1756,30 @@ int main( int argc, char* argv[] )
       tdp::Vector3fda pmu;
         if (doVariationalUpdate && haveFullNeighborhood) {
           Eigen::Matrix3f InfoPl;
-          Eigen::Matrix3f InfoO = 1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
-          Eigen::Matrix3f Info = InfoO + pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
-          Eigen::Vector3f xi = InfoO*pc0_w[i] + pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
+          tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
+          Eigen::Matrix3f Info = numSum_w[i]*InfoO ; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
+          Eigen::Vector3f xi = numSum_w[i]*InfoO*pc0_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
           for (int i=0; i<kNN; ++i) {
             if (ids[i] > -1 && pl_w[ids[i]].valid_) {
-              InfoPl = pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+              InfoPl = tau/(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+//              InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
 //              InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
               Info += InfoPl;
               xi += InfoPl*pl_w[ids[i]].p_;
+            } else {
+              std::cout << "have full neighborhood but id " <<  ids[i] << std::endl;
             }
           }
           pmu = Info.ldlt().solve(xi);
           pl.Info_ = Info;
-          pl.Hp_ = -log(Info.determinant());
-//          std::cout << pl.Hp_ << ": " << pl_w[i].p_.transpose() << " " << pmu.transpose() << std::endl;
-//          std::cout << Info << std::endl;
+          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
+          if ( (pmu-pl.p_).norm() > 0.1) {
+            std::cout << pl.Hp_  << " " << numSum_w[i]
+              << ": " << pl_w[i].p_.transpose() << " " << pmu.transpose() << " xi " << xi.transpose()  << std::endl;
+            std::cout << Info.eigenvalues().real().transpose() << std::endl;
+            std::cout << InfoO << std::endl;
+            std::cout << Info << std::endl;
+          }
         }
       // apply gradient
 //      tdp::Vector3fda& Jn = Jn_w[i];
@@ -1860,7 +1898,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, rgb_w,
+             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, pc0Info_w, rgb_w,
             n_w, grad_w, rs, ts, normalViaRMLS);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
@@ -1869,7 +1907,7 @@ int main( int argc, char* argv[] )
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
           pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
-          infoObsSum[i] = 1./(sigmaObsP*sigmaObsP);
+          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
           outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
@@ -2312,6 +2350,10 @@ int main( int argc, char* argv[] )
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
 
+            tdp::Matrix3fda SigmaO;
+            NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
+            float sigmaSqO = 100*n(u,v).dot(SigmaO*n(u,v));
+
           ts[i] = frame;
           pl.lastFrame_ = frame;
           pl.numObs_ ++;
@@ -2322,9 +2364,11 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
           outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
-          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+//          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+//          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
@@ -2386,6 +2430,12 @@ int main( int argc, char* argv[] )
             tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
             tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
 
+            tdp::Matrix3fda SigmaO;
+            NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
+            float sigmaSqO =100* n(u,v).dot(SigmaO*n(u,v));
+
+//            std::cout << sigmaSqO << std::endl;
+
             // TODO: copied from above
             ts[i] = frame;
             pl.lastFrame_ = frame;
@@ -2396,9 +2446,12 @@ int main( int argc, char* argv[] )
             pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
             outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+            
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
+//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+//            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
@@ -2505,7 +2558,7 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
-            || showHn || showHp) {
+            || showHn || showHp || showInfoObs) {
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
@@ -2527,6 +2580,9 @@ int main( int argc, char* argv[] )
           } else if (showHn) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w[i].Hn_;
+          } else if (showInfoObs) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = infoObsSum[i];
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
