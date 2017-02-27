@@ -221,7 +221,7 @@ void ExtractPlanes(
 
         tdp::Matrix3fda SigmaO;
         NoiseModelNguyen(n, p, cam, SigmaO);
-        SigmaO = T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose();
+        SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
         pc0Info_w[pl_w.iInsert_] = SigmaO.inverse();
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -1220,10 +1220,6 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
-  pangolin::Var<bool> runMapping("ui.run mapping",true,true);
-  pangolin::Var<bool> updateMap("ui.update map",true,true);
-  // TODO if sample normals if off then doRegvMF shoudl be on
-  pangolin::Var<bool> sampleNormals("ui.sampleNormals",true,true);
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
@@ -1238,6 +1234,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
+  pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
+  pangolin::Var<bool> updateMap("mapPanel.update map",true,true);
+  // TODO if sample normals if off then doRegvMF shoudl be on
+  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
   pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
   pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",true,true);
   pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
@@ -1246,16 +1246,19 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> doRegRelNZ("mapPanel.reg rel N",true,true);
 //  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
 //  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
-  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",true,true);
+  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
   pangolin::Var<bool> useMrfInVariational("mapPanel. use MRF in var",false,true);
   pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
-  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.03,0.01,.2);
-  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
-  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
+//  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.03,0.01,.2);
+//  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
+//  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.01,.2);
+  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.3,0.01,0.1);
+  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.6,0.01,0.2);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
@@ -1312,6 +1315,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNormals("visPanel.show ns",true,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
   pangolin::Var<bool> showPcEst("visPanel.show PcEst",false,true);
+  pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
   pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
   pangolin::Var<bool> showCurv("visPanel.show curvature",false,true);
@@ -1399,6 +1403,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pc0Info_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsMu_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
@@ -1644,7 +1649,7 @@ int main( int argc, char* argv[] )
           if (0 <= nn[i](k) && nn[i](k) < iInsert) {
             numSamplesZ[i](k) ++;
             if(zS[i] == zS[nn[i](k)])
-              sumSameZ[i]++
+              sumSameZ[i](k)++;
           }
         }
       }
@@ -1724,7 +1729,7 @@ int main( int argc, char* argv[] )
         Jp += -1./(sigmaPc0*sigmaPc0)*(pc0_w[i] - pl.p_);
       }
       if (doRegAbsPc) {
-        Jp += pl.n_ *pl.n_.dot(pl.p_*infoObsSum[i] - pcSum_w[i]);
+        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_*infoObsSum[i] - pcSum_w[i]);
 //        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
 //        Jp += 2.*(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
       }
@@ -1856,7 +1861,7 @@ int main( int argc, char* argv[] )
   out << "# " << input_uri << std::endl;
 
   if (varsFile.size() > 0)
-    pangolin::LoadJsonFile(varsFile, "");
+    pangolin::LoadJsonFile(varsFile, "mapPanel");
 
   pangolin::SaveJsonFile("./varsUi.json", "ui");
   pangolin::SaveJsonFile("./varsMap.json", "mapPanel");
@@ -1928,12 +1933,14 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
-          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
-          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
-//          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
+//          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
+//          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
+          infoObsSum[i] =  1./(sigmaObsP*sigmaObsP);
+          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
          
           pcObsInfo_w[i] = pc0Info_w[i];
           pcObsXi_w[i] = pc0Info_w[i]* pl_w[i].p_;
+          pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
           outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
@@ -2393,15 +2400,18 @@ int main( int argc, char* argv[] )
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
           outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
-          tdp::Matrix3fda infoObs = (T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+          tdp::Matrix3fda infoObs = 0.01*(T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
-          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
-          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+//          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
+//          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+            pcObsInfo_w[i] = pcObsInfo_w[i] + infoObs;
+            pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
+            pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-//          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-//          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
+          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+//            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
@@ -2481,15 +2491,18 @@ int main( int argc, char* argv[] )
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
             outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
-            tdp::Matrix3fda infoObs = (T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+            tdp::Matrix3fda infoObs = 0.01*(T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
-            pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
-            pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+//            pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
+//            pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+            pcObsInfo_w[i] = pcObsInfo_w[i] + infoObs;
+            pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
+            pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
-//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-//            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+//            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
@@ -2649,7 +2662,7 @@ int main( int argc, char* argv[] )
             auto& ass = mapNN[i];
             if (ass.second >= 0) {
               if (numSamplesZ[ass.first](i%kNN) > 0) {
-                tdp::glColorHot(sumSameZ[ass.first](i%5)/numSamplesZ[ass.first](i%5));
+                tdp::glColorHot(sumSameZ[ass.first](i%5)/numSamplesZ[ass.first](i%5),0.3);
               } else {
                 glColor4f(0.3,0.3,0.3,0.3);
               }
@@ -2694,6 +2707,15 @@ int main( int argc, char* argv[] )
         glColor4f(1,0,1,0.5);
         for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w[i], pcEst_w[i]);
+        }
+      }
+      if (showPcMu) {
+        vboEst_w.Upload(pcObsMu_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+        glColor3f(0.,1.,1.);
+        pangolin::RenderVbo(vboEst_w);
+        glColor4f(1,0,1,0.5);
+        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w[i], pcObsMu_w[i]);
         }
       }
     }
