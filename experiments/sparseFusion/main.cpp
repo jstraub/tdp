@@ -1256,9 +1256,15 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.03,0.01,.2);
 //  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
 //  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
+  pangolin::Var<bool> useSigmaPl("mapPanel.use sigmaPl",false,true);
+  pangolin::Var<bool> useOtherNi("mapPanel.use OtherNi",true,true);
+  pangolin::Var<bool> useESameZ("mapPanel.use ESameZ",false,true);
+  pangolin::Var<int> zCountBurnIn("mapPanel.z Count Burn In",20, 1, 100);
+  pangolin::Var<bool> useTau("mapPanel.use Tau",false,true);
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.01,.2);
   pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.3,0.01,0.1);
   pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.6,0.01,0.2);
+  pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",10,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
@@ -1784,14 +1790,21 @@ int main( int argc, char* argv[] )
           tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
           Eigen::Matrix3f Info = InfoO + numSum_w[i]* pcObsInfo_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
           Eigen::Vector3f xi = InfoO*pc0_w[i] + numSum_w[i]*pcObsXi_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
-          if (useMrfInVariational) {
-            for (int i=0; i<kNN; ++i) {
-              if (ids[i] > -1 && pl_w[ids[i]].valid_) {
-                InfoPl = tau/(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
-                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
-                //InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+          if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
+            for (int k=0; k<kNN; ++k) {
+              if (ids[k] > -1 && pl_w[ids[k]].valid_) {
+                float eSameZ = numSamplesZ[i](k) > zCountBurnIn ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
+                if (useOtherNi)
+                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                else
+                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                if (useESameZ) InfoPl *= eSameZ ;
+                if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+                if (useTau) InfoPl *= tau;
+                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
                 Info += InfoPl;
-                xi += InfoPl*pl_w[ids[i]].p_;
+                xi += InfoPl*pl_w[ids[k]].p_;
               } else {
                 std::cout << "have full neighborhood but id " <<  ids[i] << std::endl;
               }
@@ -1933,10 +1946,12 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
-//          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
-//          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
-          infoObsSum[i] =  1./(sigmaObsP*sigmaObsP);
-          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
+          pc0Info_w[i] /= obsStdInflation*obsStdInflation;
+
+          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
+          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
+//          infoObsSum[i] =  1./(sigmaObsP*sigmaObsP);
+//          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
          
           pcObsInfo_w[i] = pc0Info_w[i];
           pcObsXi_w[i] = pc0Info_w[i]* pl_w[i].p_;
@@ -2386,7 +2401,8 @@ int main( int argc, char* argv[] )
 
             tdp::Matrix3fda SigmaO;
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
-            float sigmaSqO = 100*n(u,v).dot(SigmaO*n(u,v));
+            SigmaO *= obsStdInflation*obsStdInflation;
+            float sigmaSqO = n(u,v).dot(SigmaO*n(u,v));
 
           ts[i] = frame;
           pl.lastFrame_ = frame;
@@ -2400,7 +2416,7 @@ int main( int argc, char* argv[] )
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
           outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
-          tdp::Matrix3fda infoObs = 0.01*(T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+          tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
 //          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
 //          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
@@ -2408,10 +2424,10 @@ int main( int argc, char* argv[] )
             pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
             pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
-//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-//            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
+//          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+//          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
@@ -2475,7 +2491,8 @@ int main( int argc, char* argv[] )
 
             tdp::Matrix3fda SigmaO;
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
-            float sigmaSqO =100* n(u,v).dot(SigmaO*n(u,v));
+            SigmaO *= obsStdInflation*obsStdInflation;
+            float sigmaSqO =n(u,v).dot(SigmaO*n(u,v));
 
 //            std::cout << sigmaSqO << std::endl;
 
@@ -2491,7 +2508,7 @@ int main( int argc, char* argv[] )
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
             outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
-            tdp::Matrix3fda infoObs = 0.01*(T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+            tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
 //            pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
 //            pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
@@ -2499,10 +2516,10 @@ int main( int argc, char* argv[] )
             pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
             pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-//            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
+            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
+            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
+//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
+//            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
