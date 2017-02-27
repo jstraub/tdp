@@ -2009,7 +2009,7 @@ int main( int argc, char* argv[] )
             for (size_t lvl=0; lvl<PYR; ++lvl) {
               for (auto i : *idsCur[lvl]) {
                 uint32_t k = pl_w[i].z_;
-                if (invInd[lvl]->at(k).size() < 3000)
+                if (k < invInd[lvl]->size() && invInd[lvl]->at(k).size() < 3000)
                   invInd[lvl]->at(k).push_back(i);
               }
             }
@@ -2021,7 +2021,7 @@ int main( int argc, char* argv[] )
             for (size_t lvl=0; lvl<PYR; ++lvl) {
               for (auto i : id_w) {
                 uint32_t k = pl_w[i].z_;
-                if (invInd[lvl]->at(k).size() < 3000)
+                if (k < invInd[lvl]->size() && invInd[lvl]->at(k).size() < 3000)
                   invInd[lvl]->at(k).push_back(i);
               }
             }
