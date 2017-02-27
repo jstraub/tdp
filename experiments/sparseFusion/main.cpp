@@ -1379,6 +1379,10 @@ int main( int argc, char* argv[] )
   nnFixed.Fill(0);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> sumSameZ(MAP_SIZE);
+  sumSameZ.Fill(tdp::VectorkNNfda::Zero());
+  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> numSamplesZ(MAP_SIZE);
+  numSamplesZ.Fill(tdp::VectorkNNfda::Zero());
 //  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
 //  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(MAP_SIZE);
 //  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
@@ -1463,12 +1467,14 @@ int main( int argc, char* argv[] )
 //            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
 //            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
 //            mapObsNum[iReadNext][i] = 1;
-//            if (ids(i) != idsPrev(i)) {
+            if (ids(i) != idsPrev(i)) {
+              numSamplesZ[iReadNext][i] = 0;
+              sumSameZ[iReadNext][i] = 0;
 //              mapObsDot[iReadNext][i] = 0.;
 //              mapObsP2Pl[iReadNext][i] = 0.;
 //              mapObsNum[iReadNext][i] = 0.;
 //  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
-//            }
+            }
           if (values(i) > maxNnDist*maxNnDist) {
             ids(i) = -1;
             nnFixed[iReadNext]-- ;
@@ -1627,6 +1633,17 @@ int main( int argc, char* argv[] )
           pl_w[i].z_ = zS[i];
         }
         K = Ksample;
+      }
+
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        uint16_t& zi = zS[i];
+        for (size_t k=0; k<kNN; ++k) {
+          if (0 <= nn[i](k) && nn[i](k) < iInsert) {
+            numSamplesZ[i](k) ++;
+            if(zS[i] == zS[nn[i](k)])
+              sumSameZ[i]++
+          }
+        }
       }
 
 //      std::cout << "counts " << Ksample << ": ";
