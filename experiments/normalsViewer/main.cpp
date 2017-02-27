@@ -327,7 +327,7 @@ int main( int argc, char* argv[] )
           for (size_t u=(wc-recW)/2; u<wc-(wc-recW)/2; ++u) {
             if (tdp::IsValidData(n(u,v))) {
               normalsOut << n(u,v)(0) << " " << n(u,v)(1) <<  " " << n(u,v)(2) 
-                << pc(u,v)(0) << " " << pc(u,v)(1) <<  " " << pc(u,v)(2) 
+                << " "<< pc(u,v)(0) << " " << pc(u,v)(1) <<  " " << pc(u,v)(2) 
                 << std::endl;
             }
           }

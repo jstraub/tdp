@@ -59,56 +59,58 @@ def norm(x):
 
 
 
-
-with open("./normals_1000.csv") as f:
-  print f.readline()
-  ns = np.loadtxt(f)
-
-# improve conditioning of grid based method
-R = np.array([[0,0,1],
-              [1,0,0],
-              [0,1,0]])
-print det(R)
-ns = (R.dot(ns.T)).T
-
 lvl = 4
-
-print ns.shape
-nSum = ns.sum(axis=0) 
-mu = nSum/norm(nSum)
-#mu = np.array([0,0,-1])
-
-sHistN = SphereHistogram(level=lvl)
-
-N = int(np.floor(np.sqrt(sHistN.GetNumTriangles())))
-N = 1000
-
-sHistN.Compute(ns)
-ds = sHistN.GetTriangleCenters()
-HppN = sHistN.Entropy(ns)
-#pN = angleHist(ns.T,N)
-#taus = [0, 5, 10, 12.5, 15, 17.5, 20, 25, 35]
-taus = [0, 50, 100, 150, 200, 300, 400, 500, 750, 1000]
-KLs = []
-KLs2 = []
-for i,tau in enumerate(taus):
-  print "using icosahedron-based histogram"
-  pdfNico = vMF(ds.T, mu, tau)
-  HpqN = sHistN.CrossEntropy(ns, pdfNico)
-  print "Hpp(n): ",HppN
-  print "Hpq(n): ",HpqN
-  print "KL: ",HpqN - HppN
-  KLs.append(HpqN - HppN)
-#  print "using angle-based histogram"
-#  logpdfN = logvMFpdfGrid(N,mu,tau)
-#  print logpdfN
-#  KLn2 = logKL(ns.T, pN, logpdfN, N)
-#  print "KL n: ", KLn2
-#  KLs2.append(KLn2)
-
-
+#N = int(np.floor(np.sqrt(sHistN.GetNumTriangles())))
+#N = 1000
 plt.figure()
-plt.plot(taus, KLs, label="geogrid")
-#plt.plot(taus, KLs2, label="angle hist")
+for path in ["./normals_600_voting.csv", "./normals_1000_voting.csv",
+    "./normals_1300_voting.csv"]:
+
+  with open(path) as f:
+    print f.readline()
+    print f.readline()
+    ns = np.loadtxt(f)
+  print ns.shape
+  ns = ns[:min(ns.shape[0],10000),:3]
+
+  # improve conditioning of grid based method
+  #R = np.array([[0,0,1],
+  #              [1,0,0],
+  #              [0,1,0]])
+  #print det(R)
+  #ns = (R.dot(ns.T)).T
+
+  print ns.shape
+  nSum = ns.sum(axis=0) 
+  mu = nSum/norm(nSum)
+  #mu = np.array([0,0,-1])
+
+  sHistN = SphereHistogram(level=lvl)
+  sHistN.Compute(ns)
+  ds = sHistN.GetTriangleCenters()
+  HppN = sHistN.Entropy(ns)
+  #pN = angleHist(ns.T,N)
+  #taus = [0, 5, 10, 12.5, 15, 17.5, 20, 25, 35]
+  taus = [0, 50, 100, 150, 200, 300, 400, 500, 750, 1000, 1500, 2000, 2500, 3000]
+  KLs = []
+  KLs2 = []
+  for i,tau in enumerate(taus):
+    print "using icosahedron-based histogram"
+    pdfNico = vMF(ds.T, mu, tau)
+    HpqN = sHistN.CrossEntropy(ns, pdfNico)
+    print "Hpp(n): ",HppN
+    print "Hpq(n): ",HpqN
+    print "KL: ",HpqN - HppN
+    KLs.append(HpqN - HppN)
+  #  print "using angle-based histogram"
+  #  logpdfN = logvMFpdfGrid(N,mu,tau)
+  #  print logpdfN
+  #  KLn2 = logKL(ns.T, pN, logpdfN, N)
+  #  print "KL n: ", KLn2
+  #  KLs2.append(KLn2)
+
+
+  plt.plot(taus, KLs, label=path)
+  #plt.plot(taus, KLs2, label="angle hist")
 plt.legend(loc="best")
 plt.show()
