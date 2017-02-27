@@ -195,6 +195,7 @@ void ExtractPlanes(
 //            p, n, T_wc, cam, Wscaled, i%mask.w_, i/mask.w_, feat);
         pl.p_ = T_wc*p;
         pl.n_ = T_wc.rotation()*n;
+        pl.p0_ = pl.p_;
         pl.curvature_ = curv;
         pl.rgb_ = rgb[i];
         pl.gradGrey_ = gradGrey[i];
@@ -1236,6 +1237,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
   pangolin::Var<bool> updateMap("mapPanel.update map",true,true);
+  pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
   pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
   pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
@@ -1456,7 +1458,7 @@ int main( int argc, char* argv[] )
           newIds.push_back(i);
         iReadNext = sizeToReadPrev;
       }
-      if (nnFixed[iReadNext] < kNN) {
+      if (allowNNRevisit || nnFixed[iReadNext] < kNN) {
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
           pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
@@ -1469,7 +1471,7 @@ int main( int argc, char* argv[] )
         ids = tdp::VectorkNNida::Ones()*(-1);
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext) {
-            float dist = (pl.p_-pl_w.GetCircular(i).p_).squaredNorm();
+            float dist = (pl.p0_-pl_w.GetCircular(i).p0_).squaredNorm();
             tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }

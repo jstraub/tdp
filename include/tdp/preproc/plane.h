@@ -17,6 +17,7 @@ void ComputeUnitPlanes(
 
 struct Plane {
   Vector3fda p_; 
+  Vector3fda p0_;  // initial location for NN
   Vector3fda n_; 
   float curvature_;
   Vector3bda rgb_; 
