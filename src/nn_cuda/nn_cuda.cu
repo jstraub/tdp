@@ -2,6 +2,10 @@
 #include <tdp/sorts/parallelSorts.h>
 #include <tdp/cuda/cuda.h>
 
+#include <tdp/utils/timer.hpp>
+
+#include <algorithm>
+
 namespace tdp {
 
 template<class T> inline void destroyArray(T*& p) {
@@ -89,18 +93,32 @@ void NN_Cuda::search(
   dim3 blocks, threads;
   ComputeKernelParamsForArray(blocks, threads, m_size, 256);
   KernelComputeNNDistances<<<blocks,threads>>>(m_size, d_elements, d_points, query);
+  cudaDeviceSynchronize();
 
-  // Sort nearest to farthest
-  ParallelSorts<NN_Element>::sortDevicePreloaded(blocks, threads, m_size, d_elements);
+  // Either sort in GPU or CPU depending on how many we need.
+//  if (k == 1) {
+//    // Copy back everything, then do a reduce
+//    cudaMemcpy(h_elements, d_elements, m_size * sizeof(NN_Element), cudaMemcpyDeviceToHost);
+//    NN_Element min = *std::min_element(h_elements, h_elements + m_size);
+//    nnIds(0) = min.index();
+//    dists(0) = min.value();
+//  } else {
+    if (k > 1000) {
+      // Sort in GPU then copy back only what is asked for
+      ParallelSorts<NN_Element>::sortDevicePreloaded(blocks, threads, m_size, d_elements);
+      cudaMemcpy(h_elements, d_elements, k * sizeof(NN_Element), cudaMemcpyDeviceToHost);
+    } else {
+      // Copy back everything, then sort only for top K in CPU
+      cudaMemcpy(h_elements, d_elements, m_size * sizeof(NN_Element), cudaMemcpyDeviceToHost);
+      std::partial_sort(h_elements, h_elements + k, h_elements + m_size);
+    }
 
-  // Copy Back data
-  cudaMemcpy(h_elements, d_elements, k * sizeof(NN_Element), cudaMemcpyDeviceToHost);
-
-  // Place the necessary information into the passed containers
-  for (size_t i = 0; i < k; i++) {
-    nnIds(i) = h_elements[i].index();
-    dists(i) = h_elements[i].value();
-  }
+    // Place the necessary information into the passed containers
+    for (size_t i = 0; i < k; i++) {
+      nnIds(i) = h_elements[i].index();
+      dists(i) = h_elements[i].value();
+    }
+//  }
 }
 
 }

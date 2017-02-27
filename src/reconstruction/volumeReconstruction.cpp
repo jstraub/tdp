@@ -35,7 +35,10 @@ bool inside_surface(const Volume<TSDFval>& tsdf,
   inside &= tsdf(x    , y + 1, z + 1).f <= 0;
   inside &= tsdf(x + 1, y + 1, z + 1).f <= 0;
 
-  inside &= extra_filter(tsdf_point_to_real_space_point(x, y, z, grid0, dGrid, T_wG));
+  // Extremely costly computation.
+  if (inside) {
+    inside &= extra_filter(tsdf_point_to_real_space_point(x, y, z, grid0, dGrid, T_wG));
+  }
 
   return inside;
 }
@@ -334,6 +337,7 @@ float volume_in_bounds_with_voxel_counting(
   find_distances(distances, tsdf, p_left, p_right, grid0, dGrid, T_wG);
   float volume = 0.0;
 
+  size_t count = 0;
   for (size_t k = 0; k < tsdf.d_ - 1; k++)
     for (size_t j = 0; j < tsdf.h_ - 1; j++)
       for (size_t i = 0; i < tsdf.w_ - 1; i++) {
@@ -365,7 +369,9 @@ float volume_in_bounds_with_voxel_counting(
         // }
         // volume += dGrid(0) * dGrid(1) * dGrid(2) * percentVolume;
         volume += dGrid(0) * dGrid(1) * dGrid(2);
+        count++;
       }
+  std::cout << "count: " << count << std::endl;
 
   return volume;
 }

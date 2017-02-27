@@ -26,6 +26,7 @@ file(GLOB SRCS
   "../3rdparty/fast-C-src/*c"
   "./nn_cuda/*cpp"
   "./sorts/*cpp"
+  "./filters/*cpp"
   )
 file(GLOB CU_SRCS "*.cu" "./*/*cu")
 

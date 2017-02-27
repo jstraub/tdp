@@ -22,7 +22,6 @@
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
 #include <tdp/eigen/dense.h>
-#include <tdp/nn/ann.h>
 #ifdef CUDA_FOUND
 #include <tdp/preproc/normals.h>
 #endif
@@ -37,7 +36,7 @@
 #include <tdp/gl/shaders.h>
 #include <tdp/gl/render.h>
 
-#include <tdp/tsdf/tsdf_shapes.h>
+#include <tdp/nn_cuda/nn_cuda.h>
 
 #include <math.h>
 #include <cmath>
@@ -45,148 +44,27 @@
 #include <functional>
 #include <tdp/reconstruction/plane.h>
 #include <tdp/reconstruction/volumeReconstruction.h>
+#include <tdp/filters/tsdfFilters.h>
 #include "test.h"
+#include "render_help.h"
+#include "filters.h"
+#include <vector>
 
-#define PI 3.14159265358979f
+inline std::function<void(size_t, size_t, size_t)> makeVectorFill(
+       std::vector<float>& vec,
+       const tdp::Vector3fda& grid0,
+       const tdp::Vector3fda& dGrid,
+       const tdp::SE3f& T_wG
+) {
+  vec.clear();
 
-inline std::function<bool(tdp::Vector3fda)> make_inside_surface_filter(
-        tdp::ManagedHostImage<tdp::Vector3fda>& centroids,
-        tdp::ManagedHostImage<tdp::Vector3fda>& normals,
-        tdp::ANN& ann,
-        Eigen::VectorXi& nnIds,
-        Eigen::VectorXf& dists) {
-  // points pass the filter if they lie inside the surface
-  return [&](tdp::Vector3fda point) {
-    ann.Search(point, 1, 1e-7, nnIds, dists);
-    size_t id = nnIds(0);
-    return (centroids(id, 0) - point).dot(normals(id, 0)) < 0;
+  return [&](size_t i, size_t j, size_t k) {
+    tdp::Vector3fda point(i * dGrid(0), j * dGrid(1), k * dGrid(2));
+    point = T_wG * (point + grid0);
+    vec.push_back(point(0));
+    vec.push_back(point(1));
+    vec.push_back(point(2));
   };
-}
-
-void set_up_ann(
-        tdp::ManagedHostImage<tdp::Vector3fda>& centroids,
-        tdp::ManagedHostImage<tdp::Vector3fda>& normals,
-        tdp::ANN& ann,
-        const float* vertices,
-        const size_t numVertices,
-        const uint32_t* indices,
-        const size_t numTriangles) {
-  centroids.Reinitialise(numTriangles, 1);
-  normals.Reinitialise(numTriangles, 1);
-  for (size_t i = 0; i < numTriangles; i++) {
-    size_t c1 = indices[3 * i + 0],
-           c2 = indices[3 * i + 1],
-           c3 = indices[3 * i + 2];
-    tdp::Vector3fda v1(vertices[3 * c1 + 0], vertices[3 * c1 + 1], vertices[3 * c1 + 2]);
-    tdp::Vector3fda v2(vertices[3 * c2 + 0], vertices[3 * c2 + 1], vertices[3 * c2 + 2]);
-    tdp::Vector3fda v3(vertices[3 * c3 + 0], vertices[3 * c3 + 1], vertices[3 * c3 + 2]);
-    centroids(i, 0) = (v1 + v2 + v3) / 3;
-    normals(i, 0) = (v2 - v1).cross(v3 - v1).normalized();
-  }
-  ann.ComputeKDtree(centroids);
-}
-
-void render_surface_normals(const float* vertices,
-                            const size_t numVertices,
-                            const uint32_t* indices,
-                            const size_t numTriangles) {
-    glColor3f(1,0,0);
-    glBegin(GL_LINES);
-    for (size_t i = 0; i < numTriangles; i++) {
-      size_t c1 = indices[3 * i + 0],
-             c2 = indices[3 * i + 1],
-             c3 = indices[3 * i + 2];
-      tdp::Vector3fda v1(vertices[3 * c1 + 0], vertices[3 * c1 + 1], vertices[3 * c1 + 2]);
-      tdp::Vector3fda v2(vertices[3 * c2 + 0], vertices[3 * c2 + 1], vertices[3 * c2 + 2]);
-      tdp::Vector3fda v3(vertices[3 * c3 + 0], vertices[3 * c3 + 1], vertices[3 * c3 + 2]);
-      tdp::Vector3fda centroid = (v1 + v2 + v3) / 3;
-
-      tdp::Vector3fda normal = (v2 - v1).cross(v3 - v1).normalized() / 100;
-
-      tdp::Vector3fda endpoint = centroid + normal;
-      glVertex3f(centroid(0), centroid(1), centroid(2));
-      glVertex3f(endpoint(0), endpoint(1), endpoint(2));
-    }
-    glEnd();
-}
-
-void render_bounding_box_corners(
-                  pangolin::GlBuffer& vbo,
-                  const tdp::Vector3fda& corner1,
-                  const tdp::Vector3fda& corner2) {
-  size_t numVertices = 8;
-  float x[2] = {corner1(0), corner2(0)};
-  float y[2] = {corner1(1), corner2(1)};
-  float z[2] = {corner1(2), corner2(2)};
-  float vertexStore[numVertices * 3];
-
-  size_t vertex = 0;
-  for (int i = 0; i < 2; i++)
-    for (int j = 0; j < 2; j++)
-      for (int k = 0; k < 2; k++, vertex++) {
-        vertexStore[vertex * 3 + 0] = x[i];
-        vertexStore[vertex * 3 + 1] = y[j];
-        vertexStore[vertex * 3 + 2] = z[k];
-      }
-
-  vbo.Reinitialise(pangolin::GlArrayBuffer, numVertices,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  vbo.Upload(vertexStore, sizeof(float) * numVertices * 3, 0);
-
-  if (vbo.IsValid()) {
-    glColor3f(0, 1, 0);
-    pangolin::RenderVbo(vbo);
-  }
-}
-
-void render_plane(const tdp::Reconstruction::Plane& plane,
-                  pangolin::GlBuffer& vbo,
-                  pangolin::GlBuffer& ibo,
-                  auto& shader,
-                  const tdp::Vector3fda& corner1,
-                  const tdp::Vector3fda& corner2) {
-  size_t numVertices = 6;
-  size_t numTriangles = 4;
-
-  float vertexStore[numVertices * 3];
-  unsigned int indexStore[numTriangles * 3];
-
-  // find the intersecting polygon between the plane and the bounding box of the TSDF
-  tdp::Vector3fda polygon[6];
-  tdp::Reconstruction::get_vertices_of_intersection(polygon, plane, corner1, corner2);
-
-  // copy the data into the buffers
-  for (int i = 0; i < numVertices; i++) {
-    vertexStore[i * 3 + 0] = polygon[i](0);
-    vertexStore[i * 3 + 1] = polygon[i](1);
-    vertexStore[i * 3 + 2] = polygon[i](2);
-  }
-
-  for (int i = 0; i < numTriangles; i++) {
-    indexStore[i * 3 + 0] = 0;
-    indexStore[i * 3 + 1] = i + 1;
-    indexStore[i * 3 + 2] = i + 2;
-  }
-
-  // Load the data into the opengl buffers
-  vbo.Reinitialise(pangolin::GlArrayBuffer, numVertices,  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
-  ibo.Reinitialise(pangolin::GlElementArrayBuffer, numTriangles, GL_UNSIGNED_INT,  3, GL_DYNAMIC_DRAW);
-  vbo.Upload(vertexStore, sizeof(float) * numVertices * 3, 0);
-  ibo.Upload(indexStore,  sizeof(unsigned int) * numTriangles * 3, 0);
-
-  if (vbo.IsValid() && ibo.IsValid()) {
-    // make the plane blue
-    glColor3f(0,0,1);
-    tdp::RenderVboIbo(vbo, ibo);
-    // Render a line pointing in the direction of the normal as well
-    // Make it red to contrast with the plane
-    // Keep in mind that the scale size is in terms of meters, so decrease unit normal
-    tdp::Vector3fda other_endpoint = polygon[0] + 0.1 * plane.unit_normal();
-    glColor3f(1,0,0);
-    glBegin(GL_LINES);
-       glVertex3f(polygon[0](0), polygon[0](1), polygon[0](2));
-       glVertex3f(other_endpoint(0), other_endpoint(1), other_endpoint(2));
-    glEnd();
-  }
 }
 
 int main( int argc, char* argv[] )
@@ -230,10 +108,15 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wG;
   tdp::Vector3fda grid0, dGrid;
   tdp::ManagedHostVolume<tdp::TSDFval> tsdf(0, 0, 0);
+  tdp::ManagedHostVolume<tdp::TSDFval> tsdfBase(0, 0, 0);
   if (!tdp::TSDF::LoadTSDF(input_uri, tsdf, T_wG, grid0, dGrid)) {
     pango_print_error("Unable to load volume");
     return 1;
   }
+  tdp::TSDF::LoadTSDF(input_uri, tsdfBase, T_wG, grid0, dGrid);
+  tdp::ManagedDeviceVolume<tdp::TSDFval> cuTsdfBuf1(tsdf.w_, tsdf.h_, tsdf.d_);
+  tdp::ManagedDeviceVolume<tdp::TSDFval> cuTsdfBuf2(tsdf.w_, tsdf.h_, tsdf.d_);
+
   std::cout << "loaded TSDF volume of size: " << tsdf.w_ << "x"
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
@@ -251,11 +134,15 @@ int main( int argc, char* argv[] )
   corner1 = T_wG * (corner1 + grid0);
   corner2 = T_wG * (corner2 + grid0);
 
+  std::cout << "Corner 1: " << corner1 << std::endl;
+  std::cout << "Corner 2: " << corner2 << std::endl;
+
   std::cout << "Finished building TSDF" << std::endl;
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
   pangolin::CreateWindowAndBind( "GuiBase", 1200+menue_w, 800);
+  std::cout << " Create window" << std::endl;
   // current frame in memory buffer and displaying.
   pangolin::CreatePanel("ui").SetBounds(0.,1.,0.,pangolin::Attach::Pix(menue_w));
   // Assume packed OpenGL data unless otherwise specified
@@ -289,13 +176,14 @@ int main( int argc, char* argv[] )
   // vbo_pc.Upload((float *)&(points(0,0)), sizeof(float) * num_points * 3, 0);
 
   // Add some variables to GUI
-  pangolin::Var<float> marchCubeswThr("ui.weight thr",1,1,100);
+  pangolin::Var<float> marchCubeswThr("ui.weight thr",1,0,100);
   pangolin::Var<float> marchCubesfThr("ui.tsdf value thr",1.,0.01,2);
   pangolin::Var<bool> recomputeMesh("ui.recompute mesh", true, false);
   pangolin::Var<bool> showTSDFslice("ui.show tsdf slice", false, true);
   pangolin::Var<int>   tsdfSliceD("ui.TSDF slice D",tsdf.d_/2,0,tsdf.d_-1);
 
   pangolin::Var<bool> showPointCloud("ui.show point cloud", false, true);
+  pangolin::Var<bool> reset("ui.reset", false, false);
 
   // Using cartesian coordinates instead of spherical because the TSDF is not
   // centered at the origin. So it is a tad difficult to manually move planes
@@ -317,19 +205,27 @@ int main( int argc, char* argv[] )
   float minD = tdp::Vector3fda(closeX, closeY, closeZ).norm();
 
   // Plane 1 cutoffs
-  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 1, 0, 1);
-  pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, 0, 1);
-  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 0, 0, 1);
-  pangolin::Var<float> pl1_d("ui.plane_1 d",   -maxD / 3,    -maxD, maxD);
+  //pangolin::Var<float> pl1_nx("ui.plane_1 nx", 1, -1, 1);
+  //pangolin::Var<float> pl1_ny("ui.plane_1 ny", 0, -1, 1);
+  //pangolin::Var<float> pl1_nz("ui.plane_1 nz", 0, -1, 1);
+  //pangolin::Var<float> pl1_d("ui.plane_1 d",   -maxD / 3,    -maxD, maxD);
+  pangolin::Var<float> pl1_nx("ui.plane_1 nx", 1, -1, 1);
+  pangolin::Var<float> pl1_ny("ui.plane_1 ny", -.02381f, -1, 1);
+  pangolin::Var<float> pl1_nz("ui.plane_1 nz", 0.01193f, -1, 1);
+  pangolin::Var<float> pl1_d("ui.plane_1 d",   -0.1380f,    -maxD, maxD);
   pangolin::Var<bool>  pl1_flip_normal("ui.plane_1 flip normal", true, true);
   pangolin::GlBuffer   pl1_vbo;
   pangolin::GlBuffer   pl1_ibo;
 
   // Plane 2 cutoffs
-  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 1, 0, 1);
-  pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, 0, 1);
-  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 0, 0, 1);
-  pangolin::Var<float> pl2_d("ui.plane_2 d",   maxD / 3,    -maxD, maxD);
+  // pangolin::Var<float> pl2_nx("ui.plane_2 nx", 1, -1, 1);
+  // pangolin::Var<float> pl2_ny("ui.plane_2 ny", 0, -1, 1);
+  // pangolin::Var<float> pl2_nz("ui.plane_2 nz", 0, -1, 1);
+  // pangolin::Var<float> pl2_d("ui.plane_2 d",   maxD / 3,    -maxD, maxD);
+  pangolin::Var<float> pl2_nx("ui.plane_2 nx", 1, -1, 1);
+  pangolin::Var<float> pl2_ny("ui.plane_2 ny", -.02381f, -1, 1);
+  pangolin::Var<float> pl2_nz("ui.plane_2 nz", 0.01193f, -1, 1);
+  pangolin::Var<float> pl2_d("ui.plane_2 d",   0.0700f,    -maxD, maxD);
   pangolin::Var<bool>  pl2_flip_normal("ui.plane_2 flip normal", false, true);
   pangolin::GlBuffer   pl2_vbo;
   pangolin::GlBuffer   pl2_ibo;
@@ -353,9 +249,37 @@ int main( int argc, char* argv[] )
   // Variables used for filtering points during volume calculations
   tdp::ManagedHostImage<tdp::Vector3fda> centroids;
   tdp::ManagedHostImage<tdp::Vector3fda> normals;
-  tdp::ANN ann;
+  tdp::NN_Cuda nn;
   Eigen::VectorXi nnIds(1);
   Eigen::VectorXf dists(1);
+
+  // Filters and point clouds for the filtered points
+  pangolin::Var<bool> applyPlanes("ui.apply planes", false, false);
+  //pangolin::Var<bool> filterUninitialized("ui.filter uninit", false, false);
+  //pangolin::Var<bool> showFiltered("ui.show filtered uninit", false, true);
+  pangolin::Var<bool> applyMedianFilter("ui.apply median filter", false, false);
+  pangolin::Var<bool> fillEdges("ui.fill edges", false, false);
+  pangolin::Var<bool> showFilled("ui.show filled", false, true);
+  pangolin::Var<bool> filterPositive("ui.filter positive", false, false);
+  pangolin::Var<bool> showPositiveFilter("ui.show pos", false, true);
+  pangolin::Var<bool> filterNegative("ui.filter negative", false, false);
+  pangolin::Var<bool> showNegativeFilter("ui.show neg", false, true);
+  pangolin::Var<bool> showVolumeCloud("ui.show volume", false, true);
+  pangolin::Var<bool> showTSDFSlice("ui.show tsdf slice plane", false, true);
+
+  pangolin::GlBuffer smallCluster_vbo;
+  pangolin::GlBuffer edgeFill_vbo;
+  pangolin::GlBuffer f_pos_vbo;
+  pangolin::GlBuffer f_neg_vbo;
+  pangolin::GlBuffer volume_vbo;
+  pangolin::GlBuffer slice_vbo;
+
+  std::vector<float> smallCluster_points;
+  std::vector<float> edgeFill_points;
+  std::vector<float> f_pos_points;
+  std::vector<float> f_neg_points;
+  std::vector<float> volume_points;
+  std::vector<float> slice_points;
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -375,7 +299,7 @@ int main( int argc, char* argv[] )
       indexStore = new uint32_t[numTriangles * 3];
       meshVbo.Download(vertexStore, sizeof(float) * numVertices * 3, 0);
       meshIbo.Download(indexStore, sizeof(uint32_t) * numTriangles * 3, 0);
-      set_up_ann(centroids, normals, ann, vertexStore, numVertices, indexStore, numTriangles);
+      set_up_nn(centroids, normals, nn, vertexStore, numVertices, indexStore, numTriangles);
     }
 
     // Draw 3D stuff
@@ -388,6 +312,60 @@ int main( int argc, char* argv[] )
     // draw bounding box
     if (render_bounding_box) {
       render_bounding_box_corners(boundingBoxVbo, corner1, corner2);
+    }
+
+    if (pangolin::Pushed(reset)) {
+      tsdf.CopyFrom(tsdfBase);
+    }
+
+    // if (pangolin::Pushed(filterUninitialized)) {
+    //   auto func = makeVectorFill(smallCluster_points, grid0, dGrid, T_wG);
+    //   filterBlackRegions(tsdf, func);
+    // }
+
+    // if (showFiltered) {
+    //   render_point_cloud(smallCluster_vbo, smallCluster_points, 1, 0, 0);
+    // }
+
+    if (pangolin::Pushed(applyMedianFilter)) {
+      cuTsdfBuf1.CopyFrom(tsdf);
+      tdp::TSDFFilters::medianFilter(cuTsdfBuf1, cuTsdfBuf2);
+      tsdf.CopyFrom(cuTsdfBuf2);
+    }
+
+    if (pangolin::Pushed(fillEdges)) {
+      auto func = makeVectorFill(edgeFill_points, grid0, dGrid, T_wG);
+      fillInFromEdges(tsdf, func);
+    }
+
+    if (showFilled) {
+      render_point_cloud(edgeFill_vbo, edgeFill_points, 0, 0, 1);
+    }
+
+    if (pangolin::Pushed(filterPositive)) {
+      auto func = makeVectorFill(f_pos_points, grid0, dGrid, T_wG);
+      filterPositiveRegions(tsdf, func);
+    }
+
+    if (showPositiveFilter) {
+      render_point_cloud(f_pos_vbo, f_pos_points, 0, 0, 1);
+    }
+
+    if (pangolin::Pushed(filterNegative)) {
+      auto func = makeVectorFill(f_neg_points, grid0, dGrid, T_wG);
+      filterNegativeRegions(tsdf, func);
+    }
+
+    if (showNegativeFilter) {
+      render_point_cloud(f_neg_vbo, f_neg_points, 0, 0, 1);
+    }
+
+    if (showVolumeCloud) {
+      render_point_cloud(volume_vbo, volume_points, 0, 0, 1);
+    }
+
+    if (showTSDFSlice) {
+      render_point_cloud(slice_vbo, slice_points, 0, 1, 0);
     }
 
     // Render the Marching Cubes Mesh
@@ -423,24 +401,43 @@ int main( int argc, char* argv[] )
     }
 
     if (pangolin::Pushed(recomputeVolume) && !first) {
+      // auto func = make_inside_surface_filter(centroids, normals, nn, nnIds, dists);
+      auto func = [&](tdp::Vector3fda point) {
+        volume_points.push_back(point(0));
+        volume_points.push_back(point(1));
+        volume_points.push_back(point(2));
+        return true;
+      };
       std::cout << "Estimated volume: "
                 << tdp::Reconstruction::volume_in_bounds_with_voxel_counting(
                             tsdf, pl1, pl2, grid0, dGrid, T_wG,
-                            make_inside_surface_filter(centroids, normals, ann, nnIds, dists))
+                            func)
                 << std::endl;
     }
 
     first = false;
 
     glDisable(GL_DEPTH_TEST);
+
+    if (pangolin::Pushed(applyPlanes)) {
+      cuTsdfBuf1.CopyFrom(tsdf);
+      tdp::TSDFFilters::applyCuttingPlanes(cuTsdfBuf1, pl1, pl2, grid0, dGrid, T_wG);
+      tsdf.CopyFrom(cuTsdfBuf1);
+    }
+
     // Draw 2D stuff
     viewTsdfSliveView.Show(showTSDFslice);
     if (viewTsdfSliveView.IsShown()) {
-      tdp::Image<tdp::TSDFval> tsdfSliceRaw =
-        tsdf.GetImage(std::min((int)tsdf.d_-1,tsdfSliceD.Get()));
+      int d = std::min((int)tsdf.d_-1, tsdfSliceD.Get());
+      tdp::Image<tdp::TSDFval> tsdfSliceRaw = tsdf.GetImage(d);
       for (size_t i=0; i<tsdfSliceRaw.Area(); ++i)
         tsdfSlice[i] = tsdfSliceRaw[i].f;
       viewTsdfSliveView.SetImage(tsdfSlice);
+
+      auto func = makeVectorFill(slice_points, grid0, dGrid, T_wG);
+      for (size_t i = 0; i < tsdf.w_; i++)
+        for (size_t j = 0; j < tsdf.h_; j++)
+          func(i, j, d);
     }
 
     // leave in pixel orthographic for slider to render.
@@ -450,6 +447,5 @@ int main( int argc, char* argv[] )
   }
   delete[] vertexStore;
   delete[] indexStore;
-
   return 0;
 }
