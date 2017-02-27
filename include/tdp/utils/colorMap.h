@@ -18,4 +18,10 @@ void glColorHot(float cVal) {
             cVal<0.80 ? 0 : 255*(cVal-0.8)*5 );
 }
 
+void glColorHot(float cVal, float alpha) {
+  glColor4f(cVal<0.20 ? 255*cVal*5 : 255,
+            cVal<0.40 ? 0 : cVal < 0.80 ? 255*(cVal-.4)*2.5 : 255,
+            cVal<0.80 ? 0 : 255*(cVal-0.8)*5 , alpha);
+}
+
 }

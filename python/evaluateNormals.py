@@ -109,7 +109,6 @@ for path in ["./normals_600_voting.csv", "./normals_1000_voting.csv",
   #  print "KL n: ", KLn2
   #  KLs2.append(KLn2)
 
-
   plt.plot(taus, KLs, label=path)
   #plt.plot(taus, KLs2, label="angle hist")
 plt.legend(loc="best")
