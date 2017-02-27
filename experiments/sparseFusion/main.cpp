@@ -1396,6 +1396,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<float> infoObsSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pc0Info_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
@@ -1923,8 +1925,13 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
-          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
           infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
+          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
+//          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
+         
+          pcObsInfo_w[i] = pc0Info_w[i];
+          pcObsXi_w[i] = pc0Info_w[i]* pl_w[i].p_;
+
           outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
@@ -2382,6 +2389,12 @@ int main( int argc, char* argv[] )
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
           outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
+
+          tdp::Matrix3fda infoObs = (T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+          tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
+          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
+          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+
 //          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
 //          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
             pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
@@ -2464,7 +2477,12 @@ int main( int argc, char* argv[] )
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
             outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
-            
+
+            tdp::Matrix3fda infoObs = (T_wc.rotation().matrix().transpose()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+            tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
+            pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
+            pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
+
             pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
             infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
 //            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
