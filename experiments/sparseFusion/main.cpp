@@ -1247,6 +1247,7 @@ int main( int argc, char* argv[] )
 //  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
 //  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
   pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",true,true);
+  pangolin::Var<bool> useMrfInVariational("mapPanel. use MRF in var",false,true);
   pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
@@ -1776,17 +1777,19 @@ int main( int argc, char* argv[] )
         if (doVariationalUpdate && haveFullNeighborhood) {
           Eigen::Matrix3f InfoPl;
           tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
-          Eigen::Matrix3f Info = numSum_w[i]*InfoO ; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
-          Eigen::Vector3f xi = numSum_w[i]*InfoO*pc0_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
-          for (int i=0; i<kNN; ++i) {
-            if (ids[i] > -1 && pl_w[ids[i]].valid_) {
-              InfoPl = tau/(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
-//              InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
-//              InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-              Info += InfoPl;
-              xi += InfoPl*pl_w[ids[i]].p_;
-            } else {
-              std::cout << "have full neighborhood but id " <<  ids[i] << std::endl;
+          Eigen::Matrix3f Info = InfoO + numSum_w[i]* pcObsInfo_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
+          Eigen::Vector3f xi = InfoO*pc0_w[i] + numSum_w[i]*pcObsXi_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
+          if (useMrfInVariational) {
+            for (int i=0; i<kNN; ++i) {
+              if (ids[i] > -1 && pl_w[ids[i]].valid_) {
+                InfoPl = tau/(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[i]].n_*pl_w[ids[i]].n_.transpose();
+                //InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                Info += InfoPl;
+                xi += InfoPl*pl_w[ids[i]].p_;
+              } else {
+                std::cout << "have full neighborhood but id " <<  ids[i] << std::endl;
+              }
             }
           }
           pmu = Info.ldlt().solve(xi);
