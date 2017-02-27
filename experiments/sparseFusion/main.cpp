@@ -2644,10 +2644,17 @@ int main( int argc, char* argv[] )
           TICK("Draw 3D render NN");
 //          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
 //             << mapNN.size()/kNN << std::endl;
-          glColor4f(0.3,0.3,0.3,0.3);
-          for (auto& ass : mapNN) {
-            if (ass.second >= 0)
+//          for (auto& ass : mapNN) {
+          for (size_t i=0; i<mapNN.size(); ++i) {
+            auto& ass = mapNN[i];
+            if (ass.second >= 0) {
+              if (numSamplesZ[ass.first](i%kNN) > 0) {
+                tdp::glColorHot(sumSameZ[ass.first](i%5)/numSamplesZ[ass.first](i%5));
+              } else {
+                glColor4f(0.3,0.3,0.3,0.3);
+              }
               tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
+            }
           }
           TOCK("Draw 3D render NN");
         }
