@@ -1213,16 +1213,19 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> savePly("ui.save ply",false,true);
 
   pangolin::Var<int> numMapPoints("ui.num Map",0,0,0);
+  pangolin::Var<int> numPruned("ui.num Pruned",0,0,0);
   pangolin::Var<int> numProjected("ui.num Proj",0,0,0);
   pangolin::Var<int> numInl("ui.num Inl",0,0,0);
   pangolin::Var<int> idMapUpdate("ui.id Map",0,0,0);
   pangolin::Var<int> idNNUpdate("ui.id NN",0,0,0);
+  pangolin::Var<int> idNNStack("ui.id NN Stack",0,0,0);
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
+  pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
   pangolin::Var<int> numAdditionalObs("ui.num add Obs",300,0,1000);
@@ -1240,6 +1243,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
   pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
+  pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
+  pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
+  pangolin::Var<float> condHThr("mapPanel.condHThr",0.01,0.001,0.1);
   pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
   pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",true,true);
   pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
@@ -1266,7 +1272,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.01,.2);
   pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.3,0.01,0.1);
   pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.6,0.01,0.2);
-  pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",10,1,100);
+  pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
   pangolin::Var<bool> runICP("ui.run ICP",true,true);
@@ -1320,9 +1326,11 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
   pangolin::Var<int> showPcLvl("visPanel.cur Lvl",0,0,PYR-1);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
-  pangolin::Var<bool> showNormals("visPanel.show ns",true,true);
+  pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
   pangolin::Var<bool> showPcEst("visPanel.show PcEst",false,true);
+  pangolin::Var<bool> showSamplePcEst("visPanel.show SamplePcEst",false,true);
+  pangolin::Var<bool> showSamplePc("visPanel.show SamplePc",false,true);
   pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
   pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
@@ -1333,6 +1341,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
   pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
   pangolin::Var<bool> showInfoObs("visPanel.show InfoObs",false,true);
+  pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,1.0);
+  pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.,1.0);
+  pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
+  pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
@@ -1372,6 +1384,19 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcEst_w(MAP_SIZE);
+
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleOuter_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleSum_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleEst_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> pSampleCount_w(MAP_SIZE);
+  nSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
+  pSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
+  pSampleSum_w.Fill(tdp::Vector3fda::Zero());
+  pSampleEst_w.Fill(tdp::Vector3fda::Zero());
+  nSampleSum_w.Fill(tdp::Vector3fda::Zero());
+  pSampleCount_w.Fill(0.);
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1445,26 +1470,27 @@ int main( int argc, char* argv[] )
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead ==0) continue;
-      if (sizeToRead == sizeToReadPrev) {
-        if (newIds.size() > 0) {
-          iReadNext = newIds.front();
-          newIds.pop_front();
-        } else {
-          std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
-          iReadNext = unif(rnd);
-        }
-      } else {
-        for (int32_t i=sizeToReadPrev+1; i<sizeToRead; ++i)
+      if (sizeToRead > sizeToReadPrev) {
+        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
           newIds.push_back(i);
-        iReadNext = sizeToReadPrev;
       }
+      if (newIds.size() == 0) {
+        std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
+        newIds.push_back(unif(rnd));
+//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
+      }
+      iReadNext = newIds.front();
+      newIds.pop_front();
+      idNNStack = newIds.size();
+
       if (allowNNRevisit || nnFixed[iReadNext] < kNN) {
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
-          pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
-          n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
-          pl.valid_ = false;
-        }
+        if (!pl.valid_) continue;
+//        if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
+//          pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+//          n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
+//          pl.valid_ = false;
+//        }
         values.fill(std::numeric_limits<float>::max());
         tdp::VectorkNNida& ids = nn[iReadNext];
         tdp::VectorkNNida idsPrev = ids;
@@ -1476,6 +1502,30 @@ int main( int argc, char* argv[] )
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
+        if (pruneNoise) {
+//          std::cout << "checking prune on " << iReadNext 
+//            << " time " << pl.lastFrame_ << " now " << frame << std::endl;
+          if (pl.lastFrame_+survivalTime < frame) {
+          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
+//          std::cout << iReadNext << ": " 
+//            << dist  <<  " vs " << values(0) 
+//            << " frac " << dist/values(0) 
+//            << std::endl;
+          if (dist/values(0) > relPruneDistThr
+              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
+            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
+            pl.valid_ = false;
+            std::cout << "pruning " << iReadNext 
+              << " rel val " << dist/values(0)
+              << " thr " << relPruneDistThr 
+              << std::endl;
+//            std::cout << values.transpose() << std::endl;
+            numPruned = numPruned +1;
+          }
+          }
+        }
+
         // for map constraints
         // TODO: should be updated as pairs are reobserved
         nnFixed[iReadNext] = kNN;
@@ -1541,6 +1591,7 @@ int main( int argc, char* argv[] )
     int32_t iInsert = 0;
 //    std::random_device rd_;
     std::mt19937 rnd(0);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
     while(runSampling.Get()) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
@@ -1555,8 +1606,7 @@ int main( int argc, char* argv[] )
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         uint16_t& zi = zS[i];
         tdp::Vector3fda& ni = nS[i];
-        if (!pl_w[i].valid_)
-          continue;
+        if (!pl_w[i].valid_) continue;
         if (sampleNormals) {
           //tdp::plane& pl = pl_w[i];
           //eigen::vector3f mu = pl.w_*pl.n_*tauo;
@@ -1566,8 +1616,51 @@ int main( int argc, char* argv[] )
           if (zi < Ksample) {
             mu += vmfs[zi].mu_*vmfs[zi].tau_;
           }
+          if (normalsP2PlContrib) {
+            tdp::VectorkNNida& ids = nn.GetCircular(i);
+            if ((ids.array() >= 0).all()) {
+              Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
+              Eigen::Matrix3f InfoPl;
+              int32_t num = 0;
+              for (int k=0; k<kNN; ++k) {
+                if (ids[k] > -1 
+                    && pl_w[ids[k]].valid_ 
+                    && tdp::IsValidData(pS[ids[k]])
+                    && tdp::IsValidData(pS[i])) {
+                  InfoPl = (pS[ids[k]]-pS[i])*(pS[ids[k]]-pS[i]).transpose();
+//                  if (i%10) {
+//                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
+//                  }
+                  if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+                  Info += InfoPl;
+                  num++;
+                }  else {
+                  break;
+                } 
+              }
+              if (num == kNN) {
+                eig.computeDirect(Info);
+                tdp::Vector3fda e = eig.eigenvalues();
+                float tauEst = 2.*(e(1)*e(2))/(e(1)+e(2));
+                tdp::Vector3fda muEst = eig.eigenvectors().col(0);
+                muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
+//                if (tauEst > 100) 
+//                  std::cout 
+//                    << Info << std::endl
+//                    << " eig " 
+//                    << muEst.transpose() 
+//                    << " mu " << mu.transpose() << ": "
+//                    << e.transpose() << " tau " << tauEst << std::endl;
+                mu += muEst*tauEst;
+              }
+            }
+          }
           ni = vMF<float,3>(mu).sample(rnd);
-          pl_w[i].n_ = ni;
+          nSampleOuter_w[i] += ni*ni.transpose();
+          nSampleSum_w[i] += ni;
+          zCountS[i] ++;
+          pl_w[i].n_ = nSampleSum_w[i].normalized();
+          n_w[i] = pl_w[i].n_;
         } else {
           ni = pl_w[i].n_;
         }
@@ -1576,8 +1669,7 @@ int main( int argc, char* argv[] )
       }
       // sample dpvmf labels
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        if (!pl_w[i].valid_)
-          continue;
+        if (!pl_w[i].valid_) continue;
         Eigen::VectorXf logPdfs(Ksample+1);
         Eigen::VectorXf pdfs(Ksample+1);
 
@@ -1616,9 +1708,6 @@ int main( int argc, char* argv[] )
           vmfSS[zPrev](3) --;
           vmfSS[zi].topRows<3>() += ni;
           vmfSS[zi](3) ++;
-          zCountS[i] = 1;
-        } else {
-          zCountS[i] ++;
         }
       }
       std::vector<uint32_t> labelMap(Ksample);
@@ -1645,6 +1734,7 @@ int main( int argc, char* argv[] )
 //      }
 //      {
         for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+          if (!pl_w[i].valid_) continue;
           zS[i] = labelMap[zS[i]];
           pl_w[i].z_ = zS[i];
         }
@@ -1652,6 +1742,7 @@ int main( int argc, char* argv[] )
       }
 
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        if (!pl_w[i].valid_) continue;
         uint16_t& zi = zS[i];
         for (size_t k=0; k<kNN; ++k) {
           if (0 <= nn[i](k) && nn[i](k) < iInsert) {
@@ -1672,28 +1763,91 @@ int main( int argc, char* argv[] )
 //          std::cout << vmfs[k].tau_ << " ";
 //      std::cout << std::endl;
 //      // sample points
-//      for (int32_t i = 0; i!=iInsert;
-//        i=(i+1)%nn.w_) {
-//        tdp::Vector3fda& pi = pS[i];
-//        tdp::Plane& pl = pl_w[i];
-//        tdp::Vector5ida& ids = nn[i];
-//
-//        Eigen::Matrix3f SigmaPl;
-//        Eigen::Matrix3f Info =  InfoO*pl.N_;
-////        Eigen::Vector3f xi = SigmaO.ldlt().solve(pl.p_);
-//        Eigen::Vector3f xi = Info*pl.p_; //*pl.w_;
-//        for (int i=0; i<5; ++i) {
-//          if (ids[i] > -1  && zS[ids[i]] < Ksample && tdp::IsValidData(pS[ids[i]])) {
-//            SigmaPl = vmfs[zS[ids[i]]].mu_*vmfs[zS[ids[i]]].mu_.transpose();
-//            Info += SigmaPl;
-//            xi += SigmaPl*pS[ids[i]];
+      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+        tdp::Plane& pl = pl_w[i];
+        if (!pl.valid_) continue;
+        tdp::VectorkNNida& ids = nn.GetCircular(i);
+        bool haveFullNeighborhood = (ids.array() >= 0).all();
+        if (haveFullNeighborhood) {
+          tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
+          Eigen::Matrix3f Info = InfoO + numSum_w[i]* pcObsInfo_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
+          Eigen::Vector3f xi = InfoO*pc0_w[i] + numSum_w[i]*pcObsXi_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
+//          if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
+          Eigen::Matrix3f InfoPl;
+          Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
+          Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
+          uint32_t numNN = 0;
+            for (int k=0; k<kNN; ++k) {
+              if (ids[k] > -1 
+                  && pl_w[ids[k]].valid_ 
+                  && tdp::IsValidData(pS[ids[k]])
+                  && tdp::IsValidData(pS[i])) {
+//                float eSameZ = numSamplesZ[i](k) > 0 ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
+                if (useOtherNi) {
+                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                  //                  if (zCountS[ids[k]] > 0)
+                  //                    InfoPl = nSampleOuter_w[ids[k]]/zCountS[ids[k]];
+                  //                  else
+                  //                    InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                } else {
+                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                  //                  if (zCountS[i] > 0)
+                  //                    InfoPl = nSampleOuter_w[i]/zCountS[i];
+                  //                  else
+                  //                    InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                }
+//                if (useESameZ) InfoPl *= eSameZ ;
+                if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
+                InfoPlSum += InfoPl;
+                xiPl += InfoPl*pS[i];
+                numNN++;
+              } else {
+                break;
+              }
+            } 
 //          }
-//        }
-//        Eigen::Matrix3f Sigma = Info.inverse();
-//        Eigen::Vector3f mu = Info.ldlt().solve(xi);
-////        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-//        pi = Normal<float,3>(mu, Sigma).sample(rnd);
-//      }
+          if (numNN == kNN) {
+            Info += InfoPlSum;
+            xi += xiPl;
+          }
+          Eigen::Matrix3f Sigma = Info.inverse();
+          Eigen::Vector3f mu = Info.ldlt().solve(xi);
+          if ((Info.eigenvalues().real().array() < 1.).any() )
+            std::cout <<  "low Information! "  << numNN << " neighs: evs "
+              << Info.eigenvalues().transpose()
+              << " mu " << mu.transpose() << std::endl;
+          //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+          tdp::Vector3fda& pi = pS[i];
+          pi = Normal<float,3>(mu, Sigma).sample(rnd);
+          pSampleSum_w[i] += pi;
+          pSampleOuter_w[i] += pi*pi.transpose();
+          pSampleCount_w[i] ++;
+
+          if (false && i%10) {
+            std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
+            std::cout << Sigma << std::endl;
+            std::cout << Info << std::endl;
+            std::cout << xi.transpose() << std::endl;
+            std::cout << mu.transpose() << std::endl;
+          }
+
+          tdp::Matrix3fda cov = pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i];
+          float Hp = (cov).eigenvalues().real().array().log().sum();
+          pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
+          if (samplePoints) {
+            if (Hp - pl.Hp_ < condHThr)
+//            if (pSampleCount_w[i] > 30)
+              pl.p_ = pSampleEst_w[i];
+            pc_w[i] = pl.p_;
+            if (pSampleCount_w[i] > 3) {
+              pl.Hp_ = Hp;
+            }
+          }
+          //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
+        }
+      }
     };
   });
 
@@ -1703,7 +1857,7 @@ int main( int argc, char* argv[] )
 //    std::random_device rd_;
     std::mt19937 gen_(0);
     while(runMappingThread.Get()) {
-    if (updateMap) {
+    if (updateMap && !samplePoints) {
       {
         std::lock_guard<std::mutex> lock(nnLock); 
         sizeToRead = nn.SizeToRead();
@@ -1795,11 +1949,20 @@ int main( int argc, char* argv[] )
           if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
             for (int k=0; k<kNN; ++k) {
               if (ids[k] > -1 && pl_w[ids[k]].valid_) {
-                float eSameZ = numSamplesZ[i](k) > zCountBurnIn ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
-                if (useOtherNi)
-                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                else
-                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                float eSameZ = numSamplesZ[i](k) > 0 ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
+                if (useOtherNi) {
+//                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                  if (zCountS[ids[k]] > 0)
+                    InfoPl = nSampleOuter_w[ids[k]]/zCountS[ids[k]];
+                  else
+                    InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+                } else {
+//                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                  if (zCountS[i] > 0)
+                    InfoPl = nSampleOuter_w[i]/zCountS[i];
+                  else
+                    InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+                }
                 if (useESameZ) InfoPl *= eSameZ ;
                 if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
                 if (useTau) InfoPl *= tau;
@@ -2572,7 +2735,8 @@ int main( int argc, char* argv[] )
 //      }
 //    }
 
-    frame ++;
+    if (!gui.paused())
+      frame ++;
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
     TICK("Draw 3D");
@@ -2660,9 +2824,14 @@ int main( int argc, char* argv[] )
           valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
           std::pair<float,float> minMaxAge = age.GetRoi(0,0,
               pl_w.SizeToRead(),1).MinMax();
-          std::cout << "drawn values are min " << minMaxAge.first << " max " << minMaxAge.second << std::endl;
-          tdp::RenderVboValuebo(vbo_w, valuebo, minMaxAge.first,
-              minMaxAge.second, P, MV);
+          std::cout << "drawn values are min " << minMaxAge.first 
+            << " max " << minMaxAge.second << std::endl;
+          showLow = minMaxAge.first;
+          showHigh = minMaxAge.second;
+          tdp::RenderVboValuebo(vbo_w, valuebo, 
+              minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first),
+              minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first), 
+              P, MV);
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
@@ -2728,6 +2897,24 @@ int main( int argc, char* argv[] )
           tdp::glDrawLine(pc_w[i], pcEst_w[i]);
         }
       }
+      if (showSamplePc) {
+        vboEst_w.Upload(pS.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+        glColor3f(0.,1.,1.);
+        pangolin::RenderVbo(vboEst_w);
+        glColor4f(1,0,1,0.5);
+        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w[i], pS[i]);
+        }
+      }
+      if (showSamplePcEst) {
+        vboEst_w.Upload(pSampleEst_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
+        glColor3f(0.,1.,1.);
+        pangolin::RenderVbo(vboEst_w);
+        glColor4f(1,0,1,0.5);
+        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pc_w[i], pSampleEst_w[i]);
+        }
+      }
       if (showPcMu) {
         vboEst_w.Upload(pcObsMu_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
         glColor3f(0.,1.,1.);
@@ -2774,7 +2961,7 @@ int main( int argc, char* argv[] )
       {
         std::lock_guard<std::mutex> lock(vmfsLock);
         for (size_t k=0; k<vmfs.size(); ++k) {
-          if (vmfSS[k](3) > 0) {
+          if (vmfSS[k](3) > 0 && vmfs[k].tau_ > 0) {
             tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
             std::cout << "vmf " << k << " tau: " << vmfs[k].tau_ << std::endl;
           }
@@ -2856,7 +3043,7 @@ int main( int argc, char* argv[] )
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
 
-    if (!gui.finished()) {
+    if (!gui.finished() && !gui.paused()) {
       if (streamTimeStamps.size() > frame-1) {
         out << streamTimeStamps[frame-1] << " ";
       } else {
