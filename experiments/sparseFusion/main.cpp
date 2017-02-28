@@ -1023,9 +1023,9 @@ int main( int argc, char* argv[] )
 //  imuInterp.Start();
 
   tdp::GuiBase gui(1200,800,video);
-  pangolin::CreatePanel("visPanel").SetBounds(0.4,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::CreatePanel("visPanel").SetBounds(0.3,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
   pangolin::Display("visPanel").Show(false);
-  pangolin::CreatePanel("mapPanel").SetBounds(0.4,1.,pangolin::Attach::Pix(180),pangolin::Attach::Pix(360));
+  pangolin::CreatePanel("mapPanel").SetBounds(0.3,1.,pangolin::Attach::Pix(360),pangolin::Attach::Pix(540));
   pangolin::Display("mapPanel").Show(false);
 
   gui.container().SetLayout(pangolin::LayoutEqual);
@@ -1130,7 +1130,7 @@ int main( int argc, char* argv[] )
 
   containerTracking.Show(false);
   viewAssoc.Show(false);
-  viewGreyGradNorm.Show(true);
+  viewGreyGradNorm.Show(false);
   plotters.Show(false);
 
   tdp::ManagedHostImage<tdp::Vector3bda> n2D(wc,hc);
@@ -1321,10 +1321,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> step("visPanel.step",10,1,100);
   pangolin::Var<float> bgGrey("visPanel.bg Grey",0.02,0.0,1);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
-  pangolin::Var<bool> showPlanes("visPanel.show planes",false,true);
-  pangolin::Var<bool> showPcModel("visPanel.show model",false,true);
-  pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
-  pangolin::Var<int> showPcLvl("visPanel.cur Lvl",0,0,PYR-1);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
@@ -1332,23 +1328,27 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showSamplePcEst("visPanel.show SamplePcEst",false,true);
   pangolin::Var<bool> showSamplePc("visPanel.show SamplePc",false,true);
   pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
+  pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
+  pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
+  pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,1.0);
+  pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.,1.0);
+  pangolin::Var<float> showLowH("visPanel.show low H",-50,-60.,-30.0);
+  pangolin::Var<float> showHighH("visPanel.show high H",-30,-30.,-10.0);
+  pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
+  pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
+  pangolin::Var<bool> showInfoObs("visPanel.show InfoObs",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
   pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
   pangolin::Var<bool> showCurv("visPanel.show curvature",false,true);
   pangolin::Var<bool> showGrey("visPanel.show grey",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
-  pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
-  pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
-  pangolin::Var<bool> showInfoObs("visPanel.show InfoObs",false,true);
-  pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,1.0);
-  pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.,1.0);
-  pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
-  pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
   pangolin::Var<bool> showNN("visPanel.show NN",false,true);
+  pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
+  pangolin::Var<int> showPcLvl("visPanel.cur Lvl",0,0,PYR-1);
   pangolin::Var<bool> showLoopClose("visPanel.show loopClose",false,true);
 
   pangolin::Var<float> ransacMaxIt("ui.max it",3000,1,1000);
@@ -1801,7 +1801,7 @@ int main( int argc, char* argv[] )
                 //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
                 //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
                 InfoPlSum += InfoPl;
-                xiPl += InfoPl*pS[i];
+                xiPl += InfoPl*pS[ids[k]];
                 numNN++;
               } else {
                 break;
@@ -1817,7 +1817,8 @@ int main( int argc, char* argv[] )
           if ((Info.eigenvalues().real().array() < 1.).any() )
             std::cout <<  "low Information! "  << numNN << " neighs: evs "
               << Info.eigenvalues().transpose()
-              << " mu " << mu.transpose() << std::endl;
+              << " mu " << mu.transpose()
+              << " xi " << xi.transpose() << std::endl;
           //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
           tdp::Vector3fda& pi = pS[i];
           pi = Normal<float,3>(mu, Sigma).sample(rnd);
@@ -1833,11 +1834,14 @@ int main( int argc, char* argv[] )
             std::cout << mu.transpose() << std::endl;
           }
 
-          tdp::Matrix3fda cov = pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i];
+          tdp::Matrix3fda cov = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
           float Hp = (cov).eigenvalues().real().array().log().sum();
           pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
+//          if (i%10) {
+//            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
+//          }
           if (samplePoints) {
-            if (Hp - pl.Hp_ < condHThr)
+            if ( fabs(Hp - pl.Hp_) < condHThr)
 //            if (pSampleCount_w[i] > 30)
               pl.p_ = pSampleEst_w[i];
             pc_w[i] = pl.p_;
@@ -2793,6 +2797,7 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
             || showHn || showHp || showInfoObs) {
+          float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ts.GetCircular(i);
@@ -2809,11 +2814,14 @@ int main( int argc, char* argv[] )
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = zCountS[i];
           } else if (showHp) {
-            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i)  {
               age[i] = pl_w[i].Hp_;
+              max = std::max(max, pl_w[i].Hp_ < 0? pl_w[i].Hp_ : max);
+            }
           } else if (showHn) {
-            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
               age[i] = pl_w[i].Hn_;
+            }
           } else if (showInfoObs) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = infoObsSum[i];
@@ -2824,6 +2832,10 @@ int main( int argc, char* argv[] )
           valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
           std::pair<float,float> minMaxAge = age.GetRoi(0,0,
               pl_w.SizeToRead(),1).MinMax();
+          if (showHp){ 
+            minMaxAge.first = showLowH;
+            minMaxAge.second = showHighH;
+          }
           std::cout << "drawn values are min " << minMaxAge.first 
             << " max " << minMaxAge.second << std::endl;
           showLow = minMaxAge.first;

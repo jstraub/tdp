@@ -226,7 +226,6 @@ bool NormalViaVoting(
     float orthoL = 0.;
     float orthoU = 0.;
     for (float dAng : {45./180.*M_PI,35./180.*M_PI,25./180.*M_PI,15./180.*M_PI}) {
-//    for (float dAng : {45.,35.,25.,15.,15.,15.}) {
       N = 0;
       S.fill(0.);
       p.fill(0.);
@@ -255,16 +254,15 @@ bool NormalViaVoting(
       S(1,0) = S(0,1);
       S(2,0) = S(0,2);
       S(2,1) = S(1,2);
-      eig.computeDirect(S - p*p.transpose()/float(N));
       int id = 0;
-      // curvature according to PCL
-      curvature = eig.eigenvalues().minCoeff(&id)/eig.eigenvalues().sum();
-      n = eig.eigenvectors().col(id).normalized();
-      p /= N;
+      n = S.ldlt().solve(p);
+//      n = eig.eigenvectors().col(0).normalized();
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
       Nprev = N;
     }
+    eig.computeDirect((S - p*p.transpose()/float(N))/float(N));
+    curvature = 2.*(eig.eigenvalues()(1)*eig.eigenvalues()(2))/(eig.eigenvalues()(1)+eig.eigenvalues()(2));
 
     ni = n * (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
 //    float mu = 0;
