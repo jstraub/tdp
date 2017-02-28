@@ -262,9 +262,10 @@ bool NormalViaVoting(
       Nprev = N;
     }
     eig.computeDirect((S - p*p.transpose()/float(N))/float(N));
+    ni = n*(n.dot(pc0)/pc0.norm()<0.?1.:-1.);
     curvature = 2.*(eig.eigenvalues()(1)*eig.eigenvalues()(2))/(eig.eigenvalues()(1)+eig.eigenvalues()(2));
-
-    ni = n * (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
+//    if (eig.eigenvectors().col(0).dot(n) < 0)
+//      curvature *= -1;
 //    float mu = 0;
 //    for (size_t u=u0-W; u<=u0+W; ++u) {
 //      for (size_t v=v0-W; v<=v0+W; ++v) {

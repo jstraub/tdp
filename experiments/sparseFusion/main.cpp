@@ -222,7 +222,7 @@ void ExtractPlanes(
         tdp::Matrix3fda SigmaO;
         NoiseModelNguyen(n, p, cam, SigmaO);
         SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
-        pc0Info_w[pl_w.iInsert_] = SigmaO.inverse();
+        pc0Info_w.Insert(SigmaO.inverse());
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
         n_w.Insert(pl.n_);
@@ -1244,32 +1244,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
   pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
   pangolin::Var<float> condHThr("mapPanel.condHThr",0.01,0.001,0.1);
-  pangolin::Var<bool> doRegvMF("mapPanel.reg vMF",false,true);
-  pangolin::Var<bool> doRegPc0("mapPanel.reg pc0",true,true);
-  pangolin::Var<bool> doRegAbsPc("mapPanel.reg abs pc",true,true);
-  pangolin::Var<bool> doRegAbsN("mapPanel.reg abs n",false,true);
-  pangolin::Var<bool> doRegRelPlZ("mapPanel.reg rel Pl",true,true);
-  pangolin::Var<bool> doRegRelNZ("mapPanel.reg rel N",true,true);
-//  pangolin::Var<bool> doRegRelPlObs("mapPanel.reg rel PlObs",false,true);
-//  pangolin::Var<bool> doRegRelNObs("mapPanel.reg rel NObs",false,true);
-  pangolin::Var<bool> doVariationalUpdate("mapPanel.variational",false,true);
-  pangolin::Var<bool> useMrfInVariational("mapPanel. use MRF in var",false,true);
-  pangolin::Var<float> lambdaRegDir("mapPanel.lamb Reg Dir",0.01,0.01,1.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
-  pangolin::Var<float> alphaGrad("mapPanel.alpha Grad",.0001,0.0,1.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
-  pangolin::Var<float> tauP("mapPanel.tauP",100.,0.0,200.);
-//  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.03,0.01,.2);
-//  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.03,0.01,0.1);
-//  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.06,0.01,0.2);
-  pangolin::Var<bool> useSigmaPl("mapPanel.use sigmaPl",false,true);
-  pangolin::Var<bool> useOtherNi("mapPanel.use OtherNi",true,true);
-  pangolin::Var<bool> useESameZ("mapPanel.use ESameZ",false,true);
-  pangolin::Var<int> zCountBurnIn("mapPanel.z Count Burn In",20, 1, 100);
-  pangolin::Var<bool> useTau("mapPanel.use Tau",false,true);
-  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.3,0.01,.2);
-  pangolin::Var<float> sigmaPc0("mapPanel.sigmaPc0",0.3,0.01,0.1);
-  pangolin::Var<float> sigmaObsP("mapPanel.sigmaObsP",0.6,0.01,0.2);
+  pangolin::Var<bool> estimateTauO("mapPanel.estimate TauO",false,true);
+  pangolin::Var<bool> useSigmaPl("mapPanel.use sigmaPl",true,true);
+  pangolin::Var<bool> useOtherNi("mapPanel.use OtherNi",false,true);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.06,0.01,.2);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
@@ -1411,22 +1391,24 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<uint8_t> nnFixed(MAP_SIZE);
   nnFixed.Fill(0);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
-  nn.Fill(tdp::VectorkNNida::Ones()*-1);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> sumSameZ(MAP_SIZE);
-  sumSameZ.Fill(tdp::VectorkNNfda::Zero());
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> numSamplesZ(MAP_SIZE);
+  nn.Fill(tdp::VectorkNNida::Ones()*-1);
+  sumSameZ.Fill(tdp::VectorkNNfda::Zero());
   numSamplesZ.Fill(tdp::VectorkNNfda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> tauOSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsMu_w(MAP_SIZE);
+  pcObsInfo_w.Fill(tdp::Matrix3fda::Zero());
+  pcObsXi_w.Fill(tdp::Vector3fda::Zero());
+  pcObsMu_w.Fill(tdp::Vector3fda::Zero());
 
   tdp::ManagedHostImage<uint16_t> labels(MAP_SIZE);
-
   std::vector<std::pair<int32_t, int32_t>> mapNN;
   mapNN.reserve(MAP_SIZE*kNN);
 
@@ -1579,6 +1561,8 @@ int main( int argc, char* argv[] )
         if (!pl_w[i].valid_) continue;
         if (sampleNormals) {
           tdp::Vector3fda mu = normSum_w[i]*nSum_w[i]*tauO;
+          if (estimateTauO)
+            mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
           if (zi < Ksample) {
             mu += vmfs[zi].mu_*vmfs[zi].tau_;
           }
@@ -1754,14 +1738,18 @@ int main( int argc, char* argv[] )
             Info += InfoPlSum;
             xi += xiPl;
           }
-          Eigen::Matrix3f Sigma = Info.inverse();
-          Eigen::Vector3f mu = Info.ldlt().solve(xi);
-          if ((Info.eigenvalues().real().array() < 1.).any() )
+          if ((Info.eigenvalues().real().array() < 0.).any() ) {
             std::cout <<  "low Information! "  << numNN << " neighs "
               << numSum_w[i] 
               << " obs, evs " << Info.eigenvalues().transpose()
-              << " mu " << mu.transpose()
+//              << " mu " << mu.transpose()
               << " xi " << xi.transpose() << std::endl;
+            pl.valid_ = false;
+            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+          }
+          Eigen::Matrix3f Sigma = Info.inverse();
+          Eigen::Vector3f mu = Info.ldlt().solve(xi);
           //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
           tdp::Vector3fda& pi = pS[i];
           pi = Normal<float,3>(mu, Sigma).sample(rnd);
@@ -1908,6 +1896,7 @@ int main( int argc, char* argv[] )
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
           normSum_w[i] = 1;
+          tauOSum_w[i] = pl_w[i].curvature_;
           idsCur[0]->emplace_back(i);
         }
       }
@@ -2364,6 +2353,7 @@ int main( int argc, char* argv[] )
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
           nSum_w[i] /= nSum_w[i].norm();
+          tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
           numSum_w[i] = std::min(50.f, w+1.f);
 
           grad_w[i] = pl.grad_;
@@ -2424,6 +2414,7 @@ int main( int argc, char* argv[] )
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
             nSum_w[i] /= nSum_w[i].norm();
+            tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
             numSum_w[i] = std::min(50.f, w+1.f);
 
             grad_w[i] = pl.grad_;
