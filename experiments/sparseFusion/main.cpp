@@ -1075,6 +1075,7 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   viewPc3D.AddDisplay(viewGrads);
   viewGrads.SetBounds(0.6,1.0,0.6,1.);
+  viewGrads.Show(false);
 
   tdp::QuickView viewCurrent(wc, hc);
 //  gui.container().AddDisplay(viewCurrent);
