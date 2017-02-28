@@ -255,7 +255,7 @@ bool NormalViaVoting(
       S(2,0) = S(0,2);
       S(2,1) = S(1,2);
       int id = 0;
-      n = S.ldlt().solve(p);
+      n = (S.ldlt().solve(p)).normalized();
 //      n = eig.eigenvectors().col(0).normalized();
 //      std::cout << N << " " << Nprev << " " << 4*W*W << "\t" << n.transpose() << std::endl;
       if (N == Nprev) break;
