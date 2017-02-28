@@ -1416,10 +1416,6 @@ int main( int argc, char* argv[] )
   sumSameZ.Fill(tdp::VectorkNNfda::Zero());
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> numSamplesZ(MAP_SIZE);
   numSamplesZ.Fill(tdp::VectorkNNfda::Zero());
-//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsNum(MAP_SIZE);
-//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsDot(MAP_SIZE);
-//  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
-//  mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
@@ -1474,11 +1470,6 @@ int main( int argc, char* argv[] )
       if (allowNNRevisit || nnFixed[iReadNext] < kNN) {
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
         if (!pl.valid_) continue;
-//        if (pruneNoise && pl.lastFrame_+survivalTime < frame && pl.numObs_ < minNumObs) {
-//          pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
-//          n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
-//          pl.valid_ = false;
-//        }
         values.fill(std::numeric_limits<float>::max());
         tdp::VectorkNNida& ids = nn[iReadNext];
         tdp::VectorkNNida idsPrev = ids;
@@ -1518,16 +1509,9 @@ int main( int argc, char* argv[] )
         // TODO: should be updated as pairs are reobserved
         nnFixed[iReadNext] = kNN;
         for (int32_t i=0; i<kNN; ++i) {
-//            mapObsDot[iReadNext][i] = pl.n_.dot(pl_w[ids[i]].n_);
-//            mapObsP2Pl[iReadNext][i] = pl.p2plDist(pl_w[ids[i]].p_);
-//            mapObsNum[iReadNext][i] = 1;
             if (ids(i) != idsPrev(i)) {
               numSamplesZ[iReadNext][i] = 0;
               sumSameZ[iReadNext][i] = 0;
-//              mapObsDot[iReadNext][i] = 0.;
-//              mapObsP2Pl[iReadNext][i] = 0.;
-//              mapObsNum[iReadNext][i] = 0.;
-//  //            std::cout << "resetting " << iReadNext << " " << i << std::endl;
             }
           if (values(i) > maxNnDist*maxNnDist) {
             ids(i) = -1;
@@ -1546,8 +1530,6 @@ int main( int argc, char* argv[] )
       iReadNext = (iReadNext+1)%sizeToRead;
       {
         std::lock_guard<std::mutex> lock(nnLock); 
-//          mapObsDot.iInsert_ = std::max(iReadNext;
-//          mapObsP2Pl.iInsert_ = std::max(iReadNext;
         nn.iInsert_ = std::max(iReadNext, nn.iInsert_);
       }
       idNNUpdate = iReadNext;
@@ -1596,10 +1578,6 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda& ni = nS[i];
         if (!pl_w[i].valid_) continue;
         if (sampleNormals) {
-          //tdp::plane& pl = pl_w[i];
-          //eigen::vector3f mu = pl.w_*pl.n_*tauo;
-          //std::cout << pl.w_ * pl.n_.transpose() << " " 
-          //  << nsum_w[i].transpose() << std::endl;
           tdp::Vector3fda mu = normSum_w[i]*nSum_w[i]*tauO;
           if (zi < Ksample) {
             mu += vmfs[zi].mu_*vmfs[zi].tau_;
@@ -1750,32 +1728,28 @@ int main( int argc, char* argv[] )
         if (haveFullNeighborhood && numSum_w[i] > 0) {
           Eigen::Matrix3f Info = pcObsInfo_w[i]; 
           Eigen::Vector3f xi =   pcObsXi_w[i]; 
-//          if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
           Eigen::Matrix3f InfoPl;
           Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
           Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
           uint32_t numNN = 0;
-            for (int k=0; k<kNN; ++k) {
-              if (ids[k] > -1 
-                  && pl_w[ids[k]].valid_ 
-                  && tdp::IsValidData(pS[ids[k]])
-                  && tdp::IsValidData(pS[i])) {
-                if (useOtherNi) {
-                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                } else {
-                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-                }
-                if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
-                InfoPlSum += InfoPl;
-                xiPl += InfoPl*pS[ids[k]];
-                numNN++;
+          for (int k=0; k<kNN; ++k) {
+            if (ids[k] > -1 
+                && pl_w[ids[k]].valid_ 
+                && tdp::IsValidData(pS[ids[k]])
+                && tdp::IsValidData(pS[i])) {
+              if (useOtherNi) {
+                InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
               } else {
-                break;
+                InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
               }
-            } 
-//          }
+              if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+              InfoPlSum += InfoPl;
+              xiPl += InfoPl*pS[ids[k]];
+              numNN++;
+            } else {
+              break;
+            }
+          } 
           if (numNN == kNN) {
             Info += InfoPlSum;
             xi += xiPl;
@@ -2314,14 +2288,6 @@ int main( int argc, char* argv[] )
               break;
             }
           }
-//          if (gui.verbose) {
-//            for (size_t k=0; k<invInd[pyr]->size(); ++k) {
-//              if (invInd[pyr]->at(k).size() > 0 )
-//                std::cout << "used different directions " << k << "/" 
-//                  << invInd[pyr]->size() << ": " << indK[k] 
-//                  << " of " << invInd[pyr]->at(k).size() << std::endl;
-//            }
-//          }
         }
         logObs.Log(log(assoc.size())/log(10.), 
             log(numProjected)/log(10.), log(pl_w.SizeToRead())/log(10));
@@ -2403,28 +2369,6 @@ int main( int argc, char* argv[] )
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
-//          if (updateMap) {
-//            for (size_t i=0; i<kNN; ++ i) {
-//              for (const auto& assB : assoc) {
-//                if (assB.first == nn[ass.first](i)){
-//                  int32_t uB = assB.second%pc.w_;
-//                  int32_t vB = assB.second/pc.w_;
-//                  //mapObsP2Pl[ass.first](i) += n(u,v).dot(pc(uB,vB)-pc(u,v));
-//                  //mapObsDot[ass.first](i) += n(u,v).dot(n(uB,vB));
-//                  //mapObsNum[ass.first](i) ++;
-//                  float w = mapObsNum[ass.first](i);
-//                  mapObsP2Pl[ass.first](i) = (w*mapObsP2Pl[ass.first](i) + n(u,v).dot(pc(uB,vB)-pc(u,v)))/(w+1.);
-//                  mapObsDot[ass.first](i) = (mapObsDot[ass.first](i)*w + n(u,v).dot(n(uB,vB)))/(w+1.);
-//                  mapObsNum[ass.first](i) = std::min(100.f,w+1.f) ;
-//                  //std::cout << "found NN " << i << " of " << ass.first 
-//                  //  << " " << mapObsP2Pl[ass.first](i)/mapObsNum[ass.first](i) 
-//                  //  << " " << mapObsDot[ass.first](i)/mapObsNum[ass.first](i)
-//                  //  << " " << mapObsNum[ass.first](i) << std::endl;
-//                  numNN++;
-//                  break;
-//                }
-//              }
-//            }
           if (!updateMap) {
             pl.AddObs(pc_c_in_w, n_c_in_w);
             n_w[i] =  pl.n_;
@@ -2485,8 +2429,11 @@ int main( int argc, char* argv[] )
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();
 
-//            if (j++ >= numAdditionalObs) 
-//              break;
+            if (!updateMap) {
+              pl.AddObs(pc_c_in_w, n_c_in_w);
+              n_w[i] =  pl.n_;
+              pc_w[i] = pl.p_;
+            }
           }
         }
         
