@@ -160,7 +160,6 @@ void ExtractPlanes(
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
-    ManagedHostCircularBuffer<Vector3fda>& pc0_w,
     ManagedHostCircularBuffer<Matrix3fda>& pc0Info_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
@@ -226,7 +225,6 @@ void ExtractPlanes(
         pc0Info_w[pl_w.iInsert_] = SigmaO.inverse();
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
-        pc0_w.Insert(pl.p_);
         n_w.Insert(pl.n_);
         grad_w.Insert(pl.grad_);
         rgb_w.Insert(pl.rgb_);
@@ -1324,7 +1322,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
-  pangolin::Var<bool> showPcEst("visPanel.show PcEst",false,true);
   pangolin::Var<bool> showSamplePcEst("visPanel.show SamplePcEst",false,true);
   pangolin::Var<bool> showSamplePc("visPanel.show SamplePc",false,true);
   pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
@@ -1336,7 +1333,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> showHighH("visPanel.show high H",-30,-30.,-10.0);
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
   pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
-  pangolin::Var<bool> showInfoObs("visPanel.show InfoObs",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
   pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
   pangolin::Var<bool> showCurv("visPanel.show curvature",false,true);
@@ -1383,7 +1379,6 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcEst_w(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
@@ -1411,7 +1406,7 @@ int main( int argc, char* argv[] )
   cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeBytes(), 0);
   gradbo_w.Upload(grad_w.ptr_, grad_w.SizeBytes(), 0);
   tbo.Upload(ts.ptr_, ts.SizeBytes(), 0);
-  vboEst_w.Upload(pcEst_w.ptr_, pcEst_w.SizeBytes(), 0);
+  vboEst_w.Upload(pSampleEst_w.ptr_, pSampleEst_w.SizeBytes(), 0);
 
   tdp::ManagedHostCircularBuffer<uint8_t> nnFixed(MAP_SIZE);
   nnFixed.Fill(0);
@@ -1426,20 +1421,13 @@ int main( int argc, char* argv[] )
 //  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> mapObsP2Pl(MAP_SIZE);
 //  mapObsNum.Fill(tdp::VectorkNNfda::Zero());
 
-  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> outerSum_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<float> infoObsSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc0_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pc0Info_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsMu_w(MAP_SIZE);
-
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jn_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::Vector3fda> Jp_w(MAP_SIZE);
 
   tdp::ManagedHostImage<uint16_t> labels(MAP_SIZE);
 
@@ -1753,25 +1741,15 @@ int main( int argc, char* argv[] )
         }
       }
 
-//      std::cout << "counts " << Ksample << ": ";
-//      for (size_t k=0; k<Ksample; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfSS[k](3) << " ";
-//      std::cout << "\ttaus: " ;
-//      for (size_t k=0; k<Ksample; ++k) 
-//        if (vmfSS[k](3) > 0) 
-//          std::cout << vmfs[k].tau_ << " ";
-//      std::cout << std::endl;
 //      // sample points
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         tdp::Plane& pl = pl_w[i];
         if (!pl.valid_) continue;
         tdp::VectorkNNida& ids = nn.GetCircular(i);
         bool haveFullNeighborhood = (ids.array() >= 0).all();
-        if (haveFullNeighborhood) {
-          tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
-          Eigen::Matrix3f Info = InfoO + numSum_w[i]* pcObsInfo_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
-          Eigen::Vector3f xi = InfoO*pc0_w[i] + numSum_w[i]*pcObsXi_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
+        if (haveFullNeighborhood && numSum_w[i] > 0) {
+          Eigen::Matrix3f Info = pcObsInfo_w[i]; 
+          Eigen::Vector3f xi =   pcObsXi_w[i]; 
 //          if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
           Eigen::Matrix3f InfoPl;
           Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
@@ -1782,21 +1760,11 @@ int main( int argc, char* argv[] )
                   && pl_w[ids[k]].valid_ 
                   && tdp::IsValidData(pS[ids[k]])
                   && tdp::IsValidData(pS[i])) {
-//                float eSameZ = numSamplesZ[i](k) > 0 ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
                 if (useOtherNi) {
                   InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                  //                  if (zCountS[ids[k]] > 0)
-                  //                    InfoPl = nSampleOuter_w[ids[k]]/zCountS[ids[k]];
-                  //                  else
-                  //                    InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
                 } else {
                   InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-                  //                  if (zCountS[i] > 0)
-                  //                    InfoPl = nSampleOuter_w[i]/zCountS[i];
-                  //                  else
-                  //                    InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
                 }
-//                if (useESameZ) InfoPl *= eSameZ ;
                 if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
                 //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
                 //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
@@ -1815,8 +1783,9 @@ int main( int argc, char* argv[] )
           Eigen::Matrix3f Sigma = Info.inverse();
           Eigen::Vector3f mu = Info.ldlt().solve(xi);
           if ((Info.eigenvalues().real().array() < 1.).any() )
-            std::cout <<  "low Information! "  << numNN << " neighs: evs "
-              << Info.eigenvalues().transpose()
+            std::cout <<  "low Information! "  << numNN << " neighs "
+              << numSum_w[i] 
+              << " obs, evs " << Info.eigenvalues().transpose()
               << " mu " << mu.transpose()
               << " xi " << xi.transpose() << std::endl;
           //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
@@ -1855,164 +1824,6 @@ int main( int argc, char* argv[] )
     };
   });
 
-  std::thread mapping([&]() {
-    int32_t i = 0;
-    int32_t sizeToRead = 0;
-//    std::random_device rd_;
-    std::mt19937 gen_(0);
-    while(runMappingThread.Get()) {
-    if (updateMap && !samplePoints) {
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        sizeToRead = nn.SizeToRead();
-      }
-      if (sizeToRead == 0) continue;
-      tdp::Plane& pl = pl_w.GetCircular(i);
-      if (!pl.valid_) continue;
-      // compute gradient
-      tdp::VectorkNNida& ids = nn.GetCircular(i);
-//      tdp::Vector3fda& Jn = Jn_w[i];
-//      tdp::Vector3fda& Jp = Jp_w[i];
-      tdp::Vector3fda Jn = tdp::Vector3fda::Zero();
-      tdp::Vector3fda Jp = tdp::Vector3fda::Zero();
-      tdp::Vector3fda mu = tdp::Vector3fda::Zero();
-      float tau = 0.;
-      vmfsLock.lock();
-      if (pl.z_ < K && vmfs[pl.z_].tau_ > 0) {
-        mu = vmfs[pl.z_].mu_;
-        tau= vmfs[pl.z_].tau_;
-      }
-      vmfsLock.unlock();
-      if (doRegvMF && lambdaRegDir > 0) {
-        Jn = -lambdaRegDir*mu*tau;
-        if (!tdp::IsValidData(Jn)) {
-//          std::cout << Jn.transpose() << " " << pl.z_ <<
-//            vmfs[pl.z_].mu_.transpose() << ", " << vmfs[pl.z_].tau_ << std::endl;
-          Jn = tdp::Vector3fda::Zero();
-        }
-      }
-      if (doRegPc0) {
-        Jp += -1./(sigmaPc0*sigmaPc0)*(pc0_w[i] - pl.p_);
-      }
-      if (doRegAbsPc) {
-        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_*infoObsSum[i] - pcSum_w[i]);
-//        Jp += pl.n_ *numSum_w[i]*pl.n_.dot(pl.p_ - pcSum_w[i]);
-//        Jp += 2.*(numSum_w[i]*pl.p_ - numSum_w[i]*pcSum_w[i]);
-      }
-//      if (doRegAbsN) {
-////        Jn += (numSum_w[i]*pl.n_ - normSum_w[i]*nSum_w[i]);
-//        Jn += -tauO*normSum_w[i]*nSum_w[i];
-//        Jn += numSum_w[i]*(outerSum_w[i]*pl.n_ - pl.n_.dot(pcSum_w[i])*pl.p_ - pl.n_.dot(pl.p_)*(pcSum_w[i] - pl.p_));
-//      }
-      // TODO this seems to not work!
-      bool haveFullNeighborhood = (ids.array() >= 0).all();
-      if (haveFullNeighborhood && !doVariationalUpdate) {
-        tdp::Vector3fda JpMRF = tdp::Vector3fda::Zero();
-        float wMRF = 0.f;
-        for (int j=0; j<kNN; ++j) {
-          if (ids[j] > -1 && pl_w[ids[j]].valid_) {
-            const tdp::Plane& plO = pl_w[ids[j]];
-            if (doRegRelPlZ) {
-              if (pl.z_ == plO.z_) {
-                float wi = exp(-(pl.p_-plO.p_).squaredNorm());
-                wMRF += wi;
-                JpMRF += -wi/(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
-//                JpMRF += -1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*pl.n_;
-                Jn +=  1./(sigmaPl*sigmaPl)*(pl.p2plDist(plO.p_))*(plO.p_-pl.p_);
-              }
-            }
-            if (doRegRelNZ) {
-              if (pl.z_ == plO.z_) {
-//                Jn +=  2.*lambdaRegPl*tau*(pl.n_ - plO.n_);
-                Jn += -tauP*plO.n_;
-              }
-            }
-//            if (mapObsNum[i](j) > 0.) {
-//              if (doRegRelNObs) {
-//                Jn += mapObsNum[i](j)*2.*(pl.n_.dot(plO.n_)-mapObsDot[i](j)/mapObsNum[i](j))*plO.n_;
-//              }
-//              if (doRegRelPlObs) {
-//                Jn += mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*(plO.p_-pl.p_);
-//                Jp += -mapObsNum[i](j)*2.*(pl.p2plDist(plO.p_)-mapObsP2Pl[i](j)/mapObsNum[i](j))*pl.n_;
-//              }
-//            }
-          }
-        }
-        if (doRegRelPlZ && wMRF > 0.) {
-//          std::cout << wMRF << " " << JpMRF.transpose() << std::endl;
-          Jp += JpMRF/wMRF;
-//          Jp += JpMRF;
-        }
-      }
-      tdp::Vector3fda pmu;
-        if (doVariationalUpdate && haveFullNeighborhood) {
-          Eigen::Matrix3f InfoPl;
-          tdp::Matrix3fda& InfoO = pc0Info_w[i]; //1./(sigmaPc0*sigmaPc0)*Eigen::Matrix3f::Identity();
-          Eigen::Matrix3f Info = InfoO + numSum_w[i]* pcObsInfo_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*infoObsSum[i];
-          Eigen::Vector3f xi = InfoO*pc0_w[i] + numSum_w[i]*pcObsXi_w[i]; // + numSum_w[i]*pl_w[i].n_*pl_w[i].n_.transpose()*pcSum_w[i]; //*pl.w_;
-          if (useMrfInVariational && zCountS[i] > zCountBurnIn) {
-            for (int k=0; k<kNN; ++k) {
-              if (ids[k] > -1 && pl_w[ids[k]].valid_) {
-                float eSameZ = numSamplesZ[i](k) > 0 ? sumSameZ[i](k)/numSamplesZ[i](k) : 0.;
-                if (useOtherNi) {
-//                  InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                  if (zCountS[ids[k]] > 0)
-                    InfoPl = nSampleOuter_w[ids[k]]/zCountS[ids[k]];
-                  else
-                    InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                } else {
-//                  InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-                  if (zCountS[i] > 0)
-                    InfoPl = nSampleOuter_w[i]/zCountS[i];
-                  else
-                    InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-                }
-                if (useESameZ) InfoPl *= eSameZ ;
-                if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-                if (useTau) InfoPl *= tau;
-                //InfoPl = 1./(sigmaPl*sigmaPl)*pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-                //InfoPl = pl_w[k].n_*pl_w[k].n_.transpose();
-                Info += InfoPl;
-                xi += InfoPl*pl_w[ids[k]].p_;
-              } else {
-                std::cout << "have full neighborhood but id " <<  ids[i] << std::endl;
-              }
-            }
-          }
-          pmu = Info.ldlt().solve(xi);
-          pl.Info_ = Info;
-          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
-          if ( (pmu-pl.p_).norm() > 0.1) {
-            std::cout << pl.Hp_  << " " << numSum_w[i]
-              << ": " << pl_w[i].p_.transpose() << " " << pmu.transpose() << " xi " << xi.transpose()  << std::endl;
-            std::cout << Info.eigenvalues().real().transpose() << std::endl;
-            std::cout << InfoO << std::endl;
-            std::cout << Info << std::endl;
-          }
-        }
-      // apply gradient
-//      tdp::Vector3fda& Jn = Jn_w[i];
-//      tdp::Vector3fda& Jp = Jp_w[i];
-      {
-        std::lock_guard<std::mutex> mapGuard(mapLock);
-        if (!sampleNormals) 
-          pl.n_ = (pl.n_- alphaGrad * Jn).normalized();
-        if (haveFullNeighborhood &&  doVariationalUpdate) {
-          pl.p_ = pmu;
-        } else {
-          pl.p_ -= alphaGrad * Jp;
-        }
-        pc_w[i] = pl.p_;
-        n_w[i] = pl.n_;
-      }
-      i = (i+1)%sizeToRead;
-      idMapUpdate = i;
-//      std::cout << "map updated " << i << " " 
-//        << (alphaGrad * Jn.transpose()) << "; "
-//        << (alphaGrad * Jp.transpose()) << std::endl;
-    }
-    };
-  });
 
   tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
 
@@ -2107,7 +1918,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pc0_w, pc0Info_w, rgb_w,
+             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w, rgb_w,
             n_w, grad_w, rs, ts, normalViaRMLS);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
@@ -2115,22 +1926,14 @@ int main( int argc, char* argv[] )
         TICK("add to model");
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
-          pc0Info_w[i] /= obsStdInflation*obsStdInflation;
-
-          infoObsSum[i] = pl_w[i].n_.dot(pc0Info_w[i]*pl_w[i].n_) ; // 1./(sigmaObsP*sigmaObsP);
-          pcSum_w[i] = pl_w[i].p_*infoObsSum[i];
-//          infoObsSum[i] =  1./(sigmaObsP*sigmaObsP);
-//          pcSum_w[i] = pl_w[i].p_/(sigmaObsP*sigmaObsP);
          
-          pcObsInfo_w[i] = pc0Info_w[i];
-          pcObsXi_w[i] = pc0Info_w[i]* pl_w[i].p_;
+          pcObsInfo_w[i] /= obsStdInflation*obsStdInflation;
+          pcObsXi_w[i] = pcObsInfo_w[i]*pl_w[i].p_;
           pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-          outerSum_w[i] = pl_w[i].p_*pl_w[i].p_.transpose();
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
           normSum_w[i] = 1;
-          pcEst_w[i] = pl_w[i].p_;
           idsCur[0]->emplace_back(i);
         }
       }
@@ -2571,7 +2374,6 @@ int main( int argc, char* argv[] )
             tdp::Matrix3fda SigmaO;
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
             SigmaO *= obsStdInflation*obsStdInflation;
-            float sigmaSqO = n(u,v).dot(SigmaO*n(u,v));
 
           ts[i] = frame;
           pl.lastFrame_ = frame;
@@ -2583,7 +2385,6 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
           tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2593,17 +2394,12 @@ int main( int argc, char* argv[] )
             pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
             pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-//          pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-//          infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           normSum_w[i] = nSum_w[i].norm();
           nSum_w[i] /= nSum_w[i].norm();
           numSum_w[i] = std::min(50.f, w+1.f);
 
-          pcEst_w[i] = pcSum_w[i]/infoObsSum[i];
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
@@ -2661,9 +2457,6 @@ int main( int argc, char* argv[] )
             tdp::Matrix3fda SigmaO;
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
             SigmaO *= obsStdInflation*obsStdInflation;
-            float sigmaSqO =n(u,v).dot(SigmaO*n(u,v));
-
-//            std::cout << sigmaSqO << std::endl;
 
             // TODO: copied from above
             ts[i] = frame;
@@ -2675,7 +2468,6 @@ int main( int argc, char* argv[] )
             pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-            outerSum_w[i] = (outerSum_w[i]*w + pc_c_in_w*pc_c_in_w.transpose())/(w+1.);
 
             tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2685,17 +2477,11 @@ int main( int argc, char* argv[] )
             pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
             pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
-            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/sigmaSqO)/(w+1.);
-            infoObsSum[i] = (infoObsSum[i]*w + 1./sigmaSqO)/(w+1.);
-//            pcSum_w[i] = (pcSum_w[i]*w + pc_c_in_w/(sigmaObsP*sigmaObsP))/(w+1.);
-//            infoObsSum[i] = (infoObsSum[i]*w + 1./(sigmaObsP*sigmaObsP))/(w+1.);
-
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             normSum_w[i] = nSum_w[i].norm();
             nSum_w[i] /= nSum_w[i].norm();
             numSum_w[i] = std::min(50.f, w+1.f);
 
-            pcEst_w[i] = pcSum_w[i]/infoObsSum[i];
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();
 
@@ -2796,7 +2582,7 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
-            || showHn || showHp || showInfoObs) {
+            || showHn || showHp) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -2822,9 +2608,6 @@ int main( int argc, char* argv[] )
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
               age[i] = pl_w[i].Hn_;
             }
-          } else if (showInfoObs) {
-            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = infoObsSum[i];
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
@@ -2899,15 +2682,6 @@ int main( int argc, char* argv[] )
         pangolin::glSetFrameOfReference(T_wc.matrix());
         pangolin::RenderVboCbo(vbo, cbo, true);
         pangolin::glUnsetFrameOfReference();
-      }
-      if (showPcEst) {
-        vboEst_w.Upload(pcEst_w.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
-        glColor3f(0.,1.,1.);
-        pangolin::RenderVbo(vboEst_w);
-        glColor4f(1,0,1,0.5);
-        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
-          tdp::glDrawLine(pc_w[i], pcEst_w[i]);
-        }
       }
       if (showSamplePc) {
         vboEst_w.Upload(pS.ptr_, pl_w.SizeToRead()*sizeof(tdp::Vector3fda), 0);
