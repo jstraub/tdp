@@ -463,7 +463,8 @@ bool AccumulateP2PlIntensity(const Plane& pl,
     const Vector2fda& gradGrey_ci,
     float p2plThr, 
     float dotThr,
-    float lambda,
+    float sqrtInfoP2Pl,
+    float sqrtInfoIm,
     Eigen::Matrix<float,6,6>& A,
     Eigen::Matrix<float,6,1>& Ai,
     Eigen::Matrix<float,6,1>& b,
@@ -482,9 +483,9 @@ bool AccumulateP2PlIntensity(const Plane& pl,
         Ai.bottomRows<3>() = n_w_in_c; 
 //        Ai.bottomRows<3>() = n_w; 
         bi = p2pl;
-        A += Ai * Ai.transpose();
-        b += Ai * bi;
-        err += bi;
+        A +=   sqrtInfoP2Pl*(Ai * Ai.transpose());
+        b +=   sqrtInfoP2Pl*(Ai * bi);
+        err += sqrtInfoP2Pl*(bi);
 //        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
         // texture inverse transform verified Jse3 
         Eigen::Matrix<float,2,3> Jpi = cam.Jproject(T_cw*pc_w);
@@ -493,14 +494,14 @@ bool AccumulateP2PlIntensity(const Plane& pl,
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
         bi = - grey_ci + pl.grey_;
-        A += lambda*(Ai * Ai.transpose());
-        b += lambda*(Ai * bi);
+        A += sqrtInfoIm*(Ai * Ai.transpose());
+        b += sqrtInfoIm*(Ai * bi);
 
 //        std::cout << " intensity " << bi << " " << Ai.transpose() << std::endl;
 //        std::cout << Jse3 << std::endl;
 //        std::cout << Jpi << std::endl;
 //        std::cout << gradGrey_ci << std::endl;
-        err += lambda*bi;
+        err += sqrtInfoIm*bi;
         // accumulate
         return true;
       }
@@ -1296,6 +1297,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useSigmaPl("mapPanel.use sigmaPl",true,true);
   pangolin::Var<bool> useOtherNi("mapPanel.use OtherNi",false,true);
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.06,0.01,.2);
+  pangolin::Var<bool> estSigmaPl("mapPanel.est SigmaPl",false,true);
+  pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
@@ -2287,9 +2290,11 @@ int main( int argc, char* argv[] )
                   //                    W, dpc, n, curv, u,v ))
                   continue;
                 if (useTexture) {
+                  float sqrtInfoP2Pl = estSigmaPl ? 1./sqrtf(p2plVar[i]) : 1.;
+                  float sqrtInfoIm = estSigmaIm ? lambdaTex/sqrtf(ImVar[i]) : lambdaTex;
                   if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
-                        lambdaTex, A, Ai, b, err))
+                        sqrtInfoP2Pl, sqrtInfoIm, A, Ai, b, err))
                     continue;
                 } else if (use3dGrads) {
                   if (!AccumulateP2Pl3DGrad(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
