@@ -1248,7 +1248,8 @@ int main( int argc, char* argv[] )
 //  tdp::ManagedHostImage<tdp::Vector3bda> rgb_c;
 //  tdp::ManagedHostImage<tdp::Vector3fda> n_c;
 
-  pangolin::Var<bool> record("ui.record",false,true);
+  pangolin::Var<bool> record("ui.record",false,false);
+  pangolin::Var<bool> snapShot("ui.snapshot",false,false);
   pangolin::Var<float> depthSensorScale("ui.depth sensor scale",1e-3,1e-4,1e-3);
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
@@ -1269,9 +1270,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
 
-  pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
+  pangolin::Var<bool> pruneNoise("ui.prune Noise",true,true);
   pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
-  pangolin::Var<float> pruneHThr("ui.prune H Thr",-10,-30.,0.);
+  pangolin::Var<float> pruneHThr("ui.prune H Thr",-30,-40.,-20.);
+  pangolin::Var<float> pruneNumObsThr("ui.prune NumObsThr",6,3,30);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
   pangolin::Var<int> numAdditionalObs("ui.num add Obs",300,0,1000);
@@ -1349,6 +1351,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",PYR-1,0,PYR-1);
   pangolin::Var<int> SO3minLvl("ui.SO3 min Lvl",1,0,PYR-1);
 
+  pangolin::Var<float> renderPointSize("visPanel.pt size",1.5,0.1,10.);
+  pangolin::Var<float> renderLineWidth("visPanel.line w",1.5,0.1,10.);
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
   pangolin::Var<int> step("visPanel.step",10,1,100);
   pangolin::Var<float> bgGrey("visPanel.bg Grey",0.02,0.0,1);
@@ -1540,7 +1544,8 @@ int main( int argc, char* argv[] )
         if (pruneNoise) {
 //          std::cout << "checking prune on " << iReadNext 
 //            << " time " << pl.lastFrame_ << " now " << frame << std::endl;
-          if (pl.lastFrame_+survivalTime < frame && pl.Hp_ > pruneHThr) {
+          if (pl.lastFrame_+survivalTime < frame && pl.Hp_ > pruneHThr
+              && pl.numObs_ < pruneNumObsThr) {
 //          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
 ////          std::cout << iReadNext << ": " 
 ////            << dist  <<  " vs " << values(0) 
@@ -2608,6 +2613,8 @@ int main( int argc, char* argv[] )
     }
 
     glEnable(GL_DEPTH_TEST);
+    glPointSize(renderPointSize);
+    glLineWidth(renderLineWidth);
     if (viewPc3D.IsShown()) {
       viewPc3D.Activate(s_cam);
       glClearColor(bgGrey, bgGrey, bgGrey, 1.0f);
@@ -2623,7 +2630,7 @@ int main( int argc, char* argv[] )
         pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
       }
       glColor4f(1.,1.,0.,0.6);
-      glDrawPoses(T_wcs,20, 0.03f);
+      glDrawPoses(T_wcs, 100000, 0.03f);
 
       TICK("Draw 3D nbo upload");
       if (showSamples) {
@@ -2890,11 +2897,13 @@ int main( int argc, char* argv[] )
     }
 
     TOCK("Draw 2D");
+    if (pangolin::Pushed(snapShot)) {
+      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
+      name = std::string(name.begin(), name.end()-4);
+      gui.container().SaveOnRender(name);
+    }
     if (pangolin::Pushed(record)) {
       pangolin::DisplayBase().RecordOnRender("ffmpeg:[fps=30,bps=67108864,unique_filename]//screencap.avi");
-//      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
-//      name = std::string(name.begin(), name.end()-4);
-//      gui.container().SaveOnRender(name);
     }
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
