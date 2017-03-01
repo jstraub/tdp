@@ -236,6 +236,29 @@ void ExtractPlanes(
     }
 }
 
+
+bool ProjectiveAssocOcl(const Plane& pl, 
+    tdp::SE3f& T_wc, 
+    CameraT& cam,
+    const Image<float>& d,
+    float occlusionDepthThr,
+    int32_t& u,
+    int32_t& v
+    ) {
+  if (!pl.valid_)
+    return false;
+  tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*pl.p_;
+  Eigen::Vector2f x = cam.Project(pc_w_in_c);
+  if (!d.Inside(x)) 
+    return false;
+  u = floor(x(0)+0.5f);
+  v = floor(x(1)+0.5f);
+  float d_c = d(u,v);
+  if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
+    return false;
+  return true;
+}
+
 bool ProjectiveAssoc(const Plane& pl, 
     tdp::SE3f& T_cw, 
     CameraT& cam,
@@ -1318,6 +1341,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showObs("visPanel.show # obs",false,true);
   pangolin::Var<bool> showCurv("visPanel.show curvature",false,true);
   pangolin::Var<bool> showGrey("visPanel.show grey",false,true);
+  pangolin::Var<bool> showP2PlVar("visPanel.show p2pl var",false,true);
+  pangolin::Var<bool> showIvar("visPanel.show I var",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
@@ -1405,6 +1430,17 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsMu_w(MAP_SIZE);
+
+  tdp::ManagedHostCircularBuffer<float> p2plSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> p2plSqSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> p2plCount(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> p2plVar(MAP_SIZE);
+
+  tdp::ManagedHostCircularBuffer<float> ImSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImSqSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImCount(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImVar(MAP_SIZE);
+
   pcObsInfo_w.Fill(tdp::Matrix3fda::Zero());
   pcObsXi_w.Fill(tdp::Vector3fda::Zero());
   pcObsMu_w.Fill(tdp::Vector3fda::Zero());
@@ -1757,6 +1793,21 @@ int main( int argc, char* argv[] )
           pSampleSum_w[i] += pi;
           pSampleOuter_w[i] += pi*pi.transpose();
           pSampleCount_w[i] ++;
+
+          for (int k=0; k<kNN; ++k) {
+            if (ids[k] > -1 
+                && pl_w[ids[k]].valid_ 
+                && tdp::IsValidData(pS[ids[k]])
+                && tdp::IsValidData(pS[i])) {
+                float p2pl = nS[i].dot(pS[ids[k]] - pS[i]);
+                p2plSum[i] += p2pl;
+                p2plSqSum[i] += p2pl*p2pl;
+                p2plCount[i] ++;
+            }
+          }
+          if (p2plCount[i] > 0) {
+            p2plVar[i] = (p2plSqSum[i] - p2plSum[i]*p2plSum[i]/p2plCount[i])/p2plCount[i];
+          }
 
           if (false && i%10) {
             std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
@@ -2370,6 +2421,10 @@ int main( int argc, char* argv[] )
         for (auto& i : *idsCur[0]) {
           if (pl_w[i].lastFrame_ < frame && j++ < numAdditionalObs) {
             tdp::Plane& pl = pl_w[i];
+//            int32_t u, v;
+//            if (!ProjectiveAssocOcl(pl, T_wc, cam, d,
+//                  occlusionDepthThr, u, v))
+//              continue;
             if (!pl.valid_)
               continue;
             tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*pl.p_;
@@ -2403,6 +2458,13 @@ int main( int argc, char* argv[] )
             pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+
+
+//            ImSum[i] += greyFl(u,v);
+//            ImSqSum[i] += greyFl(u,v);
+//              ImSqSum
+//              ImCount
+//              ImVar
 
             tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2521,7 +2583,7 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
-            || showHn || showHp) {
+            || showHn || showHp || showP2PlVar || showIvar) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -2538,6 +2600,12 @@ int main( int argc, char* argv[] )
           } else if (showZCounts) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = zCountS[i];
+          } else if (showP2PlVar) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = p2plVar[i];
+          } else if (showIvar) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = ImVar[i];
           } else if (showHp) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i)  {
               age[i] = pl_w[i].Hp_;
