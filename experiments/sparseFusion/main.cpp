@@ -1082,7 +1082,7 @@ int main( int argc, char* argv[] )
   if (calibPath.size() > 0) {
     rig.FromFile(calibPath,true);
     std::vector<pangolin::VideoInterface*>& streams = video.InputStreams();
-    rig.CorrespondOpenniStreams2Cams(streams);
+    rig.CorrespondOpenniStreams2Cams(streams,1);
   } else {
     return 2;
   }
@@ -1358,7 +1358,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> renderPointSize("visPanel.pt size",1.5,0.1,10.);
   pangolin::Var<float> renderLineWidth("visPanel.line w",1.5,0.1,10.);
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
-  pangolin::Var<int> step("visPanel.step",10,1,100);
+  pangolin::Var<int>   step("visPanel.step",10,1,100);
   pangolin::Var<float> bgGrey("visPanel.bg Grey",0.2,0.0,1);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);

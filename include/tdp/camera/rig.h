@@ -162,7 +162,8 @@ struct Rig {
   }
 
   bool CorrespondOpenniStreams2Cams(
-    const std::vector<pangolin::VideoInterface*>& streams);
+    const std::vector<pangolin::VideoInterface*>& streams,
+    int maxDevs=999);
 
   void CollectRGB(const GuiBase& gui,
     Image<Vector3bda>& rgb);
@@ -283,7 +284,8 @@ struct Rig {
 /// correspondences.
 template<class CamT>
 bool Rig<CamT>::CorrespondOpenniStreams2Cams(
-    const std::vector<pangolin::VideoInterface*>& streams) {
+    const std::vector<pangolin::VideoInterface*>& streams, 
+    int maxDevs) {
 
   rgbStream2cam_.clear();
   dStream2cam_.clear();
@@ -308,7 +310,7 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
   }
   pangolin::json::value jsDevices = devProps[devType]["devices"];
 
-  for (size_t i=0; i<jsDevices.size(); ++i) {
+  for (size_t i=0; i< jsDevices.size() && i < maxDevs; ++i) {
     std::string serial;
     if (jsDevices[i].contains("ONI_DEVICE_PROPERTY_SERIAL_NUMBER")) {
       serial = 
