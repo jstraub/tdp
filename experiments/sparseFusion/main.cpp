@@ -1288,6 +1288,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
   pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
+  pangolin::Var<bool> useSurfNormalObs("mapPanel.use SurfNormal Obs",true,true);
   pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
   pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
   pangolin::Var<float> condHThr("mapPanel.condHThr",0.01,0.001,0.1);
@@ -1626,8 +1627,8 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda& ni = nS[i];
         if (!pl_w[i].valid_) continue;
         if (sampleNormals) {
-          tdp::Vector3fda mu = normSum_w[i]*nSum_w[i]*tauO;
-          if (estimateTauO)
+          tdp::Vector3fda mu = useSurfNormalObs ? normSum_w[i]*nSum_w[i]*tauO : tdp::Vector3fda::Zero();
+          if (estimateTauO && useSurfNormalObs)
             mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
           if (zi < Ksample) {
             mu += vmfs[zi].mu_*vmfs[zi].tau_;

@@ -143,7 +143,9 @@ float vMF<float,3>::logPdf(const Eigen::Matrix<float,3,1>& x) const {
 
 template<>
 Eigen::Matrix<float,3,1> vMF<float,3>::sample(std::mt19937& rnd) {
-  //    std::cout << "stating n sampling ------------ " << std::endl;
+  if (tau_ < 1e-10) {
+    return Eigen::Vector3f v(gauss_(rnd), gauss_(rnd), gauss_(rnd)).normalized();
+  }
   // https://www.mitsuba-renderer.org/~wenzel/files/vmf.pdf
   // sample around (0,0,1)
   Eigen::Vector2f v(gauss_(rnd), gauss_(rnd));
