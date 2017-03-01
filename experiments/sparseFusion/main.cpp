@@ -164,6 +164,10 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<Vector3fda>& grad_w,
+    ManagedHostCircularBuffer<float>& ImSum,
+    ManagedHostCircularBuffer<float>& ImSqSum,
+    ManagedHostCircularBuffer<float>& ImCount,
+    ManagedHostCircularBuffer<float>& ImVar,
     ManagedHostCircularBuffer<float>& rs,
     ManagedHostCircularBuffer<uint16_t>& ts,
     bool viaRMLs
@@ -217,6 +221,8 @@ void ExtractPlanes(
 //            cam.Unproject(uGrad,vGrad,1.));
 //        ray.Transform(T_wc);
 //        pl.grad_ = pl.gradGrey_.norm()*(ray.IntersectPlane(pl.p_,pl.n_) - pl.p_).normalized();
+
+
         // could project onto plane spanned by normal?
 
         tdp::Matrix3fda SigmaO;
@@ -230,12 +236,36 @@ void ExtractPlanes(
         rgb_w.Insert(pl.rgb_);
         rs.Insert(pl.r_);
         ts.Insert(pl.lastFrame_);
+
+        ImSum.Insert(greyFl[i]);
+        ImSqSum.Insert(greyFl[i]*greyFl[i]);
+        ImCount.Insert(1);
+        ImVar.Insert(1.); 
       }
     }
   }
     }
 }
 
+bool ProjectiveAssocOcl(const tdp::Vector3fda& p_w,
+    tdp::SE3f& T_wc, 
+    CameraT& cam,
+    const Image<float>& d,
+    float occlusionDepthThr,
+    int32_t& u,
+    int32_t& v
+    ) {
+  tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*p_w;
+  Eigen::Vector2f x = cam.Project(pc_w_in_c);
+  if (!d.Inside(x)) 
+    return false;
+  u = floor(x(0)+0.5f);
+  v = floor(x(1)+0.5f);
+  float d_c = d(u,v);
+  if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
+    return false;
+  return true;
+}
 
 bool ProjectiveAssocOcl(const Plane& pl, 
     tdp::SE3f& T_wc, 
@@ -247,17 +277,9 @@ bool ProjectiveAssocOcl(const Plane& pl,
     ) {
   if (!pl.valid_)
     return false;
-  tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*pl.p_;
-  Eigen::Vector2f x = cam.Project(pc_w_in_c);
-  if (!d.Inside(x)) 
-    return false;
-  u = floor(x(0)+0.5f);
-  v = floor(x(1)+0.5f);
-  float d_c = d(u,v);
-  if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
-    return false;
-  return true;
+  return ProjectiveAssocOcl(pl.p_, T_wc, cam, d, occlusionDepthThr, u,v);
 }
+
 
 bool ProjectiveAssoc(const Plane& pl, 
     tdp::SE3f& T_cw, 
@@ -1435,6 +1457,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<float> p2plSqSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> p2plCount(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> p2plVar(MAP_SIZE);
+  p2plSum.Fill(0.);
+  p2plSqSum.Fill(0.);
+  p2plCount.Fill(0.);
+  p2plVar.Fill(sigmaPl*sigmaPl);
 
   tdp::ManagedHostCircularBuffer<float> ImSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> ImSqSum(MAP_SIZE);
@@ -1933,7 +1959,8 @@ int main( int argc, char* argv[] )
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w, rgb_w,
-            n_w, grad_w, rs, ts, normalViaRMLS);
+            n_w, grad_w, ImSum, ImSqSum, ImCount, ImVar, rs, ts,
+            normalViaRMLS);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
         TOCK("normals");
@@ -2411,6 +2438,14 @@ int main( int argc, char* argv[] )
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
+            if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
+                  occlusionDepthThr, u, v)) {
+              ImSum[i] += greyFl(u,v);
+              ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
+              ImCount[i] ++;
+              ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
+            }
+
           if (!updateMap) {
             pl.AddObs(pc_c_in_w, n_c_in_w);
             n_w[i] =  pl.n_;
@@ -2421,20 +2456,9 @@ int main( int argc, char* argv[] )
         for (auto& i : *idsCur[0]) {
           if (pl_w[i].lastFrame_ < frame && j++ < numAdditionalObs) {
             tdp::Plane& pl = pl_w[i];
-//            int32_t u, v;
-//            if (!ProjectiveAssocOcl(pl, T_wc, cam, d,
-//                  occlusionDepthThr, u, v))
-//              continue;
-            if (!pl.valid_)
-              continue;
-            tdp::Vector3fda pc_w_in_c = T_wc.Inverse()*pl.p_;
-            Eigen::Vector2f x = cam.Project(pc_w_in_c);
-            if (!d.Inside(x)) 
-              continue;
-            int32_t u = floor(x(0)+0.5f);
-            int32_t v = floor(x(1)+0.5f);
-            float d_c = d(u,v);
-            if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
+            int32_t u, v;
+            if (!ProjectiveAssocOcl(pl, T_wc, cam, d,
+                  occlusionDepthThr, u, v))
               continue;
             if (!EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS))
               continue;
@@ -2460,11 +2484,6 @@ int main( int argc, char* argv[] )
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
 
 
-//            ImSum[i] += greyFl(u,v);
-//            ImSqSum[i] += greyFl(u,v);
-//              ImSqSum
-//              ImCount
-//              ImVar
 
             tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2482,6 +2501,14 @@ int main( int argc, char* argv[] )
 
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();
+
+            if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
+                  occlusionDepthThr, u, v)) {
+              ImSum[i] += greyFl(u,v);
+              ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
+              ImCount[i] ++;
+              ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
+            }
 
             if (!updateMap) {
               pl.AddObs(pc_c_in_w, n_c_in_w);
