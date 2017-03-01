@@ -1371,8 +1371,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
   pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,.5);
   pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.000001,.5);
-  pangolin::Var<float> showLowH("visPanel.show low H",-50,-60.,-30.0);
-  pangolin::Var<float> showHighH("visPanel.show high H",-30,-30.,-10.0);
+  pangolin::Var<float> showLowH("visPanel.show low H",-25,-30.,-15.0);
+  pangolin::Var<float> showHighH("visPanel.show high H",-15,-15.,-5.0);
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
   pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
@@ -2713,6 +2713,10 @@ int main( int argc, char* argv[] )
               minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first),
               minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first), 
               P, MV);
+          if (!showHp){ 
+            showLow  = minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first);
+            showHigh = minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first);
+          }
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
