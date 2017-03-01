@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.linalg import eig, inv
 
-scale = 0.1
-N = 100
+scale = 1.
+N = 1000
 x = np.zeros((3,N))
 x[:2,:] = scale*np.random.randn(2,N)
 x[2,:]  = scale*np.random.randn(1,N)*0.01
@@ -26,7 +26,8 @@ print e
 print e[0]/e.sum(), e[0]/(e[1]+e[2])
 #tau = e[0]/(e[1]+e[2])
 #tau = e[0]/min(e[1],e[2])
-tau = e[0]
+tau = 1./(2*(e[1]*e[2])/(e[1]+e[2]))
+print tau
 mu = Q[:,0]
 
 N = 1000
@@ -39,7 +40,7 @@ for i,ang in enumerate(angs):
 
 logpnSn = np.zeros(N)
 for i,ang in enumerate(angs):
-  logpnSn[i] = -n[:,i].dot(S).dot(n[:,i])
+  logpnSn[i] = -0.5*n[:,i].dot(S).dot(n[:,i])
 logpnb = mu.dot(n)*tau
 
 def expDist(logp):
@@ -48,18 +49,23 @@ def expDist(logp):
   return p
 
 pnSn = expDist(logpnSn)
-pnb = 0.5*expDist(logpnb)
+pnb = 0.5*expDist(logpnb)+0.5*expDist(-logpnb)
 
 print pnSn.shape
 print pnb.shape
 
 import matplotlib.pyplot as plt
 
+#plt.figure()
+#plt.plot(angs,pnSn,label="nSn")
+#plt.plot(angs,pnb ,label="nb")
+#plt.legend()
+#plt.show()
+
 plt.figure()
-plt.plot(angs,pnSn,label="nSn")
-plt.plot(angs,pnb ,label="nb")
+plt.plot(angs,np.log(pnSn),label="nSn")
+plt.plot(angs,np.log(pnb ),label="nb")
 plt.legend()
 plt.show()
-
 
 
