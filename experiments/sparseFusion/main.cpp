@@ -1271,6 +1271,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",false,true);
   pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
+  pangolin::Var<float> pruneHThr("ui.prune H Thr",-10,-30.,0.);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
   pangolin::Var<int> numAdditionalObs("ui.num add Obs",300,0,1000);
@@ -1317,7 +1318,8 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
   pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.001,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.01,1.);
+  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0001,0.1);
+  pangolin::Var<float> lambdaP2Pl("ui.lamb p2pl",1.0,0.001,1.);
   pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
   pangolin::Var<bool> use3dGrads("ui.use 3D grads ",false,true);
   pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
@@ -1325,6 +1327,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
 
   pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.06,0.01,0.3);
+  pangolin::Var<float> numSigmaOclusion("ui.num sigma ocl",10.,1.,6.);
+  pangolin::Var<bool> sigmaOclusion("ui.use sigma in ocl",true,true);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
@@ -1357,8 +1361,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
   pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
   pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
-  pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,1.0);
-  pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.,1.0);
+  pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,.5);
+  pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.000001,.5);
   pangolin::Var<float> showLowH("visPanel.show low H",-50,-60.,-30.0);
   pangolin::Var<float> showHighH("visPanel.show high H",-30,-30.,-10.0);
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
@@ -1369,6 +1373,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showGrey("visPanel.show grey",false,true);
   pangolin::Var<bool> showP2PlVar("visPanel.show p2pl var",false,true);
   pangolin::Var<bool> showIvar("visPanel.show I var",false,true);
+  pangolin::Var<bool> showImean("visPanel.show I mean",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
   pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
@@ -1415,11 +1420,13 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleOuter_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleCov_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleEst_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> pSampleCount_w(MAP_SIZE);
   nSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
   pSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
+  pSampleCov_w.Fill(tdp::Matrix3fda::Zero());
   pSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleEst_w.Fill(tdp::Vector3fda::Zero());
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
@@ -1533,24 +1540,25 @@ int main( int argc, char* argv[] )
         if (pruneNoise) {
 //          std::cout << "checking prune on " << iReadNext 
 //            << " time " << pl.lastFrame_ << " now " << frame << std::endl;
-          if (pl.lastFrame_+survivalTime < frame) {
-          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
-//          std::cout << iReadNext << ": " 
-//            << dist  <<  " vs " << values(0) 
-//            << " frac " << dist/values(0) 
-//            << std::endl;
-          if (dist/values(0) > relPruneDistThr
-              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
+          if (pl.lastFrame_+survivalTime < frame && pl.Hp_ > pruneHThr) {
+//          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
+////          std::cout << iReadNext << ": " 
+////            << dist  <<  " vs " << values(0) 
+////            << " frac " << dist/values(0) 
+////            << std::endl;
+//          if (dist/values(0) > relPruneDistThr
+//              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
             pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
             n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
             pl.valid_ = false;
             std::cout << "pruning " << iReadNext 
-              << " rel val " << dist/values(0)
-              << " thr " << relPruneDistThr 
+//              << " rel val " << dist/values(0)
+              << " H " << pl.Hp_ << " HThr " << HThr 
+//              << " thr " << relPruneDistThr 
               << std::endl;
 //            std::cout << values.transpose() << std::endl;
             numPruned = numPruned +1;
-          }
+//          }
           }
         }
 
@@ -1627,7 +1635,12 @@ int main( int argc, char* argv[] )
         tdp::Vector3fda& ni = nS[i];
         if (!pl_w[i].valid_) continue;
         if (sampleNormals) {
-          tdp::Vector3fda mu = useSurfNormalObs ? normSum_w[i]*nSum_w[i]*tauO : tdp::Vector3fda::Zero();
+          tdp::Vector3fda mu;
+          if (useSurfNormalObs) {
+            mu = normSum_w[i]*nSum_w[i]*tauO;
+          } else {
+            mu = tdp::Vector3fda::Zero();
+          }
           if (estimateTauO && useSurfNormalObs)
             mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
           if (zi < Ksample) {
@@ -1660,7 +1673,12 @@ int main( int argc, char* argv[] )
                 tdp::Vector3fda e = eig.eigenvalues();
                 float tauEst = 2.*(e(1)*e(2))/(e(1)+e(2));
                 tdp::Vector3fda muEst = eig.eigenvectors().col(0);
-                muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
+
+                if (!useSurfNormalObs) {
+                  muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
+                } else {
+                  muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
+                }
 //                if (tauEst > 100) 
 //                  std::cout 
 //                    << Info << std::endl
@@ -1847,8 +1865,8 @@ int main( int argc, char* argv[] )
             std::cout << mu.transpose() << std::endl;
           }
 
-          tdp::Matrix3fda cov = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
-          float Hp = (cov).eigenvalues().real().array().log().sum();
+          pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
+          float Hp = pSampleCov_w[i].eigenvalues().real().array().log().sum();
           pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
 //          if (i%10) {
 //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
@@ -1946,8 +1964,14 @@ int main( int argc, char* argv[] )
 //      projAssoc.GetAssoc(z, mask, idsCur);
 //      projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
 //          occlusionDepthThr, z, mask, idsCur);
-      projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
-          occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
+      if (sigmaOclusion) {
+        projAssoc.GetAssocOcclusion(pl_w, pSampleCov_w, pyrPc, pyrRay,
+            T_wc.Inverse(), numSigmaOclusion, dMin, dMax, pyrZ,
+            pyrMask, idsCur);
+      } else {
+        projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
+            occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
+      }
       TOCK("extract assoc");
       pyrMaskDisp.CopyFrom(pyrMask);
 
@@ -2251,6 +2275,7 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
+          tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
             for (auto& ass : assoc) mask[ass.second] = 0;
@@ -2279,19 +2304,23 @@ int main( int argc, char* argv[] )
 //                std::cout << x.transpose() << std::endl;
                 if (!dLvl.Inside(x)) 
                   continue;
-                float d_c = dLvl.GetBilinear(x(0),x(1));
-//                std::cout << d_c << std::endl;
-                if (d_c != d_c || fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr) 
-                  continue;
-                numProjected = numProjected + 1;
                 int32_t u = floor(x(0)+0.5f);
                 int32_t v = floor(x(1)+0.5f);
+                float d_c = dLvl.GetBilinear(x(0),x(1));
+//                std::cout << d_c << std::endl;
+                float threeSigma_d = numSigmaOclusion*sqrtf(rayLvl(u,v).dot(pSampleCov_w[i]*rayLvl(u,v)));
+                if (d_c != d_c 
+                    || (!sigmaOclusion && fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr)
+                    || (sigmaOclusion  && fabs(d_c-pc_w_in_c(2)) > threeSigma_d)
+                    )
+                  continue;
+                numProjected = numProjected + 1;
                 if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v, normalViaRMLS))
                   //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, camLvl, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
                 if (useTexture) {
-                  float sqrtInfoP2Pl = estSigmaPl ? 1./sqrtf(p2plVar[i]) : 1.;
+                  float sqrtInfoP2Pl = estSigmaPl ? lambdaP2Pl/sqrtf(p2plVar[i]) : 1.;
                   float sqrtInfoIm = estSigmaIm ? lambdaTex/sqrtf(ImVar[i]) : lambdaTex;
                   if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
@@ -2616,7 +2645,8 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
-            || showHn || showHp || showP2PlVar || showIvar) {
+            || showHn || showHp || showP2PlVar 
+            || showIvar || showImean) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -2635,10 +2665,13 @@ int main( int argc, char* argv[] )
               age[i] = zCountS[i];
           } else if (showP2PlVar) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = p2plVar[i];
+              age[i] = sqrtf(p2plVar[i]);
           } else if (showIvar) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = ImVar[i];
+              age[i] = sqrtf(ImVar[i]);
+          } else if (showImean) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = ImSum[i] / ImCount[i];
           } else if (showHp) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i)  {
               age[i] = pl_w[i].Hp_;
@@ -2857,10 +2890,11 @@ int main( int argc, char* argv[] )
     }
 
     TOCK("Draw 2D");
-    if (record) {
-      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
-      name = std::string(name.begin(), name.end()-4);
-      gui.container().SaveOnRender(name);
+    if (pangolin::Pushed(record)) {
+      pangolin::DisplayBase().RecordOnRender("ffmpeg:[fps=30,bps=67108864,unique_filename]//screencap.avi");
+//      std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
+//      name = std::string(name.begin(), name.end()-4);
+//      gui.container().SaveOnRender(name);
     }
 
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
