@@ -161,6 +161,7 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
     ManagedHostCircularBuffer<Matrix3fda>& pc0Info_w,
+    ManagedHostCircularBuffer<Matrix3fda>& pc0Cov_w,
     ManagedHostCircularBuffer<Vector3bda>& rgb_w,
     ManagedHostCircularBuffer<Vector3fda>& n_w,
     ManagedHostCircularBuffer<Vector3fda>& grad_w,
@@ -209,7 +210,6 @@ void ExtractPlanes(
         pl.numObs_ = 1;
         pl.valid_ = true;
         pl.Hn_ = 0;
-        pl.Hp_ = 0;
 //        pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
         pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
@@ -228,6 +228,10 @@ void ExtractPlanes(
         tdp::Matrix3fda SigmaO;
         NoiseModelNguyen(n, p, cam, SigmaO);
         SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
+
+        pl.Hp_ = 0.5*SigmaO.eigenvalues().array().real().log().sum();
+
+        pc0Cov_w.Insert(SigmaO);
         pc0Info_w.Insert(SigmaO.inverse());
         pl_w.Insert(pl);
         pc_w.Insert(pl.p_);
@@ -1272,11 +1276,11 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",true,true);
   pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
-  pangolin::Var<float> pruneHThr("ui.prune H Thr",-30,-40.,-20.);
-  pangolin::Var<float> pruneNumObsThr("ui.prune NumObsThr",6,3,30);
+  pangolin::Var<float> pruneHThr("ui.prune H Thr",-15,-40.,-20.);
+  pangolin::Var<float> pruneNumObsThr("ui.prune NumObsThr",10,3,30);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
-  pangolin::Var<int> numAdditionalObs("ui.num add Obs",300,0,1000);
+  pangolin::Var<int> numAdditionalObs("ui.num add Obs",3000,0,1000);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
@@ -1329,7 +1333,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
 
   pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.06,0.01,0.3);
-  pangolin::Var<float> numSigmaOclusion("ui.num sigma ocl",10.,1.,6.);
+  pangolin::Var<float> numSigmaOclusion("ui.num sigma ocl",30.,1.,6.);
   pangolin::Var<bool> sigmaOclusion("ui.use sigma in ocl",true,true);
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
@@ -1355,7 +1359,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> renderLineWidth("visPanel.line w",1.5,0.1,10.);
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
   pangolin::Var<int> step("visPanel.step",10,1,100);
-  pangolin::Var<float> bgGrey("visPanel.bg Grey",0.02,0.0,1);
+  pangolin::Var<float> bgGrey("visPanel.bg Grey",0.2,0.0,1);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
@@ -1871,7 +1875,7 @@ int main( int argc, char* argv[] )
           }
 
           pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
-          float Hp = pSampleCov_w[i].eigenvalues().real().array().log().sum();
+          float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
           pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
 //          if (i%10) {
 //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
@@ -1887,6 +1891,7 @@ int main( int argc, char* argv[] )
           }
           //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
         }
+        idMapUpdate = i;
       }
     };
   });
@@ -1991,8 +1996,9 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w, rgb_w,
-            n_w, grad_w, ImSum, ImSqSum, ImCount, ImVar, rs, ts,
+             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w,
+             pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
+             ImVar, rs, ts,
             normalViaRMLS);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
