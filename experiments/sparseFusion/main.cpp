@@ -199,6 +199,7 @@ void ExtractPlanes(
     const Image<Vector2fda>& gradGrey,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
+    const Matrix<float,6,6>& Sigma_wc,
     const CameraT& cam,
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
@@ -2056,7 +2057,7 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w,
+             mask, W, frame, T_wc, Sigma_w, cam, dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
              ImVar, rs, ts,
             normalViaRMLS);
