@@ -1512,11 +1512,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<uint8_t> nnFixed(MAP_SIZE);
   nnFixed.Fill(0);
   tdp::ManagedHostCircularBuffer<tdp::VectorkNNida> nn(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> sumSameZ(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<tdp::VectorkNNfda> numSamplesZ(MAP_SIZE);
   nn.Fill(tdp::VectorkNNida::Ones()*-1);
-  sumSameZ.Fill(tdp::VectorkNNfda::Zero());
-  numSamplesZ.Fill(tdp::VectorkNNfda::Zero());
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
@@ -1629,10 +1625,10 @@ int main( int argc, char* argv[] )
         // TODO: should be updated as pairs are reobserved
         nnFixed[iReadNext] = kNN;
         for (int32_t i=0; i<kNN; ++i) {
-            if (ids(i) != idsPrev(i)) {
-              numSamplesZ[iReadNext][i] = 0;
-              sumSameZ[iReadNext][i] = 0;
-            }
+//            if (ids(i) != idsPrev(i)) {
+//              numSamplesZ[iReadNext][i] = 0;
+//              sumSameZ[iReadNext][i] = 0;
+//            }
           if (values(i) > maxNnDist*maxNnDist) {
             ids(i) = -1;
             nnFixed[iReadNext]-- ;
@@ -1845,18 +1841,6 @@ int main( int argc, char* argv[] )
           zMlCount[i] = countMli;
         }
         K = Ksample;
-      }
-
-      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        if (!pl_w[i].valid_) continue;
-        uint16_t& zi = zS[i];
-        for (size_t k=0; k<kNN; ++k) {
-          if (0 <= nn[i](k) && nn[i](k) < iInsert) {
-            numSamplesZ[i](k) ++;
-            if(zS[i] == zS[nn[i](k)])
-              sumSameZ[i](k)++;
-          }
-        }
       }
 
 //      // sample points
@@ -2567,8 +2551,7 @@ int main( int argc, char* argv[] )
           if (pl_w[i].lastFrame_ < frame && j++ < numAdditionalObs) {
             tdp::Plane& pl = pl_w[i];
             int32_t u, v;
-            if (!ProjectiveAssocOcl(pl, T_wc, cam, d,
-                  occlusionDepthThr, u, v))
+            if (!ProjectiveAssocOcl(pl, T_wc, cam, d, occlusionDepthThr, u, v))
               continue;
             if (!EnsureNormal(pc, dpc, W, n, curv, rad, u, v, normalViaRMLS))
               continue;
@@ -2806,11 +2789,7 @@ int main( int argc, char* argv[] )
           for (size_t i=0; i<mapNN.size(); ++i) {
             auto& ass = mapNN[i];
             if (ass.second >= 0) {
-              if (numSamplesZ[ass.first](i%kNN) > 0) {
-                tdp::glColorHot(sumSameZ[ass.first](i%5)/numSamplesZ[ass.first](i%5),0.3);
-              } else {
-                glColor4f(0.3,0.3,0.3,0.3);
-              }
+              glColor4f(0.3,0.3,0.3,0.3);
               tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
             }
           }

@@ -185,7 +185,8 @@ class ProjectiveAssociation {
       const tdp::SE3f& T_cw,
       float numSigmaOclusion,
       tdp::Image<uint32_t>& z, 
-      tdp::Image<uint8_t>& mask, std::vector<uint32_t>& ids) {
+      tdp::Image<uint8_t>& mask, 
+      std::vector<uint32_t>& ids) {
     GetAssoc(z);
     // TODO could try to use depth of render buffer
     for (size_t i=0; i<z.Area(); ++i) {
