@@ -114,6 +114,17 @@ void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
 typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 
+void InflateObsCovByTransformationCov(
+    const tdp::SE3f& T_wc, 
+    const tdp;:Vector3fda& p_w,
+    const Eigen::Matrix<float,6,6>& Sigma_wc,
+    tdp::Matrix3fda& SigmaO
+    ) {
+  Eigen::Matrix<float, 6, 3> Jse3;
+  Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
+  SigmaO += Jse3*Sigma_wc*Jse3.transpose();
+}
+
 //https://ai2-s2-pdfs.s3.amazonaws.com/a8a6/18363b8dee8037df9133668ec8dcd532ee4e.pdf
 void NoiseModelNguyen(
     const tdp::Vector3fda& n,
@@ -266,6 +277,9 @@ void ExtractPlanes(
 
         tdp::Matrix3fda SigmaO;
         NoiseModelNguyen(n, p, cam, SigmaO);
+        if (useTrackingUncertainty) {
+          InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+        }
         SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
         pl.Hp_ = 0.5*SigmaO.eigenvalues().array().real().log().sum();
@@ -1338,6 +1352,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
   pangolin::Var<bool> updateMap("mapPanel.update map",true,true);
+  pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",false,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
   pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
@@ -1448,8 +1463,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wc = T_wc_0;
   tdp::SE3f T_wcRansac;
   std::vector<tdp::SE3f> T_wcs;
-  Eigen::Matrix<float,6,6> Sigma_mc;
-  std::vector<float> logHs;
+  Eigen::Matrix<float,6,6> Sigma_wc;
 
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
@@ -2475,6 +2489,9 @@ int main( int argc, char* argv[] )
         q0 *= (q0(maxId) > 0? 1.: -1.);
         logEv.Log(q0);
         T_wcs.push_back(T_wc);
+
+        Sigma_wc = A.inverse();
+
         trackingGood = (H <= HThr && assoc.size() > 10) || assoc.size() > 0.5*idsCur[0]->size();
         TOCK("icp");
         if (trackingGood) if (gui.verbose) std::cout << "tracking good" << std::endl;
@@ -2497,9 +2514,13 @@ int main( int argc, char* argv[] )
           tdp::Vector3fda pc_c_in_w = T_wc*pc(u,v);
           tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
 
-            tdp::Matrix3fda SigmaO;
-            NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
-            SigmaO *= obsStdInflation*obsStdInflation;
+          tdp::Matrix3fda SigmaO;
+          NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
+          SigmaO *= obsStdInflation*obsStdInflation;
+          if (useTrackingUncertainty) {
+            InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+          }
+          SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
           ts[i] = frame;
           pl.lastFrame_ = frame;
@@ -2514,7 +2535,7 @@ int main( int argc, char* argv[] )
           pl.r_ = std::min(pl.r_, rad(u,v));
           rs[i] = pl.r_;
 
-          tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+          tdp::Matrix3fda infoObs = SigmaO.inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
 //          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
 //          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
@@ -2564,6 +2585,10 @@ int main( int argc, char* argv[] )
             tdp::Matrix3fda SigmaO;
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
             SigmaO *= obsStdInflation*obsStdInflation;
+            if (useTrackingUncertainty) {
+              InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+            }
+            SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
             // TODO: copied from above
             ts[i] = frame;
@@ -2579,7 +2604,7 @@ int main( int argc, char* argv[] )
             pl.r_ = std::min(pl.r_, rad(u,v));
             rs[i] = pl.r_;
 
-            tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
+            tdp::Matrix3fda infoObs = SigmaO.inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
 //            pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
 //            pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
