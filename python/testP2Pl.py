@@ -16,6 +16,12 @@ print e
 print e[0]/e.sum(), e[0]/(e[1]+e[2])
 #print Q
 
+tau = 4*(e[1]*e[0])/(e[1]+e[0])
+#tau = 1./(2*(e[1]*e[0])/(e[1]+e[0]))
+print tau
+mu = Q[:,2]
+
+
 I = inv(S)
 e,Q = eig(I)
 e = e.real
@@ -26,9 +32,11 @@ print e
 print e[0]/e.sum(), e[0]/(e[1]+e[2])
 #tau = e[0]/(e[1]+e[2])
 #tau = e[0]/min(e[1],e[2])
-tau = 1./(2*(e[1]*e[2])/(e[1]+e[2]))
-print tau
-mu = Q[:,0]
+#tau = 1./(2*(e[1]*e[2])/(e[1]+e[2]))
+#tau = (e[1]+e[2])/(2*(e[1]*e[2]))
+###tau = 1./(2*(e[1]*e[0])/(e[1]+e[0]))
+##print tau
+#mu = Q[:,0]
 
 N = 1000
 angs = np.linspace(-np.pi, np.pi,N)
@@ -40,7 +48,7 @@ for i,ang in enumerate(angs):
 
 logpnSn = np.zeros(N)
 for i,ang in enumerate(angs):
-  logpnSn[i] = -0.5*n[:,i].dot(S).dot(n[:,i])
+  logpnSn[i] = -n[:,i].dot(S).dot(n[:,i])
 logpnb = mu.dot(n)*tau
 
 def expDist(logp):

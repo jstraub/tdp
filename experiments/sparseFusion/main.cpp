@@ -1539,8 +1539,8 @@ int main( int argc, char* argv[] )
         tdp::VectorkNNida idsPrev = ids;
         ids = tdp::VectorkNNida::Ones()*(-1);
         for (int32_t i=0; i<sizeToRead; ++i) {
-          if (i != iReadNext) {
-            float dist = (pl.p0_-pl_w.GetCircular(i).p0_).squaredNorm();
+          if (i != iReadNext && pl_w[i].valid_) {
+            float dist = (pl.p0_-pl_w.[i].p0_).squaredNorm();
             tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
@@ -1671,7 +1671,7 @@ int main( int argc, char* argv[] )
 //                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
 //                  }
                   if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-                  Info += InfoPl;
+                  Info += 0.5*InfoPl;
                   num++;
                 }  else {
                   break;
@@ -1680,7 +1680,7 @@ int main( int argc, char* argv[] )
               if (num == kNN) {
                 eig.computeDirect(Info);
                 tdp::Vector3fda e = eig.eigenvalues();
-                float tauEst = 2.*(e(1)*e(2))/(e(1)+e(2));
+                float tauEst = 4.*(e(1)*e(2))/(e(1)+e(2));
                 tdp::Vector3fda muEst = eig.eigenvectors().col(0);
 
                 if (!useSurfNormalObs) {
@@ -1821,7 +1821,7 @@ int main( int argc, char* argv[] )
                 InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
               }
               if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-              InfoPlSum += InfoPl;
+              InfoPlSum += 0.5*InfoPl;
               xiPl += InfoPl*pS[ids[k]];
               numNN++;
             } else {
