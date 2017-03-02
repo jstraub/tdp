@@ -196,6 +196,21 @@ bool NormalViaVoting(
     float& curvature,
     Vector3fda& p
     ) {
+    float radiusStd =0;
+    return NormalViaVoting(pc, u0, v0, W, inlierThr, dpc, ni,
+        curvature, radiusStd, p);
+}
+
+bool NormalViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W, float inlierThr,
+    Image<Vector4fda>& dpc, 
+    Vector3fda& ni,
+    float& curvature,
+    float& radiusStd,
+    Vector3fda& p
+    ) {
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
@@ -264,6 +279,7 @@ bool NormalViaVoting(
     eig.computeDirect((S - p*p.transpose()/float(N))/float(N));
     ni = n*(n.dot(pc0)/pc0.norm()<0.?1.:-1.);
     curvature = 2.*(eig.eigenvalues()(1)*eig.eigenvalues()(2))/(eig.eigenvalues()(1)+eig.eigenvalues()(2));
+    radiusStd = sqrtf(std::min(eig.eigenvalues()(1),eig.eigenvalues()(2)));
 //    if (eig.eigenvectors().col(0).dot(n) < 0)
 //      curvature *= -1;
 //    float mu = 0;

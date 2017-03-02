@@ -177,6 +177,7 @@ void ExtractPlanes(
   tdp::Brief feat;
   Vector3fda n, p;
   float curv;
+  float radiusStd = 0.;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i]) {
 //      std::cout << "mask point " << i << std::endl;
@@ -191,7 +192,7 @@ void ExtractPlanes(
       if (viaRMLs) {
         success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
       } else {
-        success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+        success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
       }
       if (success) {
 //        std::cout << "extracted normal at " << u << "," << v << std::endl;
@@ -212,7 +213,13 @@ void ExtractPlanes(
         pl.Hn_ = 0;
 //        pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
-        pl.r_ = p(2)/cam.params_(0); // unprojected radius in m
+        if (viaRMLs) {
+          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
+          // radius covering a single pizel
+          pl.r_ = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
+        } else {
+          pl.r_ = radiusStd*3;
+        }
 
         pl.grad_ = pl.Compute3DGradient(T_wc, cam, u, v, gradGrey[i]);
 //        float uGrad = u + 10.*pl.gradGrey_(0);

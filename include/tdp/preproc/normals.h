@@ -180,6 +180,17 @@ bool NormalViaVoting(
     float& curvature,
     Vector3fda& p);
 
+bool NormalViaVoting(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, uint32_t v0,
+    uint32_t W, float inlierThr,
+    Image<Vector4fda>& dpc, 
+    Vector3fda& ni,
+    float& curvature,
+    float& radiusStd,
+    Vector3fda& p
+    );
+
 bool NormalViaClustering(
     const Image<Vector3fda>& pc, 
     uint32_t u0, uint32_t v0,
