@@ -318,6 +318,7 @@ bool EnsureNormal(
     uint32_t W,
     Image<Vector3fda>& n,
     Image<float>& curv,
+    Image<float>& rad,
     int32_t u,
     int32_t v,
     bool viaRMLs
@@ -328,7 +329,7 @@ bool EnsureNormal(
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
       tdp::Vector3fda pi;
-      float curvi;
+      float curvi, radiusi;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
@@ -336,14 +337,19 @@ bool EnsureNormal(
         if (viaRMLs) {
           success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
               dpc, ni, curvi, pi);
+          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
+          // radius covering a single pizel
+          radiusi = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
-              dpc, ni, curvi, pi);
+              dpc, ni, curvi, radiusi, pi);
+          radiusi *= 3.;
         }
         if (success) {
           n(u,v) = ni;
           pc(u,v) = pi;
           curv(u,v) = curvi;
+          rad(u,v) = radiusi;
           return true;
         }
       } else {
@@ -354,25 +360,25 @@ bool EnsureNormal(
   return false;
 }
 
-bool ProjectiveAssocNormalExtract(const Plane& pl, 
-    tdp::SE3f& T_cw, 
-    CameraT& cam,
-    Image<Vector3fda>& pc,
-    uint32_t W,
-    Image<Vector4fda>& dpc,
-    Image<Vector3fda>& n,
-    Image<float>& curv,
-    int32_t& u,
-    int32_t& v,
-    bool normalViaRMLS
-    ) {
-  const tdp::Vector3fda& n_w =  pl.n_;
-  const tdp::Vector3fda& pc_w = pl.p_;
-  Eigen::Vector2f x = cam.Project(T_cw*pc_w);
-  u = floor(x(0)+0.5f);
-  v = floor(x(1)+0.5f);
-  return EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS);
-}
+//bool ProjectiveAssocNormalExtract(const Plane& pl, 
+//    tdp::SE3f& T_cw, 
+//    CameraT& cam,
+//    Image<Vector3fda>& pc,
+//    uint32_t W,
+//    Image<Vector4fda>& dpc,
+//    Image<Vector3fda>& n,
+//    Image<float>& curv,
+//    int32_t& u,
+//    int32_t& v,
+//    bool normalViaRMLS
+//    ) {
+//  const tdp::Vector3fda& n_w =  pl.n_;
+//  const tdp::Vector3fda& pc_w = pl.p_;
+//  Eigen::Vector2f x = cam.Project(T_cw*pc_w);
+//  u = floor(x(0)+0.5f);
+//  v = floor(x(1)+0.5f);
+//  return EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS);
+//}
 
 
 bool AccumulateP2Pl(const Plane& pl, 
@@ -1193,6 +1199,7 @@ int main( int argc, char* argv[] )
   memset(n2D.ptr_,0,n2D.SizeBytes());
   tdp::ManagedHostImage<tdp::Vector3fda> n2Df(wc,hc);
   tdp::ManagedHostImage<float> curv(wc,hc);
+  tdp::ManagedHostImage<float> rad(wc,hc);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(wc,hc);
   tdp::ManagedHostImage<tdp::Vector4fda> dpc(wc, hc);
 
@@ -2333,7 +2340,7 @@ int main( int argc, char* argv[] )
                     )
                   continue;
                 numProjected = numProjected + 1;
-                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, u, v, normalViaRMLS))
+                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, rad, u, v, normalViaRMLS))
                   //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, camLvl, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
@@ -2472,6 +2479,8 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+          pl.r_ = std::min(pl.r_, rad(u,v));
+          rs[i] = pl.r_;
 
           tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2513,7 +2522,7 @@ int main( int argc, char* argv[] )
             if (!ProjectiveAssocOcl(pl, T_wc, cam, d,
                   occlusionDepthThr, u, v))
               continue;
-            if (!EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS))
+            if (!EnsureNormal(pc, dpc, W, n, curv, rad, u, v, normalViaRMLS))
               continue;
 //            std::cout << " adding " << j << " of " << numAdditionalObs 
 //              << " id " << i << " uv " << u << "," << v << std::endl;
@@ -2536,7 +2545,8 @@ int main( int argc, char* argv[] )
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
 
-
+            pl.r_ = std::min(pl.r_, rad(u,v));
+            rs[i] = pl.r_;
 
             tdp::Matrix3fda infoObs = (T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose()).inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
