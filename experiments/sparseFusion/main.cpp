@@ -74,10 +74,42 @@ typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
 #define PYR 4
+#define zKTrac 3
 #define kNN 12
 #define MAP_SIZE 1000000
 
 namespace tdp {
+
+typedef Eigen::Matrix<float,  zKTrac,1,Eigen::DontAlign> VectorZfda;
+typedef Eigen::Matrix<uint16_t,zKTrac,1,Eigen::DontAlign> VectorZuda;
+
+void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
+    uint16_t& idMax, float& countMax) {
+  int32_t kMatch=-1;
+  int32_t kMin=-1;
+  float countMin=std::numeric_limits<float>::max();
+  int32_t kMax=-1;
+  countMax=std::numeric_limits<float>::lowest();
+  for (int32_t k=0; k<zKTrac; ++k) {
+    if (ids(k) == id) {
+      kMatch = k;
+    }
+    if (counts(k) < countMin) {
+      countMin = counts(k);
+      kMin = k;
+    }
+    if (counts(k) > countMax) {
+      countMax = counts(k);
+      idMax = ids(k);
+    }
+  }
+  if (kMatch > 0) {
+    counts(kMatch) ++;
+  } else {
+    counts(kMin) = 1;
+    ids(kMin) = id;
+  }
+}
 
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
 typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
@@ -1397,8 +1429,10 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showIvar("visPanel.show I var",false,true);
   pangolin::Var<bool> showImean("visPanel.show I mean",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
-  pangolin::Var<bool> showZCounts("visPanel.show zCounts",false,true);
-  pangolin::Var<bool> showLabels("visPanel.show labels",true,true);
+  pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
+  pangolin::Var<bool> showZCounts("visPanel.show samplesCount",false,true);
+  pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
+  pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
   pangolin::Var<bool> showNN("visPanel.show NN",false,true);
@@ -1438,6 +1472,12 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> n_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> grad_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
+
+
+  tdp::ManagedHostCircularBuffer<tdp::VectorZfda> zSampleCounts(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<tdp::VectorZuda> zSampleIds(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<uint16_t> zMl(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> zMlCount(MAP_SIZE);
 
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
@@ -1628,7 +1668,7 @@ int main( int argc, char* argv[] )
   vmfs.push_back(base.sample(rnd));
 
   tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<uint16_t> zCountS(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<uint16_t> samplesCount(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1716,7 +1756,7 @@ int main( int argc, char* argv[] )
           ni = vMF<float,3>(mu).sample(rnd);
           nSampleOuter_w[i] += ni*ni.transpose();
           nSampleSum_w[i] += ni;
-          zCountS[i] ++;
+          samplesCount[i] ++;
           pl_w[i].n_ = nSampleSum_w[i].normalized();
           n_w[i] = pl_w[i].n_;
         } else {
@@ -1791,10 +1831,18 @@ int main( int argc, char* argv[] )
         vmfs.resize(Ksample);
 //      }
 //      {
+        uint16_t zMli = 0;
+        float countMli = 0;
         for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
           if (!pl_w[i].valid_) continue;
+          tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
+              zMli, countMli);
+          for (uint32_t k=0; k<zKTrac; ++k)
+            zSampleIds[i](k) = labelMap[zSampleIds[i](k)];
           zS[i] = labelMap[zS[i]];
-          pl_w[i].z_ = zS[i];
+          pl_w[i].z_ = labelMap[zMli];
+          zMl[i] = pl_w[i].z_;
+          zMlCount[i] = countMli;
         }
         K = Ksample;
       }
@@ -2676,7 +2724,8 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
             || showHn || showHp || showP2PlVar 
-            || showIvar || showImean) {
+            || showIvar || showImean
+            || showLabelCounts) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -2690,9 +2739,12 @@ int main( int argc, char* argv[] )
           } else if (showNumSum) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = numSum_w[i];
+          } else if (showLabelCounts) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = zMlCount[i];
           } else if (showZCounts) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = zCountS[i];
+              age[i] = samplesCount[i];
           } else if (showP2PlVar) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = sqrtf(p2plVar[i]);
@@ -2736,6 +2788,9 @@ int main( int argc, char* argv[] )
           }
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
+          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
+        } else if (showLabelsMl && frame > 1) {
+          lbo.Upload(zMl.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
