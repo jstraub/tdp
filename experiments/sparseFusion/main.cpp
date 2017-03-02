@@ -114,7 +114,16 @@ void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
 typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 
-void InflateObsCovByTransformationCov(
+//void InflateObsCovByTransformationCov(
+//    const Eigen::Matrix<float,6,6>& Sigma_wc,
+//    tdp::Matrix3fda& SigmaO
+//    ) {
+//  Eigen::Matrix<float, 6, 3> Jse3;
+//  Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
+//  SigmaO += Jse3*Sigma_wc*Jse3.transpose();
+//}
+
+void InflateObsTauByTransformationCov(
     const tdp::SE3f& T_wc, 
     const tdp;:Vector3fda& p_w,
     const Eigen::Matrix<float,6,6>& Sigma_wc,
