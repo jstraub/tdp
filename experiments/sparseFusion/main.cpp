@@ -1580,14 +1580,15 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleCov_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleEst_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<float> pSampleCount_w(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<uint32_t> pSampleCount(MAP_SIZE);
   nSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
   pSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
   pSampleCov_w.Fill(tdp::Matrix3fda::Zero());
   pSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleEst_w.Fill(tdp::Vector3fda::Zero());
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
-  pSampleCount_w.Fill(0.);
+  pSampleCount.Fill(0);
+  size_t pTotalSampleCount = 0;
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1778,12 +1779,11 @@ int main( int argc, char* argv[] )
 
   std::thread samplingNormals([&]() {
     int32_t i = 0;
-    int32_t iInsert = 0;
     int32_t sizeToReadPrev = 0;
     int32_t sizeToRead = 0;
     std::deque<int32_t> newIds;
 //    std::random_device rd_;
-    std::mt19937 rnd(0);
+    std::mt19937 rnd(19201420);
     std::uniform_real_distribution<float> coin(0, 1);
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
     while(runSampling.Get()) {
@@ -2001,30 +2001,30 @@ int main( int argc, char* argv[] )
   });
 
   std::thread samplingPoints([&]() {
-    int32_t iInsert = 0;
+    int32_t i = 0;
     int32_t sizeToReadPrev = 0;
     int32_t sizeToRead = 0;
     std::deque<int32_t> newIds;
-    std::mt19937 rnd(0);
+    std::mt19937 rnd(3839129);
+    std::uniform_real_distribution<float> coin(0, 1);
     // sample points
     while(runSampling.Get()) {
-      sizeToReadPrev = sizeToRead;
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        sizeToRead = nn.iInsert_;
+      if (i%100 == 0 || sizeToRead == 0) {
+        {
+          std::lock_guard<std::mutex> lock(nnLock); 
+          sizeToRead = nn.iInsert_;
+        }
       }
       if (sizeToRead ==0) continue;
+      i = (i+1)% sizeToRead;
       if (sizeToRead > sizeToReadPrev) {
-        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
-          newIds.push_back(i);
+        i = sizeToReadPrev;
+        sizeToReadPrev = sizeToRead;
       }
-      if (newIds.size() == 0) {
-        std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
-        newIds.push_back(unif(rnd));
-//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
+      float pDontSample = ((float)pSampleCount[i]+alphaSchedule)/((float)pTotalSampleCount+alphaSchedule);
+      if (coin(rnd) < pDontSample)  {
+        continue;
       }
-      int32_t i = newIds.front();
-      newIds.pop_front();
 
       tdp::Plane& pl = pl_w[i];
       if (!pl.valid_) continue;
@@ -2077,7 +2077,8 @@ int main( int argc, char* argv[] )
         pi = Normal<float,3>(mu, Sigma).sample(rnd);
         pSampleSum_w[i] += pi;
         pSampleOuter_w[i] += pi*pi.transpose();
-        pSampleCount_w[i] ++;
+        pSampleCount[i] ++;
+        pTotalSampleCount ++;
 
         for (int k=0; k<kNN; ++k) {
           if (ids[k] > -1 
@@ -2095,28 +2096,28 @@ int main( int argc, char* argv[] )
         }
 
         if (false && i%10) {
-          std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
+          std::cout << pSampleCount[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
           std::cout << Sigma << std::endl;
           std::cout << Info << std::endl;
           std::cout << xi.transpose() << std::endl;
           std::cout << mu.transpose() << std::endl;
         }
 
-        pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
+        pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/(float)pSampleCount[i])/(float)pSampleCount[i];
         float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
-        pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
+        pSampleEst_w[i] = pSampleSum_w[i]/(float)pSampleCount[i];
         //          if (i%10) {
         //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
         //          }
         if (samplePoints) {
           if ( fabs(Hp - pl.Hp_) < condHThr 
-              && pSampleCount_w[i] > sampleCountThr
+              && pSampleCount[i] > sampleCountThr
               && pl.numObs_ > sampleCountThr) {
-            //            if (pSampleCount_w[i] > 30)
+            //            if (pSampleCount[i] > 30)
             pl.p_ = pSampleEst_w[i];
           }
           pc_w[i] = pl.p_;
-          if (pSampleCount_w[i] > 3) {
+          if (pSampleCount[i] > 3) {
             pl.Hp_ = Hp;
           }
         }
