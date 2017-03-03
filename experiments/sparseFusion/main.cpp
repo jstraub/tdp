@@ -103,8 +103,9 @@ void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
       idMax = ids(k);
     }
   }
-  if (kMatch > 0) {
+  if (kMatch >= 0) {
     counts(kMatch) ++;
+    countMax = idMax == kMatch? countMax+1 : countMax;
   } else {
     counts(kMin) = 1;
     ids(kMin) = id;
@@ -122,7 +123,11 @@ void InflateObsCovByTransformationCov(
     ) {
   Eigen::Matrix<float, 6, 3> Jse3;
   Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
+  std::cout << "before" << std::endl << SigmaO << std::endl;
+  std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
+  std::cout << "Jse3" << std::endl << Jse3 << std::endl;
   SigmaO += Jse3.transpose()*Sigma_wc*Jse3;
+  std::cout << "after" << std::endl << SigmaO << std::endl;
 }
 
 //void InflateObsTauByTransformationCov(
@@ -1458,6 +1463,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showP2PlVar("visPanel.show p2pl var",false,true);
   pangolin::Var<bool> showIvar("visPanel.show I var",false,true);
   pangolin::Var<bool> showImean("visPanel.show I mean",false,true);
+  pangolin::Var<bool> showRadius("visPanel.show Radius",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
   pangolin::Var<bool> showZCounts("visPanel.show samplesCount",false,true);
@@ -1621,13 +1627,7 @@ int main( int argc, char* argv[] )
         tdp::VectorkNNida& ids = nn[iReadNext];
         tdp::VectorkNNida idsPrev = ids;
         ids = tdp::VectorkNNida::Ones()*(-1);
-        for (int32_t i=0; i<sizeToRead; ++i) {
-          if (i != iReadNext && pl_w[i].valid_) {
-            float dist = (pl.p0_-pl_w[i].p0_).squaredNorm();
-            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
-//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
-          }
-        }
+
         if (pruneNoise) {
 //          std::cout << "checking prune on " << iReadNext 
 //            << " time " << pl.lastFrame_ << " now " << frame << std::endl;
@@ -1651,6 +1651,17 @@ int main( int argc, char* argv[] )
 //            std::cout << values.transpose() << std::endl;
             numPruned = numPruned +1;
 //          }
+            for (int32_t i=0; i<kNN; ++i) 
+              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, -1);
+            continue;
+          }
+        }
+
+        for (int32_t i=0; i<sizeToRead; ++i) {
+          if (i != iReadNext && pl_w[i].valid_) {
+            float dist = (pl.p0_-pl_w[i].p0_).squaredNorm();
+            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
+//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
 
@@ -1868,6 +1879,9 @@ int main( int argc, char* argv[] )
           if (!pl_w[i].valid_) continue;
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
               zMli, countMli);
+//          if (i%100) 
+//            std::cout << zSampleIds[i].transpose() << std::endl << zSampleCounts[i].transpose() << std::endl 
+//              << "ML: " << zMli << " " << countMli << " zi=" << zS[i] << std::endl;
           for (uint32_t k=0; k<zKTrac; ++k) {
             if (zSampleIds[i](k) < K)
               zSampleIds[i](k) = labelMap[zSampleIds[i](k)];
@@ -2756,7 +2770,7 @@ int main( int argc, char* argv[] )
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
             || showHn || showHp || showP2PlVar 
-            || showIvar || showImean
+            || showIvar || showImean || showRadius
             || showLabelCounts) {
           float min, max;
           if (showAge) {
@@ -2786,6 +2800,9 @@ int main( int argc, char* argv[] )
           } else if (showImean) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = ImSum[i] / ImCount[i];
+          } else if (showRadius) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = pl_w[i].r_;
           } else if (showHp) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i)  {
               age[i] = pl_w[i].Hp_;
