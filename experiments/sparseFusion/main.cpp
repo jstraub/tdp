@@ -564,9 +564,11 @@ bool AccumulateP2PlIntensity(const Plane& pl,
     float dotThr,
     float sqrtInfoP2Pl,
     float sqrtInfoIm,
-    Eigen::Matrix<float,6,6>& A,
+    Eigen::Matrix<float,6,6>& Ap2pl,
+    Eigen::Matrix<float,6,1>& bp2pl,
+    Eigen::Matrix<float,6,6>& Aphoto,
+    Eigen::Matrix<float,6,1>& bphoto,
     Eigen::Matrix<float,6,1>& Ai,
-    Eigen::Matrix<float,6,1>& b,
     float& err
     ) {
   const tdp::Vector3fda& n_w =  pl.n_;
@@ -582,8 +584,8 @@ bool AccumulateP2PlIntensity(const Plane& pl,
         Ai.bottomRows<3>() = n_w_in_c; 
 //        Ai.bottomRows<3>() = n_w; 
         bi = p2pl;
-        A +=   sqrtInfoP2Pl*(Ai * Ai.transpose());
-        b +=   sqrtInfoP2Pl*(Ai * bi);
+        Ap2pl +=   sqrtInfoP2Pl*(Ai * Ai.transpose());
+        bp2pl +=   sqrtInfoP2Pl*(Ai * bi);
         err += sqrtInfoP2Pl*(bi);
 //        std::cout << " p2pl " << bi << " " << Ai.transpose() << std::endl;
         // texture inverse transform verified Jse3 
@@ -593,8 +595,8 @@ bool AccumulateP2PlIntensity(const Plane& pl,
              -Eigen::Matrix3f::Identity();
         Ai = Jse3.transpose() * Jpi.transpose() * gradGrey_ci;
         bi = - grey_ci + pl.grey_;
-        A += sqrtInfoIm*(Ai * Ai.transpose());
-        b += sqrtInfoIm*(Ai * bi);
+        Aphoto += sqrtInfoIm*(Ai * Ai.transpose());
+        bphoto += sqrtInfoIm*(Ai * bi);
 
 //        std::cout << " intensity " << bi << " " << Ai.transpose() << std::endl;
 //        std::cout << Jse3 << std::endl;
@@ -2507,6 +2509,10 @@ int main( int argc, char* argv[] )
       if (runICP) {
         if (gui.verbose) std::cout << "SE3 ICP" << std::endl;
         TICK("icp");
+        Eigen::Matrix<float,6,6> Ap2pl;
+        Eigen::Matrix<float,6,1> bp2pl;
+        Eigen::Matrix<float,6,6> Aphoto;
+        Eigen::Matrix<float,6,1> bphoto;
         Eigen::Matrix<float,6,6> A;
         Eigen::Matrix<float,6,1> b;
         Eigen::Matrix<float,6,1> Ai;
@@ -2532,6 +2538,10 @@ int main( int argc, char* argv[] )
             assoc.clear();
             indK = std::vector<size_t>(invInd[pyr]->size(),0);
             numProjected = 0;
+            Ap2pl = Eigen::Matrix<float,6,6>::Zero();
+            bp2pl = Eigen::Matrix<float,6,1>::Zero();
+            Aphoto = Eigen::Matrix<float,6,6>::Zero();
+            bphoto = Eigen::Matrix<float,6,1>::Zero();
             A = Eigen::Matrix<float,6,6>::Zero();
             b = Eigen::Matrix<float,6,1>::Zero();
             Ai = Eigen::Matrix<float,6,1>::Zero();
@@ -2577,8 +2587,10 @@ int main( int argc, char* argv[] )
                   float sqrtInfoIm = estSigmaIm ? lambdaTex/sqrtf(ImVar[i]) : lambdaTex;
                   if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
-                        sqrtInfoP2Pl, sqrtInfoIm, A, Ai, b, err))
+                        sqrtInfoP2Pl, sqrtInfoIm, Ap2pl, bp2pl, Aphoto, bphoto, Ai, err))
                     continue;
+                  A = Aphoto + Ap2pl;
+                  b = bphoto + bp2pl;
                 } else if (use3dGrads) {
                   if (!AccumulateP2Pl3DGrad(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v),
@@ -2674,7 +2686,11 @@ int main( int argc, char* argv[] )
         logEv.Log(q0);
         T_wcs.push_back(T_wc);
 
-        Sigma_wc = A.inverse();
+        if (useTrackingUncertainty) {
+          Sigma_wc = Ap2pl.inverse();
+        } else {
+          Sigma_wc = A.inverse();
+        }
 
         trackingGood = (H <= HThr && assoc.size() > 10) || assoc.size() > 0.5*idsCur[0]->size();
         TOCK("icp");
