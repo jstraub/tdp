@@ -91,7 +91,7 @@ void RenderSurfels(
 
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
   glEnable(GL_PROGRAM_POINT_SIZE);
-  //glEnable(GL_POINT_SPRITE);
+  glEnable(GL_POINT_SPRITE);
   shader.Bind();
   shader.SetUniform("Tinv",MV);
   shader.SetUniform("P",P);
@@ -123,7 +123,7 @@ void RenderSurfels(
   vbo.Unbind();
   shader.Unbind();
   glDisable(GL_PROGRAM_POINT_SIZE);
-  //glDisable(GL_POINT_SPRITE);
+  glDisable(GL_POINT_SPRITE);
 }
 
 void RenderVboValuebo(

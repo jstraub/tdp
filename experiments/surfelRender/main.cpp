@@ -21,6 +21,8 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/camera/camera.h>
 #include <tdp/gui/quickView.h>
+#include <tdp/gl/render.h>
+#include <tdp/gl/gl_draw.h>
 #include <tdp/eigen/dense.h>
 #include <tdp/preproc/normals.h>
 
@@ -53,6 +55,11 @@ int main( int argc, char* argv[] )
   pangolin::View& d_cam = pangolin::CreateDisplay()
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
+
+  uint32_t w=640;
+  uint32_t h=480;
+  tdp::QuickView viewRender(w,h);
+  container.AddDisplay(viewRender);
   
   uint32_t N = 9;
   // host image: image in CPU memory
@@ -62,16 +69,23 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<float> r(N);
 
   rgb.Fill(tdp::Vector3bda(255,0,0));
-  n.Fill(tdp::Vector3bda(0.,0.,1.));
+  n.Fill(tdp::Vector3fda(0.,0.,-1.));
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,N,GL_FLOAT,3);
   pangolin::GlBuffer nbo(pangolin::GlArrayBuffer,N,GL_FLOAT,3);
   pangolin::GlBuffer cbo(pangolin::GlArrayBuffer,N,GL_UNSIGNED_BYTE,3);
   pangolin::GlBuffer rbo(pangolin::GlArrayBuffer,N,GL_FLOAT,1);
 
+  pangolin::GlTexture tex(w, h, GL_RGB);
+  pangolin::GlRenderBuffer render(w, h, GL_DEPTH_COMPONENT);
+  pangolin::GlFramebuffer fbo(tex, render);
+
+//  tdp::ManagedHostImage<tdp::Vector4bda> rgbaI(w,h);
+  tdp::ManagedHostImage<tdp::Vector3bda> rgbI(w,h);
+
   // Add some variables to GUI
-  pangolin::Var<float> radius("ui.radius",0.1,0.001,1.);
-  pangolin::Var<float> dx("ui.dx",0.1,0.001,1.);
+  pangolin::Var<float> radius("ui.radius",0.5,0.001,1.);
+  pangolin::Var<float> dx("ui.dx",0.5,0.001,1.);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -88,10 +102,9 @@ int main( int argc, char* argv[] )
       }
 
     // Draw 3D stuff
+
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
-    pangolin::glDrawAxis(0.1);
-
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     rbo.Upload(r.ptr_,r.SizeBytes(), 0);
@@ -99,8 +112,40 @@ int main( int argc, char* argv[] )
 
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-    RenderSurfels( vbo, nbo, cbo, rbo, 4., P, MV);
+
+    pangolin::glDrawAxis(0.1);
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., P, MV);
+    glColor3f(0,1,0);
+    for (size_t i=0; i<N; ++i) {
+      tdp::glDrawLine(pc[i], pc[i]+3*radius*n[i]);
+    }
     glDisable(GL_DEPTH_TEST);
+
+    fbo.Bind();
+    glPushAttrib(GL_VIEWPORT_BIT);
+    glPointSize(1);
+    glViewport(0, 0, w, h);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., P, MV);
+    glColor3f(0,1,0);
+    for (size_t i=0; i<N; ++i) {
+      tdp::glDrawLine(pc[i], pc[i]+3*radius*n[i]);
+    }
+    fbo.Unbind();
+    glPopAttrib();
+    glFinish();
+    tex.Download(rgbI.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
+
+    viewRender.Activate();
+    viewRender.FlipTextureY()=true;
+//    viewRender.UpdateView();
+    viewRender.glSetViewOrtho();
+    tex.Bind();
+    viewRender.glRenderTexture(tex);
+    tex.Unbind();
+    viewRender.SetImage(rgbI);
+//    viewRender.UpdateView();
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

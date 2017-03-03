@@ -9,6 +9,7 @@ namespace tdp {
 
 typedef Eigen::Matrix<uint8_t,3,1> Vector3b;
 typedef Eigen::Matrix<uint8_t,3,1,Eigen::DontAlign> Vector3bda;
+typedef Eigen::Matrix<uint8_t,4,1,Eigen::DontAlign> Vector4bda;
 
 
 typedef Eigen::Matrix<float,29,1,Eigen::DontAlign> Vector29fda;

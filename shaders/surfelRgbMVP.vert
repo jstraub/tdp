@@ -14,9 +14,11 @@ vec3 projectCamPlane(vec3 p)
   float cols = 640;
   float rows = 480;
   vec4 cam = vec4(420., 420.,319.5, 239.5);
-  return vec3(((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
-              ((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
-              p.z / maxZ);
+
+  return vec3(-((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
+              -((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
+//              p.z / maxZ);
+         (p.z)/(maxZ));
 }
 // Project into the image plane (into pixels)
 vec3 projectImgPlane(vec3 p)
@@ -42,8 +44,8 @@ void main() {
     gl_Position = vec4(1000.f,1000.f,1000.f,1000.f);
     gl_PointSize = 0;
   } else {
-    gl_Position = P*vec4(posC, 1.);
-//    gl_Position = vec4(projectCamPlane(posC), 1.);
+//    gl_Position = P*vec4(posC, 1.);
+    gl_Position = vec4(projectCamPlane(posC), 1.);
     // vectors orthogonal to n
     vec3 u = 1.41421356 * r * vec3(n.y - n.z, -n.x, n.x);
     vec3 v = 1.41421356 * r * cross(n, u);
