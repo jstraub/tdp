@@ -162,6 +162,7 @@ bool NormalViaScatter(
     uint32_t W, 
     Vector3fda& c);
 
+/// fastest method
 void NormalsViaScatterAproxIntInvD(
     const Image<float>& rho, 
     const Image<Vector3fda>& ray, 

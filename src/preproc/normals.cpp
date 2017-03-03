@@ -399,6 +399,7 @@ void NormalsViaScatterAproxIntInvD(
   }
 }
 
+/// fastest method
 bool NormalViaScatterAproxIntInvD(
     const Image<float>& rho, 
     const Image<Vector3fda>& ray, 
