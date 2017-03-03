@@ -194,6 +194,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
 
   pangolin::Var<bool>  normalsViaConv("ui.normals via conv",true,true);
+  pangolin::Var<bool>  NormalsViaScatterUnconst("ui.via scat unconst",true,true);
   pangolin::Var<bool>  normalsViaClustering("ui.normals via clustering",true,true);
   pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
   pangolin::Var<bool>  normalsViaRMLS("ui.normals via RMLS",true,true);
@@ -259,6 +260,8 @@ int main( int argc, char* argv[] )
         normalsOut << "# method Voting W " << W << " thr " << votingInlierThr << std::endl;
       } else if (normalsViaScatter) {
         normalsOut << "# method Scatter W " << W << std::endl;
+      } else if (NormalsViaScatterUnconst) {
+        normalsOut << "# method Scatter Unconstrained W " << W << std::endl;
       } else if (normalsViaConv) {
         normalsOut << "# method Conv " << std::endl;
       }
@@ -302,6 +305,10 @@ int main( int argc, char* argv[] )
       if (normalsViaConv) {
         Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
         n.CopyFrom(cuN);
+      } else if (NormalsViaScatterUnconst) {
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaScatterUnconstrained(pc, W, stepToUse, n);
+        cuN.CopyFrom(n);
       } else if (normalsViaClustering) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
         NormalsViaClustering(pc, W, stepToUse, n);

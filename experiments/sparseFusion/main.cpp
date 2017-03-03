@@ -251,7 +251,10 @@ void ExtractPlanes(
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       bool success = false;
       if (viaRMLs) {
-        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+//        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
+            n, curv, radiusStd);
+        p = pc(u,v);
       } else {
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
       }
@@ -399,12 +402,15 @@ bool EnsureNormal(
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
         bool success = false;
         if (viaRMLs) {
-          success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
-              dpc, ni, curvi, pi);
-          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
-          // radius covering a single pizel
-          // TODO: 550 -> fu
-          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+//          success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
+//              dpc, ni, curvi, pi);
+//          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
+//          // radius covering a single pizel
+//          // TODO: 550 -> fu
+//          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
+              Wscaled, ni, curvi, radiusi);
+          pi = pc(u,v);
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
               dpc, ni, curvi, radiusi, pi);
@@ -1369,8 +1375,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
-  pangolin::Var<bool> normalViaRMLS("ui.normal RMLS",false,true);
-  pangolin::Var<int>  W("ui.W ",9,1,15);
+  pangolin::Var<bool> normalViaRMLS("ui.normal RMLS",true,true);
+  pangolin::Var<int>  W("ui.W ",4,1,15);
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
@@ -1424,7 +1430,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> angleThr("icpPanel.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("icpPanel.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> HThr("icpPanel.H Thr",-32.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("icpPanel.neg log ev Thr",-8.,-12.,-1.);
+  pangolin::Var<float> negLogEvThr("icpPanel.neg log ev Thr",-5.5,-12.,-1.);
   pangolin::Var<float> dPyrHThr("icpPanel.d Pyr H Thr",4.,0.,8.);
   pangolin::Var<float> dPyrNewLogEvHThr("icpPanel.d Pyr H Thr",1.,0.,3.);
   pangolin::Var<float> dPyrdAlpha("icpPanel.d Pyr dAlpha",0.9,0.1,1.);
@@ -1906,108 +1912,237 @@ int main( int argc, char* argv[] )
         K = Ksample;
       }
       TOCK("sample params");
-      TICK("sample points");
-//      // sample points
-      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        tdp::Plane& pl = pl_w[i];
-        if (!pl.valid_) continue;
-        tdp::VectorkNNida& ids = nn.GetCircular(i);
-        bool haveFullNeighborhood = (ids.array() >= 0).all();
-        if (haveFullNeighborhood && numSum_w[i] > 0) {
-          Eigen::Matrix3f Info = pcObsInfo_w[i]; 
-          Eigen::Vector3f xi =   pcObsXi_w[i]; 
-          Eigen::Matrix3f InfoPl;
-          Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
-          Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
-          uint32_t numNN = 0;
-          for (int k=0; k<kNN; ++k) {
-            if (ids[k] > -1 
-                && pl_w[ids[k]].valid_ 
-                && tdp::IsValidData(pS[ids[k]])
-                && tdp::IsValidData(pS[i])) {
-              if (useOtherNi) {
-                InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-              } else {
-                InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-              }
-              if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-              InfoPlSum += 0.5*InfoPl;
-              xiPl += InfoPl*pS[ids[k]];
-              numNN++;
-            } else {
-              break;
-            }
-          } 
-          if (numNN == kNN) {
-            Info += InfoPlSum;
-            xi += xiPl;
-          }
-          if ((Info.eigenvalues().real().array() < 0.).any() ) {
-            std::cout <<  "low Information! "  << numNN << " neighs "
-              << numSum_w[i] 
-              << " obs, evs " << Info.eigenvalues().transpose()
-//              << " mu " << mu.transpose()
-              << " xi " << xi.transpose() << std::endl;
-            pl.valid_ = false;
-            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
-            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
-          }
-          Eigen::Matrix3f Sigma = Info.inverse();
-          Eigen::Vector3f mu = Info.ldlt().solve(xi);
-          //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-          tdp::Vector3fda& pi = pS[i];
-          pi = Normal<float,3>(mu, Sigma).sample(rnd);
-          pSampleSum_w[i] += pi;
-          pSampleOuter_w[i] += pi*pi.transpose();
-          pSampleCount_w[i] ++;
-
-          for (int k=0; k<kNN; ++k) {
-            if (ids[k] > -1 
-                && pl_w[ids[k]].valid_ 
-                && tdp::IsValidData(pS[ids[k]])
-                && tdp::IsValidData(pS[i])) {
-                float p2pl = nS[i].dot(pS[ids[k]] - pS[i]);
-                p2plSum[i] += p2pl;
-                p2plSqSum[i] += p2pl*p2pl;
-                p2plCount[i] ++;
-            }
-          }
-          if (p2plCount[i] > 0) {
-            p2plVar[i] = (p2plSqSum[i] - p2plSum[i]*p2plSum[i]/p2plCount[i])/p2plCount[i];
-          }
-
-          if (false && i%10) {
-            std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
-            std::cout << Sigma << std::endl;
-            std::cout << Info << std::endl;
-            std::cout << xi.transpose() << std::endl;
-            std::cout << mu.transpose() << std::endl;
-          }
-
-          pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
-          float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
-          pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
-//          if (i%10) {
-//            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
+//      TICK("sample points");
+////      // sample points
+//      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
+//        tdp::Plane& pl = pl_w[i];
+//        if (!pl.valid_) continue;
+//        tdp::VectorkNNida& ids = nn.GetCircular(i);
+//        bool haveFullNeighborhood = (ids.array() >= 0).all();
+//        if (haveFullNeighborhood && numSum_w[i] > 0) {
+//          Eigen::Matrix3f Info = pcObsInfo_w[i]; 
+//          Eigen::Vector3f xi =   pcObsXi_w[i]; 
+//          Eigen::Matrix3f InfoPl;
+//          Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
+//          Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
+//          uint32_t numNN = 0;
+//          for (int k=0; k<kNN; ++k) {
+//            if (ids[k] > -1 
+//                && pl_w[ids[k]].valid_ 
+//                && tdp::IsValidData(pS[ids[k]])
+//                && tdp::IsValidData(pS[i])) {
+//              if (useOtherNi) {
+//                InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+//              } else {
+//                InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+//              }
+//              if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+//              InfoPlSum += 0.5*InfoPl;
+//              xiPl += InfoPl*pS[ids[k]];
+//              numNN++;
+//            } else {
+//              break;
+//            }
+//          } 
+//          if (numNN == kNN) {
+//            Info += InfoPlSum;
+//            xi += xiPl;
 //          }
-          if (samplePoints) {
-            if ( fabs(Hp - pl.Hp_) < condHThr 
-                && pSampleCount_w[i] > sampleCountThr
-                && pl.numObs_ > sampleCountThr) {
-//            if (pSampleCount_w[i] > 30)
-              pl.p_ = pSampleEst_w[i];
-            }
-            pc_w[i] = pl.p_;
-            if (pSampleCount_w[i] > 3) {
-              pl.Hp_ = Hp;
-            }
-          }
-          //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
-        }
-        idMapUpdate = i;
-      }
-      TOCK("sample points");
+//          if ((Info.eigenvalues().real().array() < 0.).any() ) {
+//            std::cout <<  "low Information! "  << numNN << " neighs "
+//              << numSum_w[i] 
+//              << " obs, evs " << Info.eigenvalues().transpose()
+////              << " mu " << mu.transpose()
+//              << " xi " << xi.transpose() << std::endl;
+//            pl.valid_ = false;
+//            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+//            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+//          }
+//          Eigen::Matrix3f Sigma = Info.inverse();
+//          Eigen::Vector3f mu = Info.ldlt().solve(xi);
+//          //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+//          tdp::Vector3fda& pi = pS[i];
+//          pi = Normal<float,3>(mu, Sigma).sample(rnd);
+//          pSampleSum_w[i] += pi;
+//          pSampleOuter_w[i] += pi*pi.transpose();
+//          pSampleCount_w[i] ++;
+//
+//          for (int k=0; k<kNN; ++k) {
+//            if (ids[k] > -1 
+//                && pl_w[ids[k]].valid_ 
+//                && tdp::IsValidData(pS[ids[k]])
+//                && tdp::IsValidData(pS[i])) {
+//                float p2pl = nS[i].dot(pS[ids[k]] - pS[i]);
+//                p2plSum[i] += p2pl;
+//                p2plSqSum[i] += p2pl*p2pl;
+//                p2plCount[i] ++;
+//            }
+//          }
+//          if (p2plCount[i] > 0) {
+//            p2plVar[i] = (p2plSqSum[i] - p2plSum[i]*p2plSum[i]/p2plCount[i])/p2plCount[i];
+//          }
+//
+//          if (false && i%10) {
+//            std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
+//            std::cout << Sigma << std::endl;
+//            std::cout << Info << std::endl;
+//            std::cout << xi.transpose() << std::endl;
+//            std::cout << mu.transpose() << std::endl;
+//          }
+//
+//          pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
+//          float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
+//          pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
+////          if (i%10) {
+////            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
+////          }
+//          if (samplePoints) {
+//            if ( fabs(Hp - pl.Hp_) < condHThr 
+//                && pSampleCount_w[i] > sampleCountThr
+//                && pl.numObs_ > sampleCountThr) {
+////            if (pSampleCount_w[i] > 30)
+//              pl.p_ = pSampleEst_w[i];
+//            }
+//            pc_w[i] = pl.p_;
+//            if (pSampleCount_w[i] > 3) {
+//              pl.Hp_ = Hp;
+//            }
+//          }
+//          //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
+//        }
+//        idMapUpdate = i;
+//      }
+//      TOCK("sample points");
       TOCK("sample full");
+    };
+  });
+
+  std::thread samplingPoints([&]() {
+    int32_t iInsert = 0;
+    int32_t sizeToReadPrev = 0;
+    int32_t sizeToRead = 0;
+    std::deque<int32_t> newIds;
+    std::mt19937 rnd(0);
+    // sample points
+    while(runSampling.Get()) {
+      sizeToReadPrev = sizeToRead;
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        sizeToRead = nn.iInsert_;
+      }
+      if (sizeToRead ==0) continue;
+      if (sizeToRead > sizeToReadPrev) {
+        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
+          newIds.push_back(i);
+      }
+      if (newIds.size() == 0) {
+        std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
+        newIds.push_back(unif(rnd));
+//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
+      }
+      int32_t i = newIds.front();
+      newIds.pop_front();
+
+      tdp::Plane& pl = pl_w[i];
+      if (!pl.valid_) continue;
+      TICK("sample points");
+      tdp::VectorkNNida& ids = nn.GetCircular(i);
+      bool haveFullNeighborhood = (ids.array() >= 0).all();
+      if (haveFullNeighborhood && numSum_w[i] > 0) {
+        Eigen::Matrix3f Info = pcObsInfo_w[i]; 
+        Eigen::Vector3f xi =   pcObsXi_w[i]; 
+        Eigen::Matrix3f InfoPl;
+        Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
+        Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
+        uint32_t numNN = 0;
+        for (int k=0; k<kNN; ++k) {
+          if (ids[k] > -1 
+              && pl_w[ids[k]].valid_ 
+              && tdp::IsValidData(pS[ids[k]])
+              && tdp::IsValidData(pS[i])) {
+            if (useOtherNi) {
+              InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
+            } else {
+              InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
+            }
+            if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+            InfoPlSum += 0.5*InfoPl;
+            xiPl += InfoPl*pS[ids[k]];
+            numNN++;
+          } else {
+            break;
+          }
+        } 
+        if (numNN == kNN) {
+          Info += InfoPlSum;
+          xi += xiPl;
+        }
+        if ((Info.eigenvalues().real().array() < 0.).any() ) {
+          std::cout <<  "low Information! "  << numNN << " neighs "
+            << numSum_w[i] 
+            << " obs, evs " << Info.eigenvalues().transpose()
+            //              << " mu " << mu.transpose()
+            << " xi " << xi.transpose() << std::endl;
+          pl.valid_ = false;
+          pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+          n_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
+        }
+        Eigen::Matrix3f Sigma = Info.inverse();
+        Eigen::Vector3f mu = Info.ldlt().solve(xi);
+        //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
+        tdp::Vector3fda& pi = pS[i];
+        pi = Normal<float,3>(mu, Sigma).sample(rnd);
+        pSampleSum_w[i] += pi;
+        pSampleOuter_w[i] += pi*pi.transpose();
+        pSampleCount_w[i] ++;
+
+        for (int k=0; k<kNN; ++k) {
+          if (ids[k] > -1 
+              && pl_w[ids[k]].valid_ 
+              && tdp::IsValidData(pS[ids[k]])
+              && tdp::IsValidData(pS[i])) {
+            float p2pl = nS[i].dot(pS[ids[k]] - pS[i]);
+            p2plSum[i] += p2pl;
+            p2plSqSum[i] += p2pl*p2pl;
+            p2plCount[i] ++;
+          }
+        }
+        if (p2plCount[i] > 0) {
+          p2plVar[i] = (p2plSqSum[i] - p2plSum[i]*p2plSum[i]/p2plCount[i])/p2plCount[i];
+        }
+
+        if (false && i%10) {
+          std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
+          std::cout << Sigma << std::endl;
+          std::cout << Info << std::endl;
+          std::cout << xi.transpose() << std::endl;
+          std::cout << mu.transpose() << std::endl;
+        }
+
+        pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
+        float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
+        pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
+        //          if (i%10) {
+        //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
+        //          }
+        if (samplePoints) {
+          if ( fabs(Hp - pl.Hp_) < condHThr 
+              && pSampleCount_w[i] > sampleCountThr
+              && pl.numObs_ > sampleCountThr) {
+            //            if (pSampleCount_w[i] > 30)
+            pl.p_ = pSampleEst_w[i];
+          }
+          pc_w[i] = pl.p_;
+          if (pSampleCount_w[i] > 3) {
+            pl.Hp_ = Hp;
+          }
+        }
+        //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
+      }
+      idMapUpdate = i;
+      TOCK("sample points");
+//      pS.iInsert_ = sizeToRead;
+//      nS.iInsert_ = sizeToRead;
     };
   });
 

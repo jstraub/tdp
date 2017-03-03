@@ -162,6 +162,20 @@ bool NormalViaScatter(
     uint32_t W, 
     Vector3fda& c);
 
+bool NormalViaScatterUnconstrained(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n,
+    float& curvature,
+    float& radiusStd);
+
+void NormalsViaScatterUnconstrained(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n);
+
 bool NormalViaRMLS(
     const Image<Vector3fda>& pc, 
     uint32_t u0, uint32_t v0,

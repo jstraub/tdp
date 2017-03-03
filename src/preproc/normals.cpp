@@ -388,32 +388,59 @@ bool NormalViaScatterUnconstrained(
     uint32_t u0, 
     uint32_t v0,
     uint32_t W, 
-    Vector3fda& c
+    Vector3fda& n,
+    float& curvature,
+    float& radiusStd
     ) {
   if ( W <= u0 && u0 < pc.w_-W 
     && W <= v0 && v0 < pc.h_-W
     && IsValidData(pc(u0,v0))) {
     const Vector3fda& pc0 = pc(u0,v0);
     Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
+    Eigen::Vector3f xSum = Eigen::Vector3f::Zero();
     size_t N = 0;
-    for (size_t u=u0-W; u<u0+W; ++u) {
-      for (size_t v=v0-W; v<v0+W; ++v) {
+    for (size_t u=u0-W; u<=u0+W; ++u) {
+      for (size_t v=v0-W; v<=v0+W; ++v) {
         if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
-          S += (pc0-pc(u,v))*(pc0-pc(u,v)).transpose();
+          S(0,0) += pc(u,v)(0)*pc(u,v)(0);
+          S(0,1) += pc(u,v)(0)*pc(u,v)(1);
+          S(0,2) += pc(u,v)(0)*pc(u,v)(2);
+          S(1,1) += pc(u,v)(1)*pc(u,v)(1);
+          S(1,2) += pc(u,v)(1)*pc(u,v)(2);
+          S(2,2) += pc(u,v)(2)*pc(u,v)(2);
+          xSum += pc(u,v);
           N ++;
         }
       }
     }
     if (N<3) 
       return false;
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
-    int id = 0;
-    float eval = eig.eigenvalues().minCoeff(&id);
-    c = eig.eigenvectors().col(id).normalized();
-    c *= (c(2)<0.?1.:-1.);
+
+    S(1,0) = S(0,1);
+    S(2,0) = S(0,2);
+    S(2,1) = S(1,2);
+    n = (S.ldlt().solve(xSum)).normalized();
+    n *= (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
+//    Eigen::Vector3f eig = ((S - xSum*xSum.transpose()/float(N))/float(N)).eigenvalues().real();
+//    curvature = 2.*(eig(1)*eig(2))/(eig(1)+eig(2));
+//    radiusStd = sqrtf(std::min(eig(1),eig(2)));
     return true;
   }
   return false;
+}
+
+void NormalsViaScatterUnconstrained(
+    const Image<Vector3fda>& pc, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n) {
+  float curv,rad;
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
+      if(!NormalViaScatterUnconstrained(pc, u,v,W,n(u,v),curv,rad)) {
+        n(u,v) << NAN,NAN,NAN;
+      }
+    }
+  }
 }
 
 bool NormalViaScatter(
