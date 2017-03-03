@@ -1854,13 +1854,6 @@ int main( int argc, char* argv[] )
             } else {
               muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
             }
-            //                if (tauEst > 100) 
-            //                  std::cout 
-            //                    << Info << std::endl
-            //                    << " eig " 
-            //                    << muEst.transpose() 
-            //                    << " mu " << mu.transpose() << ": "
-            //                    << e.transpose() << " tau " << tauEst << std::endl;
             mu += muEst*tauEst;
           }
         }
@@ -1874,8 +1867,12 @@ int main( int argc, char* argv[] )
         pl_w[i].n_ = nSampleSum_w[i].normalized();
         n_w[i] = pl_w[i].n_;
       }
-//        vmfSS[zi].topRows<3>() += ni;
-//        vmfSS[zi](3) ++;
+      // TODO: could play with sync across threads here to never have
+      // go over all SS;
+//      if (zi == 9999) {
+//        vmfSS[zS[i]].topRows<3>() += ni;
+//        vmfSS[zS[i]](3) ++;
+//      }
       TOCK("sample normals");
     }
   });
@@ -1891,23 +1888,18 @@ int main( int argc, char* argv[] )
         iInsert = nn.iInsert_;
       }
       if (iInsert == 0) continue;
-      TICK("sample full");
+      TICK("sample labels");
       pS.iInsert_ = nn.iInsert_;
       nS.iInsert_ = nn.iInsert_;
-      // sample normals using dpvmf and observations from planes
       size_t Ksample = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
-//      TICK("sample normals");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        uint16_t& zi = zS[i];
-        tdp::Vector3fda& ni = nS[i];
-        if (!pl_w[i].valid_ || !tdp::IsValidData(ni)) continue;
-        vmfSS[zi].topRows<3>() += ni;
-        vmfSS[zi](3) ++;
+        if (!pl_w[i].valid_ || !tdp::IsValidData(nS[i])) continue;
+        vmfSS[zS[i]].topRows<3>() += nS[i];
+        vmfSS[zS[i]](3) ++;
       }
 //      TOCK("sample normals");
       // sample dpvmf labels
-      TICK("sample labels");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         tdp::Vector3fda& ni = nS[i];
         if (!pl_w[i].valid_ || !tdp::IsValidData(ni)) continue;
