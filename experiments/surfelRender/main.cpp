@@ -60,6 +60,7 @@ int main( int argc, char* argv[] )
   uint32_t h=480;
   tdp::QuickView viewRender(w,h);
   container.AddDisplay(viewRender);
+//    .SetHandler(new pangolin::Handler3D(s_cam2));
   
   uint32_t N = 9;
   // host image: image in CPU memory
@@ -101,14 +102,14 @@ int main( int argc, char* argv[] )
         pc[j++] = tdp::Vector3fda(u*dx, v*dx, 1.);
       }
 
-    // Draw 3D stuff
-
-    glEnable(GL_DEPTH_TEST);
-    d_cam.Activate(s_cam);
     vbo.Upload(pc.ptr_,pc.SizeBytes(), 0);
     cbo.Upload(rgb.ptr_,rgb.SizeBytes(), 0);
     rbo.Upload(r.ptr_,r.SizeBytes(), 0);
     nbo.Upload(n.ptr_,n.SizeBytes(), 0);
+    // Draw 3D stuff
+
+    glEnable(GL_DEPTH_TEST);
+    d_cam.Activate(s_cam);
 
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
@@ -120,6 +121,11 @@ int main( int argc, char* argv[] )
       tdp::glDrawLine(pc[i], pc[i]+3*radius*n[i]);
     }
     glDisable(GL_DEPTH_TEST);
+
+//    viewRender.Activate(s_cam2);
+//    P = s_cam2.GetProjectionMatrix();
+//    MV = s_cam2.GetModelViewMatrix();
+
 
     fbo.Bind();
     glPushAttrib(GL_VIEWPORT_BIT);
@@ -139,11 +145,11 @@ int main( int argc, char* argv[] )
 
     viewRender.Activate();
     viewRender.FlipTextureY()=true;
-//    viewRender.UpdateView();
-    viewRender.glSetViewOrtho();
-    tex.Bind();
-    viewRender.glRenderTexture(tex);
-    tex.Unbind();
+////    viewRender.UpdateView();
+//    viewRender.glSetViewOrtho();
+//    tex.Bind();
+//    viewRender.glRenderTexture(tex);
+//    tex.Unbind();
     viewRender.SetImage(rgbI);
 //    viewRender.UpdateView();
 
