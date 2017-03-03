@@ -1370,6 +1370,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
   pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
   pangolin::Var<float> condHThr("mapPanel.condHThr",0.01,0.001,0.1);
+  pangolin::Var<float> sampleCountThr("mapPanel.count Thr",10.,1.,100.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<bool> estimateTauO("mapPanel.estimate TauO",false,true);
@@ -1409,7 +1410,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
   pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-4.,-12.,-1.);
+  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-8.,-12.,-1.);
   pangolin::Var<float> dPyrHThr("ui.d Pyr H Thr",4.,0.,8.);
   pangolin::Var<float> dPyrNewLogEvHThr("ui.d Pyr H Thr",1.,0.,3.);
   pangolin::Var<float> dPyrdAlpha("ui.d Pyr dAlpha",0.9,0.1,1.);
@@ -1777,8 +1778,10 @@ int main( int argc, char* argv[] )
           nSampleOuter_w[i] += ni*ni.transpose();
           nSampleSum_w[i] += ni;
           samplesCount[i] ++;
-          pl_w[i].n_ = nSampleSum_w[i].normalized();
-          n_w[i] = pl_w[i].n_;
+          if (samplesCount[i] > sampleCountThr) {
+            pl_w[i].n_ = nSampleSum_w[i].normalized();
+            n_w[i] = pl_w[i].n_;
+          }
         } else {
           ni = pl_w[i].n_;
         }
@@ -1951,9 +1954,11 @@ int main( int argc, char* argv[] )
 //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
 //          }
           if (samplePoints) {
-            if ( fabs(Hp - pl.Hp_) < condHThr)
+            if ( fabs(Hp - pl.Hp_) < condHThr 
+                && pSampleCount_w[i] > sampleCountThr) {
 //            if (pSampleCount_w[i] > 30)
               pl.p_ = pSampleEst_w[i];
+            }
             pc_w[i] = pl.p_;
             if (pSampleCount_w[i] > 3) {
               pl.Hp_ = Hp;
