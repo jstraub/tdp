@@ -234,7 +234,7 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<float>& ImVar,
     ManagedHostCircularBuffer<float>& rs,
     ManagedHostCircularBuffer<uint16_t>& ts,
-    bool viaRMLs,
+    int normalMethod,
     bool useTrackingUncertainty
     ) {
   Plane pl;
@@ -253,12 +253,14 @@ void ExtractPlanes(
 //      std::cout << "found valid point in mask " << u << "," << v << std::endl;
 //      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       bool success = false;
-      if (viaRMLs) {
-//        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
+      if (normalMethod == 0) {
+//        success = tdp::normalExtractMethod(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
         success = tdp::NormalViaScatterAproxIntInvD(rho, rays,
             outerRaysInt, u, v, Wscaled, n);
-//        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
-//            n, curv, radiusStd);
+        p = pc(u,v);
+      } else if (normalMethod == 1) {
+        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
+            n, curv, radiusStd);
         p = pc(u,v);
       } else {
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
@@ -282,7 +284,7 @@ void ExtractPlanes(
         pl.Hn_ = 0;
 //        pl.feat_ = feat;
 //        pl.r_ = 2*W*pc[i](2)/cam.params_(0); // unprojected radius in m
-        if (viaRMLs) {
+        if (normalMethod < 2) {
           //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
           // radius covering a single pizel
           pl.r_ = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
@@ -396,31 +398,32 @@ bool EnsureNormal(
     Image<float>& rad,
     int32_t u,
     int32_t v,
-    bool viaRMLs
+    int normalMethod
     ) {
   if (0 <= u && u < pc.w_ && 0 <= v && v < pc.h_) {
     if (tdp::IsValidData(pc(u,v))) {
 //      uint32_t Wscaled = floor(W*pc(u,v)(2));
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
-      tdp::Vector3fda pi;
+      tdp::Vector3fda pi = pc(u,v);
       float curvi=0.;
       float radiusi=0.;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
         bool success = false;
-        if (viaRMLs) {
-//          success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, 
+        if (normalMethod == 0) {
+//          success = tdp::normalExtractMethod(pc, u, v, Wscaled, 0.29, 
 //              dpc, ni, curvi, pi);
 //          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
 //          // radius covering a single pizel
 //          // TODO: 550 -> fu
-//          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
-//              Wscaled, ni, curvi, radiusi);
           success = tdp::NormalViaScatterAproxIntInvD(rho, rays,
               outerRaysInt, u, v, Wscaled, ni);
-          pi = pc(u,v);
+          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+        } else if (normalMethod == 1) {
+          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
+              Wscaled, ni, curvi, radiusi);
           radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
@@ -452,14 +455,14 @@ bool EnsureNormal(
 //    Image<float>& curv,
 //    int32_t& u,
 //    int32_t& v,
-//    bool normalViaRMLS
+//    bool normalExtractMethod
 //    ) {
 //  const tdp::Vector3fda& n_w =  pl.n_;
 //  const tdp::Vector3fda& pc_w = pl.p_;
 //  Eigen::Vector2f x = cam.Project(T_cw*pc_w);
 //  u = floor(x(0)+0.5f);
 //  v = floor(x(1)+0.5f);
-//  return EnsureNormal(pc, dpc, W, n, curv, u, v, normalViaRMLS);
+//  return EnsureNormal(pc, dpc, W, n, curv, u, v, normalExtractMethod);
 //}
 
 
@@ -1421,7 +1424,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
   pangolin::Var<int> smoothDPyr("ui.smooth D pyr",1,0,1);
-  pangolin::Var<bool> normalViaRMLS("ui.normal RMLS",true,true);
+  pangolin::Var<int> normalExtractMethod("ui.normal Extr Method",1,0,2);
   pangolin::Var<int>  W("ui.W ",4,1,15);
   pangolin::Var<float> subsample("ui.subsample %",1.,0.1,3.);
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
@@ -1447,8 +1450,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
-  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",100., 1., 1000.);
-  pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
+  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 1., 100.);
+  pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",true,true);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1526,6 +1529,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
   pangolin::Var<bool> showNSampleCount("visPanel.show nSampleCount",false,true);
+  pangolin::Var<bool> showNSamplePReject("visPanel.show nSample P Rej",false,true);
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
@@ -1591,7 +1595,7 @@ int main( int argc, char* argv[] )
   pSampleEst_w.Fill(tdp::Vector3fda::Zero());
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleCount.Fill(1);
-  size_t pTotalSampleCount = 0;
+  size_t pTotalSampleCount = alphaSchedule;
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1770,10 +1774,12 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<uint32_t> nSampleCount(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<float> nSamplePReject(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
-  size_t nTotalSampleCount = 0;
+  size_t nTotalSampleCount = alphaSchedule;
   nSampleCount.Fill(1);
+  nSamplePReject.Fill(NAN);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
@@ -1801,9 +1807,10 @@ int main( int argc, char* argv[] )
       if (sizeToRead > sizeToReadPrev) {
         i = sizeToReadPrev;
         sizeToReadPrev = sizeToRead;
-        nTotalSampleCount += sizeToRead;
+//        nTotalSampleCount += sizeToRead;
       }
       float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
+      nSamplePReject[i] = pDontSample;
       if (sampleScheduling && coin(rnd) < pDontSample)  {
 //        std::cout << " normals skipping " << i << std::endl;
         continue;
@@ -2018,7 +2025,7 @@ int main( int argc, char* argv[] )
       if (sizeToRead > sizeToReadPrev) {
         i = sizeToReadPrev;
         sizeToReadPrev = sizeToRead;
-        pTotalSampleCount+=sizeToRead;
+//        pTotalSampleCount+=sizeToRead;
       }
       float pDontSample = ((float)pSampleCount[i]+alphaSchedule)/((float)pTotalSampleCount+alphaSchedule);
       if (sampleScheduling && coin(rnd) < pDontSample)  {
@@ -2238,7 +2245,7 @@ int main( int argc, char* argv[] )
              mask, W, frame, T_wc, Sigma_wc, cam, rho, rays, outerRaysInt,
              dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
-             ImVar, rs, ts, normalViaRMLS, useTrackingUncertainty);
+             ImVar, rs, ts, normalExtractMethod, useTrackingUncertainty);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
         TOCK("normals");
@@ -2380,7 +2387,7 @@ int main( int argc, char* argv[] )
     } else {
       tdp::CompletePyramidBlur(cuPyrD, 1.);
     }
-    if (normalViaRMLS) {
+    if (normalExtractMethod) {
       tdp::ConvertDepthToInverseDepthGpu(cuPyrD, cuPyrRho);
       pyrRho.CopyFrom(cuPyrRho);
     }
@@ -2583,7 +2590,7 @@ int main( int argc, char* argv[] )
                 numProjected = numProjected + 1;
                 if (!EnsureNormal(pcLvl, dpc, rhoLvl, rayLvl,
                       outerRaysIntLvl, W, nLvl, curv, rad, u, v,
-                      normalViaRMLS))
+                      normalExtractMethod))
                   //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, camLvl, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
@@ -2780,7 +2787,7 @@ int main( int argc, char* argv[] )
             if (!ProjectiveAssocOcl(pl, T_wc, cam, d, occlusionDepthThr, u, v))
               continue;
             if (!EnsureNormal(pc, dpc, rho, rays, outerRaysInt, W, n,
-                  curv, rad, u, v, normalViaRMLS))
+                  curv, rad, u, v, normalExtractMethod))
               continue;
 //            std::cout << " adding " << j << " of " << numAdditionalObs 
 //              << " id " << i << " uv " << u << "," << v << std::endl;
@@ -2936,10 +2943,10 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv || showGrey || showNumSum || showNSampleCount
-            || showHn || showHp || showP2PlVar 
-            || showIvar || showImean || showRadius
-            || showLabelCounts) {
+        if (showAge || showObs || showCurv || showGrey || showNumSum ||
+            showNSampleCount || showNSamplePReject || showHn || showHp
+            || showP2PlVar || showIvar || showImean || showRadius ||
+            showLabelCounts) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -2959,6 +2966,9 @@ int main( int argc, char* argv[] )
           } else if (showNSampleCount) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = nSampleCount[i];
+          } else if (showNSamplePReject) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
+              age[i] = nSamplePReject[i];
           } else if (showP2PlVar) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = sqrtf(p2plVar[i]);
