@@ -121,4 +121,27 @@ void ConvertDepthToInverseDepthGpu(const Image<uint16_t>& dRaw,
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ void KernelDepthConvertInverseDepth(Image<float> d,
+    Image<float> rho) {
+  const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+  const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+
+  if (idx < d.w_ && idy < d.h_) {
+    const float di = ((float)d(idx,idy));
+    rho(idx,idy) = 1./di;
+  } else if (idx < rho.w_ && idy < rho.h_) {
+    // d might be bigger than dRaw because of consecutive convolutions
+    rho(idx,idy) = NAN; // nan
+  }
+}
+
+void ConvertDepthToInverseDepthGpu(const Image<float>& d,
+    Image<float>& rho) {
+  dim3 threads, blocks;
+  ComputeKernelParamsForImage(blocks,threads,rho,32,32);
+  //std::cout << blocks.x << " " << blocks.y << " " << blocks.z << std::endl;
+  KernelDepthConvert<<<blocks,threads>>>(d,rho);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
 }

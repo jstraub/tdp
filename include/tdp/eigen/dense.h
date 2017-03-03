@@ -40,4 +40,7 @@ typedef Eigen::Matrix<uint32_t,4,1,Eigen::DontAlign> Vector4uda;
 typedef Eigen::Matrix<uint32_t,8,1,Eigen::DontAlign> Vector8uda;
 typedef Eigen::Matrix<uint32_t,16,1,Eigen::DontAlign> Vector16uda;
 
+typedef Eigen::Matrix<double,3,3,Eigen::DontAlign> Matrix3dda;
+typedef Eigen::Matrix<double,6,1,Eigen::DontAlign> Vector6dda;
+
 }

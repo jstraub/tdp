@@ -162,6 +162,58 @@ bool NormalViaScatter(
     uint32_t W, 
     Vector3fda& c);
 
+void NormalsViaScatterAproxIntInvD(
+    const Image<float>& rho, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n);
+
+bool NormalViaScatterAproxIntInvD(
+    const Image<float>& rho, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    );
+
+
+void NormalsViaScatterAproxInt(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n);
+
+bool NormalViaScatterAproxInt(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    );
+
+void NormalsViaScatterAprox(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6fda>& outer, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n);
+
+bool NormalViaScatterAprox(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6fda>& outer, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    );
+
 bool NormalViaScatterUnconstrained(
     const Image<Vector3fda>& pc, 
     uint32_t u0, 

@@ -383,6 +383,180 @@ bool NormalViaClustering(
   return false;
 }
 
+void NormalsViaScatterAproxIntInvD(
+    const Image<float>& rho, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n) {
+  float curv,rad;
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
+      if(!NormalViaScatterAproxIntInvD(rho, ray, outerInt, u,v,W,n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
+    }
+  }
+}
+
+bool NormalViaScatterAproxIntInvD(
+    const Image<float>& rho, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    ) {
+  if ( W < u0 && u0 < rho.w_-W 
+    && W < v0 && v0 < rho.h_-W
+    && rho(u0,v0) == rho(u0,v0)) {
+//    const Vector3fda& pc0 = pc(u0,v0);
+    tdp::Vector6fda outerS = (outerInt(u0-W-1, v0-W-1)
+      - outerInt(u0-W-1, v0+W) 
+      - outerInt(u0+W, v0-W-1) 
+      + outerInt(u0+W, v0+W)).cast<float>();
+
+    tdp::Matrix3fda S;
+    S.row(0) = outerS.topRows<3>();
+    S(1,1) = outerS(3);
+    S(1,2) = outerS(4);
+    S(2,2) = outerS(5);
+    S(1,0) = S(0,1);
+    S(2,0) = S(0,2);
+    S(2,1) = S(1,2);
+
+    tdp::Vector3fda xSum = tdp::Vector3fda::Zero();
+    for (size_t v=v0-W; v<=v0+W; ++v) {
+      float* rhoi = rho.RowPtr(v);
+      tdp::Vector3fda* rayi = ray.RowPtr(v);
+      for (size_t u=u0-W; u<=u0+W; ++u) {
+        float d = rhoi[u];
+        if (d == d && u != u0 && v != v0) {
+          xSum += rayi[u]*d;
+        }
+      }
+    }
+    n = (S.ldlt().solve(xSum)).normalized();
+    n *= (n.dot(ray(u0,v0))/ray(u0,v0).norm()<0.?1.:-1.);
+    return true;
+  }
+  return false;
+}
+
+void NormalsViaScatterAproxInt(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n) {
+  float curv,rad;
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
+      if(!NormalViaScatterAproxInt(pc, ray, outerInt, u,v,W,n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
+    }
+  }
+}
+
+bool NormalViaScatterAproxInt(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6dda>& outerInt, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    ) {
+  if ( W < u0 && u0 < pc.w_-W 
+    && W < v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+    const Vector3fda& pc0 = pc(u0,v0);
+    tdp::Vector6fda outerS = (outerInt(u0-W-1, v0-W-1)
+      - outerInt(u0-W-1, v0+W) 
+      - outerInt(u0+W, v0-W-1) 
+      + outerInt(u0+W, v0+W)).cast<float>();
+
+    tdp::Matrix3fda S;
+    S.row(0) = outerS.topRows<3>();
+    S(1,1) = outerS(3);
+    S(1,2) = outerS(4);
+    S(2,2) = outerS(5);
+    S(1,0) = S(0,1);
+    S(2,0) = S(0,2);
+    S(2,1) = S(1,2);
+
+    tdp::Vector3fda xSum = tdp::Vector3fda::Zero();
+    for (size_t v=v0-W; v<=v0+W; ++v) {
+      tdp::Vector3fda* pi = pc.RowPtr(v);
+      tdp::Vector3fda* rayi = ray.RowPtr(v);
+      for (size_t u=u0-W; u<=u0+W; ++u) {
+        float d = pi[u](2);
+        if (d == d && u != u0 && v != v0) {
+          xSum += rayi[u]/d;
+        }
+      }
+    }
+    n = (S.ldlt().solve(xSum)).normalized();
+    n *= (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
+    return true;
+  }
+  return false;
+}
+
+void NormalsViaScatterAprox(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6fda>& outer, 
+    uint32_t W, uint32_t step,
+    Image<Vector3fda>& n) {
+  float curv,rad;
+  for(size_t u=W; u<n.w_-W; u+=step) {
+    for(size_t v=W; v<n.h_-W; v+=step) {
+      if(!NormalViaScatterAprox(pc, ray, outer, u,v,W,n(u,v))) {
+        n(u,v) << NAN,NAN,NAN;
+      }
+    }
+  }
+}
+
+bool NormalViaScatterAprox(
+    const Image<Vector3fda>& pc, 
+    const Image<Vector3fda>& ray, 
+    const Image<Vector6fda>& outer, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& n
+    ) {
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+    const Vector3fda& pc0 = pc(u0,v0);
+    tdp::Matrix3fda S = tdp::Matrix3fda::Zero();
+    tdp::Vector3fda xSum = tdp::Vector3fda::Zero();
+    for (size_t u=u0-W; u<=u0+W; ++u) {
+      for (size_t v=v0-W; v<=v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          S.row(0) += outer(u,v).topRows<3>();
+          S(1,1) += outer(u,v)(3);
+          S(1,2) += outer(u,v)(4);
+          S(2,2) += outer(u,v)(5);
+          xSum += ray(u,v)/pc(u,v)(2);
+        }
+      }
+    }
+    S(1,0) = S(0,1);
+    S(2,0) = S(0,2);
+    S(2,1) = S(1,2);
+    n = (S.ldlt().solve(xSum)).normalized();
+    n *= (n.dot(pc0)/pc0.norm()<0.?1.:-1.);
+    return true;
+  }
+  return false;
+}
+
 bool NormalViaScatterUnconstrained(
     const Image<Vector3fda>& pc, 
     uint32_t u0, 

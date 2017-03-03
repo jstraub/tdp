@@ -10,6 +10,7 @@
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/managed_image.h>
+#include <tdp/data/managed_pyramid.h>
 
 #include <tdp/preproc/convolutionSeparable.h>
 #include <tdp/preproc/depth.h>
@@ -27,7 +28,7 @@
 #include <tdp/preproc/pc.h>
 #include <tdp/preproc/grad.h>
 #include <tdp/preproc/grey.h>
-#include <tdp/preproc/grey.h>
+#include <tdp/camera/ray.h>
 
 #include <tdp/gui/gui.hpp>
 #include <tdp/camera/rig.h>
@@ -143,6 +144,7 @@ int main( int argc, char* argv[] )
   gui.container().AddDisplay(plotters);
 
   tdp::ManagedHostImage<float> d(wc, hc);
+  tdp::ManagedHostImage<float> invD(wc, hc);
   tdp::ManagedHostImage<float> grey(wc, hc);
   tdp::ManagedHostImage<float> greydu(wc, hc);
   tdp::ManagedHostImage<float> greydv(wc, hc);
@@ -194,6 +196,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> verbose ("ui.verbose", false,true);
 
   pangolin::Var<bool>  normalsViaConv("ui.normals via conv",true,true);
+  pangolin::Var<bool>  NormalsViaScatterAppIntInv("ui.via scat app int inv",true,true);
+  pangolin::Var<bool>  NormalsViaScatterAppInt("ui.via scat app int",true,true);
+  pangolin::Var<bool>  NormalsViaScatterApp("ui.via scat app",true,true);
   pangolin::Var<bool>  NormalsViaScatterUnconst("ui.via scat unconst",true,true);
   pangolin::Var<bool>  normalsViaClustering("ui.normals via clustering",true,true);
   pangolin::Var<bool>  normalsViaVoting("ui.normals via voting",true,true);
@@ -244,6 +249,38 @@ int main( int argc, char* argv[] )
   float f = 1.;
   float fKF = 1.;
 
+  tdp::ManagedHostPyramid<tdp::Vector3fda,3> pyrRay(wc,hc);
+  tdp::ManagedDevicePyramid<tdp::Vector3fda,3> cuPyrRay(wc,hc);
+  tdp::ComputeCameraRays(cam, cuPyrRay);
+  pyrRay.CopyFrom(cuPyrRay);
+  tdp::Image<tdp::Vector3fda> rays = pyrRay.GetImage(0);
+  tdp::ManagedHostImage<tdp::Vector6fda> outerRays(wc,hc);
+  tdp::ManagedHostImage<tdp::Vector6dda> outerRaysInt(wc+1,hc+1);
+  for (size_t i=0; i<outerRays.Area(); ++i) {
+    outerRays[i](0) = rays[i](0)*rays[i](0);
+    outerRays[i](1) = rays[i](0)*rays[i](1);
+    outerRays[i](2) = rays[i](0)*rays[i](2);
+    outerRays[i](3) = rays[i](1)*rays[i](1);
+    outerRays[i](4) = rays[i](1)*rays[i](2);
+    outerRays[i](5) = rays[i](2)*rays[i](2);
+  }
+  outerRaysInt.Fill(tdp::Vector6dda::Zero());
+  for (size_t u=1; u<wc+1; ++u) {
+    for (size_t v=1; v<hc+1; ++v) {
+      tdp::Vector6dda delta = outerRays(u,v).cast<double>();
+      outerRaysInt(u,v) =-outerRaysInt(u-1,v-1) + outerRaysInt(u-1,v)+outerRaysInt(u,v-1)+delta;
+    }
+  }
+
+  tdp::Vector6fda test = tdp::Vector6fda::Zero();
+  for (size_t u=0; u<W; ++u) {
+    for (size_t v=0; v<W; ++v) {
+      test += outerRays(u,v);
+    }
+  }
+  tdp::Vector6dda testInt = outerRaysInt(0,0) - outerRaysInt(0,W) -
+    outerRaysInt(W,0) + outerRaysInt(W,W);
+  std::cout << test.transpose() << std::endl << testInt.transpose() << std::endl;
 
   std::ofstream normalsOut;
   // Stream and display video
@@ -260,6 +297,12 @@ int main( int argc, char* argv[] )
         normalsOut << "# method Voting W " << W << " thr " << votingInlierThr << std::endl;
       } else if (normalsViaScatter) {
         normalsOut << "# method Scatter W " << W << std::endl;
+      } else if (NormalsViaScatterApp) {
+        normalsOut << "# method Scatter Approx W " << W << std::endl;
+      } else if (NormalsViaScatterAppInt) {
+        normalsOut << "# method Scatter Approx Integral Image W " << W << std::endl;
+      } else if (NormalsViaScatterAppIntInv) {
+        normalsOut << "# method Scatter Approx Integral Image InvD W " << W << std::endl;
       } else if (NormalsViaScatterUnconst) {
         normalsOut << "# method Scatter Unconstrained W " << W << std::endl;
       } else if (normalsViaConv) {
@@ -291,6 +334,9 @@ int main( int argc, char* argv[] )
     cuDraw.CopyFrom(dRaw);
     ConvertDepthGpu(cuDraw, cuDrawf, depthSensorScale, tsdfDmin, tsdfDmax);
     tdp::Blur5(cuDrawf, cuD, 0.03);
+    d.CopyFrom(cuD);
+    for(size_t i=0; i<d.Area(); ++i)
+      invD[i] = 1./d[i];
     TOCK("Convert Depth");
     uint32_t stepToUse = step;
     if (recordNormals) 
@@ -305,6 +351,18 @@ int main( int argc, char* argv[] )
       if (normalsViaConv) {
         Depth2Normals(cuD, cam, tdp::SE3f(), cuN);
         n.CopyFrom(cuN);
+      } else if (NormalsViaScatterAppIntInv) {
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaScatterAproxIntInvD(invD, rays, outerRaysInt, W, stepToUse, n);
+        cuN.CopyFrom(n);
+      } else if (NormalsViaScatterAppInt) {
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaScatterAproxInt(pc, rays, outerRaysInt, W, stepToUse, n);
+        cuN.CopyFrom(n);
+      } else if (NormalsViaScatterApp) {
+        n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
+        NormalsViaScatterAprox(pc, rays, outerRays, W, stepToUse, n);
+        cuN.CopyFrom(n);
       } else if (NormalsViaScatterUnconst) {
         n.Fill(tdp::Vector3fda(NAN,NAN,NAN));
         NormalsViaScatterUnconstrained(pc, W, stepToUse, n);

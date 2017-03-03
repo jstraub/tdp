@@ -1385,7 +1385,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",false,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
-  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
+//  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
   pangolin::Var<bool> useSurfNormalObs("mapPanel.use SurfNormal Obs",true,true);
   pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
   pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
@@ -1729,6 +1729,107 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector4fda> vmfSS(10000);
   vmfSS.Fill(tdp::Vector4fda::Zero());
 
+  std::thread samplingNormals([&]() {
+    int32_t iInsert = 0;
+    int32_t sizeToReadPrev = 0;
+    int32_t sizeToRead = 0;
+    std::deque<int32_t> newIds;
+//    std::random_device rd_;
+    std::mt19937 rnd(0);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
+    while(runSampling.Get()) {
+      sizeToReadPrev = sizeToRead;
+      {
+        std::lock_guard<std::mutex> lock(nnLock); 
+        sizeToRead = nn.iInsert_;
+      }
+      if (sizeToRead ==0) continue;
+      if (sizeToRead > sizeToReadPrev) {
+        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
+          newIds.push_back(i);
+      }
+      if (newIds.size() == 0) {
+        std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
+        newIds.push_back(unif(rnd));
+//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
+      }
+      int32_t i = newIds.front();
+      newIds.pop_front();
+      // sample normals using dpvmf and observations from planes
+//      vmfSS.Fill(tdp::Vector4fda::Zero());
+      TICK("sample normals");
+      uint16_t& zi = zS[i];
+      tdp::Vector3fda& ni = nS[i];
+      if (!pl_w[i].valid_) continue;
+      tdp::Vector3fda mu;
+      if (useSurfNormalObs) {
+        mu = normSum_w[i]*nSum_w[i]*tauO;
+      } else {
+        mu = tdp::Vector3fda::Zero();
+      }
+      if (estimateTauO && useSurfNormalObs)
+        mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
+      if (zi < vmfs.size()) {
+        mu += vmfs[zi].mu_*vmfs[zi].tau_;
+      }
+      if (normalsP2PlContrib) {
+        tdp::VectorkNNida& ids = nn.GetCircular(i);
+        if ((ids.array() >= 0).all()) {
+          Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
+          Eigen::Matrix3f InfoPl;
+          int32_t num = 0;
+          for (int k=0; k<kNN; ++k) {
+            if (ids[k] > -1 
+                && pl_w[ids[k]].valid_ 
+                && tdp::IsValidData(pS[ids[k]])
+                && tdp::IsValidData(pS[i])) {
+              InfoPl = (pS[ids[k]]-pS[i])*(pS[ids[k]]-pS[i]).transpose();
+              //                  if (i%10) {
+              //                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
+              //                  }
+              if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+              Info += 0.5*InfoPl;
+              num++;
+            }  else {
+              break;
+            } 
+          }
+          if (num == kNN) {
+            eig.computeDirect(Info);
+            tdp::Vector3fda e = eig.eigenvalues();
+            float tauEst = 4.*(e(1)*e(2))/(e(1)+e(2));
+            tdp::Vector3fda muEst = eig.eigenvectors().col(0);
+
+            if (!useSurfNormalObs) {
+              muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
+            } else {
+              muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
+            }
+            //                if (tauEst > 100) 
+            //                  std::cout 
+            //                    << Info << std::endl
+            //                    << " eig " 
+            //                    << muEst.transpose() 
+            //                    << " mu " << mu.transpose() << ": "
+            //                    << e.transpose() << " tau " << tauEst << std::endl;
+            mu += muEst*tauEst;
+          }
+        }
+      }
+      ni = vMF<float,3>(mu).sample(rnd);
+      nSampleOuter_w[i] += ni*ni.transpose();
+      nSampleSum_w[i] += ni;
+      samplesCount[i] ++;
+      if (samplesCount[i] > sampleCountThr) {
+        pl_w[i].n_ = nSampleSum_w[i].normalized();
+        n_w[i] = pl_w[i].n_;
+      }
+//        vmfSS[zi].topRows<3>() += ni;
+//        vmfSS[zi](3) ++;
+      TOCK("sample normals");
+    }
+  });
+
   std::thread sampling([&]() {
     int32_t iInsert = 0;
 //    std::random_device rd_;
@@ -1746,90 +1847,90 @@ int main( int argc, char* argv[] )
       // sample normals using dpvmf and observations from planes
       size_t Ksample = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
-      TICK("sample normals");
+//      TICK("sample normals");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         uint16_t& zi = zS[i];
         tdp::Vector3fda& ni = nS[i];
-        if (!pl_w[i].valid_) continue;
-        if (sampleNormals) {
-          tdp::Vector3fda mu;
-          if (useSurfNormalObs) {
-            mu = normSum_w[i]*nSum_w[i]*tauO;
-          } else {
-            mu = tdp::Vector3fda::Zero();
-          }
-          if (estimateTauO && useSurfNormalObs)
-            mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
-          if (zi < Ksample) {
-            mu += vmfs[zi].mu_*vmfs[zi].tau_;
-          }
-          if (normalsP2PlContrib) {
-            tdp::VectorkNNida& ids = nn.GetCircular(i);
-            if ((ids.array() >= 0).all()) {
-              Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
-              Eigen::Matrix3f InfoPl;
-              int32_t num = 0;
-              for (int k=0; k<kNN; ++k) {
-                if (ids[k] > -1 
-                    && pl_w[ids[k]].valid_ 
-                    && tdp::IsValidData(pS[ids[k]])
-                    && tdp::IsValidData(pS[i])) {
-                  InfoPl = (pS[ids[k]]-pS[i])*(pS[ids[k]]-pS[i]).transpose();
-//                  if (i%10) {
-//                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
-//                  }
-                  if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-                  Info += 0.5*InfoPl;
-                  num++;
-                }  else {
-                  break;
-                } 
-              }
-              if (num == kNN) {
-                eig.computeDirect(Info);
-                tdp::Vector3fda e = eig.eigenvalues();
-                float tauEst = 4.*(e(1)*e(2))/(e(1)+e(2));
-                tdp::Vector3fda muEst = eig.eigenvectors().col(0);
-
-                if (!useSurfNormalObs) {
-                  muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
-                } else {
-                  muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
-                }
-//                if (tauEst > 100) 
-//                  std::cout 
-//                    << Info << std::endl
-//                    << " eig " 
-//                    << muEst.transpose() 
-//                    << " mu " << mu.transpose() << ": "
-//                    << e.transpose() << " tau " << tauEst << std::endl;
-                mu += muEst*tauEst;
-              }
-            }
-          }
-          ni = vMF<float,3>(mu).sample(rnd);
-          nSampleOuter_w[i] += ni*ni.transpose();
-          nSampleSum_w[i] += ni;
-          samplesCount[i] ++;
-          if (samplesCount[i] > sampleCountThr) {
-            pl_w[i].n_ = nSampleSum_w[i].normalized();
-            n_w[i] = pl_w[i].n_;
-          }
-        } else {
-          ni = pl_w[i].n_;
-        }
+        if (!pl_w[i].valid_ || !tdp::IsValidData(ni)) continue;
+//        if (sampleNormals) {
+//          tdp::Vector3fda mu;
+//          if (useSurfNormalObs) {
+//            mu = normSum_w[i]*nSum_w[i]*tauO;
+//          } else {
+//            mu = tdp::Vector3fda::Zero();
+//          }
+//          if (estimateTauO && useSurfNormalObs)
+//            mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
+//          if (zi < Ksample) {
+//            mu += vmfs[zi].mu_*vmfs[zi].tau_;
+//          }
+//          if (normalsP2PlContrib) {
+//            tdp::VectorkNNida& ids = nn.GetCircular(i);
+//            if ((ids.array() >= 0).all()) {
+//              Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
+//              Eigen::Matrix3f InfoPl;
+//              int32_t num = 0;
+//              for (int k=0; k<kNN; ++k) {
+//                if (ids[k] > -1 
+//                    && pl_w[ids[k]].valid_ 
+//                    && tdp::IsValidData(pS[ids[k]])
+//                    && tdp::IsValidData(pS[i])) {
+//                  InfoPl = (pS[ids[k]]-pS[i])*(pS[ids[k]]-pS[i]).transpose();
+////                  if (i%10) {
+////                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
+////                  }
+//                  if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
+//                  Info += 0.5*InfoPl;
+//                  num++;
+//                }  else {
+//                  break;
+//                } 
+//              }
+//              if (num == kNN) {
+//                eig.computeDirect(Info);
+//                tdp::Vector3fda e = eig.eigenvalues();
+//                float tauEst = 4.*(e(1)*e(2))/(e(1)+e(2));
+//                tdp::Vector3fda muEst = eig.eigenvectors().col(0);
+//
+//                if (!useSurfNormalObs) {
+//                  muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
+//                } else {
+//                  muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
+//                }
+////                if (tauEst > 100) 
+////                  std::cout 
+////                    << Info << std::endl
+////                    << " eig " 
+////                    << muEst.transpose() 
+////                    << " mu " << mu.transpose() << ": "
+////                    << e.transpose() << " tau " << tauEst << std::endl;
+//                mu += muEst*tauEst;
+//              }
+//            }
+//          }
+//          ni = vMF<float,3>(mu).sample(rnd);
+//          nSampleOuter_w[i] += ni*ni.transpose();
+//          nSampleSum_w[i] += ni;
+//          samplesCount[i] ++;
+//          if (samplesCount[i] > sampleCountThr) {
+//            pl_w[i].n_ = nSampleSum_w[i].normalized();
+//            n_w[i] = pl_w[i].n_;
+//          }
+//        } else {
+//          ni = pl_w[i].n_;
+//        }
         vmfSS[zi].topRows<3>() += ni;
         vmfSS[zi](3) ++;
       }
-      TOCK("sample normals");
+//      TOCK("sample normals");
       // sample dpvmf labels
       TICK("sample labels");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-        if (!pl_w[i].valid_) continue;
+        tdp::Vector3fda& ni = nS[i];
+        if (!pl_w[i].valid_ || !tdp::IsValidData(ni)) continue;
         Eigen::VectorXf logPdfs(Ksample+1);
         Eigen::VectorXf pdfs(Ksample+1);
 
-        tdp::Vector3fda& ni = nS[i];
         uint16_t& zi = zS[i];
         tdp::VectorkNNida& ids = nn[i];
 

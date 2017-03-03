@@ -29,6 +29,9 @@ void ConvertDepthToInverseDepthGpu(const Image<uint16_t>& dRaw,
     float dMax
     );
 
+void ConvertDepthToInverseDepthGpu(const Image<float>& d,
+    Image<float>& rho);
+
 void ConvertDepth(const Image<uint16_t>& dRaw, 
     Image<float>& d, 
     float scale,
