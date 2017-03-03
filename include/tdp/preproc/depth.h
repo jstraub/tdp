@@ -4,6 +4,7 @@
 #pragma once
 #include <stdint.h>
 #include <tdp/data/image.h>
+#include <tdp/data/pyramid.h>
 
 namespace tdp {
 
@@ -31,6 +32,17 @@ void ConvertDepthToInverseDepthGpu(const Image<uint16_t>& dRaw,
 
 void ConvertDepthToInverseDepthGpu(const Image<float>& d,
     Image<float>& rho);
+
+template<int LEVELS>
+void ConvertDepthToInverseDepthGpu(
+    const Pyramid<float,LEVELS>& cuPyrD,
+    Pyramid<float,LEVELS>& cuPyrRho) {
+  for (int lvl=0; lvl<LEVELS; ++lvl) {
+    Image<float> cuD = cuPyrD.GetImage(lvl);
+    Image<float> cuRho = cuPyrRho.GetImage(lvl);
+    ConvertDepthToInverseDepthGpu(cuD, cuRho);
+  }
+}
 
 void ConvertDepth(const Image<uint16_t>& dRaw, 
     Image<float>& d, 

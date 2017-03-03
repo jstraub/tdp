@@ -217,6 +217,9 @@ void ExtractPlanes(
     const SE3f& T_wc, 
     const Eigen::Matrix<float,6,6>& Sigma_wc,
     const CameraT& cam,
+    const Image<float>& rho, 
+    const Image<Vector3fda>& rays, 
+    const Image<Vector6dda>& outerRaysInt, 
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
     ManagedHostCircularBuffer<Vector3fda>& pc_w,
@@ -237,7 +240,7 @@ void ExtractPlanes(
   Plane pl;
   tdp::Brief feat;
   Vector3fda n, p;
-  float curv;
+  float curv = 0;
   float radiusStd = 0.;
   for (size_t i=0; i<mask.Area(); ++i) {
     if (mask[i]) {
@@ -252,8 +255,10 @@ void ExtractPlanes(
       bool success = false;
       if (viaRMLs) {
 //        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
-        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
-            n, curv, radiusStd);
+        success = tdp::NormalViaScatterAproxIntInvD(rho, ray,
+            outerRaysInt, u, v, Wscaled, n);
+//        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
+//            n, curv, radiusStd);
         p = pc(u,v);
       } else {
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
@@ -382,6 +387,9 @@ bool ProjectiveAssoc(const Plane& pl,
 bool EnsureNormal(
     Image<Vector3fda>& pc,
     Image<Vector4fda>& dpc,
+    const Image<float>& rho, 
+    const Image<Vector3fda>& rays, 
+    const Image<Vector6dda>& outerRaysInt, 
     uint32_t W,
     Image<Vector3fda>& n,
     Image<float>& curv,
@@ -396,7 +404,8 @@ bool EnsureNormal(
       uint32_t Wscaled = W;
       tdp::Vector3fda ni = n(u,v);
       tdp::Vector3fda pi;
-      float curvi, radiusi;
+      float curvi=0.;
+      float radiusi=0.;
       if (!tdp::IsValidData(ni)) {
 //        if(tdp::NormalViaScatter(pc, u, v, Wscaled, ni)) {
 //        if(tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, ni, curvi, pi)) {
@@ -407,10 +416,12 @@ bool EnsureNormal(
 //          //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
 //          // radius covering a single pizel
 //          // TODO: 550 -> fu
-//          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
-          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
-              Wscaled, ni, curvi, radiusi);
+//          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
+//              Wscaled, ni, curvi, radiusi);
+          success = tdp::NormalViaScatterAproxIntInvD(rho, ray,
+              outerRaysInt, u, v, Wscaled, ni);
           pi = pc(u,v);
+          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
               dpc, ni, curvi, radiusi, pi);
@@ -1318,6 +1329,36 @@ int main( int argc, char* argv[] )
   tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrRay(wc,hc);
   tdp::ComputeCameraRays(cam, cuPyrRay);
   pyrRay.CopyFrom(cuPyrRay);
+  tdp::ManagedHostPyramid<tdp::Vector6fda,PYR> pyrOuterRays(wc,hc);
+  tdp::ManagedHostPyramid<tdp::Vector6dda,PYR> pyrOuterRaysInt(wc+(1<<PYR),hc+(1<<PYR));
+  tdp::Image<tdp::Vector3fda> rays;
+  tdp::Image<tdp::Vector6fda> outerRays;
+  tdp::Image<tdp::Vector6dda> outerRaysInt;
+  // precompute outer products of rays for surface normal extraction
+  for (size_t lvl=0; lvl<PYR; ++lvl) {
+    rays = pyrRay.GetImage(lvl);
+    outerRays = pyrOuterRays.GetImage(lvl);
+    outerRaysInt = pyrOuterRaysInt.GetImage(lvl);
+    for (size_t i=0; i<outerRays.Area(); ++i) {
+      outerRays[i](0) = rays[i](0)*rays[i](0);
+      outerRays[i](1) = rays[i](0)*rays[i](1);
+      outerRays[i](2) = rays[i](0)*rays[i](2);
+      outerRays[i](3) = rays[i](1)*rays[i](1);
+      outerRays[i](4) = rays[i](1)*rays[i](2);
+      outerRays[i](5) = rays[i](2)*rays[i](2);
+    }
+    // construct integral image of outer products of rays for surface normal extraction
+    outerRaysInt.Fill(tdp::Vector6dda::Zero());
+    for (size_t u=1; u<rays.w_+1; ++u) {
+      for (size_t v=1; v<rays.h_+1; ++v) {
+        outerRaysInt(u,v) = -outerRaysInt(u-1,v-1) 
+          + outerRaysInt(u-1,v)+outerRaysInt(u,v-1)+outerRays(u,v).cast<double>()
+      }
+    }
+  }
+  rays = pyrRay.GetImage(0);
+  outerRays = pyrOuterRays.GetImage(0);
+  outerRaysInt = pyrOuterRaysInt.GetImage(0);
 
   // ICP stuff
   tdp::ManagedDevicePyramid<tdp::Vector3fda,PYR> cuPyrPc(wc,hc);
@@ -1328,6 +1369,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostPyramid<tdp::Vector3fda,PYR> pyrN(wc,hc);
   tdp::Image<tdp::Vector3fda> n = pyrN.GetImage(0);
 
+  tdp::ManagedDevicePyramid<float,PYR> cuPyrRho(wc,hc);
+  tdp::ManagedHostPyramid<float,PYR> pyrRho(wc,hc);
+  tdp::Image<float> rho = pyrRho.GetImage(0);
   tdp::ManagedDevicePyramid<float,PYR> cuPyrD(wc,hc);
   tdp::Image<float> cuD = cuPyrD.GetImage(0);
   tdp::ManagedHostPyramid<float,PYR> pyrD(wc,hc);
@@ -2353,7 +2397,8 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, Sigma_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w,
+             mask, W, frame, T_wc, Sigma_wc, cam, rho, rays, outerRaysInt,
+             dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
              ImVar, rs, ts, normalViaRMLS, useTrackingUncertainty);
 
@@ -2497,6 +2542,10 @@ int main( int argc, char* argv[] )
     } else {
       tdp::CompletePyramidBlur(cuPyrD, 1.);
     }
+    if (viaRMLs) {
+      tdp::ConvertDepthToInverseDepthGpu(cuPyrD, cuPyrRho);
+      pyrRho.CopyFrom(cuPyrRho);
+    }
     pyrD.CopyFrom(cuPyrD);
     d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
@@ -2637,12 +2686,14 @@ int main( int argc, char* argv[] )
           float scale = pow(0.5,pyr);
           CameraT camLvl = cam.Scale(scale);
           tdp::Image<float> dLvl = pyrD.GetImage(pyr);
+          tdp::Image<float> rhoLvl = pyrRho.GetImage(pyr);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
           tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
+          tdp::Image<tdp::Vector6dda> outerRaysIntLvl = pyrOuterRaysInt.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
             TICK("icp it");
@@ -2684,7 +2735,9 @@ int main( int argc, char* argv[] )
                     )
                   continue;
                 numProjected = numProjected + 1;
-                if (!EnsureNormal(pcLvl, dpc, W, nLvl, curv, rad, u, v, normalViaRMLS))
+                if (!EnsureNormal(pcLvl, dpc, rhoLvl, rayLvl,
+                      outerRaysIntLvl, W, nLvl, curv, rad, u, v,
+                      normalViaRMLS))
                   //              if (!tdp::ProjectiveAssocNormalExtract(pl, T_cw, camLvl, pc,
                   //                    W, dpc, n, curv, u,v ))
                   continue;
@@ -2874,7 +2927,8 @@ int main( int argc, char* argv[] )
             int32_t u, v;
             if (!ProjectiveAssocOcl(pl, T_wc, cam, d, occlusionDepthThr, u, v))
               continue;
-            if (!EnsureNormal(pc, dpc, W, n, curv, rad, u, v, normalViaRMLS))
+            if (!EnsureNormal(pc, dpc, rho, rays, outerRaysInt, W, n,
+                  curv, rad, u, v, normalViaRMLS))
               continue;
 //            std::cout << " adding " << j << " of " << numAdditionalObs 
 //              << " id " << i << " uv " << u << "," << v << std::endl;
