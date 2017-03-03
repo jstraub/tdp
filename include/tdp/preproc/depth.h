@@ -38,7 +38,7 @@ void ConvertDepthToInverseDepthGpu(
     const Pyramid<float,LEVELS>& cuPyrD,
     Pyramid<float,LEVELS>& cuPyrRho) {
   for (int lvl=0; lvl<LEVELS; ++lvl) {
-    Image<float> cuD = cuPyrD.GetImage(lvl);
+    const Image<float> cuD = cuPyrD.GetConstImage(lvl);
     Image<float> cuRho = cuPyrRho.GetImage(lvl);
     ConvertDepthToInverseDepthGpu(cuD, cuRho);
   }
