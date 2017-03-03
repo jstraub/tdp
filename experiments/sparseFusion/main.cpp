@@ -255,7 +255,7 @@ void ExtractPlanes(
       bool success = false;
       if (viaRMLs) {
 //        success = tdp::NormalViaRMLS(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
-        success = tdp::NormalViaScatterAproxIntInvD(rho, ray,
+        success = tdp::NormalViaScatterAproxIntInvD(rho, rays,
             outerRaysInt, u, v, Wscaled, n);
 //        success = tdp::NormalViaScatterUnconstrained(pc, u, v, Wscaled,
 //            n, curv, radiusStd);
@@ -418,7 +418,7 @@ bool EnsureNormal(
 //          // TODO: 550 -> fu
 //          success = tdp::NormalViaScatterUnconstrained(pc, u, v,
 //              Wscaled, ni, curvi, radiusi);
-          success = tdp::NormalViaScatterAproxIntInvD(rho, ray,
+          success = tdp::NormalViaScatterAproxIntInvD(rho, rays,
               outerRaysInt, u, v, Wscaled, ni);
           pi = pc(u,v);
           radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
@@ -1354,7 +1354,7 @@ int main( int argc, char* argv[] )
     for (size_t u=1; u<rays.w_+1; ++u) {
       for (size_t v=1; v<rays.h_+1; ++v) {
         outerRaysInt(u,v) = -outerRaysInt(u-1,v-1) 
-          + outerRaysInt(u-1,v)+outerRaysInt(u,v-1)+outerRays(u,v).cast<double>()
+          + outerRaysInt(u-1,v)+outerRaysInt(u,v-1)+outerRays(u,v).cast<double>();
       }
     }
   }
@@ -1448,6 +1448,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
   pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",100., 1., 1000.);
+  pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1589,7 +1590,7 @@ int main( int argc, char* argv[] )
   pSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleEst_w.Fill(tdp::Vector3fda::Zero());
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
-  pSampleCount.Fill(0);
+  pSampleCount.Fill(1);
   size_t pTotalSampleCount = 0;
 
   rs.Fill(NAN);
@@ -1772,7 +1773,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   size_t nTotalSampleCount = 0;
-  nSampleCount.Fill(0);
+  nSampleCount.Fill(1);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
@@ -1800,11 +1801,14 @@ int main( int argc, char* argv[] )
       if (sizeToRead > sizeToReadPrev) {
         i = sizeToReadPrev;
         sizeToReadPrev = sizeToRead;
+        nTotalSampleCount += sizeToRead;
       }
       float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
-      if (coin(rnd) < pDontSample)  {
+      if (sampleScheduling && coin(rnd) < pDontSample)  {
+//        std::cout << " normals skipping " << i << std::endl;
         continue;
       }
+//      std::cout << " normals sampling " << i << std::endl;
       // sample normals using dpvmf and observations from planes
 //      vmfSS.Fill(tdp::Vector4fda::Zero());
       TICK("sample normals");
@@ -1972,7 +1976,7 @@ int main( int argc, char* argv[] )
         uint16_t zMli = 0;
         float countMli = 0;
         for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-          if (!pl_w[i].valid_) continue;
+          if (!pl_w[i].valid_ || zS[i] >= K) continue;
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
               zMli, countMli);
 //          if (i%100) 
@@ -2014,9 +2018,10 @@ int main( int argc, char* argv[] )
       if (sizeToRead > sizeToReadPrev) {
         i = sizeToReadPrev;
         sizeToReadPrev = sizeToRead;
+        pTotalSampleCount+=sizeToRead;
       }
       float pDontSample = ((float)pSampleCount[i]+alphaSchedule)/((float)pTotalSampleCount+alphaSchedule);
-      if (coin(rnd) < pDontSample)  {
+      if (sampleScheduling && coin(rnd) < pDontSample)  {
         continue;
       }
 
@@ -2375,7 +2380,7 @@ int main( int argc, char* argv[] )
     } else {
       tdp::CompletePyramidBlur(cuPyrD, 1.);
     }
-    if (viaRMLs) {
+    if (normalViaRMLS) {
       tdp::ConvertDepthToInverseDepthGpu(cuPyrD, cuPyrRho);
       pyrRho.CopyFrom(cuPyrRho);
     }
