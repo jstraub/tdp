@@ -114,7 +114,20 @@ void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
 typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 
-//void InflateObsCovByTransformationCov(
+void InflateObsCovByTransformationCov(
+    const tdp::SE3f& T_wc, 
+    const tdp::Vector3fda& p_w,
+    const Eigen::Matrix<float,6,6>& Sigma_wc,
+    tdp::Matrix3fda& SigmaO
+    ) {
+  Eigen::Matrix<float, 6, 3> Jse3;
+  Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
+  SigmaO += Jse3.transpose()*Sigma_wc*Jse3;
+}
+
+//void InflateObsTauByTransformationCov(
+//    const tdp::SE3f& T_wc, 
+//    const tdp::Vector3fda& p_w,
 //    const Eigen::Matrix<float,6,6>& Sigma_wc,
 //    tdp::Matrix3fda& SigmaO
 //    ) {
@@ -122,17 +135,6 @@ typedef Eigen::Matrix<int32_t,kNN,1,Eigen::DontAlign> VectorkNNida;
 //  Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
 //  SigmaO += Jse3*Sigma_wc*Jse3.transpose();
 //}
-
-void InflateObsTauByTransformationCov(
-    const tdp::SE3f& T_wc, 
-    const tdp;:Vector3fda& p_w,
-    const Eigen::Matrix<float,6,6>& Sigma_wc,
-    tdp::Matrix3fda& SigmaO
-    ) {
-  Eigen::Matrix<float, 6, 3> Jse3;
-  Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
-  SigmaO += Jse3*Sigma_wc*Jse3.transpose();
-}
 
 //https://ai2-s2-pdfs.s3.amazonaws.com/a8a6/18363b8dee8037df9133668ec8dcd532ee4e.pdf
 void NoiseModelNguyen(
@@ -208,7 +210,7 @@ void ExtractPlanes(
     const Image<Vector2fda>& gradGrey,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
     const SE3f& T_wc, 
-    const Matrix<float,6,6>& Sigma_wc,
+    const Eigen::Matrix<float,6,6>& Sigma_wc,
     const CameraT& cam,
     Image<Vector4fda>& dpc, 
     ManagedHostCircularBuffer<Plane>& pl_w,
@@ -224,7 +226,8 @@ void ExtractPlanes(
     ManagedHostCircularBuffer<float>& ImVar,
     ManagedHostCircularBuffer<float>& rs,
     ManagedHostCircularBuffer<uint16_t>& ts,
-    bool viaRMLs
+    bool viaRMLs,
+    bool useTrackingUncertainty
     ) {
   Plane pl;
   tdp::Brief feat;
@@ -288,7 +291,7 @@ void ExtractPlanes(
         tdp::Matrix3fda SigmaO;
         NoiseModelNguyen(n, p, cam, SigmaO);
         if (useTrackingUncertainty) {
-          InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+          tdp::InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
         }
         SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
@@ -395,7 +398,8 @@ bool EnsureNormal(
               dpc, ni, curvi, pi);
           //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
           // radius covering a single pizel
-          radiusi = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
+          // TODO: 550 -> fu
+          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
               dpc, ni, curvi, radiusi, pi);
@@ -1503,6 +1507,10 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::VectorZuda> zSampleIds(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<uint16_t> zMl(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> zMlCount(MAP_SIZE);
+  zSampleCounts.Fill(tdp::VectorZfda::Zero());
+  zSampleIds.Fill(tdp::VectorZuda::Ones()*999);
+  zMl.Fill(0);
+  zMlCount.Fill(0);
 
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
@@ -1615,7 +1623,7 @@ int main( int argc, char* argv[] )
         ids = tdp::VectorkNNida::Ones()*(-1);
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext && pl_w[i].valid_) {
-            float dist = (pl.p0_-pl_w.[i].p0_).squaredNorm();
+            float dist = (pl.p0_-pl_w[i].p0_).squaredNorm();
             tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
@@ -1860,8 +1868,10 @@ int main( int argc, char* argv[] )
           if (!pl_w[i].valid_) continue;
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
               zMli, countMli);
-          for (uint32_t k=0; k<zKTrac; ++k)
-            zSampleIds[i](k) = labelMap[zSampleIds[i](k)];
+          for (uint32_t k=0; k<zKTrac; ++k) {
+            if (zSampleIds[i](k) < K)
+              zSampleIds[i](k) = labelMap[zSampleIds[i](k)];
+          }
           zS[i] = labelMap[zS[i]];
           pl_w[i].z_ = labelMap[zMli];
           zMl[i] = pl_w[i].z_;
@@ -2071,10 +2081,9 @@ int main( int argc, char* argv[] )
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("normals");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
-             mask, W, frame, T_wc, Sigma_w, cam, dpc, pl_w, pc_w, pcObsInfo_w,
+             mask, W, frame, T_wc, Sigma_wc, cam, dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
-             ImVar, rs, ts,
-            normalViaRMLS);
+             ImVar, rs, ts, normalViaRMLS, useTrackingUncertainty);
 
         std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
         TOCK("normals");
@@ -2533,7 +2542,7 @@ int main( int argc, char* argv[] )
           NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
           SigmaO *= obsStdInflation*obsStdInflation;
           if (useTrackingUncertainty) {
-            InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+            tdp::InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
           }
           SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
@@ -2601,7 +2610,7 @@ int main( int argc, char* argv[] )
             NoiseModelNguyen(n(u,v), pc(u,v), cam, SigmaO);
             SigmaO *= obsStdInflation*obsStdInflation;
             if (useTrackingUncertainty) {
-              InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
+              tdp::InflateObsCovByTransformationCov(T_wc, pl.p_, Sigma_wc, SigmaO);
             }
             SigmaO = T_wc.rotation().matrix()*SigmaO*T_wc.rotation().matrix().transpose();
 
