@@ -1799,7 +1799,7 @@ int main( int argc, char* argv[] )
         i = sizeToReadPrev;
         sizeToReadPrev = sizeToRead;
       }
-      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alpha);
+      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
       if (coin(rnd) < pDontSample)  {
         continue;
       }
