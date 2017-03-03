@@ -123,11 +123,11 @@ void InflateObsCovByTransformationCov(
     ) {
   Eigen::Matrix<float, 6, 3> Jse3;
   Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
-  std::cout << "before" << std::endl << SigmaO << std::endl;
-  std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
-  std::cout << "Jse3" << std::endl << Jse3 << std::endl;
+//  std::cout << "before" << std::endl << SigmaO << std::endl;
+//  std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
+//  std::cout << "Jse3" << std::endl << Jse3 << std::endl;
   SigmaO += Jse3.transpose()*Sigma_wc*Jse3;
-  std::cout << "after" << std::endl << SigmaO << std::endl;
+//  std::cout << "after" << std::endl << SigmaO << std::endl;
 }
 
 //void InflateObsTauByTransformationCov(
@@ -1379,7 +1379,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> normalsP2PlContrib("mapPanel.ns P2Pl contrib",true,true);
   pangolin::Var<bool> samplePoints("mapPanel.samplePoints",true,true);
   pangolin::Var<float> condHThr("mapPanel.condHThr",0.01,0.001,0.1);
-  pangolin::Var<float> sampleCountThr("mapPanel.count Thr",10.,1.,100.);
+  pangolin::Var<float> sampleCountThr("mapPanel.count Thr",5.,1.,100.);
   pangolin::Var<float> lambdaMRF("mapPanel.lamb z MRF",.1,0.01,10.);
   pangolin::Var<float> tauO("mapPanel.tauO",100.,0.0,200.);
   pangolin::Var<bool> estimateTauO("mapPanel.estimate TauO",false,true);
@@ -1484,7 +1484,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wc = T_wc_0;
   tdp::SE3f T_wcRansac;
   std::vector<tdp::SE3f> T_wcs;
-  Eigen::Matrix<float,6,6> Sigma_wc;
+  Eigen::Matrix<float,6,6> Sigma_wc = Eigen::Matrix<float,6,6>::Identity()*1e-12;
 
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
@@ -1695,7 +1695,6 @@ int main( int argc, char* argv[] )
       idNNUpdate = iReadNext;
     };
   });
-
 
   uint32_t K = 0;
   std::mutex zsLock;
@@ -1979,7 +1978,8 @@ int main( int argc, char* argv[] )
 //          }
           if (samplePoints) {
             if ( fabs(Hp - pl.Hp_) < condHThr 
-                && pSampleCount_w[i] > sampleCountThr) {
+                && pSampleCount_w[i] > sampleCountThr
+                && pl.numObs_ > sampleCountThr) {
 //            if (pSampleCount_w[i] > 30)
               pl.p_ = pSampleEst_w[i];
             }
