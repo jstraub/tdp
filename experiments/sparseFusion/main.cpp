@@ -1521,7 +1521,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showRadius("visPanel.show Radius",false,true);
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
-  pangolin::Var<bool> showZCounts("visPanel.show samplesCount",false,true);
+  pangolin::Var<bool> showNSampleCount("visPanel.show nSampleCount",false,true);
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
@@ -1764,7 +1764,7 @@ int main( int argc, char* argv[] )
   vmfs.push_back(base.sample(rnd));
 
   tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<uint16_t> samplesCount(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<uint16_t> nSampleCount(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1863,8 +1863,8 @@ int main( int argc, char* argv[] )
       ni = vMF<float,3>(mu).sample(rnd);
       nSampleOuter_w[i] += ni*ni.transpose();
       nSampleSum_w[i] += ni;
-      samplesCount[i] ++;
-      if (samplesCount[i] > sampleCountThr) {
+      nSampleCount[i] ++;
+      if (nSampleCount[i] > sampleCountThr) {
         pl_w[i].n_ = nSampleSum_w[i].normalized();
         n_w[i] = pl_w[i].n_;
       }
@@ -1896,73 +1896,6 @@ int main( int argc, char* argv[] )
         uint16_t& zi = zS[i];
         tdp::Vector3fda& ni = nS[i];
         if (!pl_w[i].valid_ || !tdp::IsValidData(ni)) continue;
-//        if (sampleNormals) {
-//          tdp::Vector3fda mu;
-//          if (useSurfNormalObs) {
-//            mu = normSum_w[i]*nSum_w[i]*tauO;
-//          } else {
-//            mu = tdp::Vector3fda::Zero();
-//          }
-//          if (estimateTauO && useSurfNormalObs)
-//            mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
-//          if (zi < Ksample) {
-//            mu += vmfs[zi].mu_*vmfs[zi].tau_;
-//          }
-//          if (normalsP2PlContrib) {
-//            tdp::VectorkNNida& ids = nn.GetCircular(i);
-//            if ((ids.array() >= 0).all()) {
-//              Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
-//              Eigen::Matrix3f InfoPl;
-//              int32_t num = 0;
-//              for (int k=0; k<kNN; ++k) {
-//                if (ids[k] > -1 
-//                    && pl_w[ids[k]].valid_ 
-//                    && tdp::IsValidData(pS[ids[k]])
-//                    && tdp::IsValidData(pS[i])) {
-//                  InfoPl = (pS[ids[k]]-pS[i])*(pS[ids[k]]-pS[i]).transpose();
-////                  if (i%10) {
-////                    std::cout << k << " " << (pS[ids[k]]-pS[i]).transpose() << std::endl;
-////                  }
-//                  if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-//                  Info += 0.5*InfoPl;
-//                  num++;
-//                }  else {
-//                  break;
-//                } 
-//              }
-//              if (num == kNN) {
-//                eig.computeDirect(Info);
-//                tdp::Vector3fda e = eig.eigenvalues();
-//                float tauEst = 4.*(e(1)*e(2))/(e(1)+e(2));
-//                tdp::Vector3fda muEst = eig.eigenvectors().col(0);
-//
-//                if (!useSurfNormalObs) {
-//                  muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
-//                } else {
-//                  muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
-//                }
-////                if (tauEst > 100) 
-////                  std::cout 
-////                    << Info << std::endl
-////                    << " eig " 
-////                    << muEst.transpose() 
-////                    << " mu " << mu.transpose() << ": "
-////                    << e.transpose() << " tau " << tauEst << std::endl;
-//                mu += muEst*tauEst;
-//              }
-//            }
-//          }
-//          ni = vMF<float,3>(mu).sample(rnd);
-//          nSampleOuter_w[i] += ni*ni.transpose();
-//          nSampleSum_w[i] += ni;
-//          samplesCount[i] ++;
-//          if (samplesCount[i] > sampleCountThr) {
-//            pl_w[i].n_ = nSampleSum_w[i].normalized();
-//            n_w[i] = pl_w[i].n_;
-//          }
-//        } else {
-//          ni = pl_w[i].n_;
-//        }
         vmfSS[zi].topRows<3>() += ni;
         vmfSS[zi](3) ++;
       }
@@ -2057,107 +1990,6 @@ int main( int argc, char* argv[] )
         K = Ksample;
       }
       TOCK("sample params");
-//      TICK("sample points");
-////      // sample points
-//      for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
-//        tdp::Plane& pl = pl_w[i];
-//        if (!pl.valid_) continue;
-//        tdp::VectorkNNida& ids = nn.GetCircular(i);
-//        bool haveFullNeighborhood = (ids.array() >= 0).all();
-//        if (haveFullNeighborhood && numSum_w[i] > 0) {
-//          Eigen::Matrix3f Info = pcObsInfo_w[i]; 
-//          Eigen::Vector3f xi =   pcObsXi_w[i]; 
-//          Eigen::Matrix3f InfoPl;
-//          Eigen::Matrix3f InfoPlSum = Eigen::Matrix3f::Zero();
-//          Eigen::Vector3f xiPl = Eigen::Vector3f::Zero();
-//          uint32_t numNN = 0;
-//          for (int k=0; k<kNN; ++k) {
-//            if (ids[k] > -1 
-//                && pl_w[ids[k]].valid_ 
-//                && tdp::IsValidData(pS[ids[k]])
-//                && tdp::IsValidData(pS[i])) {
-//              if (useOtherNi) {
-//                InfoPl = pl_w[ids[k]].n_*pl_w[ids[k]].n_.transpose();
-//              } else {
-//                InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
-//              }
-//              if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-//              InfoPlSum += 0.5*InfoPl;
-//              xiPl += InfoPl*pS[ids[k]];
-//              numNN++;
-//            } else {
-//              break;
-//            }
-//          } 
-//          if (numNN == kNN) {
-//            Info += InfoPlSum;
-//            xi += xiPl;
-//          }
-//          if ((Info.eigenvalues().real().array() < 0.).any() ) {
-//            std::cout <<  "low Information! "  << numNN << " neighs "
-//              << numSum_w[i] 
-//              << " obs, evs " << Info.eigenvalues().transpose()
-////              << " mu " << mu.transpose()
-//              << " xi " << xi.transpose() << std::endl;
-//            pl.valid_ = false;
-//            pc_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
-//            n_w[i] = tdp::Vector3fda(NAN,NAN,NAN);
-//          }
-//          Eigen::Matrix3f Sigma = Info.inverse();
-//          Eigen::Vector3f mu = Info.ldlt().solve(xi);
-//          //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
-//          tdp::Vector3fda& pi = pS[i];
-//          pi = Normal<float,3>(mu, Sigma).sample(rnd);
-//          pSampleSum_w[i] += pi;
-//          pSampleOuter_w[i] += pi*pi.transpose();
-//          pSampleCount_w[i] ++;
-//
-//          for (int k=0; k<kNN; ++k) {
-//            if (ids[k] > -1 
-//                && pl_w[ids[k]].valid_ 
-//                && tdp::IsValidData(pS[ids[k]])
-//                && tdp::IsValidData(pS[i])) {
-//                float p2pl = nS[i].dot(pS[ids[k]] - pS[i]);
-//                p2plSum[i] += p2pl;
-//                p2plSqSum[i] += p2pl*p2pl;
-//                p2plCount[i] ++;
-//            }
-//          }
-//          if (p2plCount[i] > 0) {
-//            p2plVar[i] = (p2plSqSum[i] - p2plSum[i]*p2plSum[i]/p2plCount[i])/p2plCount[i];
-//          }
-//
-//          if (false && i%10) {
-//            std::cout << pSampleCount_w[i] << ": " << pi.transpose() << "; " << pSampleSum_w[i].transpose() << std::endl;
-//            std::cout << Sigma << std::endl;
-//            std::cout << Info << std::endl;
-//            std::cout << xi.transpose() << std::endl;
-//            std::cout << mu.transpose() << std::endl;
-//          }
-//
-//          pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/pSampleCount_w[i])/pSampleCount_w[i];
-//          float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
-//          pSampleEst_w[i] = pSampleSum_w[i]/pSampleCount_w[i];
-////          if (i%10) {
-////            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
-////          }
-//          if (samplePoints) {
-//            if ( fabs(Hp - pl.Hp_) < condHThr 
-//                && pSampleCount_w[i] > sampleCountThr
-//                && pl.numObs_ > sampleCountThr) {
-////            if (pSampleCount_w[i] > 30)
-//              pl.p_ = pSampleEst_w[i];
-//            }
-//            pc_w[i] = pl.p_;
-//            if (pSampleCount_w[i] > 3) {
-//              pl.Hp_ = Hp;
-//            }
-//          }
-//          //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
-//        }
-//        idMapUpdate = i;
-//      }
-//      TOCK("sample points");
       TOCK("sample full");
     };
   });
@@ -3084,7 +2916,7 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-        if (showAge || showObs || showCurv || showGrey || showNumSum || showZCounts
+        if (showAge || showObs || showCurv || showGrey || showNumSum || showNSampleCount
             || showHn || showHp || showP2PlVar 
             || showIvar || showImean || showRadius
             || showLabelCounts) {
@@ -3104,9 +2936,9 @@ int main( int argc, char* argv[] )
           } else if (showLabelCounts) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = zMlCount[i];
-          } else if (showZCounts) {
+          } else if (showNSampleCount) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
-              age[i] = samplesCount[i];
+              age[i] = nSampleCount[i];
           } else if (showP2PlVar) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = sqrtf(p2plVar[i]);
