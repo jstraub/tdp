@@ -1077,14 +1077,16 @@ int main( int argc, char* argv[] )
   std::string input_uri = "openni2://";
   std::string output_uri = "pango://video.pango";
   std::string calibPath = "";
-  std::string varsFile = "";
+  std::string varsMapFile = "";
+  std::string varsIcpFile = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
 
   if( argc > 1 ) {
     input_uri = std::string(argv[1]);
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
-    varsFile = (argc > 3) ? std::string(argv[3]) : "";
+    varsMapFile = (argc > 3) ? std::string(argv[3]) : "";
+    varsIcpFile = (argc > 4) ? std::string(argv[4]) : "";
 //    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
 
@@ -1153,6 +1155,8 @@ int main( int argc, char* argv[] )
   pangolin::Display("visPanel").Show(false);
   pangolin::CreatePanel("mapPanel").SetBounds(0.3,1.,pangolin::Attach::Pix(360),pangolin::Attach::Pix(540));
   pangolin::Display("mapPanel").Show(false);
+  pangolin::CreatePanel("icpPanel").SetBounds(0.3,1.,pangolin::Attach::Pix(360),pangolin::Attach::Pix(540));
+  pangolin::Display("icpPanel").Show(false);
 
   gui.container().SetLayout(pangolin::LayoutEqual);
 
@@ -1337,6 +1341,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,10.);
   pangolin::Var<bool> showVisPanel("ui.viz panel",false,true);
+  pangolin::Var<bool> showIcpPanel("ui.icp panel",false,true);
   pangolin::Var<bool> showMapPanel("ui.map panel",false,true);
 
   pangolin::Var<bool> savePly("ui.save ply",false,true);
@@ -1391,50 +1396,50 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
 
-  pangolin::Var<bool> runICP("ui.run ICP",true,true);
-  pangolin::Var<bool> icpReset("ui.reset icp",true,false);
-  pangolin::Var<int> maxIt0("ui.max iter 0",10, 1, 20);
-  pangolin::Var<int> maxIt1("ui.max iter 1",7, 1, 20);
-  pangolin::Var<int> maxIt2("ui.max iter 2",5, 1, 20);
-  pangolin::Var<int> maxIt3("ui.max iter 3",5, 1, 20);
-  pangolin::Var<int> ICPmaxLvl("ui.icp max lvl",1, 0, PYR-1);
+  pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
+  pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
+  pangolin::Var<int> maxIt0("icpPanel.max iter 0",5, 1, 20);
+  pangolin::Var<int> maxIt1("icpPanel.max iter 1",7, 1, 20);
+  pangolin::Var<int> maxIt2("icpPanel.max iter 2",10, 1, 20);
+  pangolin::Var<int> maxIt3("icpPanel.max iter 3",15, 1, 20);
+  pangolin::Var<int> ICPmaxLvl("icpPanel.icp max lvl",0, 0, PYR-1);
 
-  pangolin::Var<bool> pruneAssocByRender("ui.prune assoc by render",true,true);
-  pangolin::Var<bool> semanticObsSelect("ui.semObsSelect",true,true);
-  pangolin::Var<bool> sortByGradient("ui.sortByGradient",true,true);
+  pangolin::Var<bool> pruneAssocByRender("icpPanel.prune assoc by render",true,true);
+  pangolin::Var<bool> semanticObsSelect("icpPanel.semObsSelect",true,true);
+  pangolin::Var<bool> sortByGradient("icpPanel.sortByGradient",true,true);
 
-  pangolin::Var<int> dtAssoc("ui.dtAssoc",5000,1,1000);
-  pangolin::Var<float> lambdaNs("ui.lamb Ns",0.1,0.001,1.);
-  pangolin::Var<float> lambdaTex("ui.lamb Tex",0.1,0.0001,0.1);
-  pangolin::Var<float> lambdaP2Pl("ui.lamb p2pl",1.0,0.001,1.);
-  pangolin::Var<bool> useTexture("ui.use Tex ICP",true,true);
-  pangolin::Var<bool> use3dGrads("ui.use 3D grads ",false,true);
-  pangolin::Var<bool> useNormals("ui.use Ns ICP",false,true);
-  pangolin::Var<bool> useNormalsAndTexture("ui.use Tex&Ns ICP",false,true);
-  pangolin::Var<bool> usevMFmeans("ui.use vMF means",false,true);
+  pangolin::Var<int> dtAssoc("icpPanel.dtAssoc",5000,1,1000);
+  pangolin::Var<float> lambdaNs("icpPanel.lamb Ns",0.1,0.001,1.);
+  pangolin::Var<float> lambdaTex("icpPanel.lamb Tex",0.1,0.0001,0.1);
+  pangolin::Var<float> lambdaP2Pl("icpPanel.lamb p2pl",1.0,0.001,1.);
+  pangolin::Var<bool> useTexture("icpPanel.use Tex ICP",true,true);
+  pangolin::Var<bool> use3dGrads("icpPanel.use 3D grads ",false,true);
+  pangolin::Var<bool> useNormals("icpPanel.use Ns ICP",false,true);
+  pangolin::Var<bool> useNormalsAndTexture("icpPanel.use Tex&Ns ICP",false,true);
+  pangolin::Var<bool> usevMFmeans("icpPanel.use vMF means",false,true);
 
-  pangolin::Var<float> occlusionDepthThr("ui.occlusion D Thr",0.06,0.01,0.3);
-  pangolin::Var<float> numSigmaOclusion("ui.num sigma ocl",30.,1.,6.);
-  pangolin::Var<bool> sigmaOclusion("ui.use sigma in ocl",true,true);
-  pangolin::Var<float> angleThr("ui.angle Thr",15, -1, 90);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.03,0,0.3);
-  pangolin::Var<float> HThr("ui.H Thr",-32.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("ui.neg log ev Thr",-8.,-12.,-1.);
-  pangolin::Var<float> dPyrHThr("ui.d Pyr H Thr",4.,0.,8.);
-  pangolin::Var<float> dPyrNewLogEvHThr("ui.d Pyr H Thr",1.,0.,3.);
-  pangolin::Var<float> dPyrdAlpha("ui.d Pyr dAlpha",0.9,0.1,1.);
-  pangolin::Var<float> condEntropyThr("ui.rel log dH ", 1.e-3,1.e-3,1e-2);
-  pangolin::Var<float> icpdRThr("ui.dR Thr",0.25,0.1,1.);
-  pangolin::Var<float> icpdtThr("ui.dt Thr",0.01,0.01,0.001);
+  pangolin::Var<float> occlusionDepthThr("icpPanel.occlusion D Thr",0.06,0.01,0.3);
+  pangolin::Var<float> numSigmaOclusion("icpPanel.num sigma ocl",30.,1.,6.);
+  pangolin::Var<bool> sigmaOclusion("icpPanel.use sigma in ocl",true,true);
+  pangolin::Var<float> angleThr("icpPanel.angle Thr",15, -1, 90);
+  pangolin::Var<float> p2plThr("icpPanel.p2pl Thr",0.03,0,0.3);
+  pangolin::Var<float> HThr("icpPanel.H Thr",-32.,-40.,-12.);
+  pangolin::Var<float> negLogEvThr("icpPanel.neg log ev Thr",-8.,-12.,-1.);
+  pangolin::Var<float> dPyrHThr("icpPanel.d Pyr H Thr",4.,0.,8.);
+  pangolin::Var<float> dPyrNewLogEvHThr("icpPanel.d Pyr H Thr",1.,0.,3.);
+  pangolin::Var<float> dPyrdAlpha("icpPanel.d Pyr dAlpha",0.9,0.1,1.);
+  pangolin::Var<float> condEntropyThr("icpPanel.rel log dH ", 1.e-3,1.e-3,1e-2);
+  pangolin::Var<float> icpdRThr("icpPanel.dR Thr",0.25,0.1,1.);
+  pangolin::Var<float> icpdtThr("icpPanel.dt Thr",0.01,0.01,0.001);
 
-  pangolin::Var<bool> doSO3prealign("ui.SO3 prealign",true,true);
-  pangolin::Var<bool> useGpuPrealign("ui.GPU prealign",true,true);
-  pangolin::Var<float> SO3HThr("ui.SO3 H Thr",-24.,-40.,-20.);
-  pangolin::Var<float> SO3negLogEvThr("ui.SO3 neg log ev Thr",-6.,-10.,0.);
-  pangolin::Var<float> SO3condEntropyThr("ui.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
-  pangolin::Var<int> SO3maxIt("ui.SO3 max iter",2, 1, 20);
-  pangolin::Var<int> SO3maxLvl("ui.SO3 max Lvl",PYR-1,0,PYR-1);
-  pangolin::Var<int> SO3minLvl("ui.SO3 min Lvl",1,0,PYR-1);
+  pangolin::Var<bool> doSO3prealign("icpPanel.SO3 prealign",true,true);
+  pangolin::Var<bool> useGpuPrealign("icpPanel.GPU prealign",true,true);
+  pangolin::Var<float> SO3HThr("icpPanel.SO3 H Thr",-24.,-40.,-20.);
+  pangolin::Var<float> SO3negLogEvThr("icpPanel.SO3 neg log ev Thr",-6.,-10.,0.);
+  pangolin::Var<float> SO3condEntropyThr("icpPanel.SO3 rel log dH ", 1.e-3,1.e-6,1e-2);
+  pangolin::Var<int> SO3maxIt("icpPanel.SO3 max iter",2, 1, 20);
+  pangolin::Var<int> SO3maxLvl("icpPanel.SO3 max Lvl",PYR-1,0,PYR-1);
+  pangolin::Var<int> SO3minLvl("icpPanel.SO3 min Lvl",1,0,PYR-1);
 
   pangolin::Var<float> renderPointSize("visPanel.pt size",1.5,0.1,10.);
   pangolin::Var<float> renderLineWidth("visPanel.line w",1.5,0.1,10.);
@@ -1657,6 +1662,7 @@ int main( int argc, char* argv[] )
           }
         }
 
+        TICK("full NN pass");
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext && pl_w[i].valid_) {
             float dist = (pl.p0_-pl_w[i].p0_).squaredNorm();
@@ -1664,6 +1670,7 @@ int main( int argc, char* argv[] )
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
+        TOCK("full NN pass");
 
         // for map constraints
         // TODO: should be updated as pairs are reobserved
@@ -1727,11 +1734,13 @@ int main( int argc, char* argv[] )
         iInsert = nn.iInsert_;
       }
       if (iInsert == 0) continue;
+      TICK("sample full");
       pS.iInsert_ = nn.iInsert_;
       nS.iInsert_ = nn.iInsert_;
       // sample normals using dpvmf and observations from planes
       size_t Ksample = vmfs.size();
       vmfSS.Fill(tdp::Vector4fda::Zero());
+      TICK("sample normals");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         uint16_t& zi = zS[i];
         tdp::Vector3fda& ni = nS[i];
@@ -1806,7 +1815,9 @@ int main( int argc, char* argv[] )
         vmfSS[zi].topRows<3>() += ni;
         vmfSS[zi](3) ++;
       }
+      TOCK("sample normals");
       // sample dpvmf labels
+      TICK("sample labels");
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         if (!pl_w[i].valid_) continue;
         Eigen::VectorXf logPdfs(Ksample+1);
@@ -1849,6 +1860,8 @@ int main( int argc, char* argv[] )
           vmfSS[zi](3) ++;
         }
       }
+      TOCK("sample labels");
+      TICK("sample params");
       std::vector<uint32_t> labelMap(Ksample);
       std::iota(labelMap.begin(), labelMap.end(), 0);
       size_t j=0;
@@ -1892,7 +1905,8 @@ int main( int argc, char* argv[] )
         }
         K = Ksample;
       }
-
+      TOCK("sample params");
+      TICK("sample points");
 //      // sample points
       for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
         tdp::Plane& pl = pl_w[i];
@@ -1992,6 +2006,8 @@ int main( int argc, char* argv[] )
         }
         idMapUpdate = i;
       }
+      TOCK("sample points");
+      TOCK("sample full");
     };
   });
 
@@ -2024,12 +2040,15 @@ int main( int argc, char* argv[] )
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
 
-  if (varsFile.size() > 0)
-    pangolin::LoadJsonFile(varsFile, "mapPanel");
+  if (varsMapFile.size() > 0)
+    pangolin::LoadJsonFile(varsMapFile, "mapPanel");
+  if (varsIcpFile.size() > 0)
+    pangolin::LoadJsonFile(varsIcpFile, "icpPanel");
 
   pangolin::SaveJsonFile("./varsUi.json", "ui");
   pangolin::SaveJsonFile("./varsMap.json", "mapPanel");
   pangolin::SaveJsonFile("./varsVis.json", "visPanel");
+  pangolin::SaveJsonFile("./varsIcp.json", "icpPanel");
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
@@ -2039,6 +2058,9 @@ int main( int argc, char* argv[] )
     }
     if (showMapPanel.GuiChanged()) {
       pangolin::Display("mapPanel").Show(showMapPanel);
+    }
+    if (showIcpPanel.GuiChanged()) {
+      pangolin::Display("icpPanel").Show(showIcpPanel);
     }
 
     if (runLoopClosureGeom.GuiChanged()) {
@@ -2387,6 +2409,7 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector3fda> rayLvl = pyrRay.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
+            TICK("icp it");
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
             indK = std::vector<size_t>(invInd[pyr]->size(),0);
@@ -2403,6 +2426,7 @@ int main( int argc, char* argv[] )
             uint32_t k = 0;
             while (assoc.size() < 3000 && !exploredAll) {
               k = (k+1) % invInd[pyr]->size();
+              TICK("icp one pt");
               while (indK[k] < invInd[pyr]->at(k).size()) {
                 size_t i = invInd[pyr]->at(k)[indK[k]++];
                 tdp::Plane& pl = pl_w.GetCircular(i);
@@ -2471,6 +2495,7 @@ int main( int argc, char* argv[] )
                 assoc.emplace_back(i,u+v*pc.w_);
                 break;
               }
+              TOCK("icp one pt");
               if (k == 0) {
                 if (tdp::CheckEntropyTermination(A, Hprev, HThr+pyr*dPyrHThr, condEntropyThr, 
                       negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose))
@@ -2499,6 +2524,7 @@ int main( int argc, char* argv[] )
                   negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose)) {
               break;
             }
+            TOCK("icp it");
           }
         }
         logObs.Log(log(assoc.size())/log(10.), 

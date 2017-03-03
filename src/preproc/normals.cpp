@@ -383,6 +383,39 @@ bool NormalViaClustering(
   return false;
 }
 
+bool NormalViaScatterUnconstrained(
+    const Image<Vector3fda>& pc, 
+    uint32_t u0, 
+    uint32_t v0,
+    uint32_t W, 
+    Vector3fda& c
+    ) {
+  if ( W <= u0 && u0 < pc.w_-W 
+    && W <= v0 && v0 < pc.h_-W
+    && IsValidData(pc(u0,v0))) {
+    const Vector3fda& pc0 = pc(u0,v0);
+    Eigen::Matrix3f S = Eigen::Matrix3f::Zero();
+    size_t N = 0;
+    for (size_t u=u0-W; u<u0+W; ++u) {
+      for (size_t v=v0-W; v<v0+W; ++v) {
+        if (IsValidData(pc(u,v)) && u != u0 && v != v0) {
+          S += (pc0-pc(u,v))*(pc0-pc(u,v)).transpose();
+          N ++;
+        }
+      }
+    }
+    if (N<3) 
+      return false;
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig(S);
+    int id = 0;
+    float eval = eig.eigenvalues().minCoeff(&id);
+    c = eig.eigenvectors().col(id).normalized();
+    c *= (c(2)<0.?1.:-1.);
+    return true;
+  }
+  return false;
+}
+
 bool NormalViaScatter(
     const Image<Vector3fda>& pc, 
     uint32_t u0, 
