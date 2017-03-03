@@ -83,6 +83,39 @@ namespace tdp {
 typedef Eigen::Matrix<float,  zKTrac,1,Eigen::DontAlign> VectorZfda;
 typedef Eigen::Matrix<uint16_t,zKTrac,1,Eigen::DontAlign> VectorZuda;
 
+void AccumulateGaussianSS(
+    const tdp::Vector3fda& x,
+    tdp::Vector3fda& xSum,
+    tdp::Matrix3fda& xOuter,
+    float& xCount
+    ) {
+  xSum += x; 
+  xOuter += x*x.transpose(); 
+  xCount ++;
+}
+
+void RunningAvgGaussianSS(
+    const tdp::Vector3fda& x,
+    float xCountMax,
+    tdp::Vector3fda& xSum,
+    tdp::Matrix3fda& xOuter,
+    float& xCount
+    ) {
+  xSum = (xSum*xCount + x)/(xCount+1); 
+  xOuter = (xOuter*xCount + x*x.transpose())/(xCount+1);
+  xCount = std::min(xCountMax, xCount+1);
+}
+
+void RunningAvgvMFSS(
+    const tdp::Vector3fda& x,
+    float xCountMax,
+    tdp::Vector3fda& xSum,
+    float& xCount
+    ) {
+  xSum = (xSum*xCount + x)/(xCount+1); 
+  xCount = std::min(xCountMax, xCount+1);
+}
+
 void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
     uint16_t& idMax, float& countMax) {
   int32_t kMatch=-1;
@@ -123,6 +156,7 @@ void InflateObsCovByTransformationCov(
     ) {
   Eigen::Matrix<float, 6, 3> Jse3;
   Jse3 << tdp::SO3f::invVee( T_wc.rotation().matrix().transpose()*(p_w-T_wc.translation())), -Eigen::Matrix3f::Identity();
+
 //  std::cout << "before" << std::endl << SigmaO << std::endl;
 //  std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
 //  std::cout << "Jse3" << std::endl << Jse3 << std::endl;
@@ -1431,7 +1465,7 @@ int main( int argc, char* argv[] )
 
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
   pangolin::Var<bool> updateMap("mapPanel.update map",true,true);
-  pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",false,true);
+  pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",true,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
 //  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
@@ -1445,13 +1479,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> estimateTauO("mapPanel.estimate TauO",false,true);
   pangolin::Var<bool> useSigmaPl("mapPanel.use sigmaPl",true,true);
   pangolin::Var<bool> useOtherNi("mapPanel.use OtherNi",false,true);
-  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.06,0.01,.2);
+  pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.01,0.01,.2);
   pangolin::Var<bool> estSigmaPl("mapPanel.est SigmaPl",false,true);
   pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
-  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 1., 100.);
-  pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",true,true);
+  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 0.001, 1.);
+  pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1480,8 +1514,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> sigmaOclusion("icpPanel.use sigma in ocl",true,true);
   pangolin::Var<float> angleThr("icpPanel.angle Thr",15, -1, 90);
   pangolin::Var<float> p2plThr("icpPanel.p2pl Thr",0.03,0,0.3);
-  pangolin::Var<float> HThr("icpPanel.H Thr",-32.,-40.,-12.);
-  pangolin::Var<float> negLogEvThr("icpPanel.neg log ev Thr",-5.5,-12.,-1.);
+  pangolin::Var<float> HThr("icpPanel.H Thr",-42.,-40.,-12.);
+  pangolin::Var<float> negLogEvThr("icpPanel.neg log ev Thr",-9.5,-12.,-1.);
   pangolin::Var<float> dPyrHThr("icpPanel.d Pyr H Thr",4.,0.,8.);
   pangolin::Var<float> dPyrNewLogEvHThr("icpPanel.d Pyr H Thr",1.,0.,3.);
   pangolin::Var<float> dPyrdAlpha("icpPanel.d Pyr dAlpha",0.9,0.1,1.);
@@ -1503,6 +1537,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
   pangolin::Var<int>   step("visPanel.step",10,1,100);
   pangolin::Var<float> bgGrey("visPanel.bg Grey",0.2,0.0,1);
+  pangolin::Var<float> showNumStdPose("visPanel.std pose",3.,0.0,6.);
+  pangolin::Var<bool> showRgbView("visPanel.showRGBview",true,true);
+  pangolin::Var<bool> showSurfaceNormalView("visPanel.showSurfaceNormalView",true,true);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
@@ -1581,21 +1618,19 @@ int main( int argc, char* argv[] )
   zMl.Fill(0);
   zMlCount.Fill(0);
 
-  tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> nSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleOuter_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleCov_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pSampleEst_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<uint32_t> pSampleCount(MAP_SIZE);
-  nSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
+  tdp::ManagedHostCircularBuffer<float> pSampleCount(MAP_SIZE);
   pSampleOuter_w.Fill(tdp::Matrix3fda::Zero());
   pSampleCov_w.Fill(tdp::Matrix3fda::Zero());
   pSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleEst_w.Fill(tdp::Vector3fda::Zero());
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
-  pSampleCount.Fill(1);
-  size_t pTotalSampleCount = alphaSchedule;
+  pSampleCount.Fill(0);
+  size_t pTotalSampleCount = 0;
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1777,8 +1812,9 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<float> nSamplePReject(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
-  size_t nTotalSampleCount = alphaSchedule;
-  nSampleCount.Fill(1);
+  size_t nTotalSampleCount = 0;
+  size_t nMaxSampleCount = 0;
+  nSampleCount.Fill(0);
   nSamplePReject.Fill(NAN);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1809,7 +1845,8 @@ int main( int argc, char* argv[] )
         sizeToReadPrev = sizeToRead;
 //        nTotalSampleCount += sizeToRead;
       }
-      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
+//      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
+      float pDontSample = ((float)nSampleCount[i])/((float)nMaxSampleCount+alphaSchedule);
       nSamplePReject[i] = pDontSample;
       if (sampleScheduling && coin(rnd) < pDontSample)  {
 //        std::cout << " normals skipping " << i << std::endl;
@@ -1872,10 +1909,10 @@ int main( int argc, char* argv[] )
         }
       }
       ni = vMF<float,3>(mu).sample(rnd);
-      nSampleOuter_w[i] += ni*ni.transpose();
       nSampleSum_w[i] += ni;
       nSampleCount[i] ++;
       nTotalSampleCount ++;
+      nMaxSampleCount = std::max(nMaxSampleCount, (size_t) nSampleCount[i]);
       if (nSampleCount[i] > sampleCountThr) {
         pl_w[i].n_ = nSampleSum_w[i].normalized();
         n_w[i] = pl_w[i].n_;
@@ -2187,7 +2224,12 @@ int main( int argc, char* argv[] )
     if (showIcpPanel.GuiChanged()) {
       pangolin::Display("icpPanel").Show(showIcpPanel);
     }
+    if (showSurfaceNormalView.GuiChanged()) viewNormals.Show(showSurfaceNormalView);
+    if (showRgbView.GuiChanged()) viewCurrent.Show(showRgbView);
 
+    if (frame == 30) {
+      sampleScheduling = true;
+    }
     if (runLoopClosureGeom.GuiChanged()) {
       showLoopClose = runLoopClosureGeom;
     }
@@ -2595,8 +2637,8 @@ int main( int argc, char* argv[] )
                   //                    W, dpc, n, curv, u,v ))
                   continue;
                 if (useTexture) {
-                  float sqrtInfoP2Pl = estSigmaPl ? lambdaP2Pl/sqrtf(p2plVar[i]) : 1.;
-                  float sqrtInfoIm = estSigmaIm ? lambdaTex/sqrtf(ImVar[i]) : lambdaTex;
+                  float sqrtInfoP2Pl = estSigmaPl ? lambdaP2Pl/sqrtf(p2plVar[i]) : 1./sigmaPl;
+                  float sqrtInfoIm = estSigmaIm ? lambdaTex/sqrtf(ImVar[i]) : lambdaTex/sigmaPl;
                   if (!AccumulateP2PlIntensity(pl, T_wc, T_cw, camLvl, pcLvl(u,v),
                         nLvl(u,v), greyFlLvl(u,v), gradGreyLvl(u,v), p2plThr, dotThr,
                         sqrtInfoP2Pl, sqrtInfoIm, Ap2pl, bp2pl, Aphoto, bphoto, Ai, err))
@@ -2698,11 +2740,12 @@ int main( int argc, char* argv[] )
         logEv.Log(q0);
         T_wcs.push_back(T_wc);
 
-        if (useTrackingUncertainty) {
-          Sigma_wc = Ap2pl.inverse();
-        } else {
+//        if (useTrackingUncertainty) {
+//          Sigma_wc = Ap2pl.inverse();
+//        } else {
           Sigma_wc = A.inverse();
-        }
+//        }
+        std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
 
         trackingGood = (H <= HThr && assoc.size() > 10) || assoc.size() > 0.5*idsCur[0]->size();
         TOCK("icp");
@@ -2915,6 +2958,24 @@ int main( int argc, char* argv[] )
       glColor4f(0.,1.,0.,1.0);
 //      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
       pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
+
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,3,3>> eig(Sigma_wc.bottomRightCorner<3,3>());
+      pangolin::glSetFrameOfReference(T_wc.matrix());
+      glColor4f(1.,0.,0.,1.0);
+      Eigen::Vector3f std0 = eig.eigenvectors().col(0)*sqrtf(eig.eigenvalues()(0))*showNumStdPose;
+      Eigen::Vector3f std1 = eig.eigenvectors().col(1)*sqrtf(eig.eigenvalues()(1))*showNumStdPose;
+      Eigen::Vector3f std2 = eig.eigenvectors().col(2)*sqrtf(eig.eigenvalues()(2))*showNumStdPose;
+      Eigen::Vector3f std0neg = -std0;
+      Eigen::Vector3f std1neg = -std1;
+      Eigen::Vector3f std2neg = -std2;
+      tdp::glDrawLine(Eigen::Vector3f::Zero(), std0);
+      tdp::glDrawLine(Eigen::Vector3f::Zero(),std0neg);
+      tdp::glDrawLine(Eigen::Vector3f::Zero(), std1);
+      tdp::glDrawLine(Eigen::Vector3f::Zero(),std1neg);
+      tdp::glDrawLine(Eigen::Vector3f::Zero(), std2);
+      tdp::glDrawLine(Eigen::Vector3f::Zero(),std2neg);
+      pangolin::glUnsetFrameOfReference();
+
 
       if (showLoopClose) {
         glColor4f(1.,0.,0.,1.0);
