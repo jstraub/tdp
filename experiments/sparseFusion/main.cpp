@@ -1445,6 +1445,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
+  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",100., 1., 1000.);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1764,9 +1765,11 @@ int main( int argc, char* argv[] )
   vmfs.push_back(base.sample(rnd));
 
   tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<uint16_t> nSampleCount(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<uint32_t> nSampleCount(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
+  size_t nTotalSampleCount = 0;
+  nSampleCount.Fill(0);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   pS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   zS.Fill(9999); //std::numeric_limits<uint32_t>::max());
@@ -1774,37 +1777,39 @@ int main( int argc, char* argv[] )
   vmfSS.Fill(tdp::Vector4fda::Zero());
 
   std::thread samplingNormals([&]() {
+    int32_t i = 0;
     int32_t iInsert = 0;
     int32_t sizeToReadPrev = 0;
     int32_t sizeToRead = 0;
     std::deque<int32_t> newIds;
 //    std::random_device rd_;
     std::mt19937 rnd(0);
+    std::uniform_real_distribution<float> coin(0, 1);
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
     while(runSampling.Get()) {
-      sizeToReadPrev = sizeToRead;
-      {
-        std::lock_guard<std::mutex> lock(nnLock); 
-        sizeToRead = nn.iInsert_;
+      if (i%100 == 0 || sizeToRead == 0) {
+        {
+          std::lock_guard<std::mutex> lock(nnLock); 
+          sizeToRead = nn.iInsert_;
+        }
       }
       if (sizeToRead ==0) continue;
+      i = (i+1)% sizeToRead;
       if (sizeToRead > sizeToReadPrev) {
-        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
-          newIds.push_back(i);
+        i = sizeToReadPrev;
+        sizeToReadPrev = sizeToRead;
       }
-      if (newIds.size() == 0) {
-        std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
-        newIds.push_back(unif(rnd));
-//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
+      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alpha);
+      if (coin(rnd) < pDontSample)  {
+        continue;
       }
-      int32_t i = newIds.front();
-      newIds.pop_front();
       // sample normals using dpvmf and observations from planes
 //      vmfSS.Fill(tdp::Vector4fda::Zero());
       TICK("sample normals");
       uint16_t& zi = zS[i];
       tdp::Vector3fda& ni = nS[i];
-      if (!pl_w[i].valid_) continue;
+      if (!pl_w[i].valid_) 
+        continue;
       tdp::Vector3fda mu;
       if (useSurfNormalObs) {
         mu = normSum_w[i]*nSum_w[i]*tauO;
@@ -1864,6 +1869,7 @@ int main( int argc, char* argv[] )
       nSampleOuter_w[i] += ni*ni.transpose();
       nSampleSum_w[i] += ni;
       nSampleCount[i] ++;
+      nTotalSampleCount ++;
       if (nSampleCount[i] > sampleCountThr) {
         pl_w[i].n_ = nSampleSum_w[i].normalized();
         n_w[i] = pl_w[i].n_;
