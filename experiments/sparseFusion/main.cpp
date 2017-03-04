@@ -1696,6 +1696,12 @@ int main( int argc, char* argv[] )
   p2plCount.Fill(0.);
   p2plVar.Fill(sigmaPl*sigmaPl);
 
+  // greyscale from MAP surfel location
+  tdp::ManagedHostCircularBuffer<float> ImMapSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImMapSqSum(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImMapCount(MAP_SIZE);
+  tdp::ManagedHostCircularBuffer<float> ImMapVar(MAP_SIZE);
+  // greyscale expectation from samples of surfel location
   tdp::ManagedHostCircularBuffer<float> ImSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> ImSqSum(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> ImCount(MAP_SIZE);
