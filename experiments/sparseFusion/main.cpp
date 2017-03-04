@@ -106,6 +106,31 @@ void RunningAvgGaussianSS(
   xCount = std::min(xCountMax, xCount+1);
 }
 
+void ComputeSampleCov(
+    const tdp::Vector3fda& xSum,
+    const tdp::Matrix3fda& xOuter,
+    const float xCount,
+    tdp::Matrix3fda& cov
+    ) {
+  cov = (xOuter - xSum*xSum.transpose()/xCount)/xCount;
+}
+
+void ComputeSampleCovFromRunAvg(
+    const tdp::Vector3fda& xMean,
+    const tdp::Matrix3fda& xMeanOuter,
+    tdp::Matrix3fda& cov
+    ) {
+  cov = xMeanOuter - xMean*xMean.transpose();
+}
+
+void ComputeSampleMean(
+    const tdp::Vector3fda& xSum,
+    const float xCount,
+    tdp::Vector3fda& mean
+    ) {
+  mean = xSum/xCount;
+}
+
 void RunningAvgvMFSS(
     const tdp::Vector3fda& x,
     float xCountMax,
@@ -1486,6 +1511,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
   pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 0.001, 1.);
   pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
+  pangolin::Var<float> pSampleCountMax("mapPanel.pSampleCountMax",100., 10., 1000.);
+  pangolin::Var<float> nSampleCountMax("mapPanel.nSampleCountMax",100., 10., 1000.);
+  pangolin::Var<float> obsCountMax("mapPanel.obsCountMax",100., 10., 1000.);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1654,7 +1682,6 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> numSum_w(MAP_SIZE);
-  tdp::ManagedHostCircularBuffer<float> normSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> tauOSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pcObsInfo_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pcObsXi_w(MAP_SIZE);
@@ -1809,11 +1836,13 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<uint16_t> zS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<uint32_t> nSampleCount(MAP_SIZE); // count how often the same cluster ID
+  tdp::ManagedHostCircularBuffer<float> nSampleCountRAvg(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<float> nSamplePReject(MAP_SIZE); // count how often the same cluster ID
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nS(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   size_t nTotalSampleCount = 0;
   size_t nMaxSampleCount = 0;
+  nSampleCountRAvg.Fill(0);
   nSampleCount.Fill(0);
   nSamplePReject.Fill(NAN);
   nS.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -1862,12 +1891,12 @@ int main( int argc, char* argv[] )
         continue;
       tdp::Vector3fda mu;
       if (useSurfNormalObs) {
-        mu = normSum_w[i]*nSum_w[i]*tauO;
+        mu = numSum_w[i]*nSum_w[i]*tauO;
       } else {
         mu = tdp::Vector3fda::Zero();
       }
       if (estimateTauO && useSurfNormalObs)
-        mu = normSum_w[i]*nSum_w[i]*numSum_w[i]*tauOSum_w[i];
+        mu = numSum_w[i]*nSum_w[i]*tauOSum_w[i];
       if (zi < vmfs.size()) {
         mu += vmfs[zi].mu_*vmfs[zi].tau_;
       }
@@ -1900,7 +1929,7 @@ int main( int argc, char* argv[] )
             tdp::Vector3fda muEst = eig.eigenvectors().col(0);
 
             if (!useSurfNormalObs) {
-              muEst *= muEst.dot(nSum_w[i]) > 0? 1 : -1;
+              muEst *= muEst.dot(nSum_w[i])/nSum_w[i].norm() > 0? 1 : -1;
             } else {
               muEst *= muEst.dot(mu)/mu.norm() > 0? 1 : -1;
             }
@@ -1909,8 +1938,9 @@ int main( int argc, char* argv[] )
         }
       }
       ni = vMF<float,3>(mu).sample(rnd);
-      nSampleSum_w[i] += ni;
-      nSampleCount[i] ++;
+      tdp::RunningAvgvMFSS(ni, nSampleCountMax, nSampleSum_w[i],
+          nSampleCountRAvg[i]);
+      nSampleCount[i]++;
       nTotalSampleCount ++;
       nMaxSampleCount = std::max(nMaxSampleCount, (size_t) nSampleCount[i]);
       if (nSampleCount[i] > sampleCountThr) {
@@ -2118,9 +2148,11 @@ int main( int argc, char* argv[] )
         //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
         tdp::Vector3fda& pi = pS[i];
         pi = Normal<float,3>(mu, Sigma).sample(rnd);
-        pSampleSum_w[i] += pi;
-        pSampleOuter_w[i] += pi*pi.transpose();
-        pSampleCount[i] ++;
+        tdp::RunningAvgGaussianSS(pi, pSampleCountMax, pSampleSum_w[i],
+            pSampleOuter_w[i], pSampleCount[i]);
+//        pSampleSum_w[i] += pi;
+//        pSampleOuter_w[i] += pi*pi.transpose();
+//        pSampleCount[i] ++;
         pTotalSampleCount ++;
 
         for (int k=0; k<kNN; ++k) {
@@ -2146,9 +2178,11 @@ int main( int argc, char* argv[] )
           std::cout << mu.transpose() << std::endl;
         }
 
-        pSampleCov_w[i] = (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/(float)pSampleCount[i])/(float)pSampleCount[i];
+        tdp::ComputeSampleCovFromRunAvg(pSampleSum_w[i],
+            pSampleOuter_w[i], pSampleCov_w[i]);
+//          (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/(float)pSampleCount[i])/(float)pSampleCount[i];
         float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
-        pSampleEst_w[i] = pSampleSum_w[i]/(float)pSampleCount[i];
+        pSampleSum_w[i] = pSampleEst_w[i];
         //          if (i%10) {
         //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
         //          }
@@ -2301,7 +2335,6 @@ int main( int argc, char* argv[] )
 
           nSum_w[i] = pl_w[i].n_;
           numSum_w[i] = 1;
-          normSum_w[i] = 1;
           tauOSum_w[i] = pl_w[i].curvature_;
           idsCur[0]->emplace_back(i);
         }
@@ -2794,16 +2827,14 @@ int main( int argc, char* argv[] )
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
 //          pcObsInfo_w[i] = (pcObsInfo_w[i]*w + infoObs)/(w+1.);
 //          pcObsXi_w[i] = (pcObsXi_w[i]*w + xiObs)/(w+1.);
-            pcObsInfo_w[i] = pcObsInfo_w[i] + infoObs;
-            pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
-            pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
+          pcObsInfo_w[i] = pcObsInfo_w[i] + infoObs;
+          pcObsXi_w[i] = pcObsXi_w[i] + xiObs;
+          pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
-          normSum_w[i] = nSum_w[i].norm();
-          nSum_w[i] /= nSum_w[i].norm();
           tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
-          numSum_w[i] = std::min(50.f, w+1.f);
+          numSum_w[i] = std::min(obsCountMax.Get(), w+1.f);
 
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
@@ -2869,10 +2900,8 @@ int main( int argc, char* argv[] )
             pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
-            normSum_w[i] = nSum_w[i].norm();
-            nSum_w[i] /= nSum_w[i].norm();
             tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
-            numSum_w[i] = std::min(50.f, w+1.f);
+            numSum_w[i] = std::min(obsCountMax.Get(), w+1.f);
 
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();

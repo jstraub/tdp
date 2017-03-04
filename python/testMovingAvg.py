@@ -5,9 +5,9 @@ N = 0
 xSums = []
 for i in range(10000):
   x = np.random.randn(1)*10+4
-  xSum = (xSum*N + x)/(N+1)
+  xSum = (xSum*N/(N+1) + x)
   N = min(500, N+1)
-  xSums.append(xSum*N)
+  xSums.append(xSum/N)
 
 import matplotlib.pyplot as plt
 
