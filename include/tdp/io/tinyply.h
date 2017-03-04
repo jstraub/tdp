@@ -39,6 +39,13 @@ void LoadPointCloudFromMesh(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts);
 
+void LoadPointCloud(
+    const std::string& path,
+    ManagedHostImage<Vector3fda>& verts,
+    ManagedHostImage<Vector3fda>& ns, 
+    ManagedHostImage<Vector3bda>& rgb, 
+    bool verbose = false);
+
 void LoadMesh(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,

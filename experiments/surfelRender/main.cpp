@@ -31,6 +31,10 @@
 
 int main( int argc, char* argv[] )
 {
+  std::string pathToPc = "";
+  if( argc > 1 ) {
+    pathToPc = std::string(argv[1]);
+  }
 
   // Create OpenGL window - guess sensible dimensions
   int menue_w = 180;
@@ -56,6 +60,8 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
 
+
+
   uint32_t w=640;
   uint32_t h=480;
   tdp::QuickView viewRender(w,h);
@@ -68,9 +74,16 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3fda> n(N);
   tdp::ManagedHostImage<tdp::Vector3bda> rgb(N);
   tdp::ManagedHostImage<float> r(N);
-
   rgb.Fill(tdp::Vector3bda(255,0,0));
   n.Fill(tdp::Vector3fda(0.,0.,-1.));
+
+  if (pathToPc.size() > 0) {
+    LoadPointCloud(pathToPc, pc, n, rgb, true);
+    N = pc.Area();
+//    rgb.Reinitialise(N,1);
+//    rgb.Fill(tdp::Vector3bda(255,0,0));
+    r.Reinitialise(N,1);
+  }
 
   pangolin::GlBuffer vbo(pangolin::GlArrayBuffer,N,GL_FLOAT,3);
   pangolin::GlBuffer nbo(pangolin::GlArrayBuffer,N,GL_FLOAT,3);
@@ -85,7 +98,8 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgbI(w,h);
 
   // Add some variables to GUI
-  pangolin::Var<float> radius("ui.radius",0.5,0.001,1.);
+  pangolin::Var<float> radius("ui.radius",0.1,0.001,0.1);
+  pangolin::Var<float> scale("ui.scale",1.,0.,3.);
   pangolin::Var<float> dx("ui.dx",0.5,0.001,1.);
 
   // Stream and display video
@@ -118,7 +132,7 @@ int main( int argc, char* argv[] )
     tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., P, MV);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
-      tdp::glDrawLine(pc[i], pc[i]+3*radius*n[i]);
+      tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);
     }
     glDisable(GL_DEPTH_TEST);
 
@@ -136,7 +150,7 @@ int main( int argc, char* argv[] )
     tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., P, MV);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
-      tdp::glDrawLine(pc[i], pc[i]+3*radius*n[i]);
+      tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);
     }
     fbo.Unbind();
     glPopAttrib();

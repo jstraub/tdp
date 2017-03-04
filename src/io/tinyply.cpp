@@ -102,6 +102,54 @@ void LoadPointCloudFromMesh(
   }
 }
 
+void LoadPointCloud(
+    const std::string& path,
+    ManagedHostImage<Vector3fda>& verts,
+    ManagedHostImage<Vector3fda>& ns, 
+    ManagedHostImage<Vector3bda>& rgb, 
+    bool verbose) {
+
+  std::vector<float> vertices;
+  std::vector<float> normals;
+  std::vector<uint8_t> rgbs;
+  std::ifstream in(path, std::ios::binary);
+  tinyply::PlyFile ply(in);
+
+  if (verbose) {
+    for (auto e : ply.get_elements()) {
+      std::cout << "element - " << e.name << " (" << e.size << ")" 
+        << std::endl;
+      for (auto p : e.properties) {
+        std::cout << "\tproperty - " << p.name << " (" 
+          << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+      }
+    }
+    std::cout << std::endl;
+  }
+  ply.request_properties_from_element("vertex", {"x", "y", "z"}, vertices);
+  ply.request_properties_from_element("vertex", {"nx", "ny", "nz"}, normals);
+  ply.request_properties_from_element("vertex", {"red", "green", "blue"}, rgbs);
+  ply.read(in);
+  std::cout << "loaded ply file: " << vertices.size()
+    << " normals: " << normals.size()
+    << " colors: " << rgbs.size() << std::endl;
+
+  verts.Reinitialise(vertices.size()/3,1);
+  ns.Reinitialise(normals.size()/3,1);
+  rgb.Reinitialise(rgbs.size()/3,1);
+  for (size_t i=0; i<vertices.size(); ++i) {
+    verts[i/3](i%3) = vertices[i];
+    ns[i/3](i%3) = normals[i];
+    rgb[i/3](i%3) = rgbs[i];
+//    if (i%3==2 &&  i < 10000) {
+//      std::cout << verts[i/3].transpose()
+//        << ", "<< ns[i/3].transpose() << std::endl;
+//    }
+  }
+//  std::memcpy(verts.ptr_, &vertices[0], verts.SizeBytes());
+//  std::memcpy(ns.ptr_, &normals[0], ns.SizeBytes());
+}
+
 void LoadMesh(
     const std::string& path,
     ManagedHostImage<Vector3fda>& verts,
