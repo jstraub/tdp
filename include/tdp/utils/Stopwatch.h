@@ -96,6 +96,14 @@ class Stopwatch
             std::cout << std::endl;
         }
 
+        void logAll(std::ofstream& out)
+        {
+            for(std::map<std::string, float>::const_iterator it = timings.begin(); it != timings.end(); it++)
+            {
+                out << it->first << "\t" << it->second  << std::endl;
+            }
+        }
+
         void pulse(std::string name)
         {
             timings[name] = 1;
