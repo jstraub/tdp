@@ -131,6 +131,15 @@ void ComputeSampleMean(
   mean = xSum/xCount;
 }
 
+void AccumulatevMFSS(
+    const tdp::Vector3fda& x,
+    tdp::Vector3fda& xSum,
+    uint32_t& xCount
+    ) {
+  xSum += x;
+  xCount ++;
+}
+
 void RunningAvgvMFSS(
     const tdp::Vector3fda& x,
     float xCountMax,
@@ -1160,6 +1169,7 @@ int main( int argc, char* argv[] )
   std::string calibPath = "";
   std::string varsMapFile = "";
   std::string varsIcpFile = "";
+  std::string varsVisFile = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
 
@@ -1168,6 +1178,7 @@ int main( int argc, char* argv[] )
     calibPath = (argc > 2) ? std::string(argv[2]) : "";
     varsMapFile = (argc > 3) ? std::string(argv[3]) : "";
     varsIcpFile = (argc > 4) ? std::string(argv[4]) : "";
+    varsVisFile = (argc > 5) ? std::string(argv[5]) : "";
 //    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
   }
 
@@ -1944,9 +1955,10 @@ int main( int argc, char* argv[] )
         }
       }
       ni = vMF<float,3>(mu).sample(rnd);
-      tdp::RunningAvgvMFSS(ni, nSampleCountMax, nSampleSum_w[i],
-          nSampleCountRAvg[i]);
-      nSampleCount[i]++;
+//      tdp::RunningAvgvMFSS(ni, nSampleCountMax, nSampleSum_w[i],
+//          nSampleCountRAvg[i]);
+//      nSampleCount[i]++;
+      tdp::AccumulatevMFSS(ni, nSampleSum_w[i], nSampleCount[i]);
       nTotalSampleCount ++;
       nMaxSampleCount = std::max(nMaxSampleCount, (size_t) nSampleCount[i]);
       if (nSampleCount[i] > sampleCountThr) {
@@ -2154,7 +2166,9 @@ int main( int argc, char* argv[] )
         //        std::cout << xi.transpose() << " " << mu.transpose() << std::endl;
         tdp::Vector3fda& pi = pS[i];
         pi = Normal<float,3>(mu, Sigma).sample(rnd);
-        tdp::RunningAvgGaussianSS(pi, pSampleCountMax, pSampleSum_w[i],
+//        tdp::RunningAvgGaussianSS(pi, pSampleCountMax, pSampleSum_w[i],
+//            pSampleOuter_w[i], pSampleCount[i]);
+        tdp::AccumulateGaussianSS(pi, pSampleSum_w[i],
             pSampleOuter_w[i], pSampleCount[i]);
 //        pSampleSum_w[i] += pi;
 //        pSampleOuter_w[i] += pi*pi.transpose();
@@ -2184,11 +2198,24 @@ int main( int argc, char* argv[] )
           std::cout << mu.transpose() << std::endl;
         }
 
-        tdp::ComputeSampleCovFromRunAvg(pSampleSum_w[i],
-            pSampleOuter_w[i], pSampleCov_w[i]);
+        tdp::ComputeSampleCov(pSampleSum_w[i],
+            pSampleOuter_w[i], pSampleCount[i],
+            pSampleCov_w[i]);
+        tdp::ComputeSampleMean(pSampleSum_w[i],
+            pSampleCount[i], pSampleEst_w[i]);
+//        tdp::ComputeSampleCovFromRunAvg(pSampleSum_w[i],
+//            pSampleOuter_w[i], pSampleCov_w[i]);
+//        pSampleEst_w[i] = pSampleSum_w[i];
+
+        if(false && i%100) {
+          std::cout << pSampleCount[i] << ": " 
+            << pSampleSum_w[i].transpose()  << " -> " 
+            << pSampleEst_w[i].transpose() << std::endl;
+          std::cout << pSampleOuter_w[i] << std::endl;
+          std::cout << pSampleCov_w[i] << std::endl;
+        }
 //          (pSampleOuter_w[i] - pSampleSum_w[i]*pSampleSum_w[i].transpose()/(float)pSampleCount[i])/(float)pSampleCount[i];
         float Hp = 0.5*pSampleCov_w[i].eigenvalues().real().array().log().sum();
-        pSampleSum_w[i] = pSampleEst_w[i];
         //          if (i%10) {
         //            std::cout << "Hp " << Hp << " dH " << Hp - pl.Hp_ << std::endl;
         //          }
@@ -2242,15 +2269,18 @@ int main( int argc, char* argv[] )
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
 
-  if (varsMapFile.size() > 0)
-    pangolin::LoadJsonFile(varsMapFile, "mapPanel");
-  if (varsIcpFile.size() > 0)
-    pangolin::LoadJsonFile(varsIcpFile, "icpPanel");
 
   pangolin::SaveJsonFile("./varsUi.json", "ui");
   pangolin::SaveJsonFile("./varsMap.json", "mapPanel");
   pangolin::SaveJsonFile("./varsVis.json", "visPanel");
   pangolin::SaveJsonFile("./varsIcp.json", "icpPanel");
+
+  if (varsMapFile.size() > 0)
+    pangolin::LoadJsonFile(varsMapFile, "mapPanel");
+  if (varsIcpFile.size() > 0)
+    pangolin::LoadJsonFile(varsIcpFile, "icpPanel");
+  if (varsVisFile.size() > 0)
+    pangolin::LoadJsonFile(varsVisFile, "visPanel");
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
