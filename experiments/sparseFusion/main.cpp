@@ -1519,12 +1519,14 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> estSigmaPl("mapPanel.est SigmaPl",false,true);
   pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
+  pangolin::Var<float> initObsStdInflation("mapPanel.initObsSigmaInfl",3,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
   pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 0.001, 1.);
   pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
+  pangolin::Var<bool> delaySampleScheduling("mapPanel.delay sample scheduling",false,true);
   pangolin::Var<float> pSampleCountMax("mapPanel.pSampleCountMax",100., 10., 1000.);
   pangolin::Var<float> nSampleCountMax("mapPanel.nSampleCountMax",100., 10., 1000.);
-  pangolin::Var<float> obsCountMax("mapPanel.obsCountMax",100., 10., 1000.);
+  pangolin::Var<float> obsCountMax("mapPanel.obsCountMax",50., 10., 1000.);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
   pangolin::Var<bool> icpReset("icpPanel.reset icp",true,false);
@@ -1623,7 +1625,7 @@ int main( int argc, char* argv[] )
   tdp::SE3f T_wc = T_wc_0;
   tdp::SE3f T_wcRansac;
   std::vector<tdp::SE3f> T_wcs;
-  Eigen::Matrix<float,6,6> Sigma_wc = Eigen::Matrix<float,6,6>::Identity()*1e-12;
+  Eigen::Matrix<float,6,6> Sigma_wc = Eigen::Matrix<float,6,6>::Identity()*1e-6;
 
   gui.verbose = true;
   if (gui.verbose) std::cout << "starting main loop" << std::endl;
@@ -2299,9 +2301,9 @@ int main( int argc, char* argv[] )
     if (showSurfaceNormalView.GuiChanged()) viewNormals.Show(showSurfaceNormalView);
     if (showRgbView.GuiChanged()) viewCurrent.Show(showRgbView);
 
-//    if (frame == 30) {
-//      sampleScheduling = true;
-//    }
+    if (delaySampleScheduling && frame == 10) {
+      sampleScheduling = true;
+    }
     if (runLoopClosureGeom.GuiChanged()) {
       showLoopClose = runLoopClosureGeom;
     }
@@ -2367,7 +2369,8 @@ int main( int argc, char* argv[] )
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
          
-          pcObsInfo_w[i] /= obsStdInflation*obsStdInflation;
+          pcObsInfo_w[i] /=  initObsStdInflation*initObsStdInflation;
+          pSampleCov_w[i] *= initObsStdInflation*initObsStdInflation;
           pcObsXi_w[i] = pcObsInfo_w[i]*pl_w[i].p_;
           pcObsMu_w[i] = pcObsInfo_w[i].ldlt().solve(pcObsXi_w[i]);
 
