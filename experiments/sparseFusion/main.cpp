@@ -1583,9 +1583,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
-  pangolin::Var<bool> showSamplePcEst("visPanel.show SamplePcEst",false,true);
-  pangolin::Var<bool> showSamplePc("visPanel.show SamplePc",false,true);
-  pangolin::Var<bool> showPcMu("visPanel.show PcMu",false,true);
+  pangolin::Var<bool> showSamplePcEst("visPanel.show Mean Sample Pc",false,true);
+  pangolin::Var<bool> showSamplePc("visPanel.show Samples of Pc",false,true);
+  pangolin::Var<bool> showPcMu("visPanel.show Mean Obs Pc",false,true);
   pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
   pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
   pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,.5);
@@ -1670,6 +1670,7 @@ int main( int argc, char* argv[] )
   nSampleSum_w.Fill(tdp::Vector3fda::Zero());
   pSampleCount.Fill(0);
   size_t pTotalSampleCount = 0;
+  size_t pMaxSampleCount = 0;
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -2112,7 +2113,7 @@ int main( int argc, char* argv[] )
         sizeToReadPrev = sizeToRead;
 //        pTotalSampleCount+=sizeToRead;
       }
-      float pDontSample = ((float)pSampleCount[i]+alphaSchedule)/((float)pTotalSampleCount+alphaSchedule);
+      float pDontSample = ((float)pSampleCount[i])/((float)pMaxSampleCount+alphaSchedule);
       if (sampleScheduling && coin(rnd) < pDontSample)  {
         continue;
       }
@@ -2174,6 +2175,7 @@ int main( int argc, char* argv[] )
 //        pSampleOuter_w[i] += pi*pi.transpose();
 //        pSampleCount[i] ++;
         pTotalSampleCount ++;
+        pMaxSampleCount = std::max(pMaxSampleCount, (size_t) pSampleCount[i]);
 
         for (int k=0; k<kNN; ++k) {
           if (ids[k] > -1 
@@ -2297,9 +2299,9 @@ int main( int argc, char* argv[] )
     if (showSurfaceNormalView.GuiChanged()) viewNormals.Show(showSurfaceNormalView);
     if (showRgbView.GuiChanged()) viewCurrent.Show(showRgbView);
 
-    if (frame == 30) {
-      sampleScheduling = true;
-    }
+//    if (frame == 30) {
+//      sampleScheduling = true;
+//    }
     if (runLoopClosureGeom.GuiChanged()) {
       showLoopClose = runLoopClosureGeom;
     }
