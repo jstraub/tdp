@@ -53,7 +53,7 @@ int main( int argc, char* argv[] )
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
       pangolin::ProjectionMatrix(640,480,420,420,320,240,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+      pangolin::ModelViewLookAt(0,0.0,-1., 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
   pangolin::View& d_cam = pangolin::CreateDisplay()
@@ -102,6 +102,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> scale("ui.scale",1.,0.,3.);
   pangolin::Var<float> dx("ui.dx",0.5,0.001,1.);
 
+  pangolin::Var<bool> invertMV("ui.invert MV",false,true);
+  pangolin::Var<bool> showTransformation("ui.show trafo",false,false);
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -128,8 +131,26 @@ int main( int argc, char* argv[] )
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
 
+    if (invertMV) {
+      Eigen::Matrix4f MVmat = MV;
+      Eigen::Matrix4f MVmatInv = MVmat.inverse();
+      MV = pangolin::OpenGlMatrix(MVmatInv);
+    }
+
+    if (pangolin::Pushed(showTransformation))
+      std::cout << MV << std::endl;
+
     pangolin::glDrawAxis(0.1);
+    glPushAttrib(GL_VIEWPORT_BIT);
+    glViewport(0, 0, w, h);
+    glClearColor(0, 0, 0, 0);
+    glEnable(GL_POINT_SPRITE);
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., P, MV);
+    glPopAttrib();
+    glDisable(GL_PROGRAM_POINT_SIZE);
+    glDisable(GL_POINT_SPRITE);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
       tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);
@@ -140,13 +161,13 @@ int main( int argc, char* argv[] )
 //    P = s_cam2.GetProjectionMatrix();
 //    MV = s_cam2.GetModelViewMatrix();
 
-
     fbo.Bind();
     glPushAttrib(GL_VIEWPORT_BIT);
-    glPointSize(1);
     glViewport(0, 0, w, h);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_POINT_SPRITE);
+    glEnable(GL_PROGRAM_POINT_SIZE);
     tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., P, MV);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
@@ -155,10 +176,12 @@ int main( int argc, char* argv[] )
     fbo.Unbind();
     glPopAttrib();
     glFinish();
+    glDisable(GL_PROGRAM_POINT_SIZE);
+    glDisable(GL_POINT_SPRITE);
     tex.Download(rgbI.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
 
     viewRender.Activate();
-    viewRender.FlipTextureY()=true;
+//    viewRender.FlipTextureY()=true;
 ////    viewRender.UpdateView();
 //    viewRender.glSetViewOrtho();
 //    tex.Bind();

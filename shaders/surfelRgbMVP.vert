@@ -15,8 +15,8 @@ vec3 projectCamPlane(vec3 p)
   float rows = 480;
   vec4 cam = vec4(420., 420.,319.5, 239.5);
 
-  return vec3(-((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
-              -((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
+  return vec3(((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
+              ((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
 //              p.z / maxZ);
          (p.z)/(maxZ));
 }
@@ -36,19 +36,21 @@ out float rC;
 void main() {
   // Transform into camera coordinates
   posC = (Tinv * vec4(pos, 1.0)).xyz;
+  posC.z *= -1.;
   nC = normalize(mat3(Tinv) * n.xyz);
+//  nC.z *= -1.;
   rC = r;
   rgbC = rgb;
 
-  if (posC.z > maxZ) {
+  if (posC.z > maxZ ) {
     gl_Position = vec4(1000.f,1000.f,1000.f,1000.f);
     gl_PointSize = 0;
   } else {
-//    gl_Position = P*vec4(posC, 1.);
     gl_Position = vec4(projectCamPlane(posC), 1.);
+//    gl_Position = P*vec4(posC, 1.);
     // vectors orthogonal to n
-    vec3 u = 1.41421356 * r * vec3(n.y - n.z, -n.x, n.x);
-    vec3 v = 1.41421356 * r * cross(n, u);
+    vec3 u = 1.41421356 * r * normalize(vec3(n.y - n.z, -n.x, n.x));
+    vec3 v = cross(n, u);
     // project points on a rectangle around posC into image
     vec3 c1 = projectImgPlane(posC + u);
     vec3 c2 = projectImgPlane(posC + v);
@@ -58,6 +60,7 @@ void main() {
     vec2 cxs = vec2(min(c1.x, min(c2.x, min(c3.x, c4.x))), max(c1.x, max(c2.x, max(c3.x, c4.x))));
     vec2 cys = vec2(min(c1.y, min(c2.y, min(c3.y, c4.y))), max(c1.y, max(c2.y, max(c3.y, c4.y))));
     // set the size to the maximum side length of the bounding box
-    gl_PointSize = max(1.5, max(abs(cxs.y-cxs.x), abs(cys.y-cys.x))); //r;
+    gl_PointSize = max(0., max(abs(cxs.y-cxs.x), abs(cys.y-cys.x))); //r;
+//    gl_PointSize = 2;
   }
 }
