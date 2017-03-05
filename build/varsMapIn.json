@@ -2,7 +2,7 @@
   "pangolin_version": "0.4",
   "vars": {
     "mapPanel.alpha Schedule": "10",
-    "mapPanel.delay pSample Nobs": "30",
+    "mapPanel.delay pSample Nobs": "9",
     "mapPanel.condHThr": "0.01",
     "mapPanel.count Thr": "5",
     "mapPanel.est SigmaIm": "0",
@@ -15,6 +15,7 @@
     "mapPanel.revisit NNs": "1",
     "mapPanel.run mapping": "1",
     "mapPanel.sample scheduling": "0",
+    "mapPanel.delay sample scheduling": "1",
     "mapPanel.samplePoints": "1",
     "mapPanel.sigmaPl": "0.06",
     "mapPanel.tauO": "100",
@@ -22,6 +23,10 @@
     "mapPanel.use OtherNi": "0",
     "mapPanel.use SurfNormal Obs": "1",
     "mapPanel.use sigmaPl": "1",
+    "mapPanel.prune H Thr": "-7.5",
+    "mapPanel.prune Noise": "1",
+    "mapPanel.prune NumObsThr": "10",
+    "mapPanel.rel prune dist Thr": "3",
     "mapPanel.use tracking uncertainty": "1"
   }
 }

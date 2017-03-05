@@ -278,7 +278,7 @@ bool ExtractClosestBrief(
 void ExtractPlanes(
     const Image<Vector3fda>& pc, 
     const Image<Vector3bda>& rgb,
-    const Image<uint8_t>& grey,
+    const Image<uint32_t>& z,
     const Image<float>& greyFl,
     const Image<Vector2fda>& gradGrey,
     const Image<uint8_t>& mask, uint32_t W, size_t frame,
@@ -1483,13 +1483,12 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.loopCloseGeom",false,true);
 
-  pangolin::Var<bool> pruneNoise("ui.prune Noise",true,true);
-  pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
-  pangolin::Var<float> pruneHThr("ui.prune H Thr",-15,-40.,-20.);
-  pangolin::Var<float> pruneNumObsThr("ui.prune NumObsThr",10,3,30);
-  pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
-  pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
-  pangolin::Var<int> numObsToTake("ui.num Obs2take",1000,0,1000);
+  pangolin::Var<bool> pruneNoise("mapPanel.prune Noise",true,true);
+  pangolin::Var<float> relPruneDistThr("mapPanel.rel prune dist Thr",3.,1.,10);
+  pangolin::Var<float> pruneHThr("mapPanel.prune H Thr",-7.5,-20.,-0.);
+  pangolin::Var<float> pruneNumObsThr("mapPanel.prune NumObsThr",10,3,30);
+  pangolin::Var<int> survivalTime("mapPanel.survival Time",100,0,200);
+  pangolin::Var<int> numObsToTake("mapPanel.num Obs2take",1000,0,1000);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
@@ -1523,7 +1522,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> initObsStdInflation("mapPanel.initObsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
-  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 0.001, 1.);
+  pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",1., 0.001, 1.);
   pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
   pangolin::Var<bool> delaySampleScheduling("mapPanel.delay sample scheduling",false,true);
   pangolin::Var<float> pSampleCountMax("mapPanel.pSampleCountMax",100., 10., 1000.);
@@ -1582,26 +1581,21 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> renderLineWidth("visPanel.line w",1.5,0.1,10.);
   pangolin::Var<float> scale("visPanel.scale",0.05,0.1,1);
   pangolin::Var<int>   step("visPanel.step",10,1,100);
-  pangolin::Var<float> bgGrey("visPanel.bg Grey",0.2,0.0,1);
+  pangolin::Var<float> bgGrey("visPanel.bg Grey",0.6,0.0,1);
   pangolin::Var<float> showNumStdPose("visPanel.std pose",3.,0.0,6.);
   pangolin::Var<bool> showRgbView("visPanel.showRGBview",true,true);
   pangolin::Var<bool> showSurfaceNormalView("visPanel.showSurfaceNormalView",true,true);
   pangolin::Var<bool> showTrajectory("visPanel.showTrajectory",true,true);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
-  pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
-  pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
-  pangolin::Var<bool> showSamplePcEst("visPanel.show Mean Sample Pc",false,true);
-  pangolin::Var<bool> showSamplePc("visPanel.show Samples of Pc",false,true);
-  pangolin::Var<bool> showPc0("visPanel.show Pc 0",false,true);
-  pangolin::Var<bool> showPcMu("visPanel.show Mean Obs Pc",false,true);
   pangolin::Var<bool> showOccThr("visPanel.show Occ Thr",false,true);
   pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
   pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
+  pangolin::Var<bool> showByValue("visPanel.show by Val",false,true);
   pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,.5);
   pangolin::Var<float> showHighPerc("visPanel.show highPerc",0.9,0.000001,.5);
-  pangolin::Var<float> showLowH("visPanel.show low H",-25,-30.,-15.0);
-  pangolin::Var<float> showHighH("visPanel.show high H",-15,-15.,-5.0);
+  pangolin::Var<float> showLowH("visPanel.show low H",-15,-20.,-10.0);
+  pangolin::Var<float> showHighH("visPanel.show high H",-5,-10.,.0);
   pangolin::Var<bool> showHp("visPanel.show Hp",false,true);
   pangolin::Var<bool> showHn("visPanel.show Hn",false,true);
   pangolin::Var<bool> showAge("visPanel.show age",false,true);
@@ -1620,6 +1614,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
+  pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
+  pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
+  pangolin::Var<bool> showSamplePcEst("visPanel.show Mean Sample Pc",false,true);
+  pangolin::Var<bool> showSamplePc("visPanel.show Samples of Pc",false,true);
+  pangolin::Var<bool> showPc0("visPanel.show Pc 0",false,true);
+  pangolin::Var<bool> showPcMu("visPanel.show Mean Obs Pc",false,true);
+  pangolin::Var<bool> showNNnum("visPanel.show NN num",false,true);
   pangolin::Var<bool> showNN("visPanel.show NN",false,true);
   pangolin::Var<bool> showPcCurrent("visPanel.show current",false,true);
   pangolin::Var<int> showPcLvl("visPanel.cur Lvl",0,0,PYR-1);
@@ -1658,6 +1659,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> gradDir_w(MAP_SIZE);
 
 
+  tdp::ManagedHostCircularBuffer<uint32_t> zSampleCount(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::VectorZfda> zSampleCounts(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::VectorZuda> zSampleIds(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<uint16_t> zMl(MAP_SIZE);
@@ -1666,6 +1668,7 @@ int main( int argc, char* argv[] )
   zSampleIds.Fill(tdp::VectorZuda::Ones()*999);
   zMl.Fill(0);
   zMlCount.Fill(0);
+  zSampleCount.Fill(0);
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> nSampleSum_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Matrix3fda> pSampleOuter_w(MAP_SIZE);
@@ -1804,7 +1807,8 @@ int main( int argc, char* argv[] )
             pl.valid_ = false;
             std::cout << "pruning " << iReadNext 
 //              << " rel val " << dist/values(0)
-              << " H " << pl.Hp_ << " HThr " << HThr 
+              << " H " << pl.Hp_ << " HThr " << pruneHThr
+              << " #obs " << pl.numObs_ << " HThr " << pruneNumObsThr
 //              << " thr " << relPruneDistThr 
               << std::endl;
 //            std::cout << values.transpose() << std::endl;
@@ -1942,7 +1946,7 @@ int main( int argc, char* argv[] )
       if (normalsP2PlContrib) {
         tdp::VectorkNNida& ids = nn.GetCircular(i);
 //        if ((ids.array() >= 0).all()) {
-        if (nnFixed[ids] == kNN)) {
+        if (nnFixed[i] == kNN) {
           Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
           Eigen::Matrix3f InfoPl;
           int32_t num = 0;
@@ -2095,8 +2099,9 @@ int main( int argc, char* argv[] )
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
               zMli, countMli);
           zTotalSampleCount ++;
-          zMaxSampleCount = std::max(zMaxSampleCount, (size_t) zSampleCounts[i]);
-          zMinSampleCount = std::max(zMinSampleCount+1, (size_t) zSampleCounts[i]);
+          zSampleCount[i]++;
+          zMaxSampleCount = std::max(zMaxSampleCount, (size_t) zSampleCount[i]);
+          zMinSampleCount = std::max(zMinSampleCount+1, (size_t) zSampleCount[i]);
 //          if (i%100) 
 //            std::cout << zSampleIds[i].transpose() << std::endl << zSampleCounts[i].transpose() << std::endl 
 //              << "ML: " << zMli << " " << countMli << " zi=" << zS[i] << std::endl;
@@ -2318,6 +2323,9 @@ int main( int argc, char* argv[] )
   if (varsVisFile.size() > 0)
     pangolin::LoadJsonFile(varsVisFile, "visPanel");
 
+  if (exitOnFinish)
+    gui.verbose=false;
+
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
@@ -2349,7 +2357,8 @@ int main( int argc, char* argv[] )
         && frame > 0
         && runMapping
         && (trackingGood || frame == 1)) { // add new observations
-      std::cout << " adding new planes to map " << std::endl;
+      if (gui.verbose) 
+        std::cout << " adding new planes to map " << std::endl;
 
       // update mask only once to know where to insert new planes
       TICK("dataAssoc");
@@ -2386,7 +2395,8 @@ int main( int argc, char* argv[] )
         iReadCurW = pl_w.iInsert_;
         std::lock_guard<std::mutex> lock(pl_wLock); 
         TICK("newPlanes");
-        ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
+        tdp::Image<uint32_t> z = pyrZ.GetImage(0);
+        ExtractPlanes(pc, rgb, z, greyFl, gradGrey,
              mask, W, frame, T_wc, Sigma_wc, cam, rho, rays, outerRaysInt,
              dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
@@ -3124,7 +3134,7 @@ int main( int argc, char* argv[] )
         if (showAge || showObs || showCurv || showGrey || showNumSum ||
             showNSampleCount || showNSamplePReject || showHn || showHp
             || showP2PlVar || showIvar || showImean || showRadius ||
-            showLabelCounts) {
+            showNNnum || showLabelCounts) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -3168,6 +3178,10 @@ int main( int argc, char* argv[] )
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
               age[i] = pl_w[i].Hn_;
             }
+          } else if (showNNnum) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
+              age[i] = nnFixed[i];
+            }
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
@@ -3175,23 +3189,20 @@ int main( int argc, char* argv[] )
           valuebo.Upload(age.ptr_, pl_w.SizeToRead()*sizeof(float), 0);
           std::pair<float,float> minMaxAge = age.GetRoi(0,0,
               pl_w.SizeToRead(),1).MinMax();
-          if (showHp){ 
-            minMaxAge.first = showLowH;
-            minMaxAge.second = showHighH;
+          if (showByValue){ 
+            showLow  = showLowH;
+            showHigh = showHighH;
+          } else {
+            showLow = minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first);
+            showHigh = minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first);
           }
+          minMaxAge.first = showLow;
+          minMaxAge.second = showHigh;
           if (gui.verbose)
             std::cout << "drawn values are min " << minMaxAge.first 
               << " max " << minMaxAge.second << std::endl;
-          showLow = minMaxAge.first;
-          showHigh = minMaxAge.second;
           tdp::RenderVboValuebo(vbo_w, valuebo, 
-              minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first),
-              minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first), 
-              P, MV);
-          if (!showHp){ 
-            showLow  = minMaxAge.first+showLowPerc*(minMaxAge.second-minMaxAge.first);
-            showHigh = minMaxAge.first+showHighPerc*(minMaxAge.second-minMaxAge.first);
-          }
+              minMaxAge.first, minMaxAge.second, P, MV);
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
@@ -3424,7 +3435,7 @@ int main( int argc, char* argv[] )
       outStats << "trackingH\t" << curTrackingH<< std::endl;
       outStats << "trackingMaxStd\t" << curTrackingMaxStd << std::endl;
       outStats << "trackingMinStd\t" << curTrackingMinStd << std::endl;
-      outStats << "pTotalNumSample\t" << pTotalNumSample << std::endl;
+      outStats << "pTotalNumSample\t" << pTotalSampleCount<< std::endl;
       outStats << "pMinNumSample\t" << pMinSampleCount<< std::endl;
       outStats << "pMaxNumSample\t" << pMaxSampleCount<< std::endl;
       outStats << "nTotalNumSample\t" << nTotalSampleCount << std::endl;
