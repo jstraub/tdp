@@ -1810,10 +1810,12 @@ int main( int argc, char* argv[] )
         }
 
         TICK("full NN pass");
+        float maxDistSq = maxNnDist*maxNnDist;
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext && pl_w[i].valid_) {
-            float dist = (pl.p0_-pl_w[i].p0_).squaredNorm();
-            tdp::AddToSortedIndexList<kNN>(ids, values, i, dist);
+            float distSq = (pl.p0_-pl_w[i].p0_).squaredNorm();
+            if (distSq > maxDistSq)
+              tdp::AddToSortedIndexList<kNN>(ids, values, i, distSq);
 //            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
@@ -1821,15 +1823,14 @@ int main( int argc, char* argv[] )
 
         // for map constraints
         // TODO: should be updated as pairs are reobserved
-        nnFixed[iReadNext] = kNN;
+        nnFixed[iReadNext] = 0;
         for (int32_t i=0; i<kNN; ++i) {
-//            if (ids(i) != idsPrev(i)) {
-//              numSamplesZ[iReadNext][i] = 0;
-//              sumSameZ[iReadNext][i] = 0;
-//            }
-          if (values(i) > maxNnDist*maxNnDist) {
-            ids(i) = -1;
-            nnFixed[iReadNext]-- ;
+////            if (ids(i) != idsPrev(i)) {
+////              numSamplesZ[iReadNext][i] = 0;
+////              sumSameZ[iReadNext][i] = 0;
+////            }
+          if (ids(i) >= 0) {
+            nnFixed[iReadNext]++;
           }
         }
         // just for visualization
@@ -1932,7 +1933,8 @@ int main( int argc, char* argv[] )
       }
       if (normalsP2PlContrib) {
         tdp::VectorkNNida& ids = nn.GetCircular(i);
-        if ((ids.array() >= 0).all()) {
+//        if ((ids.array() >= 0).all()) {
+        if (nnFixed[ids] == kNN)) {
           Eigen::Matrix3f Info = Eigen::Matrix3f::Zero();
           Eigen::Matrix3f InfoPl;
           int32_t num = 0;
@@ -2136,8 +2138,9 @@ int main( int argc, char* argv[] )
       if (!pl.valid_) continue;
       if (pl.numObs_ < delayPlaneSampleNumObs) continue;
       tdp::VectorkNNida& ids = nn.GetCircular(i);
-      bool haveFullNeighborhood = (ids.array() >= 0).all();
-      if (haveFullNeighborhood && numSum_w[i] > 0) {
+//      bool haveFullNeighborhood = (ids.array() >= 0).all();
+//      if (haveFullNeighborhood && numSum_w[i] > 0) {
+      if (nnFixed[i] == kNN && numSum_w[i] > 0) {
         Eigen::Matrix3f Info = pcObsInfo_w[i]; 
         Eigen::Vector3f xi =   pcObsXi_w[i]; 
         Eigen::Matrix3f InfoPl;
