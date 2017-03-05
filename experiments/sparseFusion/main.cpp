@@ -1502,6 +1502,8 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
   pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",true,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
+  pangolin::Var<bool> savePcOnFinish("mapPanel.save Pc on Finish",true, true);
+  pangolin::Var<bool> exitOnFinish("mapPanel.exit on Finish",false, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
 //  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
   pangolin::Var<bool> useSurfNormalObs("mapPanel.use SurfNormal Obs",true,true);
@@ -2303,7 +2305,6 @@ int main( int argc, char* argv[] )
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
 
-
   pangolin::SaveJsonFile("./varsUi.json", "ui");
   pangolin::SaveJsonFile("./varsMap.json", "mapPanel");
   pangolin::SaveJsonFile("./varsVis.json", "visPanel");
@@ -2340,13 +2341,6 @@ int main( int argc, char* argv[] )
     }
     if (pangolin::Pushed(icpReset)) {
       T_wc = tdp::SE3f();
-    }
-    if (pangolin::Pushed(savePly)) {
-      std::string path = pangolin::MakeUniqueFilename("./surfelMap.ply");
-      std::vector<std::string> comments;
-      comments.push_back(input_uri);
-      comments.push_back(calibPath);
-      tdp::SavePointCloud(path, pc_w, n_w, rgb_w, true, comments);
     }
 
     idNew.clear();
@@ -3455,6 +3449,18 @@ int main( int argc, char* argv[] )
         << T_wc.rotation().vector()(3) << std::endl;  // qw
     }
     TOCK("FullLoop");
+
+    if ((gui.finished() && savePcOnFinish) || pangolin::Pushed(savePly)) {
+      std::string path = pangolin::MakeUniqueFilename("./surfelMap.ply");
+      std::vector<std::string> comments;
+      comments.push_back(input_uri);
+      comments.push_back(calibPath);
+      tdp::SavePointCloud(path, pc_w, n_w, rgb_w, true, comments);
+    }
+    if (gui.finished() && exitOnFinish) {
+      break;
+    }
+
   }
   out.close();
   outT.close();
