@@ -1489,7 +1489,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pruneNumObsThr("ui.prune NumObsThr",10,3,30);
   pangolin::Var<int> survivalTime("ui.survival Time",100,0,200);
   pangolin::Var<int> minNumObs("ui.min Obs",10,1,20);
-  pangolin::Var<int> numAdditionalObs("ui.num add Obs",3000,0,1000);
+  pangolin::Var<int> numObsToTake("ui.num Obs2take",1000,0,1000);
 
   pangolin::Var<int> smoothGrey("ui.smooth grey",1,0,2);
   pangolin::Var<int> smoothGreyPyr("ui.smooth grey pyr",1,0,1);
@@ -2862,7 +2862,10 @@ int main( int argc, char* argv[] )
         TICK("updatePlanes");
 //        size_t numNN = 0;
 //        tdp::SE3f T_cw = T_wc.Inverse();
+        uint32_t j = 0;
         for (const auto& ass : assoc) {
+          if (j++ >= numObsToTake) 
+            break;
           size_t i = ass.first;
           tdp::Plane& pl = pl_w[i];
           if (!pl.valid_)
@@ -2930,9 +2933,8 @@ int main( int argc, char* argv[] )
             pl.grey_ = ImSum[i]/ImCount[i];
           }
         }
-        uint32_t j = 0;
         for (auto& i : *idsCur[0]) {
-          if (pl_w[i].lastFrame_ < frame && j++ < numAdditionalObs) {
+          if (pl_w[i].lastFrame_ < frame && j++ < numObsToTake) {
             tdp::Plane& pl = pl_w[i];
             int32_t u, v;
             if (!ProjectiveAssocOcl(pl, T_wc, cam, d, occlusionDepthThr, u, v))
@@ -2940,7 +2942,7 @@ int main( int argc, char* argv[] )
             if (!EnsureNormal(pc, dpc, rho, rays, outerRaysInt, W, n,
                   curv, rad, u, v, normalExtractMethod))
               continue;
-//            std::cout << " adding " << j << " of " << numAdditionalObs 
+//            std::cout << " adding " << j << " of " << numObsToTake 
 //              << " id " << i << " uv " << u << "," << v << std::endl;
             numProjected = numProjected + 1;
             tdp::Vector3fda n_c_in_w = T_wc.rotation()*n(u,v);
