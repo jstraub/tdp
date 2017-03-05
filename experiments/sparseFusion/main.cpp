@@ -1914,8 +1914,8 @@ int main( int argc, char* argv[] )
 //        sizeToReadPrev = sizeToRead;
 ////        nTotalSampleCount += sizeToRead;
 //      }
-//      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
-      float pDontSample = ((float)nSampleCount[i])/((float)nMaxSampleCount+alphaSchedule);
+      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
+//      float pDontSample = ((float)nSampleCount[i])/((float)nMaxSampleCount+alphaSchedule);
       nSamplePReject[i] = pDontSample;
       if (sampleScheduling && coin(rnd) < pDontSample)  {
 //        std::cout << " normals skipping " << i << std::endl;
@@ -2142,7 +2142,8 @@ int main( int argc, char* argv[] )
 //        sizeToReadPrev = sizeToRead;
 ////        pTotalSampleCount+=sizeToRead;
 //      }
-      float pDontSample = ((float)pSampleCount[i])/((float)pMaxSampleCount+alphaSchedule);
+      float pDontSample = ((float)pSampleCount[i]+alphaSchedule)/((float)pTotalSampleCount+alphaSchedule);
+//      float pDontSample = ((float)pSampleCount[i])/((float)pMaxSampleCount+alphaSchedule);
       if (sampleScheduling && coin(rnd) < pDontSample)  {
         continue;
       }
