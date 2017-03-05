@@ -1483,6 +1483,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.loopCloseGeom",false,true);
 
+  pangolin::Var<bool> freeSpaceCarving("mapPanel.free space carve",false,true);
   pangolin::Var<bool> pruneNoise("mapPanel.prune Noise",true,true);
   pangolin::Var<float> relPruneDistThr("mapPanel.rel prune dist Thr",3.,1.,10);
   pangolin::Var<float> pruneHThr("mapPanel.prune H Thr",-7.5,-20.,-0.);
@@ -1776,7 +1777,6 @@ int main( int argc, char* argv[] )
       if (newIds.size() == 0) {
         std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
         newIds.push_back(unif(rnd));
-//        std::cout << "sampled next id :" << newIds.back() << "/" << sizeToRead << std::endl;
       }
       iReadNext = newIds.front();
       newIds.pop_front();
@@ -1790,44 +1790,13 @@ int main( int argc, char* argv[] )
         tdp::VectorkNNida idsPrev = ids;
         ids = tdp::VectorkNNida::Ones()*(-1);
 
-        if (pruneNoise) {
-//          std::cout << "checking prune on " << iReadNext 
-//            << " time " << pl.lastFrame_ << " now " << frame << std::endl;
-          if (pl.lastFrame_+survivalTime < frame && pl.Hp_ > pruneHThr
-              && pl.numObs_ < pruneNumObsThr) {
-//          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
-////          std::cout << iReadNext << ": " 
-////            << dist  <<  " vs " << values(0) 
-////            << " frac " << dist/values(0) 
-////            << std::endl;
-//          if (dist/values(0) > relPruneDistThr
-//              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
-            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
-            n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
-            pl.valid_ = false;
-            std::cout << "pruning " << iReadNext 
-//              << " rel val " << dist/values(0)
-              << " H " << pl.Hp_ << " HThr " << pruneHThr
-              << " #obs " << pl.numObs_ << " HThr " << pruneNumObsThr
-//              << " thr " << relPruneDistThr 
-              << std::endl;
-//            std::cout << values.transpose() << std::endl;
-            numPruned = numPruned +1;
-//          }
-            for (int32_t i=0; i<kNN; ++i) 
-              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, -1);
-            continue;
-          }
-        }
-
         TICK("full NN pass");
         float maxDistSq = maxNnDist*maxNnDist;
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext && pl_w[i].valid_) {
             float distSq = (pl.p0_-pl_w[i].p0_).squaredNorm();
-            if (distSq > maxDistSq)
+            if (distSq < maxDistSq)
               tdp::AddToSortedIndexList<kNN>(ids, values, i, distSq);
-//            std::cout << i << ", " << dist << "| " <<  ids.transpose() << " : " << values.transpose() << std::endl;
           }
         }
         TOCK("full NN pass");
@@ -1836,12 +1805,30 @@ int main( int argc, char* argv[] )
         // TODO: should be updated as pairs are reobserved
         nnFixed[iReadNext] = 0;
         for (int32_t i=0; i<kNN; ++i) {
-////            if (ids(i) != idsPrev(i)) {
-////              numSamplesZ[iReadNext][i] = 0;
-////              sumSameZ[iReadNext][i] = 0;
-////            }
           if (ids(i) >= 0) {
             nnFixed[iReadNext]++;
+          }
+        }
+
+        if (pruneNoise) {
+          if (pl.lastFrame_+survivalTime < frame 
+             && ((pl.Hp_ > pruneHThr && pl.numObs_ < pruneNumObsThr)
+              || nnFixed[iReadNext] < kNN)) {
+//          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
+//          if (dist/values(0) > relPruneDistThr
+//              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
+            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
+            pl.valid_ = false;
+            std::cout << "pruning " << iReadNext 
+              << " NN " << int(nnFixed[iReadNext])
+              << " H " << pl.Hp_ << " HThr " << pruneHThr
+              << " #obs " << pl.numObs_ << " HThr " << pruneNumObsThr
+              << std::endl;
+            numPruned = numPruned +1;
+            for (int32_t i=0; i<kNN; ++i) 
+              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, -1);
+            continue;
           }
         }
         // just for visualization
@@ -2383,9 +2370,18 @@ int main( int argc, char* argv[] )
             occlusionDepthThr, dMin, dMax, ICPmaxLvl, pyrZ, pyrMask,
             idsCur);
       }
+      if (freeSpaceCarving) { 
+        tdp::Image<uint32_t> z = pyrZ.GetImage(0);
+        for (auto& id : *idsCur[0]) {
+          uint32_t u = id%wc;
+          uint32_t v = id/wc;
+//          z[id] 
+        }
+      }
       TOCK("extractAssoc");
-      pyrMaskDisp.CopyFrom(pyrMask);
-
+      if (viewMask.IsShown()) {
+        pyrMaskDisp.CopyFrom(pyrMask);
+      }
       TICK("mask");
       tdp::GradientNormBiasedResampleEmptyPartsOfMask(pc, cam, mask,
           greyGradNorm, W, subsample, gen, 32, 32, w, h, pUniform, idNew);

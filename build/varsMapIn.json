@@ -9,7 +9,7 @@
     "mapPanel.est SigmaPl": "0",
     "mapPanel.estimate TauO": "0",
     "mapPanel.lamb z MRF": "0.1",
-    "mapPanel.max NN Dist": "0.2",
+    "mapPanel.max NN Dist": "0.20",
     "mapPanel.ns P2Pl contrib": "1",
     "mapPanel.obsSigmaInfl": "1",
     "mapPanel.revisit NNs": "1",
@@ -27,6 +27,7 @@
     "mapPanel.prune Noise": "1",
     "mapPanel.prune NumObsThr": "10",
     "mapPanel.rel prune dist Thr": "3",
+    "mapPanel.survival Time": "10",
     "mapPanel.use tracking uncertainty": "1"
   }
 }
