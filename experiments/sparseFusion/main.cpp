@@ -1535,10 +1535,13 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> maxIt2("icpPanel.max iter 2",10, 1, 20);
   pangolin::Var<int> maxIt3("icpPanel.max iter 3",15, 1, 20);
   pangolin::Var<int> ICPmaxLvl("icpPanel.icp max lvl",0, 0, PYR-1);
+  pangolin::Var<int> maxObsIcp("icpPanel.max obs icp",1000, 1, 1000);
 
   pangolin::Var<bool> pruneAssocByRender("icpPanel.prune assoc by render",true,true);
   pangolin::Var<bool> semanticObsSelect("icpPanel.semObsSelect",true,true);
   pangolin::Var<bool> sortByGradient("icpPanel.sortByGradient",true,true);
+
+  pangolin::Var<bool> greyScaleFromExpectation("icpPanel.grey from Expect",true,true);
 
   pangolin::Var<int> dtAssoc("icpPanel.dtAssoc",5000,1,1000);
   pangolin::Var<float> lambdaNs("icpPanel.lamb Ns",0.1,0.001,1.);
@@ -1883,7 +1886,7 @@ int main( int argc, char* argv[] )
     std::mt19937 rnd(19201420);
     std::uniform_real_distribution<float> coin(0, 1);
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
-    TICK("sample normals");
+    TICK("sampleNormals");
     while(runSampling.Get()) {
       if (i%100 == 0 || sizeToRead == 0) {
         {
@@ -1894,8 +1897,8 @@ int main( int argc, char* argv[] )
       if (sizeToRead ==0) continue;
       i = (i+1)% sizeToRead;
       if (i==0) {
-        TOCK("sample normals");
-        TICK("sample normals");
+        TOCK("sampleNormals");
+        TICK("sampleNormals");
       }
 //      if (sizeToRead > sizeToReadPrev) {
 //        i = sizeToReadPrev;
@@ -1995,7 +1998,7 @@ int main( int argc, char* argv[] )
         iInsert = nn.iInsert_;
       }
       if (iInsert == 0) continue;
-      TICK("sample labels");
+      TICK("sampleLabels");
       pS.iInsert_ = nn.iInsert_;
       nS.iInsert_ = nn.iInsert_;
       size_t Ksample = vmfs.size();
@@ -2049,8 +2052,8 @@ int main( int argc, char* argv[] )
           vmfSS[zi](3) ++;
         }
       }
-      TOCK("sample labels");
-      TICK("sample params");
+      TOCK("sampleLabels");
+      TICK("sampleParams");
       std::vector<uint32_t> labelMap(Ksample);
       std::iota(labelMap.begin(), labelMap.end(), 0);
       size_t j=0;
@@ -2094,7 +2097,7 @@ int main( int argc, char* argv[] )
         }
         K = Ksample;
       }
-      TOCK("sample params");
+      TOCK("sampleParams");
     };
   });
 
@@ -2117,8 +2120,8 @@ int main( int argc, char* argv[] )
       if (sizeToRead ==0) continue;
       i = (i+1)% sizeToRead;
       if (i==0) {
-        TOCK("sample normals");
-        TICK("sample normals");
+        TOCK("samplePoints");
+        TICK("samplePoints");
       }
 //      if (sizeToRead > sizeToReadPrev) {
 //        i = sizeToReadPrev;
@@ -2132,7 +2135,6 @@ int main( int argc, char* argv[] )
       tdp::Plane& pl = pl_w[i];
       if (!pl.valid_) continue;
       if (pl.numObs_ < delayPlaneSampleNumObs) continue;
-      TICK("sample points");
       tdp::VectorkNNida& ids = nn.GetCircular(i);
       bool haveFullNeighborhood = (ids.array() >= 0).all();
       if (haveFullNeighborhood && numSum_w[i] > 0) {
@@ -2248,7 +2250,6 @@ int main( int argc, char* argv[] )
         //          pl.Hp_ = -Info.eigenvalues().real().array().log().sum();
       }
       idMapUpdate = i;
-      TOCK("sample points");
 //      pS.iInsert_ = sizeToRead;
 //      nS.iInsert_ = sizeToRead;
     };
@@ -2300,6 +2301,7 @@ int main( int argc, char* argv[] )
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    TICK("FullLoop");
     if (showVisPanel.GuiChanged()) {
       pangolin::Display("visPanel").Show(showVisPanel);
     }
@@ -2337,11 +2339,11 @@ int main( int argc, char* argv[] )
       std::cout << " adding new planes to map " << std::endl;
 
       // update mask only once to know where to insert new planes
-      TICK("data assoc");
+      TICK("dataAssoc");
       projAssoc.Associate(vbo_w, nbo_w, tbo, T_wc.Inverse(), dMin,
           dMax, std::max(0, frame-dtAssoc), pl_w.SizeToRead());
-      TOCK("data assoc");
-      TICK("extract assoc");
+      TOCK("dataAssoc");
+      TICK("extractAssoc");
 //      z.Fill(0);
       for (size_t lvl=0; lvl<PYR; ++lvl) idsCur[lvl]->clear();
 //      projAssoc.GetAssoc(z, mask, idsCur);
@@ -2358,7 +2360,7 @@ int main( int argc, char* argv[] )
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
             occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
       }
-      TOCK("extract assoc");
+      TOCK("extractAssoc");
       pyrMaskDisp.CopyFrom(pyrMask);
 
       TICK("mask");
@@ -2370,16 +2372,16 @@ int main( int argc, char* argv[] )
       {
         iReadCurW = pl_w.iInsert_;
         std::lock_guard<std::mutex> lock(pl_wLock); 
-        TICK("normals");
+        TICK("newPlanes");
         ExtractPlanes(pc, rgb, grey, greyFl, gradGrey,
              mask, W, frame, T_wc, Sigma_wc, cam, rho, rays, outerRaysInt,
              dpc, pl_w, pc_w, pcObsInfo_w,
              pSampleCov_w, rgb_w, n_w, grad_w, ImSum, ImSqSum, ImCount,
              ImVar, rs, ts, normalExtractMethod, useTrackingUncertainty);
 
-        std::cout << " extracted " << pl_w.iInsert_-iReadCurW << " new planes " << std::endl;
-        TOCK("normals");
-        TICK("add to model");
+        if (gui.verbose)
+          std::cout << " extracted " << pl_w.iInsert_-iReadCurW 
+            << " new planes " << std::endl;
         for (int32_t i = iReadCurW; i != pl_w.iInsert_; i = (i+1)%pl_w.w_) {
           gradDir_w[i] = pl_w[i].grad_.normalized();
          
@@ -2393,6 +2395,7 @@ int main( int argc, char* argv[] )
           tauOSum_w[i] = pl_w[i].curvature_;
           idsCur[0]->emplace_back(i);
         }
+        TOCK("newPlanes");
       }
 //      vbo_w.Upload(pc_w.ptr_, pc_w.SizeBytes(), 0);
       vbo_w.Upload(&pc_w.ptr_[iReadCurW], 
@@ -2410,12 +2413,11 @@ int main( int argc, char* argv[] )
 
       for (size_t lvl=0; lvl<PYR; ++lvl) {
         std::random_shuffle(idsCur[lvl]->begin(), idsCur[lvl]->end());
-        std::cout << "@" << lvl <<  " lvl projected " 
-          << idsCur[lvl]->size() 
-          << " of " << pl_w.SizeToRead() << std::endl;
+        if (gui.verbose)
+          std::cout << "@" << lvl <<  " lvl projected " 
+            << idsCur[lvl]->size() 
+            << " of " << pl_w.SizeToRead() << std::endl;
       }
-
-      TOCK("add to model");
       numMapPoints = pl_w.SizeToRead();
       TICK("inverseIndex");
       {
@@ -2490,16 +2492,18 @@ int main( int argc, char* argv[] )
           }
         }
       }
-      std::cout << " inverse index " << invInd.size()  << std::endl;
-      for (size_t lvl=0; lvl<PYR; ++lvl) {
-        std::cout << "@" << lvl << " lvl: " << idsCur[lvl]->size() << " " << id_w.size() << std::endl;
-        std::cout << "      ";
-        for (size_t k=0; k<invInd[lvl]->size(); ++k) 
-          std::cout << invInd[lvl]->at(k).size() << " ";
-        std::cout << std::endl;
-      }
-      std::cout << " inverse done" << std::endl;
       TOCK("inverseIndex");
+      if (gui.verbose) {
+        std::cout << " inverse index " << invInd.size()  << std::endl;
+        for (size_t lvl=0; lvl<PYR; ++lvl) {
+          std::cout << "@" << lvl << " lvl: " << idsCur[lvl]->size() << " " << id_w.size() << std::endl;
+          std::cout << "      ";
+          for (size_t k=0; k<invInd[lvl]->size(); ++k) 
+            std::cout << invInd[lvl]->at(k).size() << " ";
+          std::cout << std::endl;
+        }
+        std::cout << " inverse done" << std::endl;
+      }
     }
 
 //    glClearColor(bgGrey, bgGrey, bgGrey, 1.0f);
@@ -2584,7 +2588,7 @@ int main( int argc, char* argv[] )
         tdp::SO3f R_cp;
         if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
         if (useGpuPrealign) {
-          TICK("icp RGB GPU");
+          TICK("icpRGBGPU");
           std::vector<size_t> maxIt(PYR, 0);
           for (int32_t pyr=SO3maxLvl; pyr>=SO3minLvl; --pyr) {
             maxIt[pyr] = SO3maxIt*(pyr-SO3minLvl)+1;
@@ -2592,9 +2596,9 @@ int main( int argc, char* argv[] )
           tdp::PhotometricSO3::ComputeProjective(cuPyrGreyFlPrev,
               cuPyrGreyFlSmooth, cuPyrGradGrey, cuPyrRay, cam, maxIt,
               gui.verbose, R_cp);
-          TOCK("icp RGB GPU");
+          TOCK("icpRGBGPU");
         } else {
-          TICK("icp RGB");
+          TICK("icpRGB");
           Eigen::Matrix<float,3,3> A;
           Eigen::Matrix<float,3,1> b;
           Eigen::Matrix<float,3,1> Ai;
@@ -2643,7 +2647,7 @@ int main( int argc, char* argv[] )
   //            if (term) break;
             }
           }
-          TOCK("icp RGB");
+          TOCK("icpRGB");
         }
         T_wc.rotation() = T_wc.rotation() * R_cp.Inverse();
       }
@@ -2675,7 +2679,7 @@ int main( int argc, char* argv[] )
           tdp::Image<tdp::Vector6dda> outerRaysIntLvl = pyrOuterRaysInt.GetImage(pyr);
           if (gui.verbose) std::cout << "pyramid lvl " << pyr << " scale " << scale << std::endl;
           for (size_t it = 0; it < maxItLvl[pyr]; ++it) {
-            TICK("icp it");
+            TICK("icpIt");
             for (auto& ass : assoc) mask[ass.second] = 0;
             assoc.clear();
             indK = std::vector<size_t>(invInd[pyr]->size(),0);
@@ -2694,9 +2698,8 @@ int main( int argc, char* argv[] )
             // associate new data until enough
             bool exploredAll = false;
             uint32_t k = 0;
-            while (assoc.size() < 3000 && !exploredAll) {
+            while (assoc.size() < maxObsIcp && !exploredAll) {
               k = (k+1) % invInd[pyr]->size();
-              TICK("icp one pt");
               while (indK[k] < invInd[pyr]->at(k).size()) {
                 size_t i = invInd[pyr]->at(k)[indK[k]++];
                 tdp::Plane& pl = pl_w.GetCircular(i);
@@ -2769,7 +2772,6 @@ int main( int argc, char* argv[] )
                 assoc.emplace_back(i,u+v*pc.w_);
                 break;
               }
-              TOCK("icp one pt");
               if (k == 0) {
                 if (tdp::CheckEntropyTermination(A, Hprev, HThr+pyr*dPyrHThr, condEntropyThr, 
                       negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose))
@@ -2798,7 +2800,7 @@ int main( int argc, char* argv[] )
                   negLogEvThr+pyr*dPyrNewLogEvHThr, H, gui.verbose)) {
               break;
             }
-            TOCK("icp it");
+            TOCK("icpIt");
           }
         }
         logObs.Log(log(assoc.size())/log(10.), 
@@ -2833,7 +2835,6 @@ int main( int argc, char* argv[] )
 //        } else {
           Sigma_wc = A.inverse();
 //        }
-        std::cout << "Sigma_wc" << std::endl << Sigma_wc << std::endl;
 
         trackingGood = (H <= HThr && assoc.size() > 10) || assoc.size() > 0.5*idsCur[0]->size();
         TOCK("icp");
@@ -2842,7 +2843,7 @@ int main( int argc, char* argv[] )
 
       if (trackingGood) {
         std::lock_guard<std::mutex> mapGuard(mapLock);
-        TICK("update planes");
+        TICK("updatePlanes");
 //        size_t numNN = 0;
 //        tdp::SE3f T_cw = T_wc.Inverse();
         for (const auto& ass : assoc) {
@@ -2902,12 +2903,15 @@ int main( int argc, char* argv[] )
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
-          if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
+          if (samplePoints && ProjectiveAssocOcl(pS[i], T_wc, cam, d,
                 occlusionDepthThr, u, v)) {
             ImSum[i] += greyFl(u,v);
             ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
             ImCount[i] ++;
             ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
+          }
+          if (samplePoints && greyScaleFromExpectation && ImCount[i] > 0) {
+            pl.grey_ = ImSum[i]/ImCount[i];
           }
         }
         uint32_t j = 0;
@@ -2972,19 +2976,21 @@ int main( int argc, char* argv[] )
             grad_w[i] = pl.grad_;
             gradDir_w[i] = grad_w[i].normalized();
 
-            if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
+            if (samplePoints && ProjectiveAssocOcl(pS[i], T_wc, cam, d,
                   occlusionDepthThr, u, v)) {
               ImSum[i] += greyFl(u,v);
               ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
               ImCount[i] ++;
               ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
             }
-
+            if (samplePoints && greyScaleFromExpectation && ImCount[i] > 0) {
+              pl.grey_ = ImSum[i]/ImCount[i];
+            }
           }
         }
         
 //        if (gui.verbose) std::cout << "num NN measured " << numNN << std::endl;
-        TOCK("update planes");
+        TOCK("updatePlanes");
       }
     }
 
@@ -3022,7 +3028,7 @@ int main( int argc, char* argv[] )
       frame ++;
 
     if (gui.verbose) std::cout << "draw 3D" << std::endl;
-    TICK("Draw 3D");
+    TICK("Draw3D");
 
     if (showPcCurrent) {
       TICK("Draw 3D vbo cbo upload");
@@ -3078,16 +3084,16 @@ int main( int argc, char* argv[] )
         pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
       }
 
-      TICK("Draw 3D nbo upload");
+      TICK("Draw3DnboUpload");
       if (showSamples) {
         nbo_w.Upload(nS.ptr_, n_w.SizeToReadBytes(), 0);
       } else {
         nbo_w.Upload(n_w.ptr_, n_w.SizeToReadBytes(), 0);
       }
-      TOCK("Draw 3D nbo upload");
+      TOCK("Draw3DnboUpload");
 
       if (showFullPc) {
-        TICK("Draw 3D render PC");
+        TICK("Draw3DrenderPC");
         // TODO I should not need to upload all of pc_w everytime;
         // might break things though
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeToReadBytes(), 0);
@@ -3155,8 +3161,9 @@ int main( int argc, char* argv[] )
             minMaxAge.first = showLowH;
             minMaxAge.second = showHighH;
           }
-          std::cout << "drawn values are min " << minMaxAge.first 
-            << " max " << minMaxAge.second << std::endl;
+          if (gui.verbose)
+            std::cout << "drawn values are min " << minMaxAge.first 
+              << " max " << minMaxAge.second << std::endl;
           showLow = minMaxAge.first;
           showHigh = minMaxAge.second;
           tdp::RenderVboValuebo(vbo_w, valuebo, 
@@ -3180,7 +3187,7 @@ int main( int argc, char* argv[] )
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
         if (showNN) {
-          TICK("Draw 3D render NN");
+          TICK("Draw3DrenderNN");
 //          std::cout << pl_w.SizeToRead() << " vs " << mapNN.size() << " -> "
 //             << mapNN.size()/kNN << std::endl;
 //          for (auto& ass : mapNN) {
@@ -3191,28 +3198,26 @@ int main( int argc, char* argv[] )
               tdp::glDrawLine(pl_w[ass.first].p_, pl_w[ass.second].p_);
             }
           }
-          TOCK("Draw 3D render NN");
+          TOCK("Draw3DrenderNN");
         }
-        TOCK("Draw 3D render PC");
+        TOCK("Draw3DrenderPC");
       }
 
       if (showNormals) {
-        TICK("Draw 3D render normals");
+        TICK("Draw3DrenderNormals");
         tdp::ShowCurrentNormals(pc, n, assoc, T_wc, scale);
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<n_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + scale*n_w.GetCircular(i));
         }
-        TOCK("Draw 3D render normals");
+        TOCK("Draw3DrenderNormals");
       } else if (showGrads) {
-        TICK("Draw 3D render grads");
         glColor4f(0,1,0,0.5);
         for (size_t i=0; i<grad_w.SizeToRead(); i+=step) {
           tdp::glDrawLine(pc_w.GetCircular(i), 
               pc_w.GetCircular(i) + 10.*scale*grad_w.GetCircular(i));
         }
-        TOCK("Draw 3D render grads");
       }
 
       // render current camera second in the propper frame of
@@ -3306,7 +3311,8 @@ int main( int argc, char* argv[] )
         for (size_t k=0; k<vmfs.size(); ++k) {
           if (vmfSS[k](3) > 0 && vmfs[k].tau_ > 0) {
             tdp::glDrawLine(tdp::Vector3fda::Zero(), vmfs[k].mu_);
-            std::cout << "vmf " << k << " tau: " << vmfs[k].tau_ << std::endl;
+            if (gui.verbose) 
+              std::cout << "vmf " << k << " tau: " << vmfs[k].tau_ << std::endl;
           }
         }
       }
@@ -3325,9 +3331,9 @@ int main( int argc, char* argv[] )
       pangolin::RenderVbo(gradbo_w);
     }
 
-    TOCK("Draw 3D");
+    TOCK("Draw3D");
     if (gui.verbose) std::cout << "draw 2D" << std::endl;
-    TICK("Draw 2D");
+    TICK("Draw2D");
     glLineWidth(1.5f);
     glDisable(GL_DEPTH_TEST);
     if (viewGreyGradNorm.IsShown()) {
@@ -3373,7 +3379,7 @@ int main( int argc, char* argv[] )
       plotEv.ScrollView(1,0);
     }
 
-    TOCK("Draw 2D");
+    TOCK("Draw2D");
     if (pangolin::Pushed(snapShot)) {
       std::string name = tdp::MakeUniqueFilename("sparseFusion.png");
       name = std::string(name.begin(), name.end()-4);
@@ -3386,8 +3392,11 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
-    Stopwatch::getInstance().logAll(outT);
-    Stopwatch::getInstance().sendAll();
+    if (!gui.finished()) {
+      outT << "Frame " << frame << std::endl;
+      Stopwatch::getInstance().logAll(outT);
+      Stopwatch::getInstance().sendAll();
+    }
     pangolin::FinishFrame();
 
     if (!gui.finished() && !gui.paused()) {
@@ -3405,6 +3414,7 @@ int main( int argc, char* argv[] )
         << T_wc.rotation().vector()(2) << " "  // qz
         << T_wc.rotation().vector()(3) << std::endl;  // qw
     }
+    TOCK("FullLoop");
   }
   out.close();
   outT.close();

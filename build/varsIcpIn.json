@@ -24,7 +24,7 @@
     "icpPanel.max iter 1": "7",
     "icpPanel.max iter 2": "10",
     "icpPanel.max iter 3": "15",
-    "icpPanel.neg log ev Thr": "-11.8",
+    "icpPanel.neg log ev Thr": "-10.8",
     "icpPanel.num sigma ocl": "20",
     "icpPanel.occlusion D Thr": "0.06",
     "icpPanel.p2pl Thr": "0.03",
@@ -39,6 +39,7 @@
     "icpPanel.use Tex ICP": "1",
     "icpPanel.use Tex&Ns ICP": "0",
     "icpPanel.use sigma in ocl": "1",
+    "icpPanel.grey from Expect": "0",
     "icpPanel.use vMF means": "0"
   }
 }
