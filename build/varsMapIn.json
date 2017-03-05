@@ -1,0 +1,27 @@
+{
+  "pangolin_version": "0.4",
+  "vars": {
+    "mapPanel.alpha Schedule": "10",
+    "mapPanel.delay pSample Nobs": "30",
+    "mapPanel.condHThr": "0.01",
+    "mapPanel.count Thr": "5",
+    "mapPanel.est SigmaIm": "0",
+    "mapPanel.est SigmaPl": "0",
+    "mapPanel.estimate TauO": "0",
+    "mapPanel.lamb z MRF": "0.1",
+    "mapPanel.max NN Dist": "0.2",
+    "mapPanel.ns P2Pl contrib": "1",
+    "mapPanel.obsSigmaInfl": "1",
+    "mapPanel.revisit NNs": "1",
+    "mapPanel.run mapping": "1",
+    "mapPanel.sample scheduling": "0",
+    "mapPanel.samplePoints": "1",
+    "mapPanel.sigmaPl": "0.06",
+    "mapPanel.tauO": "100",
+    "mapPanel.update map": "1",
+    "mapPanel.use OtherNi": "0",
+    "mapPanel.use SurfNormal Obs": "1",
+    "mapPanel.use sigmaPl": "1",
+    "mapPanel.use tracking uncertainty": "1"
+  }
+}

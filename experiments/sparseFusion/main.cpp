@@ -1518,8 +1518,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> sigmaPl("mapPanel.sigmaPl",0.01,0.01,.2);
   pangolin::Var<bool> estSigmaPl("mapPanel.est SigmaPl",false,true);
   pangolin::Var<bool> estSigmaIm("mapPanel.est SigmaIm",false,true);
+  pangolin::Var<int> delayPlaneSampleNumObs("mapPanel.delay pSample Nobs",10,1,100);
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
-  pangolin::Var<float> initObsStdInflation("mapPanel.initObsSigmaInfl",3,1,100);
+  pangolin::Var<float> initObsStdInflation("mapPanel.initObsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
   pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",10., 0.001, 1.);
   pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
@@ -1587,7 +1588,9 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
   pangolin::Var<bool> showSamplePcEst("visPanel.show Mean Sample Pc",false,true);
   pangolin::Var<bool> showSamplePc("visPanel.show Samples of Pc",false,true);
+  pangolin::Var<bool> showPc0("visPanel.show Pc 0",false,true);
   pangolin::Var<bool> showPcMu("visPanel.show Mean Obs Pc",false,true);
+  pangolin::Var<bool> showOccThr("visPanel.show Occ Thr",false,true);
   pangolin::Var<float> showLow("visPanel.show low",0.,0.,0.);
   pangolin::Var<float> showHigh("visPanel.show high",0.,0.,0.);
   pangolin::Var<float> showLowPerc("visPanel.show lowPerc",0.1,0.,.5);
@@ -2102,6 +2105,7 @@ int main( int argc, char* argv[] )
     std::uniform_real_distribution<float> coin(0, 1);
     // sample points
     while(runSampling.Get()) {
+      if (!samplePoints) continue;
       if (i%100 == 0 || sizeToRead == 0) {
         {
           std::lock_guard<std::mutex> lock(nnLock); 
@@ -2119,9 +2123,9 @@ int main( int argc, char* argv[] )
       if (sampleScheduling && coin(rnd) < pDontSample)  {
         continue;
       }
-
       tdp::Plane& pl = pl_w[i];
       if (!pl.valid_) continue;
+      if (pl.numObs_ < delayPlaneSampleNumObs) continue;
       TICK("sample points");
       tdp::VectorkNNida& ids = nn.GetCircular(i);
       bool haveFullNeighborhood = (ids.array() >= 0).all();
@@ -2337,9 +2341,12 @@ int main( int argc, char* argv[] )
 //      projAssoc.GetAssocOcclusion(pl_w, pc, T_wc.Inverse(),
 //          occlusionDepthThr, z, mask, idsCur);
       if (sigmaOclusion) {
-        projAssoc.GetAssocOcclusion(pl_w, pSampleCov_w, pyrPc, pyrRay,
-            T_wc.Inverse(), numSigmaOclusion, dMin, dMax, pyrZ,
+        projAssoc.GetAssocOcclusion(pl_w, pyrPc, pyrRay,
+            T_wc.Inverse(), Sigma_wc, numSigmaOclusion, dMin, dMax, pyrZ,
             pyrMask, idsCur);
+//        projAssoc.GetAssocOcclusion(pl_w, pSampleCov_w, pyrPc, pyrRay,
+//            T_wc.Inverse(), numSigmaOclusion, dMin, dMax, pyrZ,
+//            pyrMask, idsCur);
       } else {
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
             occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
@@ -3226,6 +3233,24 @@ int main( int argc, char* argv[] )
           tdp::glDrawLine(pc_w[i], pcObsMu_w[i]);
         }
       }
+      if (showPc0) {
+        glColor4f(1,0,1,0.5);
+        for (size_t i=0; i<pl_w.SizeToRead(); i+=step) {
+          tdp::glDrawLine(pl_w[i].p_, pl_w[i].p0_);
+        }
+      }
+      if (showOccThr) {
+        glColor4f(1,0,0,0.8);
+        for (const auto& ass : assoc) {
+          float d_c = pc[ass.second](2);
+          float nguyenSigmaAxial = 0.0012 + 0.0019*(d_c-0.4)*(d_c-0.4);
+          float threeSigma_d = numSigmaOclusion*(nguyenSigmaAxial + sqrtf(rays[ass.second].dot(Sigma_wc.bottomRightCorner<3,3>()*rays[ass.second])));
+          tdp::Vector3fda pMin = T_wc*(rays[ass.second]*(d_c-threeSigma_d));
+          tdp::Vector3fda pMax = T_wc*(rays[ass.second]*(d_c+threeSigma_d));
+          tdp::glDrawLine(pMin, pMax);
+//          tdp::glDrawLine(pl_w[ass.first].p_, pc_c_in_m);
+        }
+      }
     }
 
     if (viewAssoc.IsShown()) {
@@ -3300,7 +3325,7 @@ int main( int argc, char* argv[] )
       }
       glColor3f(0,1,0);
       for (auto& id : idNew) {
-        pangolin::glDrawCircle(id%wc,id/wc,1);
+        pangolin::glDrawCircle(id%wc,id/wc,2);
       }
     }
 
