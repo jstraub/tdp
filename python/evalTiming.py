@@ -1,33 +1,70 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from helpers import *
+from js.utils.plot.colors import colorScheme
 
-pathToTimings = "/home/jstraub/Dropbox/0gtd/thesis/timings.txt"
+mpl.rc('font',size=30) 
+mpl.rc('lines',linewidth=2.)
+figSize = (14, 10)
+cs = colorScheme("label")
 
-frameId = []
-timings = dict()
-with open(pathToTimings) as f:
-  lines = f.readlines()
-  for line in lines:
-    if line[:5] == "Frame":
-      desc, num = line[:-1].split(" ")
-      frameId.append(int(num))
-    else:
-      desc, num = line[:-1].split("\t")
-      if frameId[-1] > 1:
-        if desc in timings.keys():
-          timings[desc].append(float(num))
-        else:
-          timings[desc] = [float(num)]
+pathToTimings = "../results/ablation_fr2_xyz/fullmode/timings.txt"
+timings = ParseTimings(pathToTimings)
 
 for key,vals in timings.iteritems():
   print key, len(vals)
 
-keysToPrint = ["Draw3D","Draw2D","Setup","sampleNormals","sampleParams","samplePoints" ]
-keysToPrint = ["mask","icp","FullLoop","Setup","sampleNormals","sampleParams","samplePoints" ]
+keyToCap = {"FullLoop":"main thread", "sampleNormals":"sample $n$",
+    "sampleParams":"sample $\\mu$, $\\tau$",
+    "samplePoints":"sample $p$",
+    "sampleLabels":"sample $z$",
+    "icp": "icp",
+    "icpRGBGPU": "rot. pre-align",
+    "dataAssoc": "proj. data assoc",
+    "extractAssoc": "data assoc filtering",
+    "mask": "plane proposals",
+    "Setup": "data preproc",
+    "inverseIndex": "inv. index",
+    "newPlanes": "extract new planes",
+    "updatePlanes": "extract plane obs.",
+    }
 
-fig = plt.figure()
-for key,vals in timings.iteritems():
-  if key in keysToPrint:
-    plt.plot(np.arange(len(vals)), vals, label=key)
-plt.legend()
+keysToPrint = ["mask","icp","FullLoop","Setup","sampleNormals","sampleParams","samplePoints" ]
+keysToPrint = ["Draw3D","Draw2D","Setup","sampleNormals","sampleParams","samplePoints" ]
+
+keysToPrint = ["Draw3D","Draw2D","FullLoop"]
+
+# high level
+keysToPrint = ["FullLoop","sampleNormals","sampleParams","samplePoints","sampleLabels" ]
+
+fig = plt.figure(figsize = figSize, dpi = 80, facecolor="w", edgecolor="k")
+i = 0
+for key in keysToPrint:
+  vals = timings[key]
+  plt.plot(np.arange(len(vals)), vals, color=cs[i],
+      label=keyToCap[key])
+  i+=1
+plt.legend(loc="best")
+plt.savefig("timingsHighLevel.png", figure=fig)
+plt.close(fig)
+
+# main thread
+keysToPrint = ["icp","dataAssoc","icpRGBGPU","extractAssoc", "mask" ,
+    "Setup", "inverseIndex", "newPlanes", "updatePlanes","FullLoop" ]
+
+fig = plt.figure(figsize = figSize, dpi = 80, facecolor="w", edgecolor="k")
+i = 0
+for key in keysToPrint:
+  vals = timings[key]
+  if key in keyToCap:
+    label = keyToCap[key]
+  else:
+    label = key
+  plt.plot(np.arange(len(vals)), vals, color=cs[i], label=label)
+  i = (i+1)%len(cs)
+plt.legend(loc="best")
+plt.savefig("timingsMainThread.png", figure=fig)
+
 plt.show()
+

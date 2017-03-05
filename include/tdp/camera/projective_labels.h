@@ -102,11 +102,12 @@ class ProjectiveAssociation {
       const tdp::Pyramid<tdp::Vector3fda,LEVELS>& pyrPc,
       float dMin,
       float dMax,
+      int maxLvl,
       tdp::Pyramid<uint32_t,LEVELS>& pyrZ, 
       tdp::Pyramid<uint8_t ,LEVELS>& pyrMask, 
       std::vector<std::vector<uint32_t>*>& ids
       ) {
-    for (size_t lvl=1; lvl < LEVELS; ++lvl) {
+    for (size_t lvl=1; lvl < std::min(maxLvl,LEVELS); ++lvl) {
       tdp::Image<tdp::Vector3fda> pc0 = pyrPc.GetConstImage(lvl-1);
       tdp::Image<uint32_t> z0 = pyrZ.GetImage(lvl-1);
       tdp::Image<uint8_t> mask0 = pyrMask.GetImage(lvl-1);
@@ -177,6 +178,7 @@ class ProjectiveAssociation {
       float occlusionDepthThr,
       float dMin,
       float dMax,
+      int maxLvl,
       tdp::Pyramid<uint32_t,LEVELS>& pyrZ, 
       tdp::Pyramid<uint8_t ,LEVELS>& pyrMask, 
       std::vector<std::vector<uint32_t>*>& ids
@@ -186,7 +188,7 @@ class ProjectiveAssociation {
     tdp::Image<uint8_t> mask0 = pyrMask.GetImage(0);
     GetAssocOcclusion(pl_w, pc0, T_cw, occlusionDepthThr, z0, mask0,
         *ids[0]);
-    FillInHigherPyramidLevels(pyrPc, dMin, dMax, pyrZ, pyrMask, ids);
+    FillInHigherPyramidLevels(pyrPc, dMin, dMax, maxLvl, pyrZ, pyrMask, ids);
   }
 
 
@@ -230,6 +232,7 @@ class ProjectiveAssociation {
       float numSigmaOclusion,
       float dMin,
       float dMax,
+      int maxLvl,
       tdp::Pyramid<uint32_t,LEVELS>& pyrZ, 
       tdp::Pyramid<uint8_t ,LEVELS>& pyrMask, 
       std::vector<std::vector<uint32_t>*>& ids
@@ -240,7 +243,8 @@ class ProjectiveAssociation {
     tdp::Image<uint8_t> mask0 = pyrMask.GetImage(0);
     GetAssocOcclusion(pl_w, covs, pc0, ray0, T_cw, numSigmaOclusion,
         z0, mask0, *ids[0]);
-    FillInHigherPyramidLevels(pyrPc, dMin, dMax, pyrZ, pyrMask, ids);
+    FillInHigherPyramidLevels(pyrPc, dMin, dMax, maxLvl, pyrZ, pyrMask,
+        ids);
   }
 
   /// adds depth-variance-based occlusion reasoning to filter data associations
@@ -286,6 +290,7 @@ class ProjectiveAssociation {
       float numSigmaOclusion,
       float dMin,
       float dMax,
+      int maxLvl,
       tdp::Pyramid<uint32_t,LEVELS>& pyrZ, 
       tdp::Pyramid<uint8_t ,LEVELS>& pyrMask, 
       std::vector<std::vector<uint32_t>*>& ids
@@ -296,7 +301,8 @@ class ProjectiveAssociation {
     tdp::Image<uint8_t> mask0 = pyrMask.GetImage(0);
     GetAssocOcclusion(pl_w, pc0, ray0, T_cw, Sigma_wc,
         numSigmaOclusion, z0, mask0, *ids[0]);
-    FillInHigherPyramidLevels(pyrPc, dMin, dMax, pyrZ, pyrMask, ids);
+    FillInHigherPyramidLevels(pyrPc, dMin, dMax, maxLvl, pyrZ, pyrMask,
+        ids);
   }
 
   void Associate(const Image<Vector3fda>& pc_w,

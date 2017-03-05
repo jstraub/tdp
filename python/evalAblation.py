@@ -28,15 +28,6 @@ def SetMode(samplePoints, dirObsSelect, gradNormObsSelect):
   else:
     varsMap["vars"]["icpPanel.sortByGradient"] = "0"
   json.dump(varsMap,open(pathVarsIcpGen,"w"),indent=4,sort_keys=True)
-def SetToSimpleMap():
-  SetMode(samplePoints=False, dirObsSelect=True, gradNormObsSelect=True);
-def SetToFullMode():
-  SetMode(samplePoints=True, dirObsSelect=True, gradNormObsSelect=True);
-def SetToRandomTracking():
-  SetMode(samplePoints=True, dirObsSelect=False, gradNormObsSelect=False);
-def SetToSimpleMapRandomTracking():
-  SetMode(samplePoints=False, dirObsSelect=False, gradNormObsSelect=False);
-
 def Run(dataString, configString, outputPath,
     gtPath):
   args = ["../build/experiments/sparseFusion/sparseFusion",
@@ -60,7 +51,8 @@ def Run(dataString, configString, outputPath,
   subp.call("mv surfelMap.ply "+outputPath, shell=True)
   subp.call("python evaluate_ate.py trajectory_tumFormat.csv "
       +gtPath+" > " +outputPath+"/trajectoryError.csv", shell=True)
-
+  subp.call("python evaluate_avgFrameTime.py -i timings.txt "
+      +" > " +outputPath+"/avgFrameTime.csv", shell=True)
 
 datsetPath = "files://../build/rgbd_dataset_freiburg2_xyz/[depth,rgb]/*png"
 configString = "../config/tum_fb2_2017_02_19.json"
@@ -68,20 +60,27 @@ pathToGt = "../build/rgbd_dataset_freiburg2_xyz/groundtruth.txt"
 tag = "ablation_fr2_xyz"
 
 outputPath = "../results/"+tag+"/fullmode/"
-SetToFullMode()
+SetMode(samplePoints=True, dirObsSelect=True, gradNormObsSelect=True);
 Run(datsetPath, configString, outputPath, pathToGt);
 
 outputPath = "../results/"+tag+"/simpleMap/"
-SetToSimpleMap()
+SetMode(samplePoints=False, dirObsSelect=True, gradNormObsSelect=True);
 Run(datsetPath, configString, outputPath, pathToGt);
 
 outputPath = "../results/"+tag+"/rndTrack/"
-SetToRandomTracking()
+SetMode(samplePoints=True, dirObsSelect=False, gradNormObsSelect=False);
 Run(datsetPath, configString, outputPath, pathToGt);
 
 outputPath = "../results/"+tag+"/simpleMapRndTrack/"
-SetToSimpleMapRandomTracking()
+SetMode(samplePoints=False, dirObsSelect=False, gradNormObsSelect=False);
 Run(datsetPath, configString, outputPath, pathToGt);
 
+outputPath = "../results/"+tag+"/dirSegTrackSampleMap/"
+SetMode(samplePoints=True, dirObsSelect=True, gradNormObsSelect=False);
+Run(datsetPath, configString, outputPath, pathToGt);
+
+outputPath = "../results/"+tag+"/gradNormTrackSampleMap/"
+SetMode(samplePoints=True, dirObsSelect=False, gradNormObsSelect=True);
+Run(datsetPath, configString, outputPath, pathToGt);
 
 #

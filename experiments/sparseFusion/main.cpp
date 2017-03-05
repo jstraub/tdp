@@ -2373,14 +2373,15 @@ int main( int argc, char* argv[] )
 //          occlusionDepthThr, z, mask, idsCur);
       if (sigmaOclusion) {
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, pyrRay,
-            T_wc.Inverse(), Sigma_wc, numSigmaOclusion, dMin, dMax, pyrZ,
-            pyrMask, idsCur);
+            T_wc.Inverse(), Sigma_wc, numSigmaOclusion, dMin, dMax,
+            ICPmaxLvl+1, pyrZ, pyrMask, idsCur);
 //        projAssoc.GetAssocOcclusion(pl_w, pSampleCov_w, pyrPc, pyrRay,
 //            T_wc.Inverse(), numSigmaOclusion, dMin, dMax, pyrZ,
 //            pyrMask, idsCur);
       } else {
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
-            occlusionDepthThr, dMin, dMax, pyrZ, pyrMask, idsCur);
+            occlusionDepthThr, dMin, dMax, ICPmaxLvl, pyrZ, pyrMask,
+            idsCur);
       }
       TOCK("extractAssoc");
       pyrMaskDisp.CopyFrom(pyrMask);
@@ -2449,7 +2450,7 @@ int main( int argc, char* argv[] )
           for (size_t k=0; k<K+1; ++k) {
             if (k >= invInd[lvl]->size()) {
               invInd[lvl]->push_back(std::vector<uint32_t>());
-              invInd[lvl]->back().reserve(3000);
+              invInd[lvl]->back().reserve(maxObsIcp);
             } else {
               invInd[lvl]->at(k).clear();
             }
@@ -2484,7 +2485,7 @@ int main( int argc, char* argv[] )
             // only use ids that were found by projecting into the current pose
             for (size_t lvl=0; lvl<PYR; ++lvl) {
               for (auto i : *idsCur[lvl]) {
-                if (invInd[lvl]->at(k).size() < 3000)
+                if (invInd[lvl]->at(k).size() < maxObsIcp)
                   invInd[lvl]->at(k).push_back(i);
                 k = (k+1)%invInd[lvl]->size();
               }
@@ -2496,7 +2497,7 @@ int main( int argc, char* argv[] )
             // use all ids in the current map
             for (size_t lvl=0; lvl<PYR; ++lvl) {
               for (auto i : id_w) {
-                if (invInd[lvl]->at(k).size() < 3000)
+                if (invInd[lvl]->at(k).size() < maxObsIcp)
                   invInd[lvl]->at(k).push_back(i);
                 k = (k+1)%invInd[lvl]->size();
               }
@@ -2540,20 +2541,20 @@ int main( int argc, char* argv[] )
     cuD = cuPyrD.GetImage(0);
     rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
     if (smoothDPyr==1) {
-      tdp::CompletePyramidBlur9(cuPyrD, 1.);
+      tdp::CompletePyramidBlur9(cuPyrD, 1., ICPmaxLvl+1);
     } else {
-      tdp::CompletePyramidBlur(cuPyrD, 1.);
+      tdp::CompletePyramidBlur(cuPyrD, 1., ICPmaxLvl+1);
     }
-    if (normalExtractMethod) {
+    if (normalExtractMethod == 0) {
       tdp::ConvertDepthToInverseDepthGpu(cuPyrD, cuPyrRho);
       pyrRho.CopyFrom(cuPyrRho);
     }
-    pyrD.CopyFrom(cuPyrD);
+    pyrD.CopyFrom(cuPyrD,0,ICPmaxLvl+1);
     d = pyrD.GetImage(0);
     if (gui.verbose) std::cout << "compute pc" << std::endl;
 
     tdp::SE3f T_rc;
-    for (size_t pyr=0; pyr<PYR; ++pyr) {
+    for (size_t pyr=0; pyr<ICPmaxLvl+1; ++pyr) {
       tdp::Image<float> cuDLvl = cuPyrD.GetImage(pyr);
       tdp::Image<tdp::Vector3fda> cuPcLvl = cuPyrPc.GetImage(pyr);
       CameraT camLvl = cam.Scale(pow(0.5,pyr));
@@ -2563,7 +2564,7 @@ int main( int argc, char* argv[] )
 //    rig.ComputePc(cuD, true, cuPc);
 //    tdp::CompletePyramid(cuPyrPc);
 //    pc.CopyFrom(cuPyrPc.GetImage(0));
-    pyrPc.CopyFrom(cuPyrPc);
+    pyrPc.CopyFrom(cuPyrPc,0,ICPmaxLvl+1);
     pc = pyrPc.GetImage(0);
     if (gui.verbose) std::cout << "collect rgb" << std::endl;
     rig.CollectRGB(gui, rgb) ;
@@ -2571,7 +2572,11 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "compute grey" << std::endl;
     tdp::Rgb2Grey(cuRgb,cuGreyFl,1./255.);
 
-    cuPyrGreyFlPrev.CopyFrom(cuPyrGreyFlSmooth);
+    if (!useGpuPrealign) {
+      pyrGreyFlPrev.CopyFrom(pyrGreyFl);
+    } else {
+      cuPyrGreyFlPrev.CopyFrom(cuPyrGreyFlSmooth, SO3minLvl, SO3maxLvl+1);
+    }
     cuGreyFlSmooth = cuPyrGreyFlSmooth.GetImage(0);
     if (smoothGrey==2) {
       tdp::Blur9(cuGreyFl,cuGreyFlSmooth, 1.);
@@ -2580,26 +2585,29 @@ int main( int argc, char* argv[] )
     } else {
       cuGreyFlSmooth.CopyFrom(cuGreyFl);
     }
+    int maxGreyLvl = std::max((int)(SO3maxLvl+1), (int)ICPmaxLvl+1);
     if (smoothGreyPyr==1) {
-      tdp::CompletePyramidBlur9(cuPyrGreyFlSmooth, 1.);
+      tdp::CompletePyramidBlur9(cuPyrGreyFlSmooth, 1.,maxGreyLvl);
     } else {
-      tdp::CompletePyramidBlur(cuPyrGreyFlSmooth, 1.);
+      tdp::CompletePyramidBlur(cuPyrGreyFlSmooth, 1., maxGreyLvl);
     }
-    pyrGreyFlPrev.CopyFrom(pyrGreyFl);
-    pyrGreyFl.CopyFrom(cuPyrGreyFlSmooth);
-    greyFl = pyrGreyFl.GetImage(0);
-
     cuGradGrey = cuPyrGradGrey.GetImage(0);
     tdp::GradientShar(cuGreyFlSmooth, cuGradGrey);
     if (smoothGreyPyr==1) {
-      tdp::CompletePyramidBlur9(cuPyrGradGrey, 1.);
+      tdp::CompletePyramidBlur9(cuPyrGradGrey, 1., maxGreyLvl);
     } else {
-      tdp::CompletePyramidBlur(cuPyrGradGrey, 1.);
+      tdp::CompletePyramidBlur(cuPyrGradGrey, 1., maxGreyLvl);
     }
-    pyrGradGrey.CopyFrom(cuPyrGradGrey);
+    if (useGpuPrealign) {
+      maxGreyLvl = ICPmaxLvl +1;
+    }
+    pyrGreyFl.CopyFrom(cuPyrGreyFlSmooth, 0, maxGreyLvl);
+    pyrGradGrey.CopyFrom(cuPyrGradGrey, 0, maxGreyLvl);
+    greyFl = pyrGreyFl.GetImage(0);
     gradGrey = pyrGradGrey.GetImage(0);
 
-    tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta, cuGreyGradNorm);
+    tdp::Gradient2AngleNorm(cuGradGrey, cuGreyGradTheta,
+        cuGreyGradNorm);
     greyGradNorm.CopyFrom(cuGreyGradNorm);
 
     pyrN.Fill(tdp::Vector3fda(NAN,NAN,NAN));
@@ -2694,7 +2702,6 @@ int main( int argc, char* argv[] )
           tdp::Image<float> dLvl = pyrD.GetImage(pyr);
           tdp::Image<float> rhoLvl = pyrRho.GetImage(pyr);
           tdp::Image<float> greyFlLvl = pyrGreyFl.GetImage(pyr);
-          tdp::Image<float> greyFlPrevLvl = pyrGreyFlPrev.GetImage(pyr);
           tdp::Image<tdp::Vector2fda> gradGreyLvl = pyrGradGrey.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> pcLvl = pyrPc.GetImage(pyr);
           tdp::Image<tdp::Vector3fda> nLvl = pyrN.GetImage(pyr);

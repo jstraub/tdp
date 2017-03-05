@@ -156,9 +156,15 @@ class Pyramid {
 #ifdef CUDA_FOUND
   /// Perform copy from the given src pyramid to this pyramid.
   /// Use type to specify from which memory to which memory to copy.
-  void CopyFrom(const Pyramid<T,LEVELS>& src, cudaMemcpyKind type) {
+  void CopyFrom(const Pyramid<T,LEVELS>& src, cudaMemcpyKind type,
+      int lvl0=0, int lvlE=LEVELS) {
     if (src.SizeBytes() == SizeBytes()) {
-      checkCudaErrors(cudaMemcpy(ptr_, src.ptr_, src.SizeBytes(), type));
+      int offset = NumElemsToLvl(w_, h_, lvl0);
+      int sizeBytes = (NumElemsToLvl(w_, h_, lvlE)-offset)*sizeof(T);
+      checkCudaErrors(cudaMemcpy(&ptr_[offset], 
+            &src.ptr_[offset], sizeBytes, type));
+//      checkCudaErrors(cudaMemcpy(ptr_, 
+//            src.ptr_, src.SizeBytes(), type));
     } else {
       std::cerr << "ERROR: not copying pyramid since sizes dont match" 
         << std::endl << Description() 
@@ -166,8 +172,10 @@ class Pyramid {
         << std::endl;
     }
   }
-  void CopyFrom(const Pyramid<T,LEVELS>& src) {
-    CopyFrom(src, CopyKindFromTo(src.storage_, storage_));
+  void CopyFrom(const Pyramid<T,LEVELS>& src, int lvl0=0, int
+      lvlE=LEVELS) {
+    CopyFrom(src, CopyKindFromTo(src.storage_, storage_),
+          lvl0, lvlE);
   }
 #endif
 
@@ -222,10 +230,11 @@ void ConstructPyramidFromImage(const Image<T>& I, Pyramid<T,LEVELS>& P, float si
 /// @param sigma whats the expected std on the first level - to only
 /// smooth over pixels that are within 3 sigma of the center pixel
 template<typename T, int LEVELS>
-void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma) {
+void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma,
+    int lvlE=LEVELS) {
   if (P.storage_ == Storage::Gpu) {
     // P is on GPU so perform downsampling on GPU
-    for (int lvl=1; lvl<LEVELS; ++lvl) {
+    for (int lvl=1; lvl<lvlE; ++lvl) {
       Image<T> Isrc = P.GetImage(lvl-1);
       Image<T> Idst = P.GetImage(lvl);
       PyrDownBlur(Isrc, Idst,sigma);
@@ -239,10 +248,11 @@ void CompletePyramidBlur(Pyramid<T,LEVELS>& P, float sigma) {
 /// @param sigma whats the expected std on the first level - to only
 /// smooth over pixels that are within 3 sigma of the center pixel
 template<typename T, int LEVELS>
-void CompletePyramidBlur9(Pyramid<T,LEVELS>& P, float sigma) {
+void CompletePyramidBlur9(Pyramid<T,LEVELS>& P, float sigma,
+    int lvlE=LEVELS) {
   if (P.storage_ == Storage::Gpu) {
     // P is on GPU so perform downsampling on GPU
-    for (int lvl=1; lvl<LEVELS; ++lvl) {
+    for (int lvl=1; lvl<lvlE; ++lvl) {
       Image<T> Isrc = P.GetImage(lvl-1);
       Image<T> Idst = P.GetImage(lvl);
       PyrDownBlur9(Isrc, Idst,sigma);
