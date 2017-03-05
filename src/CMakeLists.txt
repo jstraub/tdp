@@ -80,3 +80,5 @@ endif()
 target_link_libraries(tdp pangolin
   ${LIBS}
   )
+cotire(tdp)
+

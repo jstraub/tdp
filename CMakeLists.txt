@@ -5,7 +5,6 @@ if(POLICY CMP0012)
   cmake_policy(SET CMP0012 OLD)
 endif()
 
-
 if(COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -21,6 +20,9 @@ message(${CMAKE_MODULE_PATH})
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set (CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "default install path" FORCE )
 endif()
+
+# precompile header files
+include(cotire)
 
 # add flags depending on build type
 set(CMAKE_CXX_FLAGS_RELEASE "-g -Wall -Wno-deprecated -O2 -finline-functions -DNDEBUG -std=c++11 ")
