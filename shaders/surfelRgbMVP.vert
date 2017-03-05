@@ -7,13 +7,17 @@ layout (location = 3) in float r;
 uniform mat4 Tinv;
 uniform mat4 P;
 uniform float maxZ;
+uniform float w;
+uniform float h;
 
 // Project into the camera plane (into -1 to 1)
 vec3 projectCamPlane(vec3 p)
 {
-  float cols = 640;
-  float rows = 480;
-  vec4 cam = vec4(420., 420.,319.5, 239.5);
+  float cols = w;
+  float rows = h;
+//  vec4 cam = vec4(420., 420.,319.5, 239.5);
+//  vec4 cam = vec4(420., 420., (w-1)*0.5, (h-1)*0.5);
+  vec4 cam = vec4(420.*w/640, 420.*h/480, (w-1)*0.5, (h-1)*0.5);
 
   return vec3(((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
               ((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
@@ -23,7 +27,9 @@ vec3 projectCamPlane(vec3 p)
 // Project into the image plane (into pixels)
 vec3 projectImgPlane(vec3 p)
 {
-  vec4 cam = vec4(420., 420.,319.5, 239.5);
+//  vec4 cam = vec4(420., 420.,319.5, 239.5);
+//  vec4 cam = vec4(420., 420., (w-1)*0.5, (h-1)*0.5);
+  vec4 cam = vec4(420.*w/640, 420.*h/480, (w-1)*0.5, (h-1)*0.5);
   return vec3(((cam.x * p.x) / p.z) + cam.z,
               ((cam.y * p.y) / p.z) + cam.w,
               p.z);
@@ -42,7 +48,7 @@ void main() {
   rC = r;
   rgbC = rgb;
 
-  if (posC.z > maxZ ) {
+  if ( posC.z > maxZ ) {
     gl_Position = vec4(1000.f,1000.f,1000.f,1000.f);
     gl_PointSize = 0;
   } else {

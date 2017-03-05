@@ -60,12 +60,11 @@ int main( int argc, char* argv[] )
     .SetHandler(new pangolin::Handler3D(s_cam));
   container.AddDisplay(d_cam);
 
-
-
   uint32_t w=640;
   uint32_t h=480;
   tdp::QuickView viewRender(w,h);
   container.AddDisplay(viewRender);
+  viewRender.Show(true);
 //    .SetHandler(new pangolin::Handler3D(s_cam2));
   
   uint32_t N = 9;
@@ -98,16 +97,20 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostImage<tdp::Vector3bda> rgbI(w,h);
 
   // Add some variables to GUI
-  pangolin::Var<float> radius("ui.radius",0.1,0.001,0.1);
+  pangolin::Var<float> radius("ui.radius",0.01,0.001,0.1);
   pangolin::Var<float> scale("ui.scale",1.,0.,3.);
   pangolin::Var<float> dx("ui.dx",0.5,0.001,1.);
 
   pangolin::Var<bool> invertMV("ui.invert MV",false,true);
   pangolin::Var<bool> showTransformation("ui.show trafo",false,false);
+  pangolin::Var<bool> showSecondary("ui.show Secondary",true,true);
 
   // Stream and display video
   while(!pangolin::ShouldQuit())
   {
+    if (showSecondary.GuiChanged())
+      viewRender.Show(showSecondary);
+
     // clear the OpenGL render buffers
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -128,6 +131,7 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
 
+
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
 
@@ -140,15 +144,25 @@ int main( int argc, char* argv[] )
     if (pangolin::Pushed(showTransformation))
       std::cout << MV << std::endl;
 
+    std::cout 
+      << d_cam.GetBounds().l << " " 
+      << d_cam.GetBounds().b << " " 
+      << d_cam.GetBounds().w << " " 
+      << d_cam.GetBounds().h << std::endl;
+
     pangolin::glDrawAxis(0.1);
-    glPushAttrib(GL_VIEWPORT_BIT);
-    glViewport(0, 0, w, h);
+//    glPushAttrib(GL_VIEWPORT_BIT);
+//    glViewport( d_cam.GetBounds().l,
+//d_cam.GetBounds().b,
+//d_cam.GetBounds().w,
+//d_cam.GetBounds().h);
     glClearColor(0, 0, 0, 0);
     glEnable(GL_POINT_SPRITE);
     glEnable(GL_PROGRAM_POINT_SIZE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., P, MV);
-    glPopAttrib();
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., 
+        d_cam.GetBounds().w, d_cam.GetBounds().h, P, MV);
+//    glPopAttrib();
     glDisable(GL_PROGRAM_POINT_SIZE);
     glDisable(GL_POINT_SPRITE);
     glColor3f(0,1,0);
@@ -168,7 +182,7 @@ int main( int argc, char* argv[] )
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_POINT_SPRITE);
     glEnable(GL_PROGRAM_POINT_SIZE);
-    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., P, MV);
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., 640,480, P, MV);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
       tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);
@@ -178,17 +192,20 @@ int main( int argc, char* argv[] )
     glFinish();
     glDisable(GL_PROGRAM_POINT_SIZE);
     glDisable(GL_POINT_SPRITE);
-    tex.Download(rgbI.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
 
-    viewRender.Activate();
-//    viewRender.FlipTextureY()=true;
-////    viewRender.UpdateView();
-//    viewRender.glSetViewOrtho();
-//    tex.Bind();
-//    viewRender.glRenderTexture(tex);
-//    tex.Unbind();
-    viewRender.SetImage(rgbI);
-//    viewRender.UpdateView();
+
+    if (viewRender.IsShown()) {
+      tex.Download(rgbI.ptr_, GL_RGB, GL_UNSIGNED_BYTE);
+      viewRender.Activate();
+      viewRender.FlipTextureY()=true;
+      ////    viewRender.UpdateView();
+      //    viewRender.glSetViewOrtho();
+      //    tex.Bind();
+      //    viewRender.glRenderTexture(tex);
+      //    tex.Unbind();
+      viewRender.SetImage(rgbI);
+      //    viewRender.UpdateView();
+    }
 
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();

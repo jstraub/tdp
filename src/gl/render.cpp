@@ -87,6 +87,8 @@ void RenderSurfels(
   pangolin::GlBuffer& cbo,
   pangolin::GlBuffer& rbo,
     float dMax,
+    uint32_t w, 
+    uint32_t h, 
   const pangolin::OpenGlMatrix& P,
   const pangolin::OpenGlMatrix& MV
     ) {
@@ -98,6 +100,8 @@ void RenderSurfels(
   shader.SetUniform("Tinv",MV);
   shader.SetUniform("P",P);
   shader.SetUniform("maxZ",dMax);
+  shader.SetUniform("w",(float)w);
+  shader.SetUniform("h",(float)h);
 
   vbo.Bind();
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
