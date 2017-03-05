@@ -1481,7 +1481,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> trackingGood("ui.tracking good",false,true);
 
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
-  pangolin::Var<bool> runLoopClosureGeom("ui.run loop closure geom",false,true);
+  pangolin::Var<bool> runLoopClosureGeom("ui.loopCloseGeom",false,true);
 
   pangolin::Var<bool> pruneNoise("ui.prune Noise",true,true);
   pangolin::Var<float> relPruneDistThr("ui.rel prune dist Thr",3.,1.,10);
