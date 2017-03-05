@@ -249,12 +249,13 @@ class ProjectiveAssociation {
 
   /// adds depth-variance-based occlusion reasoning to filter data associations
   void GetAssocOcclusion(
-      const tdp::Image<tdp::Plane>& pl_w,
+      tdp::Image<tdp::Plane>& pl_w,
       const tdp::Image<tdp::Vector3fda>& pc_c,
       const tdp::Image<tdp::Vector3fda>& ray,
       const tdp::SE3f& T_cw,
       const Eigen::Matrix<float,6,6>& Sigma_wc,
       float numSigmaOclusion,
+      bool freeSpaceCarving,
       tdp::Image<uint32_t>& z, 
       tdp::Image<uint8_t>& mask, 
       std::vector<uint32_t>& ids) {
@@ -270,6 +271,27 @@ class ProjectiveAssociation {
         float nguyenSigmaAxial = 0.0012 + 0.0019*(d_c-0.4)*(d_c-0.4);
         float threeSigma_d = numSigmaOclusion*(nguyenSigmaAxial + sqrtf(ray[i].dot(Sigma_wc.bottomRightCorner<3,3>()*ray[i])));
         if (fabs(d_w_in_c - d_c) < threeSigma_d) {
+          if (freeSpaceCarving) {
+            int32_t u0 = i%pc_c.w_; 
+            int32_t v0 = i/pc_c.w_; 
+            if (0 < u0 && u0 < pc_c.w_-1 && 0 < v0 && v0 < pc_c.h_-1) {
+              for (int32_t u=u0-1; u <= u0+1; ++u) 
+                for (int32_t v=v0-1; v <= v0+1; ++v)  
+                  if (u!=u0 && v!=v0 && z(u,v)>0) {
+                    float d_w_in_ci = (T_cw*pl_w[z(u,v)-1].p_)(2);
+                    if (d_w_in_ci < d_c - threeSigma_d) {
+                      // found a point in front of the surface that is
+                      // already assocaited
+                      std::cout << "free space carve: " << z(u,v) << std::endl;
+                      pl_w[z(u,v)-1].valid_ = false;
+                      pl_w[z(u,v)-1].p_ = tdp::Vector3fda(NAN,NAN,NAN);
+                      pl_w[z(u,v)-1].n_ = tdp::Vector3fda(NAN,NAN,NAN);
+                      z(u,v) = 0;
+                      mask(u,v) = 0;
+                    }
+                  }
+            }
+          }
           mask[i] = 255;
           ids.push_back(id);
         } else {
@@ -282,7 +304,7 @@ class ProjectiveAssociation {
   /// adds depth and variance-based occlusion reasoning to filter data associations
   template<int LEVELS>
   void GetAssocOcclusion(
-      const tdp::Image<tdp::Plane>& pl_w,
+      tdp::Image<tdp::Plane>& pl_w,
       const tdp::Pyramid<tdp::Vector3fda,LEVELS>& pyrPc,
       const tdp::Pyramid<tdp::Vector3fda,LEVELS>& pyrRay,
       const tdp::SE3f& T_cw,
@@ -291,6 +313,7 @@ class ProjectiveAssociation {
       float dMin,
       float dMax,
       int maxLvl,
+      bool freeSpaceCarving,
       tdp::Pyramid<uint32_t,LEVELS>& pyrZ, 
       tdp::Pyramid<uint8_t ,LEVELS>& pyrMask, 
       std::vector<std::vector<uint32_t>*>& ids
@@ -300,7 +323,7 @@ class ProjectiveAssociation {
     tdp::Image<uint32_t> z0 = pyrZ.GetImage(0);
     tdp::Image<uint8_t> mask0 = pyrMask.GetImage(0);
     GetAssocOcclusion(pl_w, pc0, ray0, T_cw, Sigma_wc,
-        numSigmaOclusion, z0, mask0, *ids[0]);
+        numSigmaOclusion, freeSpaceCarving, z0, mask0, *ids[0]);
     FillInHigherPyramidLevels(pyrPc, dMin, dMax, maxLvl, pyrZ, pyrMask,
         ids);
   }

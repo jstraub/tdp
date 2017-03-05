@@ -1276,7 +1276,7 @@ int main( int argc, char* argv[] )
       pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
       );
   pangolin::OpenGlRenderState normalsCam(
-      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
+      pangolin::ProjectionMatrix(640,640,420,420,319.5,319.5,0.1,1000),
       pangolin::ModelViewLookAt(0,0.0,-2.2, 0,0,0, pangolin::AxisNegY)
       );
   // Add named OpenGL viewport to window and provide 3D Handler
@@ -1784,7 +1784,18 @@ int main( int argc, char* argv[] )
 
       if (allowNNRevisit || nnFixed[iReadNext] < kNN) {
         tdp::Plane& pl = pl_w.GetCircular(iReadNext);
-        if (!pl.valid_) continue;
+        if (!pl.valid_) {
+          // this might be necessary for free space carving
+          if (tdp::IsValidData(pc_w[iReadNext])) {
+            pl.p_ = tdp::Vector3fda(NAN,NAN,NAN);
+            pl.n_ = tdp::Vector3fda(NAN,NAN,NAN);
+            pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            n_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            for (int32_t i=0; i<kNN; ++i) 
+              mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, -1);
+          }
+          continue;
+        }
         values.fill(std::numeric_limits<float>::max());
         tdp::VectorkNNida& ids = nn[iReadNext];
         tdp::VectorkNNida idsPrev = ids;
@@ -2361,7 +2372,7 @@ int main( int argc, char* argv[] )
       if (sigmaOclusion) {
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, pyrRay,
             T_wc.Inverse(), Sigma_wc, numSigmaOclusion, dMin, dMax,
-            ICPmaxLvl+1, pyrZ, pyrMask, idsCur);
+            ICPmaxLvl+1, freeSpaceCarving, pyrZ, pyrMask, idsCur);
 //        projAssoc.GetAssocOcclusion(pl_w, pSampleCov_w, pyrPc, pyrRay,
 //            T_wc.Inverse(), numSigmaOclusion, dMin, dMax, pyrZ,
 //            pyrMask, idsCur);
@@ -2369,14 +2380,6 @@ int main( int argc, char* argv[] )
         projAssoc.GetAssocOcclusion(pl_w, pyrPc, T_wc.Inverse(),
             occlusionDepthThr, dMin, dMax, ICPmaxLvl, pyrZ, pyrMask,
             idsCur);
-      }
-      if (freeSpaceCarving) { 
-        tdp::Image<uint32_t> z = pyrZ.GetImage(0);
-        for (auto& id : *idsCur[0]) {
-          uint32_t u = id%wc;
-          uint32_t v = id/wc;
-//          z[id] 
-        }
       }
       TOCK("extractAssoc");
       if (viewMask.IsShown()) {
