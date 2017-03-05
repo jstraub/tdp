@@ -1500,7 +1500,6 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> pUniform("ui.p uniform ",0.1,0.1,1.);
 
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
-  pangolin::Var<bool> updateMap("mapPanel.update map",true,true);
   pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",true,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
@@ -1582,6 +1581,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> showNumStdPose("visPanel.std pose",3.,0.0,6.);
   pangolin::Var<bool> showRgbView("visPanel.showRGBview",true,true);
   pangolin::Var<bool> showSurfaceNormalView("visPanel.showSurfaceNormalView",true,true);
+  pangolin::Var<bool> showTrajectory("visPanel.showTrajectory",true,true);
   pangolin::Var<bool> showGradDir("visPanel.showGradDir",true,true);
   pangolin::Var<bool> showFullPc("visPanel.show full",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
@@ -1883,6 +1883,7 @@ int main( int argc, char* argv[] )
     std::mt19937 rnd(19201420);
     std::uniform_real_distribution<float> coin(0, 1);
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eig;
+    TICK("sample normals");
     while(runSampling.Get()) {
       if (i%100 == 0 || sizeToRead == 0) {
         {
@@ -1892,11 +1893,15 @@ int main( int argc, char* argv[] )
       }
       if (sizeToRead ==0) continue;
       i = (i+1)% sizeToRead;
-      if (sizeToRead > sizeToReadPrev) {
-        i = sizeToReadPrev;
-        sizeToReadPrev = sizeToRead;
-//        nTotalSampleCount += sizeToRead;
+      if (i==0) {
+        TOCK("sample normals");
+        TICK("sample normals");
       }
+//      if (sizeToRead > sizeToReadPrev) {
+//        i = sizeToReadPrev;
+//        sizeToReadPrev = sizeToRead;
+////        nTotalSampleCount += sizeToRead;
+//      }
 //      float pDontSample = ((float)nSampleCount[i]+alphaSchedule)/((float)nTotalSampleCount+alphaSchedule);
       float pDontSample = ((float)nSampleCount[i])/((float)nMaxSampleCount+alphaSchedule);
       nSamplePReject[i] = pDontSample;
@@ -1907,7 +1912,6 @@ int main( int argc, char* argv[] )
 //      std::cout << " normals sampling " << i << std::endl;
       // sample normals using dpvmf and observations from planes
 //      vmfSS.Fill(tdp::Vector4fda::Zero());
-      TICK("sample normals");
       uint16_t& zi = zS[i];
       tdp::Vector3fda& ni = nS[i];
       if (!pl_w[i].valid_) 
@@ -1977,7 +1981,6 @@ int main( int argc, char* argv[] )
 //        vmfSS[zS[i]].topRows<3>() += ni;
 //        vmfSS[zS[i]](3) ++;
 //      }
-      TOCK("sample normals");
     }
   });
 
@@ -2092,7 +2095,6 @@ int main( int argc, char* argv[] )
         K = Ksample;
       }
       TOCK("sample params");
-      TOCK("sample full");
     };
   });
 
@@ -2114,11 +2116,15 @@ int main( int argc, char* argv[] )
       }
       if (sizeToRead ==0) continue;
       i = (i+1)% sizeToRead;
-      if (sizeToRead > sizeToReadPrev) {
-        i = sizeToReadPrev;
-        sizeToReadPrev = sizeToRead;
-//        pTotalSampleCount+=sizeToRead;
+      if (i==0) {
+        TOCK("sample normals");
+        TICK("sample normals");
       }
+//      if (sizeToRead > sizeToReadPrev) {
+//        i = sizeToReadPrev;
+//        sizeToReadPrev = sizeToRead;
+////        pTotalSampleCount+=sizeToRead;
+//      }
       float pDontSample = ((float)pSampleCount[i])/((float)pMaxSampleCount+alphaSchedule);
       if (sampleScheduling && coin(rnd) < pDontSample)  {
         continue;
@@ -2274,6 +2280,7 @@ int main( int argc, char* argv[] )
     idsCur.back()->reserve(w*h);
   }
 
+  std::ofstream outT("timings.txt");
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
 
@@ -2882,23 +2889,25 @@ int main( int argc, char* argv[] )
 
           nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
           tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
+
+          if (!samplePoints) {
+            pl.p_ = (pl.p_*w + pc_c_in_w)/(w+1.f);
+            pc_w[i] = pl.p_;
+            //              pl.n_ = nSum_w[i].normalized();
+            //              n_w[i] =  pl.n_;
+          }
+
           numSum_w[i] = std::min(obsCountMax.Get(), w+1.f);
 
           grad_w[i] = pl.grad_;
           gradDir_w[i] = grad_w[i].normalized();
 
-            if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
-                  occlusionDepthThr, u, v)) {
-              ImSum[i] += greyFl(u,v);
-              ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
-              ImCount[i] ++;
-              ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
-            }
-
-          if (!updateMap) {
-            pl.AddObs(pc_c_in_w, n_c_in_w);
-            n_w[i] =  pl.n_;
-            pc_w[i] = pl.p_;
+          if (ProjectiveAssocOcl(pS[i], T_wc, cam, d,
+                occlusionDepthThr, u, v)) {
+            ImSum[i] += greyFl(u,v);
+            ImSqSum[i] += greyFl(u,v)*greyFl(u,v);
+            ImCount[i] ++;
+            ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
           }
         }
         uint32_t j = 0;
@@ -2949,6 +2958,15 @@ int main( int argc, char* argv[] )
 
             nSum_w[i] = (nSum_w[i]*w + n_c_in_w)/(w+1.);
             tauOSum_w[i] = (tauOSum_w[i]*w + curv(u,v))/(w+1.);
+
+
+            if (!samplePoints) {
+              pl.p_ = (pl.p_*w + pc_c_in_w)/(w+1.f);
+              pc_w[i] = pl.p_;
+//              pl.n_ = nSum_w[i].normalized();
+//              n_w[i] =  pl.n_;
+            }
+
             numSum_w[i] = std::min(obsCountMax.Get(), w+1.f);
 
             grad_w[i] = pl.grad_;
@@ -2962,11 +2980,6 @@ int main( int argc, char* argv[] )
               ImVar[i] = (ImSqSum[i] - ImSum[i]*ImSum[i]/ImCount[i])/ImCount[i];
             }
 
-            if (!updateMap) {
-              pl.AddObs(pc_c_in_w, n_c_in_w);
-              n_w[i] =  pl.n_;
-              pc_w[i] = pl.p_;
-            }
           }
         }
         
@@ -3032,26 +3045,31 @@ int main( int argc, char* argv[] )
       glClearColor(bgGrey, bgGrey, bgGrey, 1.0f);
       glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-      glColor4f(0.,1.,0.,1.0);
-//      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
-      pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
+      if (showTrajectory) {
+        glColor4f(0.,1.,0.,1.0);
+        //      pangolin::glDrawAxis(T_wc.matrix(), 0.05f);
+        pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wc.matrix(), 0.1f);
 
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,3,3>> eig(Sigma_wc.bottomRightCorner<3,3>());
-      pangolin::glSetFrameOfReference(T_wc.matrix());
-      glColor4f(1.,0.,0.,1.0);
-      Eigen::Vector3f std0 = eig.eigenvectors().col(0)*sqrtf(eig.eigenvalues()(0))*showNumStdPose;
-      Eigen::Vector3f std1 = eig.eigenvectors().col(1)*sqrtf(eig.eigenvalues()(1))*showNumStdPose;
-      Eigen::Vector3f std2 = eig.eigenvectors().col(2)*sqrtf(eig.eigenvalues()(2))*showNumStdPose;
-      Eigen::Vector3f std0neg = -std0;
-      Eigen::Vector3f std1neg = -std1;
-      Eigen::Vector3f std2neg = -std2;
-      tdp::glDrawLine(Eigen::Vector3f::Zero(), std0);
-      tdp::glDrawLine(Eigen::Vector3f::Zero(),std0neg);
-      tdp::glDrawLine(Eigen::Vector3f::Zero(), std1);
-      tdp::glDrawLine(Eigen::Vector3f::Zero(),std1neg);
-      tdp::glDrawLine(Eigen::Vector3f::Zero(), std2);
-      tdp::glDrawLine(Eigen::Vector3f::Zero(),std2neg);
-      pangolin::glUnsetFrameOfReference();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<float,3,3>> eig(Sigma_wc.bottomRightCorner<3,3>());
+        pangolin::glSetFrameOfReference(T_wc.matrix());
+        glColor4f(1.,0.,0.,1.0);
+        Eigen::Vector3f std0 = eig.eigenvectors().col(0)*sqrtf(eig.eigenvalues()(0))*showNumStdPose;
+        Eigen::Vector3f std1 = eig.eigenvectors().col(1)*sqrtf(eig.eigenvalues()(1))*showNumStdPose;
+        Eigen::Vector3f std2 = eig.eigenvectors().col(2)*sqrtf(eig.eigenvalues()(2))*showNumStdPose;
+        Eigen::Vector3f std0neg = -std0;
+        Eigen::Vector3f std1neg = -std1;
+        Eigen::Vector3f std2neg = -std2;
+        tdp::glDrawLine(Eigen::Vector3f::Zero(), std0);
+        tdp::glDrawLine(Eigen::Vector3f::Zero(),std0neg);
+        tdp::glDrawLine(Eigen::Vector3f::Zero(), std1);
+        tdp::glDrawLine(Eigen::Vector3f::Zero(),std1neg);
+        tdp::glDrawLine(Eigen::Vector3f::Zero(), std2);
+        tdp::glDrawLine(Eigen::Vector3f::Zero(),std2neg);
+        pangolin::glUnsetFrameOfReference();
+
+        glColor4f(0.,0.,1.,1.);
+        glDrawPoses(T_wcs, 100000, 0.04f);
+      }
 
 
       if (showLoopClose) {
@@ -3059,8 +3077,6 @@ int main( int argc, char* argv[] )
         //      pangolin::glDrawAxis(T_wcRansac.matrix(), 0.05f);
         pangolin::glDrawFrustrum(cam.GetKinv(), w, h, T_wcRansac.matrix(), 0.1f);
       }
-      glColor4f(1.,1.,0.,0.6);
-      glDrawPoses(T_wcs, 100000, 0.03f);
 
       TICK("Draw 3D nbo upload");
       if (showSamples) {
@@ -3370,6 +3386,7 @@ int main( int argc, char* argv[] )
     if (gui.verbose) std::cout << "finished one iteration" << std::endl;
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
+    Stopwatch::getInstance().logAll(outT);
     Stopwatch::getInstance().sendAll();
     pangolin::FinishFrame();
 
@@ -3390,6 +3407,7 @@ int main( int argc, char* argv[] )
     }
   }
   out.close();
+  outT.close();
 
   for (size_t lvl=0; lvl<PYR; ++lvl) {
     delete idsCur[lvl];
