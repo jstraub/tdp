@@ -1483,7 +1483,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runTracking("ui.run tracking",true,true);
   pangolin::Var<bool> runLoopClosureGeom("ui.loopCloseGeom",false,true);
 
-  pangolin::Var<bool> freeSpaceCarving("mapPanel.free space carve",false,true);
+  pangolin::Var<bool> freeSpaceCarving("mapPanel.free space carve",true,true);
   pangolin::Var<bool> pruneNoise("mapPanel.prune Noise",true,true);
   pangolin::Var<float> relPruneDistThr("mapPanel.rel prune dist Thr",3.,1.,10);
   pangolin::Var<float> pruneHThr("mapPanel.prune H Thr",-7.5,-20.,-0.);
