@@ -1679,6 +1679,11 @@ int main( int argc, char* argv[] )
   pSampleCount.Fill(0);
   size_t pTotalSampleCount = 0;
   size_t pMaxSampleCount = 0;
+  size_t pMinSampleCount = 0;
+
+  size_t zTotalSampleCount = 0;
+  size_t zMaxSampleCount = 0;
+  size_t zMinSampleCount = 0;
 
   rs.Fill(NAN);
   ts.Fill(0);
@@ -1869,6 +1874,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pS(MAP_SIZE);
   size_t nTotalSampleCount = 0;
   size_t nMaxSampleCount = 0;
+  size_t nMinSampleCount = 0;
   nSampleCountRAvg.Fill(0);
   nSampleCount.Fill(0);
   nSamplePReject.Fill(NAN);
@@ -1976,6 +1982,7 @@ int main( int argc, char* argv[] )
       tdp::AccumulatevMFSS(ni, nSampleSum_w[i], nSampleCount[i]);
       nTotalSampleCount ++;
       nMaxSampleCount = std::max(nMaxSampleCount, (size_t) nSampleCount[i]);
+      nMinSampleCount = std::min(nMinSampleCount+1, (size_t) nSampleCount[i]);
       if (nSampleCount[i] > sampleCountThr) {
         pl_w[i].n_ = nSampleSum_w[i].normalized();
         n_w[i] = pl_w[i].n_;
@@ -2085,6 +2092,9 @@ int main( int argc, char* argv[] )
           if (!pl_w[i].valid_ || zS[i] >= K) continue;
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
               zMli, countMli);
+          zTotalSampleCount ++;
+          zMaxSampleCount = std::max(zMaxSampleCount, (size_t) zSampleCounts[i]);
+          zMinSampleCount = std::max(zMinSampleCount+1, (size_t) zSampleCounts[i]);
 //          if (i%100) 
 //            std::cout << zSampleIds[i].transpose() << std::endl << zSampleCounts[i].transpose() << std::endl 
 //              << "ML: " << zMli << " " << countMli << " zi=" << zS[i] << std::endl;
@@ -2193,6 +2203,7 @@ int main( int argc, char* argv[] )
 //        pSampleCount[i] ++;
         pTotalSampleCount ++;
         pMaxSampleCount = std::max(pMaxSampleCount, (size_t) pSampleCount[i]);
+        pMinSampleCount = std::min(pMinSampleCount+1, (size_t) pSampleCount[i]);
 
         for (int k=0; k<kNN; ++k) {
           if (ids[k] > -1 
@@ -2258,6 +2269,9 @@ int main( int argc, char* argv[] )
     };
   });
 
+  float curTrackingH = 0;
+  float curTrackingMaxStd =0;
+  float curTrackingMinStd =0;
 
   tdp::ProjectiveAssociation<CameraT::NumParams, CameraT> projAssoc(cam, w, h);
 
@@ -2285,6 +2299,7 @@ int main( int argc, char* argv[] )
   }
 
   std::ofstream outT("timings.txt");
+  std::ofstream outStats("stats.txt");
   std::ofstream out("trajectory_tumFormat.csv");
   out << "# " << input_uri << std::endl;
 
@@ -2823,6 +2838,9 @@ int main( int argc, char* argv[] )
         //  std::cout << "k " << k << std::endl;
         //  std::cout << (Q.transpose()*Ai*Ai.transpose()*Q).diagonal().transpose() << std::endl;
         //}
+        curTrackingH = 3.*(1.+log(2.*M_PI))+0.5*H;
+        curTrackingMaxStd = 1./sqrtf(ev.array().minCoeff());
+        curTrackingMinStd = 1./sqrtf(ev.array().maxCoeff());
 
         logEntropy.Log(H);
         logEig.Log(-ev.array().log().matrix());
@@ -3396,9 +3414,28 @@ int main( int argc, char* argv[] )
     // leave in pixel orthographic for slider to render.
     pangolin::DisplayBase().ActivatePixelOrthographic();
     if (!gui.finished()) {
-      outT << "Frame " << frame << std::endl;
+      outT << "Frame\t" << frame << std::endl;
       Stopwatch::getInstance().logAll(outT);
       Stopwatch::getInstance().sendAll();
+      outStats << "Frame\t" << frame << std::endl;
+      outStats << "NumSurfels\t" << pl_w.SizeToRead() << std::endl;
+      outStats << "NumPlanesInView\t" << idsCur[0]->size() << std::endl;
+      outStats << "NumPlanesTracked\t" << assoc.size() << std::endl;
+      outStats << "NumNewPlanes\t" << idNew.size() << std::endl;
+      outStats << "NumPlanesProjected\t" << numProjected << std::endl;
+      outStats << "NumPruned\t" << numPruned<< std::endl;
+      outStats << "trackingH\t" << curTrackingH<< std::endl;
+      outStats << "trackingMaxStd\t" << curTrackingMaxStd << std::endl;
+      outStats << "trackingMinStd\t" << curTrackingMinStd << std::endl;
+      outStats << "pTotalNumSample\t" << pTotalNumSample << std::endl;
+      outStats << "pMinNumSample\t" << pMinSampleCount<< std::endl;
+      outStats << "pMaxNumSample\t" << pMaxSampleCount<< std::endl;
+      outStats << "nTotalNumSample\t" << nTotalSampleCount << std::endl;
+      outStats << "nMinNumSample\t" << nMinSampleCount<< std::endl;
+      outStats << "nMaxNumSample\t" << nMaxSampleCount<< std::endl;
+      outStats << "zTotalNumSample\t" << zTotalSampleCount << std::endl;
+      outStats << "zMinNumSample\t" << zMinSampleCount<< std::endl;
+      outStats << "zMaxNumSample\t" << zMaxSampleCount<< std::endl;
     }
     pangolin::FinishFrame();
 
@@ -3421,6 +3458,7 @@ int main( int argc, char* argv[] )
   }
   out.close();
   outT.close();
+  outStats.close();
 
   for (size_t lvl=0; lvl<PYR; ++lvl) {
     delete idsCur[lvl];
