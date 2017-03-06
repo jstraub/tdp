@@ -12,8 +12,7 @@ out vec2 uv;
 void main() {
   gl_Position = P * MV * (vec4(pos,1.));
   if (value==value) {
-    value += offset;
-    uv = vec2((mod(value,256.)+0.5)/256.,(value/256.+1.)/256.);
+    uv = vec2((mod(value+offset,256.)+0.5)/256.,((value+offset)/256.+1.)/256.);
   } else {
     uv = vec2(0.,0.);
   }
