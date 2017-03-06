@@ -13,6 +13,10 @@ for i in range(4):
   SetMode(samplePoints=True, dirObsSelect=True, gradNormObsSelect=True);
   Run(datsetPath, configString, outputPath, pathToGt);
 
+  outputPath = "../results/"+tag+"/simpleMap/"
+  SetMode(samplePoints=False, dirObsSelect=True, gradNormObsSelect=True);
+  Run(datsetPath, configString, outputPath, pathToGt);
+
   # prints out the registration error
   args = ["./../../3rdparty/SurfReg/src/build/SurfReg",
       "-r "+outputPath+"/surfelMap.ply",

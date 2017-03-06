@@ -32,6 +32,7 @@
     "icpPanel.rel log dH ": "0.001",
     "icpPanel.reset icp": "1",
     "icpPanel.run ICP": "1",
+    "icpPanel.max obs icp": "2000",
     "icpPanel.semObsSelect": "1",
     "icpPanel.sortByGradient": "1",
     "icpPanel.use 3D grads ": "0",
