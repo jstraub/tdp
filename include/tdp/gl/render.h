@@ -131,7 +131,9 @@ void RenderVboIds(
 void RenderLabeledVbo(
   pangolin::GlBuffer& vbo,
   pangolin::GlBuffer& labelbo,
-  const pangolin::OpenGlRenderState& cam);
+  const pangolin::OpenGlRenderState& cam,
+  int32_t labelOffset=0
+  );
 
 void RenderVboIbo(
   pangolin::GlBuffer& vbo,

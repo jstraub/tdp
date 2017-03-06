@@ -1611,6 +1611,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
   pangolin::Var<bool> showNSampleCount("visPanel.show nSampleCount",false,true);
   pangolin::Var<bool> showNSamplePReject("visPanel.show nSample P Rej",false,true);
+  pangolin::Var<int> dispLabelOffset("visPanel.label offset",0,0,100);
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
@@ -3211,10 +3212,10 @@ int main( int argc, char* argv[] )
               minMaxAge.first, minMaxAge.second, P, MV);
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
+          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showLabelsMl && frame > 1) {
           lbo.Upload(zMl.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam);
+          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
