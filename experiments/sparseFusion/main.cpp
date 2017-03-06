@@ -3339,7 +3339,7 @@ int main( int argc, char* argv[] )
       viewNormals.Activate(normalsCam);
       if (frame > 1) {
         lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-        tdp::RenderLabeledVbo(nbo_w, lbo, normalsCam);
+        tdp::RenderLabeledVbo(nbo_w, lbo, normalsCam, dispLabelOffset);
       }  
       glColor4f(0,1,0,1.);
       {
