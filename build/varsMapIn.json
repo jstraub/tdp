@@ -29,7 +29,7 @@
     "mapPanel.prune NumObsThr": "10",
     "mapPanel.rel prune dist Thr": "3",
     "mapPanel.survival Time": "10",
-    "mapPanel.num Obs2take": "1000",
+    "mapPanel.num Obs2take": "3000",
     "mapPanel.use tracking uncertainty": "1"
   }
 }

@@ -1502,7 +1502,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> runMapping("mapPanel.run mapping",true,true);
   pangolin::Var<bool> useTrackingUncertainty("mapPanel.use tracking uncertainty",true,true);
   pangolin::Var<bool> allowNNRevisit("mapPanel.revisit NNs",true, true);
-  pangolin::Var<bool> savePcOnFinish("mapPanel.save Pc on Finish",true, true);
+  pangolin::Var<bool> savePcOnFinish("mapPanel.save Pc on Finish",false, true);
   pangolin::Var<bool> exitOnFinish("mapPanel.exit on Finish",false, true);
   // TODO if sample normals if off then doRegvMF shoudl be on
 //  pangolin::Var<bool> sampleNormals("mapPanel.sampleNormals",true,true);
@@ -2614,7 +2614,7 @@ int main( int argc, char* argv[] )
     TOCK("Setup");
 
     trackingGood = false;
-    if (frame > 0 && runTracking && !gui.finished()) { // tracking
+    if (frame > 0 && runTracking && !gui.finished() && !gui.paused()) { // tracking
       if (doSO3prealign) {
         tdp::SO3f R_cp;
         if (gui.verbose) std::cout << "SO3 prealignment" << std::endl;
@@ -2744,7 +2744,9 @@ int main( int argc, char* argv[] )
                 int32_t v = floor(x(1)+0.5f);
                 float d_c = dLvl.GetBilinear(x(0),x(1));
 //                std::cout << d_c << std::endl;
-                float threeSigma_d = numSigmaOclusion*sqrtf(rayLvl(u,v).dot(pSampleCov_w[i]*rayLvl(u,v)));
+                float nguyenSigmaAxial = 0.0012 + 0.0019*(d_c-0.4)*(d_c-0.4);
+                float threeSigma_d = numSigmaOclusion*(nguyenSigmaAxial + sqrtf(rayLvl(u,v).dot(Sigma_wc.bottomRightCorner<3,3>()*rayLvl(u,v))));
+//                float threeSigma_d = numSigmaOclusion*sqrtf(rayLvl(u,v).dot(pSampleCov_w[i]*rayLvl(u,v)));
                 if (d_c != d_c 
                     || (!sigmaOclusion && fabs(d_c-pc_w_in_c(2)) > occlusionDepthThr)
                     || (sigmaOclusion  && fabs(d_c-pc_w_in_c(2)) > threeSigma_d)
@@ -3218,7 +3220,8 @@ int main( int argc, char* argv[] )
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
-          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax, P, MV);
+          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax,
+              viewPc3D.GetBounds().w, viewPc3D.GetBounds().h, P, MV);
         } else {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
