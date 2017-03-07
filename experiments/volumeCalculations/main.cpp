@@ -121,7 +121,7 @@ int main( int argc, char* argv[] )
     << tsdf.h_ << "x" << tsdf.d_ << std::endl
     << T_wG << std::endl;
   std::cout << "0, 0, 0: " << grid0.transpose() << std::endl;
-  std::cout << "256, 256, 256: "
+  std::cout << "255, 255, 255: "
             << (T_wG * ((tdp::Vector3fda(256 * dGrid(0), 256 * dGrid(1), 256 * dGrid(2))) + grid0)).transpose()
             << std::endl;
   std::cout << "Scale: " << dGrid.transpose() << std::endl;
@@ -329,6 +329,9 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(applyMedianFilter)) {
       cuTsdfBuf1.CopyFrom(tsdf);
+      // Necessary so that the RGB values are preserved. Maybe we should
+      // copy RGB as well as depth and weight from the tsdf points of the medians? hm...
+      cuTsdfBuf2.CopyFrom(tsdf);
       tdp::TSDFFilters::medianFilter(cuTsdfBuf1, cuTsdfBuf2);
       tsdf.CopyFrom(cuTsdfBuf2);
     }
@@ -423,6 +426,7 @@ int main( int argc, char* argv[] )
       cuTsdfBuf1.CopyFrom(tsdf);
       tdp::TSDFFilters::applyCuttingPlanes(cuTsdfBuf1, pl1, pl2, grid0, dGrid, T_wG);
       tsdf.CopyFrom(cuTsdfBuf1);
+      std::cout << "Distance Between Planes: " << pl1.distance_to_parallel_plane(pl2.flip()) << std::endl;
     }
 
     // Draw 2D stuff

@@ -15,8 +15,8 @@ namespace Reconstruction {
         {}
 
       // NOTE: This constructor assumes equations of the form
-      // normal "dot" x = d
-      // for some point x in the plane
+      // normal "dot" <x, y, z> = d
+      // for some point <x, y, z> in the plane
       TDP_HOST_DEVICE
       Plane(Vector3fda normal, float d)
         : m_original_magnitude(normal.norm()),
@@ -40,6 +40,15 @@ namespace Reconstruction {
       TDP_HOST_DEVICE
       float distance_to(const Vector3fda& point) const {
           return m_normal.dot(point) - m_dist_to_origin;
+      }
+
+      TDP_HOST_DEVICE
+      float distance_to_parallel_plane(const Plane& other) const {
+          // Given x,y = 0, what z satisfies (0, 0, z) on the plane other
+          Vector3fda tmp(0, 0, 1);
+          float z = other.m_dist_to_origin / m_normal.dot(tmp);
+          Vector3fda point(0, 0, z);
+          return distance_to(point);
       }
 
       TDP_HOST_DEVICE

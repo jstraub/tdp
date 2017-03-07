@@ -38,6 +38,8 @@ bool ComputeMesh(
   surface.getIndices((uint32_t*)indexStore.ptr_);
   surface.getColors((uint8_t*)colorStore.ptr_);
 
+  std::cout << "Mesh Vol: " << surface.getVolume() << std::endl;
+
   for (size_t i=0; i<vertexStore.Area(); ++i)
     vertexStore[i] = T_wg*(vertexStore[i] + grid0);
 
