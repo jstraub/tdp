@@ -109,7 +109,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> dMin("ui.d min",0.10,0.0,0.1);
   pangolin::Var<float> dMax("ui.d max",4.,0.1,4.);
   pangolin::Var<float> scale("ui.scale",0.1,0.1,0.2);
-  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.05,0.1,0.3);
+  pangolin::Var<float> p2plThr("ui.p2pl Thr",0.06,0.1,0.3);
   pangolin::Var<float> angThr("ui.ang Thr",15.,10.,30.);
   pangolin::Var<float> distThr("ui.dist Thr",10.,0.5,3.);
   pangolin::Var<float> curvThr("ui.curv Thr",0.06,0.01,0.1);
@@ -117,10 +117,16 @@ int main( int argc, char* argv[] )
   pangolin::Var<int> W("ui.W",9,1,15);
   pangolin::Var<int> nPlanes("ui.nPlanes",1000,100,1000);
 
+  pangolin::Var<bool> useVoting("ui.use voting",false,true);
+
   tdp::ManagedHostCircularBuffer<tdp::Plane> pls(100000);
 
   std::stringstream ss;
-  ss << "./sparsePlaneSeg_" << nPlanes << ".csv";
+  if (useVoting) {
+    ss << "./sparsePlaneSeg_voting_" << nPlanes << ".csv";
+  } else {
+    ss << "./sparsePlaneSeg_LS_" << nPlanes << ".csv";
+  }
   std::ofstream out(ss.str());
 
   // Stream and display video
@@ -149,7 +155,11 @@ int main( int argc, char* argv[] )
     // compute point cloud (on CPU)
     tdp::Depth2PC(d,cam,pc);
 
-    tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n, curv);
+    if (useVoting) {
+      tdp::NormalsViaVoting(pc, W, 1, inlierThr, dpc, n, curv);
+    } else {
+      tdp::NormalsViaScatterUnconstrained(pc, W, 1, n);
+    }
     std::cout << "normals computed" << std::endl;
 
     std::vector<int> ids(w*h);

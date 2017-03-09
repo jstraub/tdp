@@ -13,7 +13,8 @@ mpl.rc('lines',linewidth=3.)
 figSize = (14, 12)
 
 #with open("./sparsePlaneSeg_NYU_1000.csv","r") as f:
-with open("./sparsePlaneSeg_1000.csv","r") as f:
+#with open("./sparsePlaneSeg_1000.csv","r") as f:
+with open("./sparsePlaneSeg_LS_1000.csv","r") as f:
   x = np.loadtxt(f);
 xObs = x[:,1::2]
 x = x[:,0::2]
