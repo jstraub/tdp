@@ -368,7 +368,7 @@ TEST(laplace_beltrami, scale){
 
 TEST(laplace_beltrami, deform){
   int n(5);
-  ManagedHostImage<tdp::Vector3fda> pc(n,1),pc_cart(n,1),pc_d(n,1);
+  ManagedHostImage<Vector3fda> pc(n,1),pc_cart(n,1),pc_d(n,1);
   GetPointsOnSphere(pc, n, 1);
   toCartisean(pc,pc_cart);
 
@@ -388,6 +388,51 @@ TEST(laplace_beltrami, deform){
   std::cout << pc_d.Area() << std::endl;
 
   printImage(pc_d, 0, pc_d.Area());
+}
+
+TEST(laplace_beltrami, math){
+  Eigen::Matrix3f m;
+  m << 1, 0, 0,
+       0, 2, 0,
+       0, 0, 3;
+  std::cout << m.col(0) << std::endl;
+
+  for (int i=0;i< m.cols(); ++i){
+    for (int j=0; j<m.cols(); ++j){
+      if (i<j){
+      std::cout << m.col(i).dot(m.col(j)) << ", ";
+      }
+    }
+  }
+}
+
+TEST(laplace_beltrami, f_iSupport){
+  ManagedHostImage<Vector3fda> pc(10,1);
+  std::vector<int> support = {}; //must be sorted
+  Eigen::VectorXf f(pc.Area());
+
+  f_indicator(pc, support, f);
+  std::cout << f.transpose() << std::endl;
+
+  support.push_back(1);
+  support.push_back(2);
+  support.push_back(8);
+  f_indicator(pc,support,f);
+  std::cout << "\nsupport: ";
+  for (auto i = support.begin(); i != support.end(); ++i){
+    std::cout << *i << " ";
+  }
+  std::cout << std::endl;
+  std::cout << f.transpose() << std::endl;
+
+  support = std::vector<int>{2,3,5,7};
+  f_indicator(pc,support,f);
+  std::cout << "\nsupport: ";
+  for (auto i = support.begin(); i != support.end(); ++i){
+    std::cout << *i << " ";
+  }
+  std::cout << std::endl;
+  std::cout << f.transpose() << std::endl;
 }
 
 

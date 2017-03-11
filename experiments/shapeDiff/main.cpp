@@ -55,12 +55,6 @@
 #include <unistd.h> //check if cached files exist
 
 #include <tdp/laplace_beltrami/laplace_beltrami.h>
-
-/************TODO***********************************************/
-/***************************************************************/
-//1. MOVE THE TESTS TO A SEPARATE TEST FILE
-//2. FOCUS ON arm.ply and bunny ply
-
 /************Declarations***************************************
  ***************************************************************/
 
@@ -71,10 +65,7 @@
 //2. try function transfer + get error on deformed sphere
 
 
-
-
 int main(int argc, char* argv[]){
-
   //Create openGL window - guess sensible dimensions
   int menu_w = 180;
   pangolin::CreateWindowAndBind("GuiBase", 1200+menu_w, 800);
@@ -112,27 +103,29 @@ int main(int argc, char* argv[]){
                           .SetHandler(new pangolin::Handler3D(cmtx_cam));
   pangolin::View& view_f = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(s_cam));
-  pangolin::View& view_g = pangolin::CreateDisplay()
-                          .SetHandler(new pangolin::Handler3D(t_cam));
+  // pangolin::View& view_g = pangolin::CreateDisplay()
+                          // .SetHandler(new pangolin::Handler3D(t_cam));
+  pangolin::View& view_d = pangolin::CreateDisplay()
+                          .SetHandler(new pangolin::Handler3D(s_cam));
 
   container.AddDisplay(view_s);
   container.AddDisplay(view_t);
   container.AddDisplay(view_cmtx);
   container.AddDisplay(view_f);
-  container.AddDisplay(view_g);
+  container.AddDisplay(view_d);
+
+  // container.AddDisplay(view_g);
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
-  pangolin::Var<bool> showMeans("ui.show means", true, false);
   pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
-  pangolin::Var<bool> showDecomposition("ui. show evals", false, true);
 
-  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 450, 100, 450);
-  pangolin::Var<int> shapeOpt("ui. shape option", 2, 0, 3); //2:bunny
+  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 1000, 100, 2000);
+  pangolin::Var<int> shapeOpt("ui. shape option", 1, 0, 3); //2:bunny
 
   //--second shape point cloud
   pangolin::Var<float> sFactor("ui. second pc scale", 2.0, 0.5, 3); //pc_t[i] = sFactor*pc_s[i];
-  pangolin::Var<float> max_phi("ui. max phi", 0, 1e-6, M_PI); // spherical deformation using phi angle
+  pangolin::Var<float> max_phi("ui. max phi", 1e-6, 1e-6, M_PI); // spherical deformation using phi angle
   pangolin::Var<float> noiseStd("ui. noiseStd", 0, 0.00001, 0.0001); //zero mean Gaussian noise added to shape S
 
 
@@ -146,9 +139,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<float> alpha2("ui. alpha2", 0.0001, 0.0001, 0.01); //variance of rbf kernel for defining function on manifold
   pangolin::Var<int> nEv("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
   pangolin::Var<int> nPW("ui.num PointWise train",nSamples/*std::min(20*numEv, pc_s.Area())*/,nEv,nSamples);
-//nhks
-//  pangolin::Var<int> nCst("ui.numCst",nPW,nPW,nSamples);
-  pangolin::Var<int> nHKS("ui.nSteps for HKS", 100, 50,300); //number of timesteps for HKS
+
   //-- viz color coding
   pangolin::Var<float>minVal_s("ui. min Val",-0.71,-1,0);
   pangolin::Var<float>maxVal_s("ui. max Val",0.01,1,0);
@@ -158,12 +149,13 @@ int main(int argc, char* argv[]){
                      vbo_f, vbo_g,  //point clouds
 
                      valuebo_s, valuebo_t, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
-                     valuebo_f, valuebo_g,
+                     valuebo_f, valuebo_g, valuebo_d,
                      valuebo_desc_s, valuebo_desc_t; //shape descriptor values (hks,wks)
 
   // min,max for coloring
-  float minVal_t, maxVal_t, minVal_c, maxVal_c, minVal_f, maxVal_f,
-        minVal_g, maxVal_g;
+  float minVal_t, maxVal_t, minVal_c, maxVal_c,
+        minVal_f, maxVal_f,
+        minVal_g, maxVal_g, minVal_d, maxVal_d;
 
   // Control switches
   bool annChanged = false;
@@ -178,7 +170,7 @@ int main(int argc, char* argv[]){
   std::string option("rbf");
 
   tdp::ManagedHostImage<tdp::Vector3fda> 
-    pc_all,pc_s, pc_t,
+    pc_all, pc_s_spherical, pc_t_spherical, pc_s, pc_t,
     pc_grid((int)nEv*(int)nEv,1);
 
   std::string fpath_b, fpath_m;
@@ -193,14 +185,15 @@ int main(int argc, char* argv[]){
                   T_evals;//evalues of Laplacian of T. Increasing order.
 
   Eigen::MatrixXf S_wl,//(L_s.rows(),(int)numEv),
-                  T_wl,//(L_t.rows(),(int)numEv),
-                  S_desc_w, //(L_s rows(), (int)nHKS
-                  T_desc_w,
-                  F,//((int)numCst, (int)numEv),
-                  G,//((int)numCst, (int)numEv),
-                  C;//((int)nEv, (int)nEv);
+                  T_wl;//,(L_t.rows(),(int)numEv),
+//                  F,//((int)numCst, (int)numEv),
+//                  G,//((int)numCst, (int)numEv),
+//                  C,//((int)nEv, (int)nEv);
+//                  D;//DiffMap;((int)nEv, (int)nEv);
 
   std::vector<int> pIndices; //For functional correpsondence pairs
+  std::vector<int> dIndices; //Indices to deformed points
+
   /*********************************************************************/
 
   // Stream and display video
@@ -231,27 +224,36 @@ int main(int argc, char* argv[]){
         switch (shapeOpt){
           case 0:
             tdp::GetSimplePc(pc_s, nSamples);
+            pc_t.ResizeCopyFrom(pc_s);
             std::cout << "Shape: linear---" << std::endl;
             break;
           case 1:
-            tdp::GetSphericalPc(pc_s, nSamples);
+//            tdp::GetSphericalPc(pc_s, nSamples);
+            tdp::GetPointsOnSphere(pc_s_spherical, (int)nSamples);
+            tdp::toCartisean(pc_s_spherical, pc_s);
+            dIndices == tdp::Deform(pc_s_spherical, pc_t_spherical, (float)max_phi);
+            tdp::toCartisean(pc_t_spherical, pc_t);
+
+            std::cout << "number of deformed: " << dIndices.size() << std::endl;
             std::cout << "Shape: sphere---" << std::endl;
             break;
           case 2:
             tdp::LoadPointCloudFromMesh(fpath_b, pc_all);
             tdp::GetSamples(pc_all, pc_s, nSamples);
+            pc_t.ResizeCopyFrom(pc_s);
             std::cout << "Shape: bunny---" << std::endl;
             break;
           case 3:
             tdp::ManagedHostImage<tdp::Vector3fda> pc_all;
             tdp::LoadPointCloudFromMesh(fpath_m, pc_all);
             tdp::GetSamples(pc_all, pc_s, nSamples);
+            pc_t.ResizeCopyFrom(pc_s);
             std::cout << "Shape: manekine---" << std::endl;
         }
 
-        //pc_t.ResizeCopyFrom(pc_s); //copy
-        //tdp::scale(pc_s,sFactor, pc_t); //scale
-        tdp::Deform(pc_s, pc_t, (float)max_phi);
+        // Modify second shape
+        //todo: pc_s->pc_s_spherical->pc_t_spherical->pc_t
+        //tdp::scale(pc_t,sFactor, pc_t); //scale
         //tdp::addGaussianNoise(pc_t, (float)noiseStd, pc_t);
 
         std::cout << "PC_S: " << pc_s.Area() << std::endl;
@@ -284,37 +286,9 @@ int main(int argc, char* argv[]){
     if (pangolin::Pushed(showFMap) || annChanged ||
                   knn.GuiChanged() || alpha.GuiChanged()){
         // get Laplacian operator and its eigenvectors
-
-        //******************CACHE NAMING*************************//
-        //*******************************************************//
-        std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
-                                  (int)shapeOpt, (int)nSamples, (int)knn,
-                                  (float)alpha, (float)noiseStd, (int)nEv,
-                                  "./cache/scale/");
-        const char* path_ls = cacheDic.at("ls").c_str();
-        const char* path_lt = cacheDic.at("lt").c_str();
-
-
-        //***************Get Laplacians***************************//
         tdp::Timer t0;
-        int res = access(path_ls, R_OK) + access(path_lt, R_OK);
-
-        if (res == 0){
-            // Read cached file
-            std::cout << "Reading Laplacians from cache---" << std::endl;
-
-            tdp::read_binary(path_ls, L_s);
-            tdp::read_binary(path_lt, L_t);
-        } else{
-            L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
-            L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
-
-            tdp::write_binary(path_ls, L_s);
-            tdp::write_binary(path_lt, L_t);
-
-            std::cout << "Cached Laplacians---" << std::endl;
-        }
-
+        L_s = tdp::getLaplacian(pc_s, ann_s, knn, eps, alpha);
+        L_t = tdp::getLaplacian(pc_t, ann_t, knn, eps, alpha);
         t0.toctic("GetLaplacians");
         laplacianChanged = true;
         std::cout << "LaplacianS changed\n" << std::endl;
@@ -323,57 +297,39 @@ int main(int argc, char* argv[]){
     if (pangolin::Pushed(showFMap) || laplacianChanged ||
                 nEv.GuiChanged()){
       //nPW = (int)nEv; // + (int)nHKS;
-      std::cout << "before: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       S_wl.resize(L_s.rows(),(int)nEv);
-      std::cout << "after: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
-
       T_wl.resize(L_t.rows(),(int)nEv);
       S_evals.resize((int)nEv);
       T_evals.resize((int)nEv);
-      S_desc_w.resize(L_s.rows(), (int)nHKS);
-      T_desc_w.resize(L_t.rows(), (int)nHKS);
 
-      F.resize((int)nPW, (int)nEv);
-      G.resize((int)nPW, (int)nEv);
-      C.resize((int)nEv, (int)nEv);
-
-      //******************CACHE NAMING*************************//
-      std::map<std::string, std::string> cacheDic = tdp::makeCacheNames(
-                                  (int)shapeOpt, (int)nSamples, (int)knn,
-                                  (float)alpha, (float)noiseStd,(int)nEv,
-                                  "./cache/scale/");
-      const char* path_s_wl = cacheDic.at("s_wl").c_str();
-      const char* path_t_wl = cacheDic.at("t_wl").c_str();
-      const char* path_s_evals = cacheDic.at("s_evals").c_str();
-      const char* path_t_evals = cacheDic.at("t_evals").c_str();
-
-      std::cout << "s_wl resized: " << S_wl.rows() << ", " << S_wl.cols() << std::endl;
-      std::cout << "t_wl resized: " << T_wl.rows() << ", " << T_wl.cols() << std::endl;
+//      F.resize((int)nPW, (int)nEv);
+//      G.resize((int)nPW, (int)nEv);
+//      C.resize((int)nEv, (int)nEv);
+//      D.resize((int)nEv, (int)nEv);
 
       tdp::Timer t0;
-      int res = access(path_s_wl, R_OK) + access(path_t_wl, R_OK) +
-                access(path_s_evals, R_OK) + access(path_t_evals, R_OK);
+      std::cout << "Calculating Bases&evals---" << std::endl;
+      tdp::decomposeLaplacian(L_s, nEv, S_evals, S_wl); //todo: check if size initialization is included
+      tdp::decomposeLaplacian(L_t, nEv, T_evals, T_wl);
+      t0.toctic("Laplacian decomposition");
 
-      if (res == 0){
-          std::cout << "Reading Bases&evals from cache---" << std::endl;
-          tdp::read_binary(path_s_wl, S_wl);
-          tdp::read_binary(path_t_wl, T_wl);
-          tdp::read_binary(path_s_evals, S_evals);
-          tdp::read_binary(path_t_evals, T_evals);
+      tdp::gramSchmidt(S_wl);
+      tdp::gramSchmidt(T_wl);
+      t0.toctic("gramSchmidt");
 
-      } else{
-          std::cout << "Calculating Bases&evals---" << std::endl;
-          tdp::decomposeLaplacian(L_s, nEv, S_evals, S_wl); //todo: check if size initialization is included
-          tdp::decomposeLaplacian(L_t, nEv, T_evals, T_wl);
-
-          tdp::write_binary(path_s_wl, S_wl);
-          tdp::write_binary(path_t_wl, T_wl);
-          tdp::write_binary(path_s_evals, S_evals);
-          tdp::write_binary(path_t_evals, T_evals);
-          std::cout << "Cached: bases, evals" << std::endl;
-      }
-
-      t0.toctic("GetEigenVectors & GetMeans");
+//      //check if evectors are orthonormal
+//      std::cout << "\n\nnormal LB basis check-----" << std::endl;
+//      for (int i=0; i<S_wl.cols(); ++i){
+//          std::cout << S_wl.col(i).norm() << ", ";
+//      }
+//      std::cout << "\nChecking if orthogonal------" << std::endl;
+//      for (int i=0; i<S_wl.cols();++i ){
+//        std::cout << "\nnew vec-----" << std::endl;
+//        for (int j=0; j<i; ++j ){
+//          std::cout << S_wl.col(i).dot(S_wl.col(j)) << ", ";
+//        }
+//      }
+//     //end of print
 
       evector_s = S_wl.col(1); // first non-trivial evector
       evector_t = T_wl.col(1); // first non-trivial evector
@@ -395,11 +351,11 @@ int main(int argc, char* argv[]){
     }
 
     if (pangolin::Pushed(showFMap) || nPW.GuiChanged() ||
-        //        nCst.GuiChanged()          ||
         alpha2.GuiChanged() || basisChanged ){
+
       //--Construct function pairs
       Eigen::MatrixXf F((int)nPW, (int)nEv), G((int)nPW, (int)nEv),
-                      C((int)nEv, (int)nEv);
+                      C((int)nEv, (int)nEv), D((int)nEv, (int)nEv);
 
       std::cout << "nPW: " << (int)nPW << std::endl;
       std::cout << "F,G,C CREATED!---" << std::endl;
@@ -410,7 +366,6 @@ int main(int argc, char* argv[]){
       std::cout << "S_WL---" << std::endl;
       std::cout << S_wl.rows() << ", " << S_wl.cols() << std::endl;
       std::cout << T_wl.rows() << ", " << T_wl.cols() << std::endl;
-
 
       // --construct F(data matrix) and G based on the correspondences
       for (int i=0; i< (int)nPW; ++i){
@@ -437,10 +392,10 @@ int main(int argc, char* argv[]){
       // solve least-square
       C = (F.transpose()*F).fullPivLu().solve(F.transpose()*G);
 
-      std::cout << "-----------\n"
-                << "C(10x10) \n"
-                << C.block(0,0,10,10)
-                << std::endl;
+//      std::cout << "-----------\n"
+//                << "C(10x10) \n"
+//                << C.block(0,0,10,10)
+//                << std::endl;
 
       std::cout << "----------\n"
                 << "Diagnoals\n"
@@ -463,13 +418,70 @@ int main(int argc, char* argv[]){
       valuebo_cmtx.Reinitialise(pangolin::GlArrayBuffer, cvec.rows(), GL_FLOAT,1, GL_DYNAMIC_DRAW);
       valuebo_cmtx.Upload(&cvec(0), sizeof(float)*cvec.rows(), 0);
 
+      std::cout << "<---CMTX--->" << std::endl;
       std::cout << cvec.minCoeff() << " " << cvec.maxCoeff() << std::endl;
       minVal_c = cvec.minCoeff()-1e-3;
       maxVal_c = cvec.maxCoeff();
 
       cChanged = true;
       std::cout << "C matrix is (re)calculated\n" << std::endl;
+
+      // calculate DiffMap
+      tdp::Timer t0;
+      D = C.transpose()*C;
+
+      //Take a function 
+      Eigen::VectorXf f_w(pc_s.Area());
+      //sort dPoints
+      //get indicator function on the support
+      //tdp::f_indicator(pc_s, dPoints, f);
+      tdp::f_indicator(pc_s, dIndices, f_w);
+      std::cout << "checking f indicator f_w" << std::endl;
+      for (auto i = dIndices.begin(); i != dIndices.end(); ++i){
+        std::cout << f_w(*i) << " ";
+      }
+      std::cout << std::endl;
+      if ( dIndices.size() <= 0){
+        f_w.fill(1);
+      }
+
+      //To local
+      Eigen::VectorXf f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+      Eigen::VectorXf d_f_l = D * f_l;
+      Eigen::VectorXf d_f_w = S_wl * d_f_l;
+      Eigen::VectorXf diffVec = (d_f_w - f_w).array().abs();
+      t0.toctic("diff operation");
+
+      //Visualize fz and diff
+      valuebo_f.Reinitialise(pangolin::GlArrayBuffer, f_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_f.Upload(&f_w(0), sizeof(float)*f_w.rows(), 0);
+//      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, diffVec.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+//      valuebo_d.Upload(&diffVec(0), sizeof(float)*diffVec.rows(), 0);
+      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, d_f_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_d.Upload(&d_f_w(0), sizeof(float)*d_f_w.rows(), 0);
+
+      minVal_f = f_w.minCoeff()-1e-3;
+      maxVal_f = f_w.maxCoeff();
+
+//      minVal_d = diffVec.minCoeff()-1e-2;
+//      maxVal_d = diffVec.maxCoeff()+1e-2;
+      minVal_d = d_f_w.minCoeff()-1e-3;
+      maxVal_d = d_f_w.maxCoeff()+1e-3;
+
+      std::cout << "min max values------------->" << std::endl;
+      std::cout << "cmtx (fmap): " << minVal_c << ", " << maxVal_c << std::endl;
+      std::cout << "f_w: " << minVal_f << ", " << maxVal_f << std::endl;
+      std::cout << "d_fw-fw: " << minVal_d << ", " << maxVal_d << std::endl;
+      std::cout << "min, max d: " << minVal_d << ", " << maxVal_d << std::endl;
+
+      std::cout << "--------FINAL RESULT---------" << std::endl;
+      std::cout << "diff norm: " << diffVec.norm() << std::endl;
+      std::cout << "area ratio: " << (f_w.squaredNorm()/d_f_w.dot(f_w)) << std::endl;
+
     }
+
+
+
 
     // Draw 3D stuff
     glEnable(GL_DEPTH_TEST);
@@ -505,7 +517,7 @@ int main(int argc, char* argv[]){
     }
 
     if (view_t.IsShown()){
-        view_t.Activate(t_cam);
+        view_t.Activate(s_cam);
         pangolin::glDrawAxis(0.1);
 
         glPointSize(2.);
@@ -513,8 +525,8 @@ int main(int argc, char* argv[]){
         // renders the vbo with colors from valuebo
         auto& shader_t = tdp::Shaders::Instance()->valueShader_;
         shader_t.Bind();
-        shader_t.SetUniform("P",  t_cam.GetProjectionMatrix());
-        shader_t.SetUniform("MV", t_cam.GetModelViewMatrix());
+        shader_t.SetUniform("P",  s_cam.GetProjectionMatrix());
+        shader_t.SetUniform("MV", s_cam.GetModelViewMatrix());
         shader_t.SetUniform("minValue", minVal_t);
         shader_t.SetUniform("maxValue", maxVal_t);
         valuebo_t.Bind();
@@ -562,6 +574,65 @@ int main(int argc, char* argv[]){
         valuebo_cmtx.Unbind();
         glDisableVertexAttribArray(0);
         vbo_cmtx.Unbind();
+    }
+
+    if (view_f.IsShown()) {
+      view_f.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
+
+      glPointSize(2.);
+      glColor3f(1.0f, 1.0f, 0.0f);
+      // renders the vbo with colors from valuebo
+      auto& shader = tdp::Shaders::Instance()->valueShader_;
+      shader.Bind();
+      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal_f);
+      shader.SetUniform("maxValue", maxVal_f);
+      valuebo_f.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+      vbo_s.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valuebo_f.Unbind();
+      glDisableVertexAttribArray(0);
+      vbo_s.Unbind();
+    }
+
+
+    if (view_d.IsShown()) {
+      view_d.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
+
+      glPointSize(2.);
+      glColor3f(1.0f, 1.0f, 0.0f);
+      // renders the vbo with colors from valuebo
+      auto& shader = tdp::Shaders::Instance()->valueShader_;
+      shader.Bind();
+      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal_d);
+      shader.SetUniform("maxValue", maxVal_d);
+      valuebo_d.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+      vbo_s.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valuebo_d.Unbind();
+      glDisableVertexAttribArray(0);
+      vbo_s.Unbind();
     }
 
     glDisable(GL_DEPTH_TEST);

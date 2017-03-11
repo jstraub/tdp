@@ -207,28 +207,34 @@ void scale(const ManagedHostImage<Vector3fda>& src,
   }
 }
 
-void Deform(const ManagedHostImage<Vector3fda>& src,
-            ManagedHostImage<Vector3fda>& dst,
-            float max_phi){
+std::vector<int> Deform(const ManagedHostImage<Vector3fda>& src,
+                               ManagedHostImage<Vector3fda>& dst,
+                               float max_phi){
   //Assumes src contain points on the unit sphere in spherical coordinate
   //system: (p, theta, phi) where 0<=theta<=2pi and 0<=phi<=pi
+  //dIndices: indices of points that are changed
   // max_phi cannot be zero
   // Returns deformed point cloud in spherical coordinates
+  assert(max_phi>0);
+  if (max_phi > M_PI) max_phi = M_PI;
   dst.Reinitialise(src.Area(),1);
-  float k = 1/max_phi;
+  std::vector<int> deformed;
+
+  float k = 0.5*(1/max_phi);
   for (int i=0; i< src.Area(); ++i){
     if (0 <= src[i][2] && src[i][2]<= max_phi){
       //scale p in proportion to 1/phi
-//      std::cout << "changed!" << std::endl;
       dst[i] = Vector3fda(src[i][0]*(1+k*(max_phi - src[i][2])),//src[i][0]*(1+1/src[i][2]),
                                src[i][1],
                                src[i][2]); //todo: add parameter for 1/phi
+      deformed.push_back(i);
     } else{
 //      std::cout << "same" << std::endl;
       dst[i] = Vector3fda(src[i]);
     }
 //    std::cout << "dst[i]: " << dst[i].transpose() << std::endl;
   }
+  return deformed;
 }
 
 
@@ -543,6 +549,20 @@ void getLaplacianBasis(const Eigen::SparseMatrix<float>& L,
     }
 }
 
+void gramSchmidt(Eigen::MatrixXf& basis){
+  //in-place orthogonalization of the basis.
+  //Assumes column vector
+  for (int i=0; i< basis.cols(); ++i){
+    for (int j=0; j<i; ++j){
+      basis.col(i) -= (basis.col(i).dot(basis.col(j)))*basis.col(j);
+      // std::cout << "zero?: " << basis.col(i).dot(basis.col(j)) << ", ";
+    }
+
+    basis.col(i).normalize();
+    // std::cout << "one?: " << basis.col(i).norm() << std::endl;
+  }
+}
+
 void decomposeLaplacian(const Eigen::SparseMatrix<float>& L,
                         int numEv,
                         Eigen::VectorXf& evalues,
@@ -681,6 +701,36 @@ void f_indicator(const Image<Vector3fda>& pc,
     }
 }
 
+void f_indicator(const Image<Vector3fda> &pc,
+                 const std::vector<int>& support,
+                 Eigen::VectorXf &f){
+  //f[i] = 1 if i is in support, 0 otherwise.
+  //Assumes support is sorted
+  f.resize(pc.Area());
+
+  if (support.size() <= 0) {
+    f.fill(0);
+    return;  
+  } 
+  assert(support[support.size()-1] < pc.Area());
+
+  int j = 0;
+  for (int i = 0; i < support.size(); ++i){
+    while (j<support[i]){
+      f(j) = 0;
+      j++;
+    }
+    f(j) = 1;
+    j++;
+  }
+  while (j<f.rows()){
+      f[j] = 0;
+      j++;
+  }
+
+  std::cout << "j should be " << pc.Area() << ": " << j << std::endl;
+}
+
 void f_height(const Image<Vector3fda>& pc,
               Eigen::VectorXf& f_w){
   f_w.resize(pc.Area());
@@ -701,6 +751,8 @@ void f_landmark(const Image<Vector3fda>& pc,
         f_indicator(pc, p_idx, f_w);
     }
 }
+
+
 
 Eigen::MatrixXf getHKS(const Eigen::MatrixXf& LB_evecs,
                        const Eigen::VectorXf& LB_evals,

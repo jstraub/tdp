@@ -78,9 +78,9 @@ void scale(const ManagedHostImage<Vector3fda>& src,
            const float factor,
            ManagedHostImage<Vector3fda>& dst);
 
-void Deform(const ManagedHostImage<Vector3fda>& src,
-            ManagedHostImage<Vector3fda>& dst,
-            float max_phi);
+std::vector<int> Deform(const ManagedHostImage<Vector3fda>& src,
+                                ManagedHostImage<Vector3fda>& dst,
+                                float max_phi);
 
 /*****************************************************************************/
 template<typename T>
@@ -173,6 +173,9 @@ void decomposeLaplacian(const Eigen::SparseMatrix<float>& L,
                         Eigen::MatrixXf& evectors
                         );
 
+void gramSchmidt(Eigen::MatrixXf& basis);
+
+
 Eigen::MatrixXf getMeanCurvature(const Image<Vector3fda>& pc,
                                  const Eigen::SparseMatrix<float>& L);
 
@@ -202,6 +205,10 @@ void f_height(const Image<Vector3fda>& pc,
 void f_indicator(const Image<Vector3fda>& pc,
                  const int p_idx,
                  Eigen::VectorXf& f);
+
+void f_indicator(const Image<Vector3fda> &pc,
+                 const std::vector<int>& support,
+                 Eigen::VectorXf &f);
 
 void f_landmark(const Image<Vector3fda>& pc,
                 const int p_idx,

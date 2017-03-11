@@ -52,9 +52,8 @@ if (CUDA_FOUND)
   add_subdirectory(./fMap)
   add_subdirectory(./fMapTest)
   add_subdirectory(./fMapTestNoPangolin)
-  add_subdirectory(./fMapNonRigid)
-  add_subdirectory(./shapeDeform)
-
-
+  add_subdirectory(./shapeDiff)
+  add_subdirectory(./multiShapeDiff)
+  add_subdirectory(./shapeDeformNoPangolin)
 
 endif()
