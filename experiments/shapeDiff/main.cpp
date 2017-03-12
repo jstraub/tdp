@@ -98,13 +98,13 @@ int main(int argc, char* argv[]){
   pangolin::View& view_s = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(s_cam));
   pangolin::View& view_t = pangolin::CreateDisplay()
-                          .SetHandler(new pangolin::Handler3D(t_cam));
+                          .SetHandler(new pangolin::Handler3D(s_cam));
   pangolin::View& view_cmtx = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(cmtx_cam));
   pangolin::View& view_f = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(s_cam));
-  // pangolin::View& view_g = pangolin::CreateDisplay()
-                          // .SetHandler(new pangolin::Handler3D(t_cam));
+  pangolin::View& view_g = pangolin::CreateDisplay()
+                           .SetHandler(new pangolin::Handler3D(s_cam));
   pangolin::View& view_d = pangolin::CreateDisplay()
                           .SetHandler(new pangolin::Handler3D(s_cam));
 
@@ -112,9 +112,9 @@ int main(int argc, char* argv[]){
   container.AddDisplay(view_t);
   container.AddDisplay(view_cmtx);
   container.AddDisplay(view_f);
+  container.AddDisplay(view_g);
   container.AddDisplay(view_d);
 
-  // container.AddDisplay(view_g);
 
   // Add variables to pangolin GUI
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
@@ -125,7 +125,7 @@ int main(int argc, char* argv[]){
 
   //--second shape point cloud
   pangolin::Var<float> sFactor("ui. second pc scale", 2.0, 0.5, 3); //pc_t[i] = sFactor*pc_s[i];
-  pangolin::Var<float> max_phi("ui. max phi", 1e-6, 1e-6, M_PI); // spherical deformation using phi angle
+  pangolin::Var<float> max_phi("ui. max phi", M_PI/4, 1e-6, M_PI); // spherical deformation using phi angle
   pangolin::Var<float> noiseStd("ui. noiseStd", 0, 0.00001, 0.0001); //zero mean Gaussian noise added to shape S
 
 
@@ -137,8 +137,11 @@ int main(int argc, char* argv[]){
 
   //--Correspondence Matrix C estimation
   pangolin::Var<float> alpha2("ui. alpha2", 0.0001, 0.0001, 0.01); //variance of rbf kernel for defining function on manifold
-  pangolin::Var<int> nEv("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
-  pangolin::Var<int> nPW("ui.num PointWise train",nSamples/*std::min(20*numEv, pc_s.Area())*/,nEv,nSamples);
+  pangolin::Var<int> nEv_s("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
+  pangolin::Var<int> nEv_t("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
+
+  pangolin::Var<int> nPW("ui.num PointWise train",nSamples/*std::min(20*numEv, pc_s.Area())*/,
+                         nEv_t ,nSamples); //todo: minimum = max(nEv_s, nEv_t)
 
   //-- viz color coding
   pangolin::Var<float>minVal_s("ui. min Val",-0.71,-1,0);
@@ -146,7 +149,6 @@ int main(int argc, char* argv[]){
 
   // use those OpenGL buffers
   pangolin::GlBuffer vbo_s, vbo_t, vbo_cmtx,
-                     vbo_f, vbo_g,  //point clouds
 
                      valuebo_s, valuebo_t, valuebo_cmtx, valuebo_color, //colorings: source manifold, target manifod, c_mtx
                      valuebo_f, valuebo_g, valuebo_d,
@@ -171,7 +173,7 @@ int main(int argc, char* argv[]){
 
   tdp::ManagedHostImage<tdp::Vector3fda> 
     pc_all, pc_s_spherical, pc_t_spherical, pc_s, pc_t,
-    pc_grid((int)nEv*(int)nEv,1);
+    pc_grid((int)nEv_t*(int)nEv_s,1);//todo s or t first?
 
   std::string fpath_b, fpath_m;
   // std::map<std::string, std::string> cacheDic;
@@ -188,8 +190,8 @@ int main(int argc, char* argv[]){
                   T_wl;//,(L_t.rows(),(int)numEv),
 //                  F,//((int)numCst, (int)numEv),
 //                  G,//((int)numCst, (int)numEv),
-//                  C,//((int)nEv, (int)nEv);
-//                  D;//DiffMap;((int)nEv, (int)nEv);
+//                  C,//((int)nEv_t, (int)nEv_s);
+//                  D;//DiffMap;((int)nEv_t, (int)nEv_s);
 
   std::vector<int> pIndices; //For functional correpsondence pairs
   std::vector<int> dIndices; //Indices to deformed points
@@ -295,22 +297,22 @@ int main(int argc, char* argv[]){
     }
 
     if (pangolin::Pushed(showFMap) || laplacianChanged ||
-                nEv.GuiChanged()){
+                nEv_s.GuiChanged() || nEv_t.GuiChanged()){
       //nPW = (int)nEv; // + (int)nHKS;
-      S_wl.resize(L_s.rows(),(int)nEv);
-      T_wl.resize(L_t.rows(),(int)nEv);
-      S_evals.resize((int)nEv);
-      T_evals.resize((int)nEv);
+      S_wl.resize(L_s.rows(),(int)nEv_s);
+      T_wl.resize(L_t.rows(),(int)nEv_t);
+      S_evals.resize((int)nEv_s);
+      T_evals.resize((int)nEv_t);
 
-//      F.resize((int)nPW, (int)nEv);
-//      G.resize((int)nPW, (int)nEv);
-//      C.resize((int)nEv, (int)nEv);
-//      D.resize((int)nEv, (int)nEv);
+//      F.resize((int)nPW, (int)nEv_s);
+//      G.resize((int)nPW, (int)nEv_t);
+//      C.resize((int)nEv_t, (int)nEv_s);
+//      D.resize((int)nEv_t, (int)nEv_s);
 
       tdp::Timer t0;
       std::cout << "Calculating Bases&evals---" << std::endl;
-      tdp::decomposeLaplacian(L_s, nEv, S_evals, S_wl); //todo: check if size initialization is included
-      tdp::decomposeLaplacian(L_t, nEv, T_evals, T_wl);
+      tdp::decomposeLaplacian(L_s, nEv_s, S_evals, S_wl); //todo: check if size initialization is included
+      tdp::decomposeLaplacian(L_t, nEv_t, T_evals, T_wl);
       t0.toctic("Laplacian decomposition");
 
       tdp::gramSchmidt(S_wl);
@@ -354,8 +356,8 @@ int main(int argc, char* argv[]){
         alpha2.GuiChanged() || basisChanged ){
 
       //--Construct function pairs
-      Eigen::MatrixXf F((int)nPW, (int)nEv), G((int)nPW, (int)nEv),
-                      C((int)nEv, (int)nEv), D((int)nEv, (int)nEv);
+      Eigen::MatrixXf F((int)nPW, (int)nEv_s), G((int)nPW, (int)nEv_t),
+                      C((int)nEv_t, (int)nEv_s), D((int)nEv_s, (int)nEv_s);
 
       std::cout << "nPW: " << (int)nPW << std::endl;
       std::cout << "F,G,C CREATED!---" << std::endl;
@@ -403,12 +405,12 @@ int main(int argc, char* argv[]){
                 << std::endl;
 
       //Visualization of C
-      tdp::GetGrid(pc_grid, (int)nEv, (int)nEv);
+      tdp::GetGrid(pc_grid, (int)nEv_t, (int)nEv_s); //todo: order?
       vbo_cmtx.Reinitialise(pangolin::GlArrayBuffer, pc_grid.Area(),  GL_FLOAT, 3, GL_DYNAMIC_DRAW);
       vbo_cmtx.Upload(pc_grid.ptr_, pc_grid.SizeBytes(), 0);
 
       //color coding of the C matrix
-      Eigen::VectorXf cvec((int)nEv*(int)nEv);
+      Eigen::VectorXf cvec((int)nEv_t*(int)nEv_s);
       for (int r=0; r<C.rows(); ++r){
           for (int c=0; c<C.cols(); ++c){
               cvec(r*C.cols()+c) = C(r,c);
@@ -430,53 +432,66 @@ int main(int argc, char* argv[]){
       tdp::Timer t0;
       D = C.transpose()*C;
 
-      //Take a function 
+      // For functionTransfer
       Eigen::VectorXf f_w(pc_s.Area());
-      //sort dPoints
-      //get indicator function on the support
-      //tdp::f_indicator(pc_s, dPoints, f);
-      tdp::f_indicator(pc_s, dIndices, f_w);
-      std::cout << "checking f indicator f_w" << std::endl;
-      for (auto i = dIndices.begin(); i != dIndices.end(); ++i){
-        std::cout << f_w(*i) << " ";
-      }
-      std::cout << std::endl;
-      if ( dIndices.size() <= 0){
-        f_w.fill(1);
-      }
-
-      //To local
+      tdp::f_height(pc_s, f_w);
       Eigen::VectorXf f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
-      Eigen::VectorXf d_f_l = D * f_l;
-      Eigen::VectorXf d_f_w = S_wl * d_f_l;
-      Eigen::VectorXf diffVec = (d_f_w - f_w).array().abs();
-      t0.toctic("diff operation");
+      Eigen::VectorXf g_l = C*f_l;
+      Eigen::VectorXf g_w = T_wl * g_l;
+      Eigen::VectorXf rawDiff = g_w - f_w;
+
+
+//      //For shapeDifference
+//      //Take a function
+//      Eigen::VectorXf f_w(pc_s.Area());
+//      //sort dPoints
+//      //get indicator function on the support
+//      //tdp::f_indicator(pc_s, dPoints, f);
+//      tdp::f_indicator(pc_s, dIndices, f_w);
+//      std::cout << "checking f indicator f_w" << std::endl;
+//      for (auto i = dIndices.begin(); i != dIndices.end(); ++i){
+//        std::cout << f_w(*i) << " ";
+//      }
+//      std::cout << std::endl;
+//      if ( dIndices.size() <= 0){
+//        f_w.fill(1);
+//      }
+//      //To local
+//      Eigen::VectorXf f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
+//      Eigen::VectorXf d_f_l = D * f_l;
+//      Eigen::VectorXf d_f_w = S_wl * d_f_l;
+//      Eigen::VectorXf diffVec = (d_f_w - f_w).array().abs();
+//      t0.toctic("diff operation");
 
       //Visualize fz and diff
       valuebo_f.Reinitialise(pangolin::GlArrayBuffer, f_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
       valuebo_f.Upload(&f_w(0), sizeof(float)*f_w.rows(), 0);
-//      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, diffVec.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-//      valuebo_d.Upload(&diffVec(0), sizeof(float)*diffVec.rows(), 0);
-      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, d_f_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
-      valuebo_d.Upload(&d_f_w(0), sizeof(float)*d_f_w.rows(), 0);
+      valuebo_g.Reinitialise(pangolin::GlArrayBuffer, g_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_g.Upload(&g_w(0), sizeof(float)*g_w.rows(), 0);
+      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, rawDiff.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+      valuebo_d.Upload(&rawDiff(0), sizeof(float)*rawDiff.rows(), 0);
+//      valuebo_d.Reinitialise(pangolin::GlArrayBuffer, d_f_w.rows(),GL_FLOAT,1, GL_DYNAMIC_DRAW);
+//      valuebo_d.Upload(&d_f_w(0), sizeof(float)*d_f_w.rows(), 0);
 
       minVal_f = f_w.minCoeff()-1e-3;
-      maxVal_f = f_w.maxCoeff();
-
-//      minVal_d = diffVec.minCoeff()-1e-2;
-//      maxVal_d = diffVec.maxCoeff()+1e-2;
-      minVal_d = d_f_w.minCoeff()-1e-3;
-      maxVal_d = d_f_w.maxCoeff()+1e-3;
+      maxVal_f = f_w.maxCoeff();   
+      minVal_g = g_w.minCoeff()-1e-3;
+      maxVal_g = g_w.maxCoeff()+1e-3;
+      minVal_d = rawDiff.minCoeff()-1e-2;
+      maxVal_d = rawDiff.maxCoeff()+1e-2;
+//      minVal_d = d_f_w.minCoeff()-1e-3;
+//      maxVal_d = d_f_w.maxCoeff()+1e-3;
 
       std::cout << "min max values------------->" << std::endl;
       std::cout << "cmtx (fmap): " << minVal_c << ", " << maxVal_c << std::endl;
       std::cout << "f_w: " << minVal_f << ", " << maxVal_f << std::endl;
-      std::cout << "d_fw-fw: " << minVal_d << ", " << maxVal_d << std::endl;
-      std::cout << "min, max d: " << minVal_d << ", " << maxVal_d << std::endl;
+      std::cout << "rawDiff: " << minVal_d << ", " << maxVal_d << std::endl;
+//      std::cout << "d_fw-fw: " << minVal_d << ", " << maxVal_d << std::endl;
+//      std::cout << "min, max d: " << minVal_d << ", " << maxVal_d << std::endl;
 
       std::cout << "--------FINAL RESULT---------" << std::endl;
-      std::cout << "diff norm: " << diffVec.norm() << std::endl;
-      std::cout << "area ratio: " << (f_w.squaredNorm()/d_f_w.dot(f_w)) << std::endl;
+      std::cout << "rawDiff norm: " << rawDiff.norm()/nSamples << std::endl;
+//      std::cout << "area ratio: " << (f_w.squaredNorm()/d_f_w.dot(f_w)) << std::endl;
 
     }
 
@@ -601,6 +616,35 @@ int main(int argc, char* argv[]){
       shader.Unbind();
       glDisableVertexAttribArray(1);
       valuebo_f.Unbind();
+      glDisableVertexAttribArray(0);
+      vbo_s.Unbind();
+    }
+
+    if (view_g.IsShown()) {
+      view_g.Activate(s_cam);
+      pangolin::glDrawAxis(0.1);
+
+      glPointSize(2.);
+      glColor3f(1.0f, 1.0f, 0.0f);
+      // renders the vbo with colors from valuebo
+      auto& shader = tdp::Shaders::Instance()->valueShader_;
+      shader.Bind();
+      shader.SetUniform("P",  s_cam.GetProjectionMatrix());
+      shader.SetUniform("MV", s_cam.GetModelViewMatrix());
+      shader.SetUniform("minValue", minVal_g);
+      shader.SetUniform("maxValue", maxVal_g);
+      valuebo_g.Bind();
+      glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+      vbo_s.Bind();
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      glPointSize(4.);
+      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
+      shader.Unbind();
+      glDisableVertexAttribArray(1);
+      valuebo_g.Unbind();
       glDisableVertexAttribArray(0);
       vbo_s.Unbind();
     }
