@@ -26,6 +26,8 @@
 #include <Eigen/Eigenvalues>
 #include <Eigen/Sparse>
 #include <Eigen/Core>
+#include <Eigen/SVD>
+
 
 #include <tdp/preproc/depth.h>
 #include <tdp/preproc/pc.h>
@@ -120,7 +122,7 @@ int main(int argc, char* argv[]){
   pangolin::Var<bool> showFMap("ui.show fMap", true, false);
   pangolin::Var<bool> showFTransfer(" ui. show fTransfer", true, true);
 
-  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 1000, 100, 2000);
+  pangolin::Var<int> nSamples("ui. num samples from mesh pc", 2000, 100, 3000);
   pangolin::Var<int> shapeOpt("ui. shape option", 1, 0, 3); //2:bunny
 
   //--second shape point cloud
@@ -137,8 +139,10 @@ int main(int argc, char* argv[]){
 
   //--Correspondence Matrix C estimation
   pangolin::Var<float> alpha2("ui. alpha2", 0.0001, 0.0001, 0.01); //variance of rbf kernel for defining function on manifold
-  pangolin::Var<int> nEv_s("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
-  pangolin::Var<int> nEv_t("ui.num Ev",50,30,100); //min=1, max=pc_s.Area()
+  pangolin::Var<int> nEv_s("ui.nEv_s",30,30,100); //min=1, max=pc_s.Area()
+  pangolin::Var<int> nEv_t("ui.nEv_t",60,30,100); //min=1, max=pc_s.Area()
+  pangolin::Var<int> r("ui.Fmap viz scale(r)",4,0,10); //min=1, max=pc_s.Area()
+
 
   pangolin::Var<int> nPW("ui.num PointWise train",nSamples/*std::min(20*numEv, pc_s.Area())*/,
                          nEv_t ,nSamples); //todo: minimum = max(nEv_s, nEv_t)
@@ -233,7 +237,7 @@ int main(int argc, char* argv[]){
 //            tdp::GetSphericalPc(pc_s, nSamples);
             tdp::GetPointsOnSphere(pc_s_spherical, (int)nSamples);
             tdp::toCartisean(pc_s_spherical, pc_s);
-            dIndices == tdp::Deform(pc_s_spherical, pc_t_spherical, (float)max_phi);
+            dIndices = tdp::Deform(pc_s_spherical, pc_t_spherical, (float)max_phi);
             tdp::toCartisean(pc_t_spherical, pc_t);
 
             std::cout << "number of deformed: " << dIndices.size() << std::endl;
@@ -297,7 +301,8 @@ int main(int argc, char* argv[]){
     }
 
     if (pangolin::Pushed(showFMap) || laplacianChanged ||
-                nEv_s.GuiChanged() || nEv_t.GuiChanged()){
+                nEv_s.GuiChanged() || nEv_t.GuiChanged() ||
+                r.GuiChanged()){
       //nPW = (int)nEv; // + (int)nHKS;
       S_wl.resize(L_s.rows(),(int)nEv_s);
       T_wl.resize(L_t.rows(),(int)nEv_t);
@@ -357,7 +362,7 @@ int main(int argc, char* argv[]){
 
       //--Construct function pairs
       Eigen::MatrixXf F((int)nPW, (int)nEv_s), G((int)nPW, (int)nEv_t),
-                      C((int)nEv_t, (int)nEv_s), D((int)nEv_s, (int)nEv_s);
+                      C((int)nEv_s, (int)nEv_t), D((int)nEv_s, (int)nEv_s);
 
       std::cout << "nPW: " << (int)nPW << std::endl;
       std::cout << "F,G,C CREATED!---" << std::endl;
@@ -428,17 +433,38 @@ int main(int argc, char* argv[]){
       cChanged = true;
       std::cout << "C matrix is (re)calculated\n" << std::endl;
 
-      // calculate DiffMap
+      // SVD for fmap semantic viz
       tdp::Timer t0;
+      Eigen::JacobiSVD<Eigen::MatrixXf> svd(C, Eigen::ComputeThinU | Eigen::ComputeThinV);
+      t0.toctic("SVD");
+      std::cout << "C size: " << C.rows() << ", " << C.cols() << std::endl;
+      std::cout << "Its singular values are:" << std::endl << svd.singularValues().transpose() << std::endl;
+      std::cout << "U matrix (nEv_t):" << std::endl << svd.matrixU().rows() << ", " << (int)nEv_t << std::endl;
+      std::cout << "V matrix (nEv_s):" << std::endl << svd.matrixV().rows() << ", " << (int)nEv_s <<std::endl;
+
+      // calculate DiffMap
       D = C.transpose()*C;
+      t0.toctic("shapeDiff");
 
       // For functionTransfer
       Eigen::VectorXf f_w(pc_s.Area());
       tdp::f_height(pc_s, f_w);
       Eigen::VectorXf f_l = (S_wl.transpose()*S_wl).fullPivLu().solve(S_wl.transpose()*f_w);
-      Eigen::VectorXf g_l = C*f_l;
+      Eigen::VectorXf g_l = (f_l.transpose() * C).transpose();
       Eigen::VectorXf g_w = T_wl * g_l;
-      Eigen::VectorXf rawDiff = g_w - f_w;
+      Eigen::VectorXf rawDiff = (g_w - f_w).array().square();
+
+      // Viz of fMap
+      //todo: if r.GuiChanged()
+      Eigen::VectorXf v_r = svd.matrixV().col((int)r).array().square();
+      Eigen::VectorXf u_r = svd.matrixU().col((int)r).array().square();
+      f_w = S_wl * (v_r);
+      g_w = T_wl * (u_r);
+
+      std::cout << "v_r: " << v_r.transpose() << std::endl;
+      std::cout << "u_r: " << u_r.transpose() << std::endl;
+
+
 
 
 //      //For shapeDifference
@@ -474,11 +500,11 @@ int main(int argc, char* argv[]){
 //      valuebo_d.Upload(&d_f_w(0), sizeof(float)*d_f_w.rows(), 0);
 
       minVal_f = f_w.minCoeff()-1e-3;
-      maxVal_f = f_w.maxCoeff();   
+      maxVal_f = f_w.maxCoeff()+1e-3;
       minVal_g = g_w.minCoeff()-1e-3;
       maxVal_g = g_w.maxCoeff()+1e-3;
-      minVal_d = rawDiff.minCoeff()-1e-2;
-      maxVal_d = rawDiff.maxCoeff()+1e-2;
+      minVal_d = rawDiff.minCoeff()-1e-3;
+      maxVal_d = rawDiff.maxCoeff()+1e-3;
 //      minVal_d = d_f_w.minCoeff()-1e-3;
 //      maxVal_d = d_f_w.maxCoeff()+1e-3;
 
@@ -490,12 +516,9 @@ int main(int argc, char* argv[]){
 //      std::cout << "min, max d: " << minVal_d << ", " << maxVal_d << std::endl;
 
       std::cout << "--------FINAL RESULT---------" << std::endl;
-      std::cout << "rawDiff norm: " << rawDiff.norm()/nSamples << std::endl;
+      std::cout << "rawDiff norm: " << rawDiff.norm()/rawDiff.rows() << std::endl;
 //      std::cout << "area ratio: " << (f_w.squaredNorm()/d_f_w.dot(f_w)) << std::endl;
-
     }
-
-
 
 
     // Draw 3D stuff
@@ -635,7 +658,7 @@ int main(int argc, char* argv[]){
       shader.SetUniform("maxValue", maxVal_g);
       valuebo_g.Bind();
       glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-      vbo_s.Bind();
+      vbo_t.Bind();
       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
       glEnableVertexAttribArray(0);
@@ -646,7 +669,7 @@ int main(int argc, char* argv[]){
       glDisableVertexAttribArray(1);
       valuebo_g.Unbind();
       glDisableVertexAttribArray(0);
-      vbo_s.Unbind();
+      vbo_t.Unbind();
     }
 
 
