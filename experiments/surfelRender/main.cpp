@@ -131,7 +131,6 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
 
-
     pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
     pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
 
