@@ -439,8 +439,8 @@ int main(int argc, char* argv[]){
       t0.toctic("SVD");
       std::cout << "C size: " << C.rows() << ", " << C.cols() << std::endl;
       std::cout << "Its singular values are:" << std::endl << svd.singularValues().transpose() << std::endl;
-      std::cout << "U matrix (nEv_t):" << std::endl << svd.matrixU().rows() << ", " << (int)nEv_t << std::endl;
-      std::cout << "V matrix (nEv_s):" << std::endl << svd.matrixV().rows() << ", " << (int)nEv_s <<std::endl;
+      std::cout << "U matrix (nEv_s):" << std::endl << svd.matrixU().rows() << ", " << (int)nEv_s << std::endl;
+      std::cout << "V matrix (nEv_t):" << std::endl << svd.matrixV().rows() << ", " << (int)nEv_t <<std::endl;
 
       // calculate DiffMap
       D = C.transpose()*C;
@@ -454,17 +454,15 @@ int main(int argc, char* argv[]){
       Eigen::VectorXf g_w = T_wl * g_l;
       Eigen::VectorXf rawDiff = (g_w - f_w).array().square();
 
-      // Viz of fMap
-      //todo: if r.GuiChanged()
-      Eigen::VectorXf v_r = svd.matrixV().col((int)r).array().square();
-      Eigen::VectorXf u_r = svd.matrixU().col((int)r).array().square();
-      f_w = S_wl * (v_r);
-      g_w = T_wl * (u_r);
+//      // Viz of fMap
+//      //todo: if r.GuiChanged()
+//      Eigen::VectorXf v_r = svd.matrixV().col((int)r).array().square();
+//      Eigen::VectorXf u_r = svd.matrixU().col((int)r).array().square();
+//      f_w = S_wl * (u_r);
+//      g_w = T_wl * (v_r);
 
-      std::cout << "v_r: " << v_r.transpose() << std::endl;
-      std::cout << "u_r: " << u_r.transpose() << std::endl;
-
-
+//      std::cout << "v_r: " << v_r.transpose() << std::endl;
+//      std::cout << "u_r: " << u_r.transpose() << std::endl;
 
 
 //      //For shapeDifference
@@ -664,7 +662,7 @@ int main(int argc, char* argv[]){
       glEnableVertexAttribArray(0);
       glEnableVertexAttribArray(1);
       glPointSize(4.);
-      glDrawArrays(GL_POINTS, 0, vbo_s.num_elements);
+      glDrawArrays(GL_POINTS, 0, vbo_t.num_elements);
       shader.Unbind();
       glDisableVertexAttribArray(1);
       valuebo_g.Unbind();
