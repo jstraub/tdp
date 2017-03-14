@@ -1615,6 +1615,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
+  pangolin::Var<bool> surfelRadiusFromNN("visPanel.surfel r from NN",true,true);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
@@ -1820,6 +1821,11 @@ int main( int argc, char* argv[] )
           if (ids(i) >= 0) {
             nnFixed[iReadNext]++;
           }
+        }
+
+        if (surfelRadiusFromNN && nnFixed[iReadNext] == kNN) {
+          rs[iReadNext] = sqrtf(values[kNN/2]);
+          pl.r_ = rs[iReadNext];
         }
 
         if (pruneNoise) {
@@ -2914,8 +2920,10 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          pl.r_ = std::min(pl.r_, rad(u,v));
-          rs[i] = pl.r_;
+          if (!surfelRadiusFromNN) {
+            pl.r_ = std::min(pl.r_, rad(u,v));
+            rs[i] = pl.r_;
+          }
 
           tdp::Matrix3fda infoObs = SigmaO.inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2986,8 +2994,10 @@ int main( int argc, char* argv[] )
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
 
-            pl.r_ = std::min(pl.r_, rad(u,v));
-            rs[i] = pl.r_;
+            if (!surfelRadiusFromNN) {
+              pl.r_ = std::min(pl.r_, rad(u,v));
+              rs[i] = pl.r_;
+            }
 
             tdp::Matrix3fda infoObs = SigmaO.inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -3135,6 +3145,9 @@ int main( int argc, char* argv[] )
         // might break things though
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeToReadBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeToReadBytes(), 0);
+        if (surfelRadiusFromNN) {
+          rbo.Upload(rs.ptr_, rs.SizeToReadBytes(), 0);
+        }
 //        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
 //            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
 //            iReadCurW*sizeof(tdp::Vector3fda));
