@@ -14,7 +14,8 @@ void main() {
   vec4 cam = vec4(420.*w/640, 420.*h/480, (w-1)*0.5, (h-1)*0.5);
   outColor = vec4((gl_FragCoord.x-cam.z)/cam.x, (gl_FragCoord.y-cam.w)/cam.y, 0,1);
   outColor = vec4(1,0,0 , 1.);
-  gl_FragDepth = ( (posC.z / (2*maxZ)) +0.5f );
+//  gl_FragDepth = ( (posC.z / (2*maxZ)) +0.5f );
+//  gl_FragDepth = ( (posC.z / (2*maxZ)) +0.5f );
 //  return;
 
 //  vec3 ray = normalize(vec3((vec2(gl_FragCoord.x, 480-gl_FragCoord.y) - cam.zw) / cam.xy, 1.f));
@@ -36,7 +37,7 @@ void main() {
     //outColor = vec4(0., 0., 1., 1.);
     outColor = vec4(rgbC, 1.);
   }
-//  gl_FragDepth = ( (pIntersect.z / (2*maxZ)) +0.5f );
+  gl_FragDepth = ( (pIntersect.z / (2*maxZ)) +0.5f );
 //  gl_FragDepth = ( (posC.z / (2*maxZ)) +0.5f );
 }
 

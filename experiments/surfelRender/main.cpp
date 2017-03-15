@@ -64,7 +64,7 @@ int main( int argc, char* argv[] )
   uint32_t h=480;
   tdp::QuickView viewRender(w,h);
   container.AddDisplay(viewRender);
-  viewRender.Show(true);
+  viewRender.Show(false);
 //    .SetHandler(new pangolin::Handler3D(s_cam2));
   
   uint32_t N = 9;
