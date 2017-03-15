@@ -112,7 +112,8 @@ int main( int argc, char* argv[] )
       viewRender.Show(showSecondary);
 
     // clear the OpenGL render buffers
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0, 0, 0, 0);
+//    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
     r.Fill(radius);
@@ -155,15 +156,15 @@ int main( int argc, char* argv[] )
 //d_cam.GetBounds().b,
 //d_cam.GetBounds().w,
 //d_cam.GetBounds().h);
-    glClearColor(0, 0, 0, 0);
-    glEnable(GL_POINT_SPRITE);
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//    glClearColor(0, 0, 0, 0);
+//    glEnable(GL_POINT_SPRITE);
+//    glEnable(GL_PROGRAM_POINT_SIZE);
+//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., 
         d_cam.GetBounds().w, d_cam.GetBounds().h, P, MV);
 //    glPopAttrib();
-    glDisable(GL_PROGRAM_POINT_SIZE);
-    glDisable(GL_POINT_SPRITE);
+//    glDisable(GL_PROGRAM_POINT_SIZE);
+//    glDisable(GL_POINT_SPRITE);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
       tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);

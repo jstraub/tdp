@@ -18,7 +18,8 @@ void main() {
 //  return;
 
 //  vec3 ray = normalize(vec3((vec2(gl_FragCoord.x, 480-gl_FragCoord.y) - cam.zw) / cam.xy, 1.f));
-  vec3 ray = normalize(vec3((gl_FragCoord.x-180-cam.z)/cam.x, (gl_FragCoord.y-440-cam.w)/cam.y, 1.f));
+  //vec3 ray = normalize(vec3((gl_FragCoord.x-180-cam.z)/cam.x, (gl_FragCoord.y-440-cam.w)/cam.y, 1.f));
+  vec3 ray = normalize(vec3((gl_FragCoord.x-180-cam.z)/cam.x, (gl_FragCoord.y-cam.w)/cam.y, 1.f));
   vec3 pIntersect = (dot(posC.xyz, nC.xyz) / dot(ray, nC.xyz)) * ray;
 
   vec3 diff = posC - pIntersect;

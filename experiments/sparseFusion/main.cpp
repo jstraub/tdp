@@ -1271,9 +1271,9 @@ int main( int argc, char* argv[] )
 
   // Define Camera Render Object (for view / scene browsing)
   pangolin::OpenGlRenderState s_cam(
-      pangolin::ProjectionMatrix(1280,960,840,840,639.5,479.5,0.1,1000),
-//      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
-      pangolin::ModelViewLookAt(0,0.5,-3, 0,0,0, pangolin::AxisNegY)
+//      pangolin::ProjectionMatrix(1280,960,840,840,639.5,479.5,0.1,1000),
+      pangolin::ProjectionMatrix(640,480,420,420,319.5,239.5,0.1,1000),
+      pangolin::ModelViewLookAt(0,0,-1, 0,0,0, pangolin::AxisNegY)
       );
   pangolin::OpenGlRenderState normalsCam(
       pangolin::ProjectionMatrix(640,640,420,420,319.5,319.5,0.1,1000),
@@ -1616,6 +1616,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> surfelRadiusFromNN("visPanel.surfel r from NN",true,true);
+  pangolin::Var<int> surfRadFromNNrank("visPanel.surfel r from NN rank",0,0,kNN-1);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
   pangolin::Var<bool> showGrads("visPanel.show grads",false,true);
@@ -1824,7 +1825,7 @@ int main( int argc, char* argv[] )
         }
 
         if (surfelRadiusFromNN && nnFixed[iReadNext] == kNN) {
-          rs[iReadNext] = sqrtf(values[kNN/2]);
+          rs[iReadNext] = sqrtf(values[surfRadFromNNrank]);
           pl.r_ = rs[iReadNext];
         }
 
@@ -3233,7 +3234,12 @@ int main( int argc, char* argv[] )
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
-          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, dMax,
+          std::cout 
+            << viewPc3D.GetBounds().l << " " 
+            << viewPc3D.GetBounds().b << " " 
+            << viewPc3D.GetBounds().w << " " 
+            << viewPc3D.GetBounds().h << std::endl;
+          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, 10.,
               viewPc3D.GetBounds().w, viewPc3D.GetBounds().h, P, MV);
         } else {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
