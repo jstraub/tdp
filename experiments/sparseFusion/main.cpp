@@ -3154,6 +3154,7 @@ int main( int argc, char* argv[] )
 //            iReadCurW*sizeof(tdp::Vector3fda));
         pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
         pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
+        pangolin::OpenGlMatrix MVP = s_cam.GetProjectionModelViewMatrix();
         if (showAge || showObs || showCurv || showGrey || showNumSum ||
             showNSampleCount || showNSamplePReject || showHn || showHp
             || showP2PlVar || showIvar || showImean || showRadius ||
@@ -3234,13 +3235,7 @@ int main( int argc, char* argv[] )
           tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
-          std::cout 
-            << viewPc3D.GetBounds().l << " " 
-            << viewPc3D.GetBounds().b << " " 
-            << viewPc3D.GetBounds().w << " " 
-            << viewPc3D.GetBounds().h << std::endl;
-          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, 10.,
-              viewPc3D.GetBounds().w, viewPc3D.GetBounds().h, P, MV);
+          tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, MVP);
         } else {
           pangolin::RenderVboCbo(vbo_w, cbo_w, true);
         }
