@@ -149,11 +149,7 @@ void RenderSurfels(
   pangolin::GlBuffer& nbo,
   pangolin::GlBuffer& cbo,
   pangolin::GlBuffer& rbo,
-  float dMax,
-    uint32_t w, 
-    uint32_t h, 
-  const pangolin::OpenGlMatrix& P,
-  const pangolin::OpenGlMatrix& MV);
+  const pangolin::OpenGlMatrix& MVP);
 
 void RenderVboValuebo(
     const pangolin::GlBuffer& vbo,

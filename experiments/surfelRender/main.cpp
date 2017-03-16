@@ -132,23 +132,16 @@ int main( int argc, char* argv[] )
     glEnable(GL_DEPTH_TEST);
     d_cam.Activate(s_cam);
 
-    pangolin::OpenGlMatrix P = s_cam.GetProjectionMatrix();
-    pangolin::OpenGlMatrix MV = s_cam.GetModelViewMatrix();
-
-    if (invertMV) {
-      Eigen::Matrix4f MVmat = MV;
-      Eigen::Matrix4f MVmatInv = MVmat.inverse();
-      MV = pangolin::OpenGlMatrix(MVmatInv);
-    }
+    pangolin::OpenGlMatrix MVP = s_cam.GetProjectionModelViewMatrix();
 
     if (pangolin::Pushed(showTransformation))
-      std::cout << MV << std::endl;
+      std::cout << MVP << std::endl;
 
-    std::cout 
-      << d_cam.GetBounds().l << " " 
-      << d_cam.GetBounds().b << " " 
-      << d_cam.GetBounds().w << " " 
-      << d_cam.GetBounds().h << std::endl;
+//    std::cout 
+//      << d_cam.GetBounds().l << " " 
+//      << d_cam.GetBounds().b << " " 
+//      << d_cam.GetBounds().w << " " 
+//      << d_cam.GetBounds().h << std::endl;
 
     pangolin::glDrawAxis(0.1);
 //    glPushAttrib(GL_VIEWPORT_BIT);
@@ -160,8 +153,7 @@ int main( int argc, char* argv[] )
 //    glEnable(GL_POINT_SPRITE);
 //    glEnable(GL_PROGRAM_POINT_SIZE);
 //    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 4., 
-        d_cam.GetBounds().w, d_cam.GetBounds().h, P, MV);
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, MVP);
 //    glPopAttrib();
 //    glDisable(GL_PROGRAM_POINT_SIZE);
 //    glDisable(GL_POINT_SPRITE);
@@ -182,7 +174,7 @@ int main( int argc, char* argv[] )
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_POINT_SPRITE);
     glEnable(GL_PROGRAM_POINT_SIZE);
-    tdp::RenderSurfels( vbo, nbo, cbo, rbo, 10., 640,480, P, MV);
+    tdp::RenderSurfels( vbo, nbo, cbo, rbo, MVP);
     glColor3f(0,1,0);
     for (size_t i=0; i<N; ++i) {
       tdp::glDrawLine(pc[i], pc[i]+scale*radius*n[i]);

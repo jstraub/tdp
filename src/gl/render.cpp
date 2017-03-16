@@ -86,22 +86,14 @@ void RenderSurfels(
   pangolin::GlBuffer& nbo,
   pangolin::GlBuffer& cbo,
   pangolin::GlBuffer& rbo,
-    float dMax,
-    uint32_t w, 
-    uint32_t h, 
-  const pangolin::OpenGlMatrix& P,
-  const pangolin::OpenGlMatrix& MV
+  const pangolin::OpenGlMatrix& MVP
     ) {
 
   glEnable(GL_PROGRAM_POINT_SIZE);
   glEnable(GL_POINT_SPRITE);
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
   shader.Bind();
-  shader.SetUniform("Tinv",MV);
-  shader.SetUniform("P",P);
-  shader.SetUniform("maxZ",dMax);
-  shader.SetUniform("w",(float)w);
-  shader.SetUniform("h",(float)h);
+  shader.SetUniform("MVP",MVP);
 
   vbo.Bind();
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 

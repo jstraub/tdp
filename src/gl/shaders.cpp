@@ -73,6 +73,8 @@ Shaders::Shaders() {
 
   surfelShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
       shaderRoot+std::string("surfelRgbMVP.vert"));
+  surfelShader_.AddShaderFromFile(pangolin::GlSlGeometryShader,
+      shaderRoot+std::string("surfelRgbMVP.geom"));
   surfelShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
       shaderRoot+std::string("surfelRgbMVP.frag"));
   surfelShader_.Link();

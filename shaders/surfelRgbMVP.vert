@@ -4,69 +4,24 @@ layout (location = 1) in vec3 rgb;
 layout (location = 2) in vec3 n;
 layout (location = 3) in float r;
 
-uniform mat4 Tinv;
-uniform mat4 P;
-uniform float maxZ;
-uniform float w;
-uniform float h;
+uniform mat4 MVP;
 
-// Project into the camera plane (into -1 to 1)
-vec3 projectCamPlane(vec3 p)
-{
-  float cols = w;
-  float rows = h;
-//  vec4 cam = vec4(420., 420.,319.5, 239.5);
-//  vec4 cam = vec4(420., 420., (w-1)*0.5, (h-1)*0.5);
-  vec4 cam = vec4(420.*w/640, 420.*h/480, (w-1)*0.5, (h-1)*0.5);
+out vec4 vPosC;
+out vec4 vNC;
+out float vRad;
+out vec3 vColor;
+out mat4 vMVP;
 
-  return vec3(((((cam.x * p.x) / p.z) + cam.z) - (cols * 0.5)) / (cols * 0.5),
-              ((((cam.y * p.y) / p.z) + cam.w) - (rows * 0.5)) / (rows * 0.5),
-//              p.z / maxZ);
-         (p.z)/(maxZ));
-}
-// Project into the image plane (into pixels)
-vec3 projectImgPlane(vec3 p)
-{
-//  vec4 cam = vec4(420., 420.,319.5, 239.5);
-//  vec4 cam = vec4(420., 420., (w-1)*0.5, (h-1)*0.5);
-  vec4 cam = vec4(420.*w/640, 420.*h/480, (w-1)*0.5, (h-1)*0.5);
-  return vec3(((cam.x * p.x) / p.z) + cam.z,
-              ((cam.y * p.y) / p.z) + cam.w,
-              p.z);
-}
-
-out vec3 rgbC;
-out vec3 posC;
-out vec3 nC;
-out float rC;
 void main() {
   // Transform into camera coordinates
-  posC = (Tinv * vec4(pos, 1.0)).xyz;
-  posC.z *= -1.;
-  nC = normalize(mat3(Tinv) * n.xyz);
-//  nC.z *= -1.;
-  rC = r;
-  rgbC = rgb;
-
-  if ( posC.z > maxZ ) {
+  if ( pos.z > 10) {
     gl_Position = vec4(1000.f,1000.f,1000.f,1000.f);
-    gl_PointSize = 0;
   } else {
-    gl_Position = vec4(projectCamPlane(posC), 1.);
-//    gl_Position = P*vec4(posC, 1.);
-    // vectors orthogonal to n
-    vec3 u = 1.41421356 * r * normalize(vec3(n.y - n.z, -n.x, n.x));
-    vec3 v = cross(n, u);
-    // project points on a rectangle around posC into image
-    vec3 c1 = projectImgPlane(posC + u);
-    vec3 c2 = projectImgPlane(posC + v);
-    vec3 c3 = projectImgPlane(posC - u);
-    vec3 c4 = projectImgPlane(posC - v);
-    // obtain the bounding box corner locations
-    vec2 cxs = vec2(min(c1.x, min(c2.x, min(c3.x, c4.x))), max(c1.x, max(c2.x, max(c3.x, c4.x))));
-    vec2 cys = vec2(min(c1.y, min(c2.y, min(c3.y, c4.y))), max(c1.y, max(c2.y, max(c3.y, c4.y))));
-    // set the size to the maximum side length of the bounding box
-    gl_PointSize = max(0., max(abs(cxs.y-cxs.x), abs(cys.y-cys.x))); //r;
-//    gl_PointSize = 2;
+    gl_Position = MVP * vec4(pos, 1.f);
+    vColor = rgb;
+    vMVP = MVP;
+    vPosC = vec4(pos,1.f);
+    vNC = vec4(n,1.f);
+    vRad = r;
   }
 }
