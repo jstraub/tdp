@@ -82,15 +82,13 @@ void RenderVboIboCbo(
 }
 
 void RenderSurfels(
-  pangolin::GlBuffer& vbo,
-  pangolin::GlBuffer& nbo,
-  pangolin::GlBuffer& cbo,
-  pangolin::GlBuffer& rbo,
+  const pangolin::GlBuffer& vbo,
+  const pangolin::GlBuffer& nbo,
+  const pangolin::GlBuffer& cbo,
+  const pangolin::GlBuffer& rbo,
   const pangolin::OpenGlMatrix& MVP
     ) {
 
-  glEnable(GL_PROGRAM_POINT_SIZE);
-  glEnable(GL_POINT_SPRITE);
   pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelShader_;  
   shader.Bind();
   shader.SetUniform("MVP",MVP);
@@ -120,8 +118,94 @@ void RenderSurfels(
   glDisableVertexAttribArray(0);
   vbo.Unbind();
   shader.Unbind();
-  glDisable(GL_PROGRAM_POINT_SIZE);
-  glDisable(GL_POINT_SPRITE);
+}
+
+void RenderSurfelsValue(
+    const pangolin::GlBuffer& vbo,
+    const pangolin::GlBuffer& nbo,
+    const pangolin::GlBuffer& rbo,
+    const pangolin::GlBuffer& valuebo,
+    float minVal, float maxVal,
+    const pangolin::OpenGlMatrix& MVP
+    ) {
+  pangolin::GlSlProgram& shader = Shaders::Instance()->surfelValueShader_;
+
+  shader.Bind();
+  shader.SetUniform("MVP",MVP);
+  shader.SetUniform("minValue", minVal);
+  shader.SetUniform("maxValue", maxVal);
+
+  vbo.Bind();
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  valuebo.Bind();
+  glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+  nbo.Bind();
+  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  rbo.Bind();
+  glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+
+  glEnableVertexAttribArray(0);
+  glEnableVertexAttribArray(1);
+  glEnableVertexAttribArray(2);
+  glEnableVertexAttribArray(3);
+
+  glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+
+  glDisableVertexAttribArray(3);
+  rbo.Unbind();
+  glDisableVertexAttribArray(2);
+  nbo.Unbind();
+  glDisableVertexAttribArray(1);
+  valuebo.Unbind();
+  glDisableVertexAttribArray(0);
+  vbo.Unbind();
+  shader.Unbind();
+
+}
+
+void RenderSurfelsLabeled(
+    const pangolin::GlBuffer& vbo,
+    const pangolin::GlBuffer& nbo,
+    const pangolin::GlBuffer& rbo,
+    const pangolin::GlBuffer& labelbo,
+    int32_t labelOffset,
+    const pangolin::OpenGlMatrix& MVP
+    ) {
+  pangolin::GlSlProgram& shader = tdp::Shaders::Instance()->surfelLabelShader_;
+  shader.Bind();
+  glEnable(GL_TEXTURE_2D);
+  tdp::Labels::Instance()->Bind();
+  shader.SetUniform("MVP",MVP);
+  shader.SetUniform("labels",0);
+  shader.SetUniform("offset",(float)labelOffset);
+
+  vbo.Bind();
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  labelbo.Bind();
+  glVertexAttribPointer(1, 1, GL_UNSIGNED_SHORT, GL_FALSE, 0, 0); 
+  nbo.Bind();
+  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0); 
+  rbo.Bind();
+  glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 0, 0); 
+
+  glEnableVertexAttribArray(0);
+  glEnableVertexAttribArray(1);
+  glEnableVertexAttribArray(2);
+  glEnableVertexAttribArray(3);
+
+  glDrawArrays(GL_POINTS, 0, vbo.num_elements);
+
+  tdp::Labels::Instance()->Unbind();
+  glDisable(GL_TEXTURE_2D);
+  glDisableVertexAttribArray(3);
+  rbo.Unbind();
+  glDisableVertexAttribArray(2);
+  nbo.Unbind();
+  glDisableVertexAttribArray(1);
+  labelbo.Unbind();
+  glDisableVertexAttribArray(0);
+  vbo.Unbind();
+  shader.Unbind();
 }
 
 void RenderVboValuebo(

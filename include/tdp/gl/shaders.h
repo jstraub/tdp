@@ -18,6 +18,8 @@ class Shaders {
   pangolin::GlSlProgram colorByIdOwnCamNormalsShader_;
   pangolin::GlSlProgram colorByIdOwnCamNormalsTimeShader_;
   pangolin::GlSlProgram surfelShader_;
+  pangolin::GlSlProgram surfelValueShader_;
+  pangolin::GlSlProgram surfelLabelShader_;
  private:
   Shaders();
   ~Shaders() { if (shaders_) delete shaders_; };

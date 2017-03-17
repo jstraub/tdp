@@ -355,7 +355,11 @@ void ExtractPlanes(
         if (normalMethod < 2) {
           //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
           // radius covering a single pizel
-          pl.r_ = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
+          if (acos(n(2)) > 80.*M_PI/180.) {
+            pl.r_ = p(2)/(1.41421*cam.params_(0)); // unprojected radius in m
+          } else {
+            pl.r_ = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
+          }
         } else {
           pl.r_ = radiusStd*3;
         }
@@ -488,11 +492,13 @@ bool EnsureNormal(
 //          // TODO: 550 -> fu
           success = tdp::NormalViaScatterAproxIntInvD(rho, rays,
               outerRaysInt, u, v, Wscaled, ni);
-          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+          radiusi = pi(2)/(1.41421*550.); // unprojected radius in m
+//          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
         } else if (normalMethod == 1) {
           success = tdp::NormalViaScatterUnconstrained(pc, u, v,
               Wscaled, ni, curvi, radiusi);
-          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+//          radiusi = pi(2)/(1.41421*550.*ni(2)); // unprojected radius in m
+          radiusi = pi(2)/(1.41421*550.); // unprojected radius in m
         } else {
           success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, 
               dpc, ni, curvi, radiusi, pi);
@@ -1655,6 +1661,7 @@ int main( int argc, char* argv[] )
 
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
+  tdp::ManagedHostCircularBuffer<float> rsNN(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<uint16_t> ts(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
@@ -1695,6 +1702,7 @@ int main( int argc, char* argv[] )
   size_t zMinSampleCount = 0;
 
   rs.Fill(NAN);
+  rsNN.Fill(NAN);
   ts.Fill(0);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   rgb_w.Fill(tdp::Vector3bda::Zero());
@@ -1794,6 +1802,8 @@ int main( int argc, char* argv[] )
             pl.n_ = tdp::Vector3fda(NAN,NAN,NAN);
             pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
             n_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
+            rs[iReadNext] = NAN;
+            rsNN[iReadNext] = NAN;
             for (int32_t i=0; i<kNN; ++i) 
               mapNN[iReadNext*kNN+i] = std::pair<int32_t,int32_t>(iReadNext, -1);
           }
@@ -1824,9 +1834,8 @@ int main( int argc, char* argv[] )
           }
         }
 
-        if (surfelRadiusFromNN && nnFixed[iReadNext] == kNN) {
-          rs[iReadNext] = sqrtf(values[surfRadFromNNrank]);
-          pl.r_ = rs[iReadNext];
+        if (nnFixed[iReadNext] == kNN) {
+          rsNN[iReadNext] = sqrtf(values[surfRadFromNNrank]);
         }
 
         if (pruneNoise) {
@@ -1838,6 +1847,8 @@ int main( int argc, char* argv[] )
 //              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
             pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
             n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
+            rs[iReadNext] = NAN;
+            rsNN[iReadNext] = NAN;
             pl.valid_ = false;
             std::cout << "pruning " << iReadNext 
               << " NN " << int(nnFixed[iReadNext])
@@ -2921,10 +2932,10 @@ int main( int argc, char* argv[] )
           pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
           pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
           pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
-          if (!surfelRadiusFromNN) {
-            pl.r_ = std::min(pl.r_, rad(u,v));
-            rs[i] = pl.r_;
-          }
+          rgb_w[i] = pl.rgb_;
+
+          pl.r_ = std::min(pl.r_, rad(u,v));
+          rs[i] = pl.r_;
 
           tdp::Matrix3fda infoObs = SigmaO.inverse();
           tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -2994,11 +3005,10 @@ int main( int argc, char* argv[] )
             pl.grey_ = (pl.grey_*w + greyFl(u,v)) / (w+1);
             pl.gradNorm_ = (pl.gradNorm_*w + gradGrey(u,v).norm()) / (w+1);
             pl.rgb_ = ((pl.rgb_.cast<float>()*w + rgb(u,v).cast<float>()) / (w+1)).cast<uint8_t>();
+            rgb_w[i] = pl.rgb_;
 
-            if (!surfelRadiusFromNN) {
-              pl.r_ = std::min(pl.r_, rad(u,v));
-              rs[i] = pl.r_;
-            }
+            pl.r_ = std::min(pl.r_, rad(u,v));
+            rs[i] = pl.r_;
 
             tdp::Matrix3fda infoObs = SigmaO.inverse();
             tdp::Vector3fda xiObs = infoObs*pc_c_in_w;
@@ -3147,6 +3157,8 @@ int main( int argc, char* argv[] )
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeToReadBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeToReadBytes(), 0);
         if (surfelRadiusFromNN) {
+          rbo.Upload(rsNN.ptr_, rs.SizeToReadBytes(), 0);
+        } else {
           rbo.Upload(rs.ptr_, rs.SizeToReadBytes(), 0);
         }
 //        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
@@ -3225,14 +3237,18 @@ int main( int argc, char* argv[] )
           if (gui.verbose)
             std::cout << "drawn values are min " << minMaxAge.first 
               << " max " << minMaxAge.second << std::endl;
-          tdp::RenderVboValuebo(vbo_w, valuebo, 
-              minMaxAge.first, minMaxAge.second, P, MV);
+//          tdp::RenderVboValuebo(vbo_w, valuebo, 
+//              minMaxAge.first, minMaxAge.second, P, MV);
+          tdp::RenderSurfelsValue(vbo_w, nbo_w, rbo, valuebo, 
+              minMaxAge.first, minMaxAge.second, MVP);
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
+//          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
+          tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
         } else if (showLabelsMl && frame > 1) {
           lbo.Upload(zMl.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
+//          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
+          tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, MVP);

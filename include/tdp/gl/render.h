@@ -145,11 +145,27 @@ void RenderVboIboCbo(
   pangolin::GlBuffer& cbo);
 
 void RenderSurfels(
-  pangolin::GlBuffer& vbo,
-  pangolin::GlBuffer& nbo,
-  pangolin::GlBuffer& cbo,
-  pangolin::GlBuffer& rbo,
+  const pangolin::GlBuffer& vbo,
+  const pangolin::GlBuffer& nbo,
+  const pangolin::GlBuffer& cbo,
+  const pangolin::GlBuffer& rbo,
   const pangolin::OpenGlMatrix& MVP);
+
+void RenderSurfelsValue(
+    const pangolin::GlBuffer& vbo,
+    const pangolin::GlBuffer& nbo,
+    const pangolin::GlBuffer& rbo,
+    const pangolin::GlBuffer& valuebo,
+    float minVal, float maxVal,
+    const pangolin::OpenGlMatrix& MVP);
+
+void RenderSurfelsLabeled(
+    const pangolin::GlBuffer& vbo,
+    const pangolin::GlBuffer& nbo,
+    const pangolin::GlBuffer& rbo,
+    const pangolin::GlBuffer& labelbo,
+    int32_t labelOffset,
+    const pangolin::OpenGlMatrix& MVP);
 
 void RenderVboValuebo(
     const pangolin::GlBuffer& vbo,

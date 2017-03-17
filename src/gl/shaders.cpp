@@ -79,6 +79,21 @@ Shaders::Shaders() {
       shaderRoot+std::string("surfelRgbMVP.frag"));
   surfelShader_.Link();
 
+  surfelValueShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("surfelValueMVP.vert"));
+  surfelValueShader_.AddShaderFromFile(pangolin::GlSlGeometryShader,
+      shaderRoot+std::string("surfelRgbMVP.geom"));
+  surfelValueShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("surfelRgbMVP.frag"));
+  surfelValueShader_.Link();
+
+  surfelLabelShader_.AddShaderFromFile(pangolin::GlSlVertexShader, 
+      shaderRoot+std::string("surfelLabelMVP.vert"));
+  surfelLabelShader_.AddShaderFromFile(pangolin::GlSlGeometryShader,
+      shaderRoot+std::string("surfelRgbMVP.geom"));
+  surfelLabelShader_.AddShaderFromFile(pangolin::GlSlFragmentShader,
+      shaderRoot+std::string("surfelRgbMVP.frag"));
+  surfelLabelShader_.Link();
 }
 
 }
