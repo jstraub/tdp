@@ -16,7 +16,7 @@
     "icpPanel.dR Thr": "0.25",
     "icpPanel.dt Thr": "0.01",
     "icpPanel.dtAssoc": "5000",
-    "icpPanel.icp max lvl": "1",
+    "icpPanel.icp max lvl": "0",
     "icpPanel.lamb Ns": "0.1",
     "icpPanel.lamb Tex": "1",
     "icpPanel.lamb p2pl": "10",
