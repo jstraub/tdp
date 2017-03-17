@@ -2211,7 +2211,7 @@ int main( int argc, char* argv[] )
               InfoPl = pl_w[i].n_*pl_w[i].n_.transpose();
             }
             if (useSigmaPl) InfoPl *= 1./(sigmaPl*sigmaPl);
-            InfoPlSum += 0.5*InfoPl;
+            InfoPlSum += InfoPl;
             xiPl += InfoPl*pS[ids[k]];
             numNN++;
           } else {
