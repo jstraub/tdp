@@ -338,6 +338,7 @@ void ExtractPlanes(
       } else {
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
       }
+      success = success && (acos(-n(2)) < 80.*M_PI/180.);
       if (success) {
 //        std::cout << "extracted normal at " << u << "," << v << std::endl;
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
@@ -360,7 +361,7 @@ void ExtractPlanes(
         if (normalMethod < 2) {
           //http://www.vision.ee.ethz.ch/publications/papers/proceedings/eth_biwi_00677.pdf
           // radius covering a single pizel
-          if (acos(n(2)) > 80.*M_PI/180.) {
+          if (acos(-n(2)) > 80.*M_PI/180.) {
             pl.r_ = p(2)/(1.41421*cam.params_(0)); // unprojected radius in m
           } else {
             pl.r_ = p(2)/(1.41421*cam.params_(0)*n(2)); // unprojected radius in m
@@ -1623,6 +1624,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showNumSum("visPanel.show numSum",false,true);
   pangolin::Var<bool> showLabelCounts("visPanel.show LabelCount",false,true);
   pangolin::Var<bool> showNSampleCount("visPanel.show nSampleCount",false,true);
+  pangolin::Var<bool> showValid("visPanel.show Valid",false,true);
   pangolin::Var<bool> showNSamplePReject("visPanel.show nSample P Rej",false,true);
   pangolin::Var<int> dispLabelOffset("visPanel.label offset",0,0,100);
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
@@ -3188,7 +3190,7 @@ int main( int argc, char* argv[] )
         if (showAge || showObs || showCurv || showGrey || showNumSum ||
             showNSampleCount || showNSamplePReject || showHn || showHp
             || showP2PlVar || showIvar || showImean || showRadius ||
-            showNNnum || showLabelCounts) {
+            showNNnum || showLabelCounts|| showValid) {
           float min, max;
           if (showAge) {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
@@ -3236,6 +3238,10 @@ int main( int argc, char* argv[] )
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
               age[i] = nnFixed[i];
             }
+          } else if (showValid) {
+            for (size_t i=0; i<pl_w.SizeToRead(); ++i) {
+              age[i] = pl_w[i].valid_ ? 0 : 1;
+            }
           } else {
             for (size_t i=0; i<pl_w.SizeToRead(); ++i) 
               age[i] = pl_w.GetCircular(i).curvature_;
@@ -3255,18 +3261,24 @@ int main( int argc, char* argv[] )
           if (gui.verbose)
             std::cout << "drawn values are min " << minMaxAge.first 
               << " max " << minMaxAge.second << std::endl;
-//          tdp::RenderVboValuebo(vbo_w, valuebo, 
-//              minMaxAge.first, minMaxAge.second, P, MV);
-          tdp::RenderSurfelsValue(vbo_w, nbo_w, rbo, valuebo, 
-              minMaxAge.first, minMaxAge.second, MVP);
+          if (showSurfels) 
+            tdp::RenderSurfelsValue(vbo_w, nbo_w, rbo, valuebo, 
+                minMaxAge.first, minMaxAge.second, MVP);
+          else
+            tdp::RenderVboValuebo(vbo_w, valuebo, 
+                minMaxAge.first, minMaxAge.second, P, MV);
         } else if (showLabels && frame > 1) {
           lbo.Upload(zS.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-//          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
-          tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
+          if (showSurfels) 
+            tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
+          else
+            tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showLabelsMl && frame > 1) {
           lbo.Upload(zMl.ptr_, pl_w.SizeToRead()*sizeof(uint16_t), 0);
-//          tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
-          tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
+          if (showSurfels) 
+            tdp::RenderSurfelsLabeled(vbo_w, nbo_w, rbo, lbo, dispLabelOffset, MVP);
+          else
+            tdp::RenderLabeledVbo(vbo_w, lbo, s_cam, dispLabelOffset);
         } else if (showSurfels) {
           if (gui.verbose) std::cout << "render surfels" << std::endl;
           tdp::RenderSurfels(vbo_w, nbo_w, cbo_w, rbo, MVP);

@@ -4,7 +4,7 @@
     "mapPanel.alpha Schedule": "10",
     "mapPanel.condHThr": "0.01",
     "mapPanel.count Thr": "5",
-    "mapPanel.delay pSample Nobs": "10",
+    "mapPanel.delay pSample Nobs": "3",
     "mapPanel.delay sample scheduling": "1",
     "mapPanel.est SigmaIm": "0",
     "mapPanel.est SigmaPl": "0",
