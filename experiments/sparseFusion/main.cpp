@@ -74,7 +74,7 @@ typedef tdp::CameraPoly3f CameraT;
 //typedef tdp::Cameraf CameraT;
 
 #define PYR 4
-#define zKTrac 3
+#define zKTrac 5
 #define kNN 12
 #define MAP_SIZE 1000000
 
@@ -151,6 +151,7 @@ void RunningAvgvMFSS(
 }
 
 void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
+    float countThr,
     uint16_t& idMax, float& countMax) {
   int32_t kMatch=-1;
   int32_t kMin=-1;
@@ -171,12 +172,16 @@ void InsertLabelML(VectorZuda& ids, VectorZfda& counts, uint16_t id,
     }
   }
   if (kMatch >= 0) {
-    counts(kMatch) ++;
-    countMax = idMax == kMatch? countMax+1 : countMax;
+    counts(kMatch) = std::min((float)counts(kMatch)+1.f,countThr);
+    countMax = idMax == kMatch? counts(kMatch) : countMax;
   } else {
     counts(kMin) = 1;
     ids(kMin) = id;
   }
+  if (countMax == countThr)
+    for (size_t j=0; j<zKTrac; ++j)
+      if (counts(j) > 0.) 
+        --counts(j);
 }
 
 typedef Eigen::Matrix<float,kNN,1,Eigen::DontAlign> VectorkNNfda;
@@ -1534,6 +1539,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> delaySampleScheduling("mapPanel.delay sample scheduling",false,true);
   pangolin::Var<float> pSampleCountMax("mapPanel.pSampleCountMax",100., 10., 1000.);
   pangolin::Var<float> nSampleCountMax("mapPanel.nSampleCountMax",100., 10., 1000.);
+  pangolin::Var<float> zSampleCountMax("mapPanel.zSampleCountMax",100., 10., 1000.);
   pangolin::Var<float> obsCountMax("mapPanel.obsCountMax",50., 10., 1000.);
 
   pangolin::Var<bool> runICP("icpPanel.run ICP",true,true);
@@ -2114,7 +2120,7 @@ int main( int argc, char* argv[] )
         for (int32_t i = 0; i!=iInsert; i=(i+1)%nn.w_) {
           if (!pl_w[i].valid_ || zS[i] >= K) continue;
           tdp::InsertLabelML(zSampleIds[i], zSampleCounts[i], zS[i],
-              zMli, countMli);
+              zSampleCountMax, zMli, countMli);
           zTotalSampleCount ++;
           zSampleCount[i]++;
           zMaxSampleCount = std::max(zMaxSampleCount, (size_t) zSampleCount[i]);
