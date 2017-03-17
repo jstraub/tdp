@@ -1534,6 +1534,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<float> obsStdInflation("mapPanel.obsSigmaInfl",1,1,100);
   pangolin::Var<float> initObsStdInflation("mapPanel.initObsSigmaInfl",1,1,100);
   pangolin::Var<float> maxNnDist("mapPanel.max NN Dist",0.2, 0.1, 1.);
+  pangolin::Var<float> minNnDist("mapPanel.min NN Dist",0.01, 0.01, 0.1);
   pangolin::Var<float> alphaSchedule("mapPanel.alpha Schedule",1., 0.001, 1.);
   pangolin::Var<bool> sampleScheduling("mapPanel.sample scheduling",false,true);
   pangolin::Var<bool> delaySampleScheduling("mapPanel.delay sample scheduling",false,true);
@@ -1628,6 +1629,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
   pangolin::Var<bool> surfelRadiusFromNN("visPanel.surfel r from NN",true,true);
+  pangolin::Var<bool> surfelRadiusFromNNPos0("visPanel.surfel r from NN pos0",true,true);
   pangolin::Var<int> surfRadFromNNrank("visPanel.surfel r from NN rank",0,0,kNN-1);
   pangolin::Var<bool> showSurfels("visPanel.show surfels",true,true);
   pangolin::Var<bool> showNormals("visPanel.show ns",false,true);
@@ -1779,6 +1781,7 @@ int main( int argc, char* argv[] )
     int32_t sizeToRead = 0;
     std::deque<int32_t> newIds;
     tdp::VectorkNNfda values;
+    tdp::VectorkNNfda valuesCur;
     std::mt19937 rnd(0);
     while(runTopologyThread.Get()) {
       sizeToReadPrev = sizeToRead;
@@ -1787,10 +1790,10 @@ int main( int argc, char* argv[] )
         sizeToRead = pl_w.SizeToRead();
       }
       if (sizeToRead ==0) continue;
-      if (sizeToRead > sizeToReadPrev) {
-        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
-          newIds.push_back(i);
-      }
+//      if (sizeToRead > sizeToReadPrev) {
+//        for (int32_t i=sizeToReadPrev; i<sizeToRead; ++i)
+//          newIds.push_back(i);
+//      }
       if (newIds.size() == 0) {
         std::uniform_int_distribution<int32_t> unif(0, sizeToRead-1);
         newIds.push_back(unif(rnd));
@@ -1822,10 +1825,11 @@ int main( int argc, char* argv[] )
 
         TICK("full NN pass");
         float maxDistSq = maxNnDist*maxNnDist;
+        float minDistSq = minNnDist*minNnDist;
         for (int32_t i=0; i<sizeToRead; ++i) {
           if (i != iReadNext && pl_w[i].valid_) {
             float distSq = (pl.p0_-pl_w[i].p0_).squaredNorm();
-            if (distSq < maxDistSq)
+            if (minDistSq < distSq && distSq < maxDistSq)
               tdp::AddToSortedIndexList<kNN>(ids, values, i, distSq);
           }
         }
@@ -1841,16 +1845,24 @@ int main( int argc, char* argv[] )
         }
 
         if (nnFixed[iReadNext] == kNN) {
-          rsNN[iReadNext] = sqrtf(values[surfRadFromNNrank]);
+          if (surfelRadiusFromNNPos0) {
+            rsNN[iReadNext] = sqrtf(values[surfRadFromNNrank]);
+          } else {
+            rsNN[iReadNext] = (pl.p_-pl_w[ids[surfRadFromNNrank]].p_).norm();
+          }
         }
 
         if (pruneNoise) {
-          if (pl.lastFrame_+survivalTime < frame 
+          bool prune = pl.lastFrame_+survivalTime < frame 
              && ((pl.Hp_ > pruneHThr && pl.numObs_ < pruneNumObsThr)
-              || nnFixed[iReadNext] < kNN)) {
-//          float dist = (pl.p_-pl_w[ids(0)].p_).squaredNorm();
-//          if (dist/values(0) > relPruneDistThr
-//              || (pSampleEst_w[iReadNext] - pl.p_).squaredNorm()/values(0) > relPruneDistThr ) {
+              || nnFixed[iReadNext] < kNN);
+          for (size_t j=0; j<kNN; ++j) {
+            valuesCur[j] = (pl.p_-pl_w[ids[j]].p_).squaredNorm();
+          }
+          valuesCur = valuesCur.array() / values.array();
+          prune = prune || (valuesCur.array() > relPruneDistThr*relPruneDistThr).any();
+//          std::cout << valuesCur.transpose() << std::endl;
+          if (prune) {
             pc_w[iReadNext] = tdp::Vector3fda(NAN,NAN,NAN);
             n_w[iReadNext]  = tdp::Vector3fda(NAN,NAN,NAN);
             rs[iReadNext] = NAN;
