@@ -323,8 +323,6 @@ void ExtractPlanes(
       uint32_t Wscaled = W;
       const uint32_t u = i%mask.w_;
       const uint32_t v = i/mask.w_;
-//      std::cout << "found valid point in mask " << u << "," << v << std::endl;
-//      if (tdp::NormalViaScatter(pc, i%mask.w_, i/mask.w_, Wscaled, n)) {
       bool success = false;
       if (normalMethod == 0) {
 //        success = tdp::normalExtractMethod(pc, u, v, Wscaled, 0.29, dpc, n, curv, p);
@@ -338,7 +336,7 @@ void ExtractPlanes(
       } else {
         success = tdp::NormalViaVoting(pc, u, v, Wscaled, 0.29, dpc, n, curv, radiusStd, p);
       }
-      success = success && (acos(-n(2)) < 80.*M_PI/180.);
+      success = success && (acos(-n(2)) < 90.*M_PI/180.);
       if (success) {
 //        std::cout << "extracted normal at " << u << "," << v << std::endl;
 //        ExtractClosestBrief(pc, grey, pts, orientation, 
@@ -1630,6 +1628,7 @@ int main( int argc, char* argv[] )
   pangolin::Var<bool> showLabels("visPanel.show Sample labels",false,true);
   pangolin::Var<bool> showLabelsMl("visPanel.show ML labels",true,true);
   pangolin::Var<bool> showSamples("visPanel.show Samples",false,true);
+  pangolin::Var<float> surfelRadiusScale("visPanel.surfelRadiusScale",1.,0.1,10.);
   pangolin::Var<bool> surfelRadiusFromNN("visPanel.surfel r from NN",true,true);
   pangolin::Var<bool> surfelRadiusFromNNPos0("visPanel.surfel r from NN pos0",true,true);
   pangolin::Var<int> surfRadFromNNrank("visPanel.surfel r from NN rank",0,0,kNN-1);
@@ -1672,6 +1671,7 @@ int main( int argc, char* argv[] )
   tdp::ManagedHostCircularBuffer<tdp::Vector3fda> pc_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<float> rs(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<float> rsNN(MAP_SIZE); // radius of surfels
+  tdp::ManagedHostCircularBuffer<float> rsScaled(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<uint16_t> ts(MAP_SIZE); // radius of surfels
   tdp::ManagedHostCircularBuffer<tdp::Vector3bda> rgb_w(MAP_SIZE);
   tdp::ManagedHostCircularBuffer<tdp::Plane> pl_w(MAP_SIZE);
@@ -1713,6 +1713,7 @@ int main( int argc, char* argv[] )
 
   rs.Fill(NAN);
   rsNN.Fill(NAN);
+  rsScaled.Fill(NAN);
   ts.Fill(0);
   pc_w.Fill(tdp::Vector3fda(NAN,NAN,NAN));
   rgb_w.Fill(tdp::Vector3bda::Zero());
@@ -2466,9 +2467,9 @@ int main( int argc, char* argv[] )
       nbo_w.Upload(&n_w.ptr_[iReadCurW], 
           pc_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
           iReadCurW*sizeof(tdp::Vector3fda));
-      rbo.Upload(&rs.ptr_[iReadCurW],
-          rs.SizeToRead(iReadCurW)*sizeof(float),
-          iReadCurW*sizeof(float));
+//      rbo.Upload(&rs.ptr_[iReadCurW],
+//          rs.SizeToRead(iReadCurW)*sizeof(float),
+//          iReadCurW*sizeof(float));
       tbo.Upload(&ts.ptr_[iReadCurW],
           ts.SizeToRead(iReadCurW)*sizeof(uint16_t),
           iReadCurW*sizeof(int16_t));
@@ -3177,10 +3178,14 @@ int main( int argc, char* argv[] )
         vbo_w.Upload(pc_w.ptr_, pc_w.SizeToReadBytes(), 0);
         cbo_w.Upload(rgb_w.ptr_, rgb_w.SizeToReadBytes(), 0);
         if (surfelRadiusFromNN) {
-          rbo.Upload(rsNN.ptr_, rs.SizeToReadBytes(), 0);
+          for (size_t i=0; i<rs.SizeToRead(); ++i) 
+            rsScaled[i] = rsNN[i]*surfelRadiusScale;
         } else {
-          rbo.Upload(rs.ptr_, rs.SizeToReadBytes(), 0);
+          for (size_t i=0; i<rs.SizeToRead(); ++i) 
+            rsScaled[i] = rs[i]*surfelRadiusScale;
+//          rbo.Upload(rs.ptr_, rs.SizeToReadBytes(), 0);
         }
+        rbo.Upload(rsScaled.ptr_, rs.SizeToReadBytes(), 0);
 //        cbo_w.Upload(&rgb_w.ptr_[iReadCurW], 
 //            rgb_w.SizeToRead(iReadCurW)*sizeof(tdp::Vector3fda), 
 //            iReadCurW*sizeof(tdp::Vector3fda));
