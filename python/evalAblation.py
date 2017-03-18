@@ -9,6 +9,10 @@ configString = "../config/tum_fb2_2017_02_19.json"
 pathToGt = "../build/rgbd_dataset_freiburg2_xyz/groundtruth.txt"
 tag = "ablation_fr2_xyz"
 
+datsetPath = "files://../build/rgbd_dataset_freiburg2_desk/[depth,rgb]/*png"
+configString = "../config/tum_fb2_2017_02_19.json"
+pathToGt = "../build/rgbd_dataset_freiburg2_desk/groundtruth.txt"
+tag = "ablation_fr2_desk"
 
 outputPath = "../results/"+tag+"/fullmode/"
 SetMode(samplePoints=True, dirObsSelect=True, gradNormObsSelect=True);
