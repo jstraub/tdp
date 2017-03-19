@@ -1180,6 +1180,7 @@ int main( int argc, char* argv[] )
   std::string varsMapFile = "";
   std::string varsIcpFile = "";
   std::string varsVisFile = "";
+  std::string option = "";
   std::string imu_input_uri = "";
   std::string tsdfOutputPath = "tsdf.raw";
 
@@ -1189,7 +1190,13 @@ int main( int argc, char* argv[] )
     varsMapFile = (argc > 3) ? std::string(argv[3]) : "";
     varsIcpFile = (argc > 4) ? std::string(argv[4]) : "";
     varsVisFile = (argc > 5) ? std::string(argv[5]) : "";
+    option = (argc > 6) ? std::string(argv[6]) : "";
 //    imu_input_uri =  (argc > 3)? std::string(argv[3]) : "";
+  }
+
+  bool recordingMode = false;
+  if (option.compare("-r") == 0) {
+    recordingMode = true;
   }
 
   pangolin::Uri uri = pangolin::ParseUri(input_uri);
@@ -2363,6 +2370,19 @@ int main( int argc, char* argv[] )
 
   if (exitOnFinish)
     gui.verbose=false;
+
+  if (recordingMode) {
+    pangolin::Display("ui").Show(false);
+    pangolin::Display("container").SetBounds(0,1,0,1);
+    record = true;
+  }
+  pangolin::RegisterKeyPressCallback('z', [&](){
+      showLabelsMl = showLabelsMl? false: true;
+  });
+  pangolin::RegisterKeyPressCallback('H', [&](){
+      showHp = true;
+      showByValue = true;
+  });
 
   // Stream and display video
   while(!pangolin::ShouldQuit())

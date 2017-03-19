@@ -54,6 +54,6 @@
     "visPanel.surfel r from NN": "1",
     "visPanel.surfel r from NN pos0": "1",
     "visPanel.surfel r from NN rank": "0",
-    "visPanel.surfelRadiusScale": "0.3"
+    "visPanel.surfelRadiusScale": "0.8"
   }
 }
