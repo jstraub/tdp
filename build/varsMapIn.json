@@ -36,7 +36,7 @@
     "mapPanel.use OtherNi": "0",
     "mapPanel.use SurfNormal Obs": "1",
     "mapPanel.use sigmaPl": "1",
-    "mapPanel.use tracking uncertainty": "1"
+    "mapPanel.use tracking uncertainty": "1",
     "mapPanel.zSampleCountMax": "100"
   }
 }
