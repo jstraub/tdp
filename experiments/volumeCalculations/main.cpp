@@ -300,6 +300,15 @@ int main( int argc, char* argv[] )
       meshVbo.Download(vertexStore, sizeof(float) * numVertices * 3, 0);
       meshIbo.Download(indexStore, sizeof(uint32_t) * numTriangles * 3, 0);
       set_up_nn(centroids, normals, nn, vertexStore, numVertices, indexStore, numTriangles);
+
+      tdp::Image<tdp::Vector3fda> verts(numVertices, 1, (tdp::Vector3fda*) vertexStore);
+      tdp::Image<tdp::Vector3uda> faces(numTriangles, 1, (tdp::Vector3uda*) indexStore);
+
+      std::vector<std::string> comments;
+      comments.push_back("saved after multiple filters");
+      std::string meshOutputPath = pangolin::PathParent(input_uri) + std::string("/mesh.ply");
+      std::cout << "Mesh Path: " << meshOutputPath << std::endl;
+      SaveMesh(meshOutputPath, verts, faces, true, comments);
     }
 
     // Draw 3D stuff
