@@ -290,7 +290,7 @@ int main( int argc, char* argv[] )
 
     if (pangolin::Pushed(recomputeMesh)) {
       tdp::ComputeMesh(tsdf, grid0, dGrid,
-          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr);
+          T_wG, meshVbo, meshCbo, meshIbo, marchCubeswThr, marchCubesfThr, false);
       delete[] vertexStore;
       delete[] indexStore;
       numVertices = meshVbo.num_elements;

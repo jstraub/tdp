@@ -340,6 +340,19 @@ void CIsoSurface::GenerateSurface(
             float wThr,
             float fThr)
 {
+  GenerateSurface(tsdf, tIsoLevel, fCellLengthX, fCellLengthY, fCellLengthZ, wThr, fThr, true);
+}
+
+void CIsoSurface::GenerateSurface(
+            const tdp::Volume<tdp::TSDFval>* tsdf,
+            float tIsoLevel,
+            float fCellLengthX,
+            float fCellLengthY,
+            float fCellLengthZ,
+            float wThr,
+            float fThr,
+            bool enableFilters)
+{
 	if (m_bValidSurface)
 		DeleteSurface();
 
@@ -446,37 +459,39 @@ void CIsoSurface::GenerateSurface(
                         m_i2pt3idVertices.insert(ID2POINT3DID::value_type(id, pt));
                     }
 
+                if (enableFilters) {
                 // do not insert any triangles if we are not sure about the
                 // TSDF
-                // if (   ((*m_tsdf)(x  ,y+1,z).w   < wThr)
-                //     || ((*m_tsdf)(x+1,y+1,z).w   < wThr)
-                //     || ((*m_tsdf)(x  ,y  ,z).w   < wThr)
-                //     || ((*m_tsdf)(x+1,y  ,z).w   < wThr)
-                //     || ((*m_tsdf)(x  ,y+1,z+1).w < wThr)
-                //     || ((*m_tsdf)(x+1,y+1,z+1).w < wThr)
-                //     || ((*m_tsdf)(x  ,y  ,z+1).w < wThr)
-                //     || ((*m_tsdf)(x+1,y  ,z+1).w < wThr)
+                  if (   ((*m_tsdf)(x  ,y+1,z).w   < wThr)
+                      || ((*m_tsdf)(x+1,y+1,z).w   < wThr)
+                      || ((*m_tsdf)(x  ,y  ,z).w   < wThr)
+                      || ((*m_tsdf)(x+1,y  ,z).w   < wThr)
+                      || ((*m_tsdf)(x  ,y+1,z+1).w < wThr)
+                      || ((*m_tsdf)(x+1,y+1,z+1).w < wThr)
+                      || ((*m_tsdf)(x  ,y  ,z+1).w < wThr)
+                      || ((*m_tsdf)(x+1,y  ,z+1).w < wThr)
 
-                //     || ((*m_tsdf)(x  ,y+1,z  ).f > fThr)
-                //     || ((*m_tsdf)(x+1,y+1,z  ).f > fThr)
-                //     || ((*m_tsdf)(x  ,y  ,z  ).f > fThr)
-                //     || ((*m_tsdf)(x+1,y  ,z  ).f > fThr)
-                //     || ((*m_tsdf)(x  ,y+1,z+1).f > fThr)
-                //     || ((*m_tsdf)(x+1,y+1,z+1).f > fThr)
-                //     || ((*m_tsdf)(x  ,y  ,z+1).f > fThr)
-                //     || ((*m_tsdf)(x+1,y  ,z+1).f > fThr)
+                      || ((*m_tsdf)(x  ,y+1,z  ).f > fThr)
+                      || ((*m_tsdf)(x+1,y+1,z  ).f > fThr)
+                      || ((*m_tsdf)(x  ,y  ,z  ).f > fThr)
+                      || ((*m_tsdf)(x+1,y  ,z  ).f > fThr)
+                      || ((*m_tsdf)(x  ,y+1,z+1).f > fThr)
+                      || ((*m_tsdf)(x+1,y+1,z+1).f > fThr)
+                      || ((*m_tsdf)(x  ,y  ,z+1).f > fThr)
+                      || ((*m_tsdf)(x+1,y  ,z+1).f > fThr)
 
-                //     || ((*m_tsdf)(x  ,y+1,z  ).f < -1.)
-                //     || ((*m_tsdf)(x+1,y+1,z  ).f < -1.)
-                //     || ((*m_tsdf)(x  ,y  ,z  ).f < -1.)
-                //     || ((*m_tsdf)(x+1,y  ,z  ).f < -1.)
-                //     || ((*m_tsdf)(x  ,y+1,z+1).f < -1.)
-                //     || ((*m_tsdf)(x+1,y+1,z+1).f < -1.)
-                //     || ((*m_tsdf)(x  ,y  ,z+1).f < -1.)
-                //     || ((*m_tsdf)(x+1,y  ,z+1).f < -1.)
-                //     ) {
-                //     continue;
-                // }
+                      || ((*m_tsdf)(x  ,y+1,z  ).f < -1.)
+                      || ((*m_tsdf)(x+1,y+1,z  ).f < -1.)
+                      || ((*m_tsdf)(x  ,y  ,z  ).f < -1.)
+                      || ((*m_tsdf)(x+1,y  ,z  ).f < -1.)
+                      || ((*m_tsdf)(x  ,y+1,z+1).f < -1.)
+                      || ((*m_tsdf)(x+1,y+1,z+1).f < -1.)
+                      || ((*m_tsdf)(x  ,y  ,z+1).f < -1.)
+                      || ((*m_tsdf)(x+1,y  ,z+1).f < -1.)
+                      ) {
+                      continue;
+                  }
+                }
 
                 for (unsigned int i = 0; m_triTable[tableIndex][i] != -1; i += 3) {
                     TRIANGLE triangle;

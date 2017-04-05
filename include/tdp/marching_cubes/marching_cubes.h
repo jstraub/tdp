@@ -17,10 +17,11 @@ bool ComputeMesh(
   pangolin::GlBuffer& cbo,
   pangolin::GlBuffer& ibo,
   float wThr,
-  float fThr
+  float fThr,
+  bool enableFilters
     ) {
   CIsoSurface surface;
-  surface.GenerateSurface(&tsdf, 0.0f, dGrid(0), dGrid(1), dGrid(2), wThr, fThr);
+  surface.GenerateSurface(&tsdf, 0.0f, dGrid(0), dGrid(1), dGrid(2), wThr, fThr, enableFilters);
   if (!surface.IsSurfaceValid()) {
     std::cerr << "Unable to generate surface" << std::endl;
     return false;
@@ -56,4 +57,17 @@ bool ComputeMesh(
   return true;
 }
 
+bool ComputeMesh(
+  const Volume<TSDFval>& tsdf,
+  const Vector3fda& grid0,
+  const Vector3fda& dGrid,
+  SE3f& T_wg, // transformation from grid coordinate system to world
+  pangolin::GlBuffer& vbo,
+  pangolin::GlBuffer& cbo,
+  pangolin::GlBuffer& ibo,
+  float wThr,
+  float fThr
+    ) {
+  ComputeMesh(tsdf, grid0, dGrid, T_wg, vbo, cbo, ibo, wThr, fThr, true);
+}
 }

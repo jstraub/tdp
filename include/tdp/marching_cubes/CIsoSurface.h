@@ -45,7 +45,15 @@ public:
       float tIsoLevel, float fCellLengthX, float fCellLengthY,
       float fCellLengthZ,
             float wThr,
-            float fThr);
+            float fThr
+            );
+
+    void GenerateSurface(const tdp::Volume<tdp::TSDFval>* tsdf,
+      float tIsoLevel, float fCellLengthX, float fCellLengthY,
+      float fCellLengthZ,
+            float wThr,
+            float fThr,
+            bool enableFilters);
 
 	// Returns true if a valid surface has been generated.
 	bool IsSurfaceValid();
