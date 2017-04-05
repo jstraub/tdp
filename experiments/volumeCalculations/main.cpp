@@ -308,7 +308,7 @@ int main( int argc, char* argv[] )
       comments.push_back("saved after multiple filters");
       std::string meshOutputPath = pangolin::PathParent(input_uri) + std::string("/mesh.ply");
       std::cout << "Mesh Path: " << meshOutputPath << std::endl;
-      SaveMesh(meshOutputPath, verts, faces, true, comments);
+      SaveMesh(meshOutputPath, verts, faces, false, comments);
     }
 
     // Draw 3D stuff

@@ -280,7 +280,7 @@ void SaveMesh(
   }
   tinyply::PlyFile plyFile;
   plyFile.add_properties_to_element("vertex", {"x", "y", "z"}, verts);
-  plyFile.add_properties_to_element("face", {"vertex_indices"}, tris);
+  plyFile.add_properties_to_element("face", {"vertex_indices"}, tris, 3, tinyply::PlyProperty::Type::UINT8);
   for (auto& comment : comments) 
     plyFile.comments.push_back(comment);
   std::ostringstream outStream;
