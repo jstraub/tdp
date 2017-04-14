@@ -179,14 +179,11 @@ int main( int argc, char* argv[] )
   
   const int pyrLvl = 1;
 
-  pangolin::Var<bool> rotatingDepthScan("ui.rotating scan", false, true);
-
   pangolin::Var<bool>  resetTSDF("ui.reset TSDF", false, false);
   pangolin::Var<bool>  saveTSDF("ui.save TSDF", false, false);
   pangolin::Var<bool> fuseTSDF("ui.fuse TSDF",true,true);
   pangolin::Var<bool>   useRgbCamParasForDepth("ui.use rgb cams", true, true);
   pangolin::Var<bool>  runICP("ui.run ICP", false, true);
-  pangolin::Var<bool>  alignIndividual("ui.individual ICP", true, true);
 
   pangolin::Var<bool>  runMarchingCubes("ui.run Marching Cubes", false, false);
 
@@ -231,6 +228,20 @@ int main( int argc, char* argv[] )
   gui.verbose = true;
   size_t numFrames = 0;
   // Stream and display video
+
+  // This needs to happen before the while loop for rotating cameras or it crashes
+  gui.NextFrames();
+  TICK("rgb collection");
+  rig.CollectRGB(gui, rgb);
+  TOCK("rgb collection");
+  TICK("depth collection");
+  int64_t t_host_us_d = 0;
+  cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+  rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
+  TOCK("depth collection");
+  received.Set(true);
+  ++numFrames;
+
   while(!pangolin::ShouldQuit())
   {
     grid0 << grid0x,grid0y,grid0z;
@@ -239,20 +250,6 @@ int main( int argc, char* argv[] )
     dGrid(0) /= (wTSDF-1);
     dGrid(1) /= (hTSDF-1);
     dGrid(2) /= (dTSDF-1);
-
-    if (rotatingDepthScan.GuiChanged() && rotatingDepthScan) {
-      rs->SetPowers(0);
-      numFrames = 0;
-      received.Set(true);
-      resetTSDF = true;
-      runICP = true;
-    }
-    if (rotatingDepthScan.GuiChanged() && !rotatingDepthScan) {
-      rs->SetPowers(ir);
-      numFrames = 0;
-      received.Set(true);
-      resetTSDF = true;
-    }
 
     if (pangolin::Pushed(resetTSDF)) {
       T_mr = tdp::SE3f(); 
@@ -271,63 +268,45 @@ int main( int argc, char* argv[] )
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if (rotatingDepthScan) {
-      // start a collection thread to do the work so the rendering is
-      // smooth
-      if (received.Get()) {
-        if (threadCollect) {
-          threadCollect->join();
-          delete threadCollect;
-          threadCollect = nullptr;
-        }
-        threadCollect = new std::thread([&](){
-//          TICK("rgbd collection");
-          cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
-          for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
-            // grab one frame 
-            rs->SetPower(sId, rotatingDepthScanIrPower);
-            std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
-            rs->GrabOne(sId, buffer);
-            rs->SetPower(sId, 0);
-            int32_t cId = rig.rgbdStream2cam_[sId]; 
-
-            tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
-            tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle, wSingle, hSingle);
-            rgb_i.CopyFrom(_rgb);
-            cuDraw_i.CopyFrom(_d);
-            // convert depth image from uint16_t to float [m]
-            tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
-            if (rig.cuDepthScales_.size() > cId) {
-              tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.cuDepthScales_[cId], 
-                  rig.scaleVsDepths_[cId](0), rig.scaleVsDepths_[cId](1), dMin, dMax);
-            } else if (rig.depthSensorUniformScale_.size() > cId) {
-              tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.depthSensorUniformScale_[cId], dMin, dMax);
-            } else {
-              std::cout << "Warning no scale information found" << std::endl;
-            }
-          }
-//          TOCK("rgbd collection");
-          received.Set(true);
-        });
-        std::cout << "received" << std::endl;
-        ++numFrames;
-      }
-    } else {
-      // get next frames from the video source
-      gui.NextFrames();
-      TICK("rgb collection");
-      rig.CollectRGB(gui, rgb);
-      TOCK("rgb collection");
-      TICK("depth collection");
-      int64_t t_host_us_d = 0;
-      cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
-      rig.CollectD(gui, dMin, dMax, cuDraw, cuD, t_host_us_d);
-      TOCK("depth collection");
-      received.Set(true);
-      ++numFrames;
-    }
-    
+    // start a collection thread to do the work so the rendering is
+    // smooth
     if (received.Get()) {
+      if (threadCollect) {
+        threadCollect->join();
+        delete threadCollect;
+        threadCollect = nullptr;
+      }
+      threadCollect = new std::thread([&](){
+        cudaMemset(cuDraw.ptr_, 0, cuDraw.SizeBytes());
+        for (size_t sId=0; sId < rig.rgbdStream2cam_.size(); sId++) {
+          // grab one frame 
+          rs->SetPower(sId, rotatingDepthScanIrPower);
+          std::this_thread::sleep_for (std::chrono::milliseconds(stabilizationTime));
+          rs->GrabOne(sId, buffer);
+          rs->SetPower(sId, 0);
+          int32_t cId = rig.rgbdStream2cam_[sId]; 
+
+          tdp::Image<tdp::Vector3bda> rgb_i = rgb.GetRoi(0,cId*hSingle, wSingle, hSingle);
+          tdp::Image<uint16_t> cuDraw_i = cuDraw.GetRoi(0,cId*hSingle, wSingle, hSingle);
+
+          rgb_i.CopyFrom(_rgb);
+          cuDraw_i.CopyFrom(_d);
+          // convert depth image from uint16_t to float [m]
+          tdp::Image<float> cuD_i = cuD.GetRoi(0, cId*hSingle, wSingle, hSingle);
+          if (rig.cuDepthScales_.size() > cId) {
+            tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.cuDepthScales_[cId], 
+                rig.scaleVsDepths_[cId](0), rig.scaleVsDepths_[cId](1), dMin, dMax);
+          } else if (rig.depthSensorUniformScale_.size() > cId) {
+            tdp::ConvertDepthGpu(cuDraw_i, cuD_i, rig.depthSensorUniformScale_[cId], dMin, dMax);
+          } else {
+            std::cout << "Warning no scale information found" << std::endl;
+          }
+        }
+        received.Set(true);
+      });
+      std::cout << "received" << std::endl;
+      ++numFrames;
+    
       cuRgb.CopyFrom(rgb);
       TICK("pc and normals");
       rig.ComputePc(cuD, useRgbCamParasForDepth, cuPc);
@@ -340,38 +319,30 @@ int main( int argc, char* argv[] )
       tdp::CompleteNormalPyramid<3>(ns_o);
       TOCK("Setup Pyramids");
 
-
 /*
  * WHERE THINGS AND MATH HAPPENS
  */
 
-      if (!gui.paused() && fuseTSDF ) {
+      if (!gui.paused() && fuseTSDF) {
         if (runICP && numFrames > 1) {
           std::vector<size_t> maxIt{icpIter0,icpIter1,icpIter2};
           std::vector<float> errPerLvl;
           std::vector<float> countPerLvl;
           Eigen::Matrix<float,6,6> Sigma_mr; 
 
-          if (alignIndividual) {
-            tdp::ICP::ComputeProjectiveUpdateIndividual<CameraT>(
-                pcs_m, ns_m, pcs_o, ns_o,
-                rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-                gui.verbose, T_mr, errPerLvl, countPerLvl);
+          // reset to previous value - maybe not wanted/needed?
+          rig.T_rcs_ = T_rcs0; 
+          if (useRgbCamParasForDepth) {
+            tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+            rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+            gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
           } else {
-            // reset to previous value - maybe not wanted/needed?
-            rig.T_rcs_ = T_rcs0; 
-            if (useRgbCamParasForDepth) {
-              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-                  rig, rig.rgbStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-                  gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
-            } else {
-              tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
-                  rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
-                  gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
-            }
+            tdp::ICP::ComputeProjective<CameraT>(pcs_m, ns_m, pcs_o, ns_o,
+            rig, rig.dStream2cam_, maxIt, icpAngleThr_deg, icpDistThr,
+             gui.verbose, T_mr, Sigma_mr, errPerLvl, countPerLvl);
           }
         }
-        //    	std::cout << "fusing a frame" << std::endl;
+
         TICK("Add To TSDF");
         rig.AddToTSDF(cuD, cuRgb, T_mr, useRgbCamParasForDepth, 
             grid0, dGrid, tsdfMu, tsdfWMax, cuTSDF);
@@ -380,6 +351,7 @@ int main( int argc, char* argv[] )
         rig.RayTraceTSDF(cuTSDF, T_mr, useRgbCamParasForDepth, grid0,
             dGrid, tsdfMu, tsdfWThr, pcs_m, ns_m);
         TOCK("Ray Trace TSDF");
+
       }
 	  received.Set(false);
     }
