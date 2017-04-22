@@ -81,16 +81,14 @@ namespace tdp {
   }
 
   /* write 3 channel image */
-  template<class Alloc>
-  void write_png3(const std::string &file, ManagedImage<Vector3bda, Alloc> &img)
+  void write_png3(const std::string &file, Image<Vector3bda> &img)
   {
     pangolin::PixelFormat fmt = pangolin::PixelFormatFromString("RGB24");
     write_helper(file, img, fmt);
   }
 
   /* write 4 channel image */
-  template<class Alloc>
-  void write_png4(const std::string &file, ManagedImage<Vector4bda, Alloc> &img)
+  void write_png4(const std::string &file, Image<Vector4bda> &img)
   {
     pangolin::PixelFormat fmt = pangolin::PixelFormatFromString("RGBA32");
     write_helper(file, img, fmt);
