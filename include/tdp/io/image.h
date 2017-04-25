@@ -3,6 +3,8 @@
 #include <pangolin/image/image_io.h>
 #include <pangolin/image/image.h>
 
+#include <tdp/io/pixel_format.h>
+
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
 #include <tdp/data/managed_image.h>
