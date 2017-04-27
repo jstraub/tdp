@@ -17,6 +17,7 @@ log*.txt
 *.o
 lib
 3rdparty/spectra
+3rdparty/plog
 
 config/tmp_data/*.xml
 config/tmp_data/*
