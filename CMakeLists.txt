@@ -137,6 +137,7 @@ include_directories(
   include
   ./3rdparty/fast-C-src/
   ./3rdparty/spectra/include/
+  ./3rdparty/plog/include/
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_DIR}/include
   ${Pangolin_DIR}/../../include
