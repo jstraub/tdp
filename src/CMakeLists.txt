@@ -1,5 +1,5 @@
 
-file(GLOB SRCS 
+file(GLOB SRCS
   "./cuda/*cpp"
   "./directional/*cpp"
   "./gui/*cpp"
@@ -36,13 +36,13 @@ file(GLOB BB_SRCS
   "./bb/*cpp"
   )
 
-if (BUILD_BB) 
+if (BUILD_BB)
   list(APPEND SRCS ${BB_SRCS})
 endif()
 
-if (ISAM_FOUND) 
+if (ISAM_FOUND)
 #  list(APPEND SRCS ${ISAM_SRCS})
-  list(APPEND TDP_LIBS 
+  list(APPEND TDP_LIBS
       ${ISAM_LIBRARY}
       ${CHOLMOD_LIBRARIES}
     )
@@ -56,25 +56,25 @@ if(CUDA_FOUND)
   cuda_add_library(tdp SHARED
     ${SRCS} ${CU_SRCS}
     )
-  list(APPEND LIBS 
+  list(APPEND LIBS
     ${CUDA_LIBRARIES}
     ${CUDA_CUBLAS_LIBRARIES}
     )
-else() 
+else()
   add_library(tdp SHARED
     ${SRCS}
     )
 endif()
 
-if (Calibu_FOUND) 
+if (Calibu_FOUND)
   list(APPEND LIBS ${Calibu_LIBRARIES})
 endif()
 
-if (ANN_FOUND) 
+if (ANN_FOUND)
   list(APPEND LIBS ${ANN_LIBRARY})
 endif()
 
-if (aruco_FOUND) 
+if (aruco_FOUND)
   list(APPEND LIBS ${aruco_LIBS})
   list(APPEND SRCS "./marker/aruco.cpp")
 endif()
@@ -83,4 +83,6 @@ target_link_libraries(tdp pangolin
   ${LIBS}
   )
 cotire(tdp)
+
+install(TARGETS tdp LIBRARY DESTINATION /usr/lib)
 
