@@ -29,6 +29,7 @@ class ManagedImage : public Image<T> {
     other.ptr_ = nullptr;
   }
 
+  /// Reinitialize the ManagedImage to a new size and discard all data.
   void Reinitialise(size_t w, size_t h=1) {
     if (this->w_ == w && this->h_ == h)
       return;
@@ -39,6 +40,24 @@ class ManagedImage : public Image<T> {
     this->w_ = w;
     this->h_ = h;
     this->pitch_ = w*sizeof(T);
+  }
+
+  /// Reshape this ManagedImage without changing its data.
+  /// This method allocates a new chunk of data and then copies in the
+  /// data from the old chunk of data before deallocating the old data
+  /// block.
+  void Reshape(size_t w, size_t h=1) {
+    if (this->w_ == w && this->h_ == h)
+      return;
+    tdp::Image<T> tmp(*this);
+    this->ptr_ = Alloc::construct(w*h);
+    this->w_ = w;
+    this->h_ = h;
+    this->pitch_ = w*sizeof(T);
+    if (tmp.ptr_)  {
+      this->CopyFrom(tmp);
+      Alloc::destroy(tmp.ptr_);
+    }
   }
 
   void ResizeCopyFrom(const Image<T>& src) {
