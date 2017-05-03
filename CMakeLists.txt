@@ -132,12 +132,63 @@ if (ISAM_FOUND)
     )
 endif()
 
+find_package (Git)
+if (GIT_FOUND)
+  message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
+endif (GIT_FOUND)
+
+include(ExternalProject)
+ExternalProject_Add(
+  SPECTRA_LIB
+
+  # Download Steps
+  GIT_REPOSITORY https://github.com/yixuan/spectra.git
+  GIT_TAG        master
+
+  # Update Steps
+  UPDATE_COMMAND ${GIT_EXECUTABLE} pull
+
+  # Config Steps
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/spectra"
+  BINARY_DIR ""
+  CONFIGURE_COMMAND ""
+
+  # Build Steps
+  BUILD_COMMAND ""
+
+  # Install Steps
+  INSTALL_COMMAND ""
+)
+ExternalProject_Get_Property(SPECTRA_LIB source_dir)
+include_directories(${source_dir}/include)
+
+ExternalProject_Add(
+  PLOG_LIB
+
+  # Download Steps
+  GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
+  GIT_TAG        master
+
+  # Update Steps
+  UPDATE_COMMAND ${GIT_EXECUTABLE} pull
+
+  # Config Steps
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/plog"
+  BINARY_DIR ""
+  CONFIGURE_COMMAND ""
+
+  # Build Steps
+  BUILD_COMMAND ""
+
+  # Install Steps
+  INSTALL_COMMAND ""
+)
+ExternalProject_Get_Property(PLOG_LIB source_dir)
+include_directories(${source_dir}/include)
 
 include_directories(
   include
   ./3rdparty/fast-C-src/
-  ./3rdparty/spectra/include/
-  ./3rdparty/plog/include/
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_DIR}/include
   ${Pangolin_DIR}/../../include
