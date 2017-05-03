@@ -3,7 +3,9 @@
 #include <pangolin/image/image_io.h>
 #include <pangolin/image/image.h>
 
-#include <tdp/io/pixel_format.h>
+#ifndef USING_NEW_PANGOLIN
+#    include <tdp/io/pixel_format.h>
+#endif
 
 #include <tdp/eigen/dense.h>
 #include <tdp/data/image.h>
