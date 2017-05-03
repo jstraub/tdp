@@ -101,6 +101,12 @@ endif()
 find_package (ANN QUIET)
 if (ANN_FOUND)
   message("found ANN")
+
+  # Executed before build time
+  execute_process(
+    COMMAND cd ${CMAKE_SOURCE_DIR}/3rdparty && /bin/sh install.sh
+  )
+
   include_directories(${ANN_INCLUDE_DIR})
 endif()
 
