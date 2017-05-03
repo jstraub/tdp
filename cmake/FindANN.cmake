@@ -1,13 +1,19 @@
+# Executed before build time
+execute_process(
+  COMMAND cd ${CMAKE_SOURCE_DIR}/3rdparty && /bin/sh install.sh
+)
 
-FIND_PATH(ANN_INCLUDE_DIR 
-  NAMES ANN.h ANN/ANN.h
+FIND_PATH(ANN_INCLUDE_DI
+  NAME ANN.h ANN/ANN.h
   HINTS ${PROJECT_SOURCE_DIR}/3rdparty/ann_1.1.2/include
   )
-FIND_LIBRARY(ANN_LIBRARY 
+FIND_LIBRARY(ANN_LIBRARY
   NAMES ANN libANN.so
   HINTS ${PROJECT_SOURCE_DIR}/3rdparty/ann_1.1.2/lib
-  ) 
+  )
 
+message("Proj Source Dir: ${PROJECT_SOURCE_DIR}")
+message("INCLUDE_DIR: ${ANN_INCLUDE_DIR}")
 message(${ANN_LIBRARY})
 
 
