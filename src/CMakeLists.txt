@@ -84,5 +84,5 @@ target_link_libraries(tdp pangolin
   )
 cotire(tdp)
 
-install(TARGETS tdp LIBRARY DESTINATION /usr/local/lib)
+install(TARGETS tdp LIBRARY DESTINATION lib)
 
