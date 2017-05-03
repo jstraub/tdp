@@ -62,6 +62,11 @@ alpha-g++ macosx-g++ linux-g++ sgi sunos4 sunos4-g++ sunos5 sunos5-g++ sunos5-g+
 	cd sample ; $(MAKE) $@
 	cd ann2fig ; $(MAKE) $@
 
+linux-g++-notest:
+	cd src ; $(MAKE) linux-g++
+	cd sample ; $(MAKE) linux-g++
+	cd ann2fig ; $(MAKE) linux-g++
+
 #-----------------------------------------------------------------------------
 # Remove .o files and core files
 #-----------------------------------------------------------------------------

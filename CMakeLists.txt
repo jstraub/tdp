@@ -98,17 +98,11 @@ if (ASIO_FOUND)
   include_directories(${ASIO_INCLUDE_DIRS})
 endif()
 
-find_package (ANN QUIET)
-if (ANN_FOUND)
-  message("found ANN")
-
-  # Executed before build time
-  execute_process(
-    COMMAND cd ${CMAKE_SOURCE_DIR}/3rdparty && /bin/sh install.sh
-  )
-
-  include_directories(${ANN_INCLUDE_DIR})
-endif()
+#find_package (ANN QUIET)
+#if (ANN_FOUND)
+#  message("found ANN")
+#  include_directories(${ANN_INCLUDE_DIR})
+#endif()
 
 
 # Help GTSAM be found
@@ -144,6 +138,36 @@ if (GIT_FOUND)
 endif (GIT_FOUND)
 
 include(ExternalProject)
+ExternalProject_Add(
+  ANN_LIB
+
+  # Download Steps
+  DOWNLOAD_COMMAND ""
+
+  # Update Steps
+  UPDATE_COMMAND ""
+
+  # Config Steps
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/ann_1.1.2"
+  BINARY_DIR "${CMAKE_SOURCE_DIR}/3rdparty/ann_1.1.2"
+  CONFIGURE_COMMAND ""
+
+  # Build Steps
+  BUILD_COMMAND mkdir -p lib && make linux-g++-notest
+
+  # Install Steps
+  INSTALL_COMMAND ""
+)
+ExternalProject_Get_Property(ANN_LIB source_dir)
+include_directories(${source_dir}/include)
+include_directories(${source_dir}/include/ANN)
+add_library(ANN SHARED IMPORTED)
+set_property(
+  TARGET ANN
+  PROPERTY IMPORTED_LOCATION ${source_dir}/lib/${CMAKE_SHARED_MODULE_PREFIX}ANN${CMAKE_SHARED_LIBRARY_SUFFIX}
+)
+add_dependencies(ANN ANN_LIB)
+
 ExternalProject_Add(
   SPECTRA_LIB
 

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-
-
 cd ./ann_1.1.2/
-mkdir lib
-make linux-g++
+mkdir -p lib
+make linux-g++-notest
 cd -
