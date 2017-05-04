@@ -98,13 +98,6 @@ if (ASIO_FOUND)
   include_directories(${ASIO_INCLUDE_DIRS})
 endif()
 
-#find_package (ANN QUIET)
-#if (ANN_FOUND)
-#  message("found ANN")
-#  include_directories(${ANN_INCLUDE_DIR})
-#endif()
-
-
 # Help GTSAM be found
 set(GTSAM_DIR "/home/jstraub/workspace/research/3rdparty/gtsam/")
 find_package (GTSAM QUIET)
@@ -137,6 +130,12 @@ if (GIT_FOUND)
   message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
 endif (GIT_FOUND)
 
+#find_package (ANN QUIET)
+#if (ANN_FOUND)
+#  message("found ANN")
+#  include_directories(${ANN_INCLUDE_DIR})
+#endif()
+
 include(ExternalProject)
 ExternalProject_Add(
   ANN_LIB
@@ -159,13 +158,12 @@ ExternalProject_Add(
   INSTALL_COMMAND ""
 )
 ExternalProject_Get_Property(ANN_LIB source_dir)
+set(ANN_FOUND true)
+set(ANN_INCLUDE_DIR "${source_dir}/include")
+set(ANN_LIBRARY "${source_dir}/lib/${CMAKE_SHARED_MODULE_PREFIX}ANN${CMAKE_SHARED_LIBRARY_SUFFIX}")
 include_directories(${source_dir}/include)
-include_directories(${source_dir}/include/ANN)
 add_library(ANN SHARED IMPORTED)
-set_property(
-  TARGET ANN
-  PROPERTY IMPORTED_LOCATION ${source_dir}/lib/${CMAKE_SHARED_MODULE_PREFIX}ANN${CMAKE_SHARED_LIBRARY_SUFFIX}
-)
+set_property(TARGET ANN PROPERTY IMPORTED_LOCATION ANN_LIBRARY)
 add_dependencies(ANN ANN_LIB)
 
 ExternalProject_Add(

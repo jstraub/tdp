@@ -7,7 +7,8 @@ FIND_LIBRARY(ANN_LIBRARY
   HINTS ${PROJECT_SOURCE_DIR}/3rdparty/ann_1.1.2/lib
   )
 
-message(${ANN_LIBRARY})
+message("Lib: ${ANN_LIBRARY}")
+message("Include: ${ANN_INCLUDE_DIR}")
 
 
 IF (ANN_INCLUDE_DIR AND ANN_LIBRARY)
