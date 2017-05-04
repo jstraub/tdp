@@ -1,6 +1,8 @@
 project(tdp)
 cmake_minimum_required(VERSION 2.4.6)
 
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
+
 if(POLICY CMP0012)
   cmake_policy(SET CMP0012 OLD)
 endif()
@@ -130,6 +132,8 @@ if (GIT_FOUND)
   message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
 endif (GIT_FOUND)
 
+## TODO: Abstract these to different CMAKE files and
+## make the ANN dependency either once or at build time.
 #find_package (ANN QUIET)
 #if (ANN_FOUND)
 #  message("found ANN")
