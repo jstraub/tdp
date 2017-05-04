@@ -119,7 +119,11 @@ class Image {
     return ss.str();
   }
 
-  void Fill(T value) { for (size_t i=0; i<w_*h_; ++i) ptr_[i] = value; }
+  void Fill(T value) { 
+    for (size_t i = 0; i < w_; ++i)
+      for (size_t j = 0; j < h_; ++j)
+        this->operator()(i, j) = value;
+  }
 
 #ifdef CUDA_FOUND
   /// Perform pitched copy from the given src image to this image.
