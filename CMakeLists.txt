@@ -17,7 +17,7 @@ IF(NOT CMAKE_BUILD_TYPE)
 ENDIF()
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH} "/home/jstraub/workspace/research/3rdparty/install/lib/cmake/")
-message(${CMAKE_MODULE_PATH})
+message("Module Path: ${CMAKE_MODULE_PATH}")
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set (CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "default install path" FORCE )
@@ -127,96 +127,13 @@ if (ISAM_FOUND)
     )
 endif()
 
-find_package (Git)
+find_package (Git REQUIRED)
 if (GIT_FOUND)
   message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
+  include(ANN)
+  include(Spectra)
+  include(Plog)
 endif (GIT_FOUND)
-
-## TODO: Abstract these to different CMAKE files and
-## make the ANN dependency either once or at build time.
-#find_package (ANN QUIET)
-#if (ANN_FOUND)
-#  message("found ANN")
-#  include_directories(${ANN_INCLUDE_DIR})
-#endif()
-
-include(ExternalProject)
-ExternalProject_Add(
-  ANN_LIB
-
-  # Download Steps
-  DOWNLOAD_COMMAND ""
-
-  # Update Steps
-  UPDATE_COMMAND ""
-
-  # Config Steps
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/ann_1.1.2"
-  BINARY_DIR "${CMAKE_SOURCE_DIR}/3rdparty/ann_1.1.2"
-  CONFIGURE_COMMAND ""
-
-  # Build Steps
-  BUILD_COMMAND mkdir -p lib && make linux-g++-notest
-
-  # Install Steps
-  INSTALL_COMMAND ""
-)
-ExternalProject_Get_Property(ANN_LIB source_dir)
-set(ANN_FOUND true)
-set(ANN_INCLUDE_DIR "${source_dir}/include")
-set(ANN_LIBRARY "${source_dir}/lib/${CMAKE_SHARED_MODULE_PREFIX}ANN${CMAKE_SHARED_LIBRARY_SUFFIX}")
-include_directories(${source_dir}/include)
-add_library(ANN SHARED IMPORTED)
-set_property(TARGET ANN PROPERTY IMPORTED_LOCATION ANN_LIBRARY)
-add_dependencies(ANN ANN_LIB)
-
-ExternalProject_Add(
-  SPECTRA_LIB
-
-  # Download Steps
-  GIT_REPOSITORY https://github.com/yixuan/spectra.git
-  GIT_TAG        master
-
-  # Update Steps
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull
-
-  # Config Steps
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/spectra"
-  BINARY_DIR ""
-  CONFIGURE_COMMAND ""
-
-  # Build Steps
-  BUILD_COMMAND ""
-
-  # Install Steps
-  INSTALL_COMMAND ""
-)
-ExternalProject_Get_Property(SPECTRA_LIB source_dir)
-include_directories(${source_dir}/include)
-
-ExternalProject_Add(
-  PLOG_LIB
-
-  # Download Steps
-  GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
-  GIT_TAG        master
-
-  # Update Steps
-  UPDATE_COMMAND ${GIT_EXECUTABLE} pull
-
-  # Config Steps
-  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/plog"
-  BINARY_DIR ""
-  CONFIGURE_COMMAND ""
-
-  # Build Steps
-  BUILD_COMMAND ""
-
-  # Install Steps
-  INSTALL_COMMAND ""
-)
-ExternalProject_Get_Property(PLOG_LIB source_dir)
-include_directories(${source_dir}/include)
 
 include_directories(
   include

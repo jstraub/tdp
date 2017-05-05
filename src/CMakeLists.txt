@@ -71,7 +71,7 @@ if (Calibu_FOUND)
 endif()
 
 if (ANN_FOUND)
-  list(APPEND LIBS ${ANN_LIBRARY})
+  list(APPEND LIBS ${ANN_LIBRARIES})
 endif()
 
 if (aruco_FOUND)
@@ -79,6 +79,7 @@ if (aruco_FOUND)
   list(APPEND SRCS "./marker/aruco.cpp")
 endif()
 
+add_dependencies(tdp ANN)
 target_link_libraries(tdp pangolin
   ${LIBS}
   )
