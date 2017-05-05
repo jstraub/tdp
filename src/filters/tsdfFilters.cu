@@ -3,51 +3,6 @@
 
 namespace tdp {
 
-  __global__
-  void KernelApplyCuttingPlanes(
-    Volume<TSDFval> tsdf,
-    const Reconstruction::Plane pl1,
-    const Reconstruction::Plane pl2,
-    const Vector3fda grid0,
-    const Vector3fda dGrid,
-    const SE3f T_wG
-  ) {
-    const int idx = threadIdx.x + blockDim.x * blockIdx.x;
-    const int idy = threadIdx.y + blockDim.y * blockIdx.y;
-    const int idz = threadIdx.z + blockDim.z * blockIdx.z;
-
-    if (idx < tsdf.w_ && idy < tsdf.h_ && idz < tsdf.d_) {
-      Vector3fda base(idx * dGrid(0), idy * dGrid(1), idz * dGrid(2));
-      base = T_wG * (base + grid0);
-
-      // Finds the distance from each point to the base
-      // and only initializes points outside of the planes
-      float d1 = pl1.distance_to(base);
-      if (d1 > 0 && d1 > tsdf(idx, idy, idz).f) {
-        tsdf(idx, idy, idz).f =  d1;
-      }
-
-      float d2 = pl2.distance_to(base);
-      if (d2 > 0 && d2 > tsdf(idx, idy, idz).f) {
-        tsdf(idx, idy, idz).f =  d2;
-      }
-    }
-  }
-
-  void TSDFFilters::applyCuttingPlanes(
-    Volume<TSDFval>& tsdf,
-    const Reconstruction::Plane& pl1,
-    const Reconstruction::Plane& pl2,
-    const Vector3fda& grid0,
-    const Vector3fda& dGrid,
-    const SE3f& T_wG
-  ) {
-    dim3 blocks, threads;
-    ComputeKernelParamsForVolume(blocks, threads, tsdf, 8, 8, 8);
-
-    KernelApplyCuttingPlanes<<<blocks, threads>>>(tsdf, pl1, pl2, grid0, dGrid, T_wG);
-  }
-
   __device__
   void insertionSort(float* values, size_t size) {
     for(size_t i = 1; i < size; ++i) {
