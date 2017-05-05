@@ -128,12 +128,10 @@ if (ISAM_FOUND)
 endif()
 
 find_package (Git REQUIRED)
-if (GIT_FOUND)
-  message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
-  include(ANN)
-  include(Spectra)
-  include(Plog)
-endif (GIT_FOUND)
+message("git found: ${GIT_EXECUTABLE} in version ${GIT_VERSION_STRING}")
+include(ANN)
+include(Spectra)
+include(Plog)
 
 include_directories(
   include
