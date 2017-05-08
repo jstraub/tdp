@@ -19,10 +19,6 @@ target_link_libraries(SO3derivs tdp ${GTEST_BOTH_LIBRARIES} pthread)
 add_executable(SO3 SO3.cpp)
 target_link_libraries(SO3 tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
-add_executable(spectra spectra.cpp)
-target_link_libraries(spectra ${GTEST_BOTH_LIBRARIES} pthread)
-add_dependencies(spectra Spectra)
-
 add_executable(image image.cpp)
 target_link_libraries(image tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
@@ -38,9 +34,6 @@ target_link_libraries(cublas tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
 add_executable(vmfmmf vmfmmf.cpp)
 target_link_libraries(vmfmmf tdp ${GTEST_BOTH_LIBRARIES} pthread)
-
-add_executable(testLaplace_beltrami laplace_beltrami.cpp)
-target_link_libraries(testLaplace_beltrami tdp ${GTEST_BOTH_LIBRARIES} pthread)
 
 add_executable(testEigen_io eigen_io.cpp)
 target_link_libraries(testEigen_io tdp ${GTEST_BOTH_LIBRARIES} pthread)

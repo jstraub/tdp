@@ -21,7 +21,6 @@ file(GLOB SRCS
   "./drivers/inertial/imu_pango.cpp"
   "./io/*cpp"
   "./gl/*cpp"
-  "./laplace_beltrami/*cpp"
   "../3rdparty/fast-C-src/*c"
   "./nn_cuda/*cpp"
   "./sorts/*cpp"
