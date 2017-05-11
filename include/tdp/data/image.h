@@ -29,23 +29,47 @@ namespace {
 
 namespace tdp {
 
+# ifdef __CUDACC__ 
+#define assert_device( X, msg)                                                 \
+  if ( !(X) ) {                                                                \
+  printf("device assert failed. [%s : %d] " #msg " \n", __FILE__, __LINE__);   \
+  assert(false); }
+#else
+#  define assert_device( X, msg )
+#endif
+
 template <class T>
 class Image {
  public:
   Image()
     : w_(0), h_(0), pitch_(0), ptr_(nullptr), storage_(Storage::Unknown)
   {}
+
+  TDP_HOST_DEVICE
   Image(size_t w, size_t h, T* ptr, enum Storage storage = Storage::Unknown)
     : w_(w), h_(h), pitch_(w*sizeof(T)), ptr_(ptr), storage_(storage)
-  {}
+  {
+    //force device construction to wrap device memory
+    assert_device(storage_ == Storage::Gpu, "not using device memory" );
+  }
+
+  TDP_HOST_DEVICE
   Image(size_t w, size_t h, size_t pitch, T* ptr, 
       enum Storage storage = Storage::Unknown)
     : w_(w), h_(h), pitch_(pitch), ptr_(ptr), storage_(storage)
-  {}
+  {
+    assert_device(storage_ == Storage::Gpu, "not using device memory");
+  }
+
+  TDP_HOST_DEVICE
   Image(const Image& img)
     : w_(img.w_), h_(img.h_), pitch_(img.pitch_), ptr_(img.ptr_),
       storage_(img.storage_)
-  {}
+  {
+    assert_device(storage_ == Storage::Gpu, "not using device memory");
+  }
+
+  TDP_HOST_DEVICE
   ~Image()
   {}
 
