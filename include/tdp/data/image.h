@@ -18,6 +18,15 @@
 #include <tdp/eigen/dense.h>
 #include <tdp/data/storage.h>
 
+namespace {
+  ///helper function needed to multiply floats and uint8 in GetBilenear below
+  TDP_HOST_DEVICE
+  inline tdp::Vector3bda operator*(const float &f, const tdp::Vector3bda &vec) {
+    return tdp::Vector3bda(
+      int8_t(roundf(f * vec(0))), int8_t(roundf(f * vec(1))), int8_t(roundf(f * vec(2))));
+  }
+}
+
 namespace tdp {
 
 template <class T>
