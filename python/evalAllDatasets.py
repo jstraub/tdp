@@ -5,7 +5,6 @@ import subprocess as subp
 from helpers import *
 
 for i in range(10):
-
   configString = "../config/iclnuim_2017_02_23.json"
   for name in ["traj0n","traj1n","traj2n","traj3n"]:
     datsetPath = "files://../build/living_room_"+name+"_frei_png/[depth,rgb]/*png"
@@ -32,5 +31,5 @@ for i in range(10):
     SetMode(samplePoints=False, dirObsSelect=False, gradNormObsSelect=False);
     Run(datsetPath, configString, outputPath, pathToGt);
 
-subp.call("cp -r ../results /home/jstraub/Dropbox/0gtd/thesis/",shell=True)
+subp.call("cp -r ../results /home/jstraub/Dropbox/0gtd/cvpr2018/",shell=True)
 

@@ -38,7 +38,6 @@ for i in range(10):
     if os.path.isdir(outputPath):
       errsRnd[name].append(GetATE(outputPath))
 
-
 keys = errsDir.keys()
 keys.sort()
 for key in keys:
@@ -127,12 +126,12 @@ DirFusionRndStd =[ np.std(errsRnd["traj0n"]) ,
     np.std(errsRnd["desk"])]
 
 ind = np.arange(len(data))
-width=0.125
+width=0.111
 
 fig = plt.figure(figsize = figSize, dpi = 80, facecolor="w", edgecolor="k")
 ax = plt.subplot(111)
 
-ax.bar(ind, DVOSLAM, width,color=cs[6], label="DVO-SLAM")
+ax.bar(ind, DVOSLAM, width,color=cs[7], label="DVO-SLAM")
 ax.bar(ind+width,   RGBDSLAM, width, color=cs[0],label="RGBD-SLAM")
 ax.bar(ind+2*width, ElasticFusion, width, color=cs[1],label="Elastic Fusion")
 ax.bar(ind+3*width, Kintinuous, width, color=cs[2],label="Kintinuous")
@@ -140,12 +139,13 @@ ax.bar(ind+4*width, DensePlanarSLAM, width, color=cs[3],label="Dense Planar SLAM
 ax.bar(ind+5*width, CPASLAM, width, color=cs[4],label="CPA-SLAM")
 
 ax.bar(ind+6*width, DirFusion, width, yerr=DirFusionStd,color=cs[5],label="Dir.-SLAM")
-#ax.bar(ind+7*width, DirFusionRnd, width,  yerr=DirFusionRndStd,color=cs[6],label="Dir.-SLAM Rnd")
+ax.bar(ind+7*width, DirFusionRnd, width,  yerr=DirFusionRndStd,color=cs[6],label="Dir.-SLAM Rnd")
 
 ax.set_ylabel("Absolute Trajectory Error [m]")
-ax.set_xticks(ind+3.5*width)
+ax.set_xticks(ind+4.5*width)
 ax.set_xticklabels(data)
-plt.xlim([0,8])
+plt.xlim([0,9])
+plt.ylim([0,0.12])
 plt.legend(loc="best")
 
 plt.savefig("./ate.png",fig=fig)
