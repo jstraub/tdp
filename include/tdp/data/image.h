@@ -1,7 +1,7 @@
 /* Copyright (c) 2016, Julian Straub <jstraub@csail.mit.edu> Licensed
  * under the MIT license. See the license file LICENSE.
  */
-#pragma once 
+#pragma once
 #include <limits>
 #include <iostream>
 #include <cmath>
@@ -29,15 +29,6 @@ namespace {
 
 namespace tdp {
 
-# ifdef __CUDACC__ 
-#define assert_device( X, msg)                                                 \
-  if ( !(X) ) {                                                                \
-  printf("device assert failed. [%s : %d] " #msg " \n", __FILE__, __LINE__);   \
-  assert(false); }
-#else
-#  define assert_device( X, msg )
-#endif
-
 template <class T>
 class Image {
  public:
@@ -48,26 +39,19 @@ class Image {
   TDP_HOST_DEVICE
   Image(size_t w, size_t h, T* ptr, enum Storage storage = Storage::Unknown)
     : w_(w), h_(h), pitch_(w*sizeof(T)), ptr_(ptr), storage_(storage)
-  {
-    //force device construction to wrap device memory
-    assert_device(storage_ == Storage::Gpu, "not using device memory" );
-  }
+  {}
 
   TDP_HOST_DEVICE
-  Image(size_t w, size_t h, size_t pitch, T* ptr, 
+  Image(size_t w, size_t h, size_t pitch, T* ptr,
       enum Storage storage = Storage::Unknown)
     : w_(w), h_(h), pitch_(pitch), ptr_(ptr), storage_(storage)
-  {
-    assert_device(storage_ == Storage::Gpu, "not using device memory");
-  }
+  {}
 
   TDP_HOST_DEVICE
   Image(const Image& img)
     : w_(img.w_), h_(img.h_), pitch_(img.pitch_), ptr_(img.ptr_),
       storage_(img.storage_)
-  {
-    assert_device(storage_ == Storage::Gpu, "not using device memory");
-  }
+  {}
 
   TDP_HOST_DEVICE
   ~Image()
@@ -94,8 +78,8 @@ class Image {
   }
 
   TDP_HOST_DEVICE
-  T* RowPtr(size_t v) const { 
-    return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_); 
+  T* RowPtr(size_t v) const {
+    return reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(ptr_)+v*pitch_);
   }
 
   TDP_HOST_DEVICE
@@ -123,15 +107,15 @@ class Image {
   }
 
   TDP_HOST_DEVICE
-  bool Inside(int u, int v) const { 
-    return 0 <= u && u < (int)w_-1 && 0 <= v && v < (int)h_-1; 
+  bool Inside(int u, int v) const {
+    return 0 <= u && u < (int)w_-1 && 0 <= v && v < (int)h_-1;
   }
   TDP_HOST_DEVICE
-  bool Inside(float u, float v) const { 
-    return 0 <= u && u < (float)w_-1 && 0 <= v && v < (float)h_-1; 
+  bool Inside(float u, float v) const {
+    return 0 <= u && u < (float)w_-1 && 0 <= v && v < (float)h_-1;
   }
   TDP_HOST_DEVICE
-  bool Inside(const Eigen::Vector2f& x) const { 
+  bool Inside(const Eigen::Vector2f& x) const {
     return Inside(x(0), x(1));
   }
 
@@ -146,13 +130,13 @@ class Image {
 
   std::string Description() const {
     std::stringstream ss;
-    ss << w_ << "x" << h_ << " pitch=" << pitch_ 
-      << " " << SizeBytes() << "bytes " 
+    ss << w_ << "x" << h_ << " pitch=" << pitch_
+      << " " << SizeBytes() << "bytes "
       << " ptr: " << ptr_ << " storage " << storage_ ;
     return ss.str();
   }
 
-  void Fill(T value) { 
+  void Fill(T value) {
     for (size_t i = 0; i < w_; ++i)
       for (size_t j = 0; j < h_; ++j)
         this->operator()(i, j) = value;
@@ -163,11 +147,11 @@ class Image {
   /// Use type to specify from which memory to which memory to copy.
   void CopyFrom(const Image<T>& src, cudaMemcpyKind type) {
 //    std::cout << pitch_ << " " << src.pitch_ << ", " <<
-//          std::min(w_,src.w_)*sizeof(T) << " " << 
+//          std::min(w_,src.w_)*sizeof(T) << " " <<
 //          std::min(h_,src.h_) << std::endl;
-    checkCudaErrors(cudaMemcpy2D(ptr_, pitch_, 
-          src.ptr_, src.pitch_, 
-          std::min(w_,src.w_)*sizeof(T), 
+    checkCudaErrors(cudaMemcpy2D(ptr_, pitch_,
+          src.ptr_, src.pitch_,
+          std::min(w_,src.w_)*sizeof(T),
           std::min(h_,src.h_), type));
   }
   void CopyFrom(const Image<T>& src) {
@@ -185,7 +169,7 @@ class Image {
   T* ptr_;
   enum Storage storage_;
  private:
-  
+
 };
 
 template<typename T>
@@ -207,14 +191,14 @@ inline std::pair<double,double> Image<T>::MinMax(size_t* iMin, size_t* iMax) con
 }
 
 template<>
-inline std::pair<double,double> Image<Vector3fda>::MinMax(size_t* iMin, 
+inline std::pair<double,double> Image<Vector3fda>::MinMax(size_t* iMin,
     size_t* iMax) const {
   std::pair<double,double> minMax(std::numeric_limits<double>::max(),
       std::numeric_limits<double>::lowest());
   for (size_t i=0; i<Area(); ++i) {
     if (!std::isfinite(ptr_[i](0))
         || !std::isfinite(ptr_[i](1))
-        || !std::isfinite(ptr_[i](2))) 
+        || !std::isfinite(ptr_[i](2)))
       continue;
     if (minMax.first > ptr_[i].norm()) {
       minMax.first = ptr_[i].norm();
