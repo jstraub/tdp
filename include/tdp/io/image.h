@@ -26,7 +26,8 @@ namespace tdp {
       pangolin::TypedImage img_in = pangolin::LoadImage(file);
 
       if (img_in.fmt.channels != nChanel) {
-        throw std::runtime_error("Image " + file + " does not have 3 channels");
+        throw std::runtime_error("Image " + file + " does not have "
+          + std::to_string(nChanel) + " channels");
       }
 
       //build tdp::Image to wrap pangolin memory

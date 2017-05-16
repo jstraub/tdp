@@ -51,6 +51,7 @@ class SE3 : Manifold<T,6> {
 
   SE3<T,Options> Inverse() const ;
 
+  /// w in se3 (first 3 rotation so3, last 3 translation)
   SE3<T,Options> Exp(const Eigen::Matrix<T,6,1>& w) const ;
 
   TDP_HOST_DEVICE
