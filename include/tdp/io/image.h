@@ -25,7 +25,9 @@ namespace tdp {
       //use pangolin to load from file
       pangolin::TypedImage img_in = pangolin::LoadImage(file);
 
-      if (img_in.fmt.channels != nChanel) {
+      //the second check is to detect grayscale images which pangolin reports as
+      //nChannel, but allocates w*sizeof(uchar) instead of w*sizeof(uchar)*nChannel
+      if (img_in.fmt.channels != nChanel || img_in.pitch != img_in.w*nChanel) {
         throw std::runtime_error("Image " + file + " does not have "
           + std::to_string(nChanel) + " channels");
       }
