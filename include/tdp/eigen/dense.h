@@ -3,7 +3,15 @@
  */
 #pragma once
 #include <stdint.h>
-#include <Eigen/Dense>
+// <Eigen/Dense> causes issues when compiling from device on windows.
+// Dumb workaround is to include core and specific headers when needed.
+// TODO: change this in the future once Eigen fixes issues (JacobiSVD and BSVD on device)
+// RC 5/18/17
+#ifdef WIN32 
+#  include <Eigen/Core>
+#else
+#  include <Eigen/Dense>
+#endif
 
 namespace tdp {
 
