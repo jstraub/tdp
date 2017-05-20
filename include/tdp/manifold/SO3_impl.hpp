@@ -39,10 +39,10 @@ SO3<T,Options>::SO3(const Eigen::Quaternion<T,Options>& q)
 
 template<typename T, int Options>
 SO3<T,Options> SO3<T,Options>::FromAxisAngle(const Eigen::Matrix<T,3,1,Options>& axis, T angle) {
-  Eigen::Quaternion<T,Options> q(cos(angle*0.5), 
-      sin(angle*0.5)*axis(0)/axis.norm(),
-      sin(angle*0.5)*axis(1)/axis.norm(),
-      sin(angle*0.5)*axis(2)/axis.norm());
+  Eigen::Quaternion<T,Options> q(cos(angle*T(0.5)), 
+      sin(angle*T(0.5))*axis(0)/axis.norm(),
+      sin(angle*T(0.5))*axis(1)/axis.norm(),
+      sin(angle*T(0.5))*axis(2)/axis.norm());
   return SO3<T,Options>(q);
 }
 
@@ -96,7 +96,7 @@ void SO3<T,Options>::ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) c
   }
   if (fabs(q_.w()) < 1e-9) {
     axis = q_.vec().normalized();
-    angle = M_PI*0.5;
+    angle = static_cast<T>(M_PI*0.5);
     return;
   }
   axis = q_.vec().normalized();
