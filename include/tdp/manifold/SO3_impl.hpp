@@ -100,7 +100,7 @@ void SO3<T,Options>::ToAxisAngle(Eigen::Matrix<T,3,1,Options>& axis, T& angle) c
     return;
   }
   axis = q_.vec().normalized();
-  angle = atan(q_.vec().norm() / q_.w());
+  angle = 2 * atan(q_.vec().norm() / q_.w());
 //  angle = acos( q_.w());
 }
 
