@@ -115,7 +115,7 @@ SO3<T,Options> SO3<T,Options>::FromOrthogonalVectors(
 
 template<typename T, int Options>
 Eigen::Matrix<T,3,1,Options> SO3<T,Options>::Log_(const SO3<T,Options>& R) {
-  return 2.*R.ToAxisAngle();
+  return R.ToAxisAngle();
 }
 
 template<typename T, int Options>
