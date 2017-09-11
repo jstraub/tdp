@@ -26,6 +26,8 @@
 #include <tdp/config.h>
 #include <tdp/tsdf/tsdf.h>
 
+#include <tdp/utils/stringUtils.h>
+
 namespace tdp {
 
 template <class Cam>
@@ -320,6 +322,11 @@ bool Rig<CamT>::CorrespondOpenniStreams2Cams(
     } else {
       serial = "0000";
     }
+
+    // One of the serial numbers is 11 characters instead of 12, and
+    // somehow gets padded, so we need to remove the whitespace
+    serial = rtrim(serial);
+
     std::cout << "Device " << i << " serial #: " << serial << std::endl;
     int32_t camId = -1;
     for (size_t j=0; j<cams_.size(); ++j) {
