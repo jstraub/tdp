@@ -71,9 +71,9 @@ message(${Pangolin_DIR}/include)
 
 #TODO fogure out hoew to get FindEigen3.cmake to find my own install (need CUDA support)
 #unset(EIGEN3_INCLUDE_DIR CACHE)
-find_package (Eigen3 3.2.93 REQUIRED)
+find_package (Eigen 3.2.93 REQUIRED)
 #set(EIGEN3_INCLUDE_DIR "/home/jstraub/workspace/research/3rdparty/eigen/")
-message(${EIGEN3_INCLUDE_DIR})
+#message(${EIGEN3_INCLUDE_DIR})
 
 find_package(aruco 2.0.9 QUIET)
 if (aruco_FOUND)
@@ -137,6 +137,7 @@ include_directories(
   include
   ./3rdparty/fast-C-src/
   ${EIGEN3_INCLUDE_DIR}
+  ${EIGEN_INCLUDE_DIR}
   ${Pangolin_DIR}/include
   ${Pangolin_DIR}/../../include
   ${CMAKE_BINARY_DIR}/include

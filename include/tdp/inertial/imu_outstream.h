@@ -1,10 +1,10 @@
 
 #pragma once
-#include <string>
-#include <tdp/inertial/imu_obs.h>
+#include <pangolin/log/packetstream.h>
 #include <pangolin/utils/picojson.h>
 #include <pangolin/utils/uri.h>
-#include <pangolin/log/packetstream.h>
+#include <tdp/inertial/imu_obs.h>
+#include <string>
 
 namespace tdp {
 
@@ -14,18 +14,18 @@ class ImuOutStream {
   ~ImuOutStream();
 
   bool IsOpen() const;
-  void Open(const std::string& uri, const pangolin::json::value& properties);
+  void Open(const std::string& uri, const picojson::value& properties);
   void Close();
 
   bool IsPipe() { return is_pipe; }
 
-  int WriteStream(const ImuObs& data, 
-      const pangolin::json::value& frame_properties = pangolin::json::value());
+  int WriteStream(const ImuObs& data,
+                  const picojson::value& frame_properties = picojson::value());
 
  private:
   std::string input_uri;
   const std::string filename;
-  pangolin::json::value device_properties;
+  picojson::value device_properties;
   pangolin::PacketStreamWriter packetstream;
   size_t packetstream_buffer_size_bytes;
   int packetstreamsrcid;
@@ -33,6 +33,4 @@ class ImuOutStream {
   size_t total_frame_size;
   bool is_pipe;
 };
-
-
 }
