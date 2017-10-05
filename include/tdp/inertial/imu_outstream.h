@@ -1,6 +1,6 @@
 
 #pragma once
-#include <pangolin/log/packetstream.h>
+#include <pangolin/log/packetstream_writer.h>
 #include <pangolin/utils/picojson.h>
 #include <pangolin/utils/uri.h>
 #include <tdp/inertial/imu_obs.h>

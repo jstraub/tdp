@@ -1,5 +1,5 @@
 
-#include <pangolin/log/packetstream.h>
+#include <pangolin/log/packetstream_writer.h>
 #include <pangolin/utils/file_utils.h>
 #include <pangolin/utils/sigstate.h>
 #include <pangolin/utils/uri.h>
